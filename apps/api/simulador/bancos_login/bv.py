@@ -436,7 +436,7 @@ class BancoBVAutomation(BaseBankAutomation):
             if match:
                 return float(match.group())
             return 0.0
-        except:
+        except Exception:
             return 0.0
 
     def _limpar_percentual(self, texto: str) -> float:
@@ -457,7 +457,7 @@ class BancoBVAutomation(BaseBankAutomation):
                 valor = match.group(1).replace(",", ".")
                 return float(valor)
             return 0.0
-        except:
+        except Exception:
             return 0.0
 
 

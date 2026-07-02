@@ -28,14 +28,28 @@ from schemas import (
 from auth import decode_access_token
 
 class ConnectionManager:
+    # Teto de conexões simultâneas por usuário. Protege o dict em memória contra
+    # crescimento ilimitado quando o cliente com reconexão automática (B024) deixa
+    # sockets meio-abertos acumulados (várias abas, rede instável, deploy).
+    MAX_CONNECTIONS_PER_USER = 8
+
     def __init__(self):
         self.active_connections: dict[str, list[WebSocket]] = {}
 
     async def connect(self, usuario_id: str, websocket: WebSocket):
         await websocket.accept()
-        if usuario_id not in self.active_connections:
-            self.active_connections[usuario_id] = []
-        self.active_connections[usuario_id].append(websocket)
+        conns = self.active_connections.setdefault(usuario_id, [])
+        conns.append(websocket)
+        # Se exceder o teto, encerra as conexões mais antigas (best-effort).
+        # A conexão evicta é removida da lista aqui; quando o loop dela receber o
+        # WebSocketDisconnect e chamar disconnect(), o guard `websocket in [...]`
+        # já a ignora — sem KeyError e sem duplo-remove.
+        while len(conns) > self.MAX_CONNECTIONS_PER_USER:
+            oldest = conns.pop(0)
+            try:
+                await oldest.close(code=status.WS_1013_TRY_AGAIN_LATER)
+            except Exception:
+                pass
 
     def disconnect(self, usuario_id: str, websocket: WebSocket):
         if usuario_id in self.active_connections:

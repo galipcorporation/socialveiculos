@@ -111,7 +111,7 @@ class C6BankAutomation(BaseBankAutomation):
                         if error_element.is_displayed() and error_element.text:
                             logger.error(f"Mensagem de erro encontrada: {error_element.text}")
                             return False
-                    except:
+                    except Exception:
                         continue
             except Exception as e:
                 logger.debug(f"Erro ao verificar mensagens de erro: {e}")
@@ -429,7 +429,7 @@ class C6BankAutomation(BaseBankAutomation):
             if match:
                 return float(match.group())
             return 0.0
-        except:
+        except Exception:
             return 0.0
 
     def _limpar_percentual(self, texto: str) -> float:
@@ -450,7 +450,7 @@ class C6BankAutomation(BaseBankAutomation):
                 valor = match.group(1).replace(",", ".")
                 return float(valor)
             return 0.0
-        except:
+        except Exception:
             return 0.0
 
 

@@ -22,7 +22,7 @@ from deps import get_current_b2b_user, B2BContext, registrar_auditoria
 from models import (
     Contrato, Veiculo, ClientePF, StatusContrato, TipoContrato,
     StatusVeiculo, LancamentoFinanceiro, TipoLancamento,
-    EsteiraPosVenda, OrigemLead,
+    EsteiraPosVenda, OrigemLead, OrigemVeiculo, ComissaoVenda, MembroLoja,
 )
 from pos_venda_template import montar_checklist
 from schemas import (
@@ -191,7 +191,16 @@ async def criar_contrato(
     result = await db.execute(stmt)
     contrato = result.scalar_one()
 
-    await registrar_auditoria(db, ctx.usuario.id, "contrato_criado", f"Contrato {numero} criado")
+    await registrar_auditoria(
+        db=db,
+        loja_id=ctx.loja.id,
+        ator_id=ctx.usuario.id,
+        ator_nome=ctx.usuario.nome,
+        acao="contrato.criar",
+        entidade="contrato",
+        entidade_id=contrato.id,
+        detalhes=f"Contrato {numero} criado",
+    )
 
     return _contrato_to_response(contrato)
 
@@ -300,11 +309,16 @@ async def vender_veiculo(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Registra a venda de um veículo:
-    1. Muda status do veículo para VENDIDO
-    2. Remove da vitrine (publicado_marketplace = false)
-    3. Cria contrato de compra e venda vinculado
-    4. Registra receita no financeiro
+    Fecha a venda de um veículo num ato só (tudo na mesma transação):
+    1. Cliente existente (cliente_id) ou cadastrado na hora (cliente_novo)
+    2. Trocas entram no estoque como rascunho (origem=troca, custo=avaliação,
+       vinculadas à venda via contrato_origem_id)
+    3. Contrato de compra e venda com dação em pagamento nas observações
+    4. Receita = o que entra de fato em caixa (dinheiro + financiado); as
+       trocas entram como ativo de estoque
+    5. Excedente (composto > venda) soma na comissão do vendedor — "volta ao
+       cliente" não existe na prática dos garagistas
+    6. Esteira pós-venda com checklist
     """
     # Buscar veículo
     stmt = select(Veiculo).where(
@@ -319,24 +333,60 @@ async def vender_veiculo(
     if veiculo.status == StatusVeiculo.VENDIDO:
         raise HTTPException(status_code=400, detail="Veículo já está vendido")
 
-    # Validar cliente
-    stmt_cli = select(ClientePF).where(
-        ClientePF.id == body.cliente_id,
-        ClientePF.loja_id == ctx.loja.id,
-    )
-    result_cli = await db.execute(stmt_cli)
-    cliente = result_cli.scalar_one_or_none()
-    if not cliente:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    # 1. Cliente: existente ou cadastro rápido no ato
+    if body.cliente_id:
+        stmt_cli = select(ClientePF).where(
+            ClientePF.id == body.cliente_id,
+            ClientePF.loja_id == ctx.loja.id,
+        )
+        result_cli = await db.execute(stmt_cli)
+        cliente = result_cli.scalar_one_or_none()
+        if not cliente:
+            raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    elif body.cliente_novo:
+        cliente = ClientePF(
+            loja_id=ctx.loja.id,
+            nome=body.cliente_novo.nome,
+            cpf=body.cliente_novo.cpf,
+            telefone=body.cliente_novo.telefone,
+        )
+        db.add(cliente)
+        await db.flush()  # garante cliente.id
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="Informe cliente_id ou cliente_novo para fechar a venda.",
+        )
 
+    # Composição do pagamento (pagamento_dinheiro/financiamento novos;
+    # valor_entrada/parcelas legados continuam aceitos)
     valor_venda = body.valor_venda or veiculo.preco_venda or 0
+    dinheiro = body.pagamento_dinheiro if body.pagamento_dinheiro is not None else (body.valor_entrada or 0)
+    fin_valor = body.financiamento.valor if body.financiamento else 0
+    parcelas = body.financiamento.parcelas if body.financiamento else body.parcelas
+    financiado = bool(body.financiamento) or bool(body.financiado)
+    total_trocas = round(sum(t.valor_avaliacao for t in body.trocas), 2)
+    composto = round(total_trocas + dinheiro + fin_valor, 2)
+    excedente = round(composto - valor_venda, 2) if valor_venda and composto > valor_venda else 0.0
+    entrada_total = round(dinheiro + total_trocas, 2)
 
-    # 1. Marcar veículo como vendido
+    # 2. Marcar veículo como vendido
     veiculo.status = StatusVeiculo.VENDIDO
     veiculo.publicado_marketplace = False
     veiculo.updated_at = datetime.now(timezone.utc)
 
-    # 2. Criar contrato de compra e venda
+    # 3. Criar contrato de compra e venda (trocas = dação em pagamento)
+    observacoes = body.observacoes or ""
+    if body.trocas:
+        dacao = "\n".join(
+            f"Dação em pagamento: {t.marca} {t.modelo}"
+            + (f" {t.ano_fabricacao}/{t.ano_modelo}" if t.ano_fabricacao and t.ano_modelo else "")
+            + (f", placa {t.placa}" if t.placa else ", sem placa")
+            + f" — avaliado em R$ {t.valor_avaliacao:,.2f}"
+            for t in body.trocas
+        )
+        observacoes = f"{observacoes}\n{dacao}".strip() if observacoes else dacao
+
     numero = await gerar_numero_contrato(db, ctx.loja.id, TipoContrato.COMPRA_VENDA)
     contrato = Contrato(
         loja_id=ctx.loja.id,
@@ -346,28 +396,63 @@ async def vender_veiculo(
         status=StatusContrato.AGUARDANDO,
         numero=numero,
         valor_venda=valor_venda,
-        valor_entrada=body.valor_entrada,
-        parcelas=body.parcelas,
-        observacoes=body.observacoes,
+        valor_entrada=entrada_total or None,
+        parcelas=parcelas,
+        observacoes=observacoes or None,
     )
     db.add(contrato)
+    await db.flush()  # garante contrato.id para vincular as trocas
 
-    # 3. Registrar receita no financeiro
-    lancamento = LancamentoFinanceiro(
-        loja_id=ctx.loja.id,
-        tipo=TipoLancamento.RECEITA,
-        descricao=f"Venda: {veiculo.marca} {veiculo.modelo} — {cliente.nome}",
-        valor=valor_venda,
-        veiculo_id=veiculo.id,
-        categoria="venda_veiculo",
-        data=datetime.now(timezone.utc),
-    )
-    db.add(lancamento)
+    # 4. Trocas entram no estoque como rascunho, rastreáveis até o contrato
+    ano_fallback = datetime.now(timezone.utc).year
+    trocas_criadas = []
+    for t in body.trocas:
+        v_troca = Veiculo(
+            loja_id=ctx.loja.id,
+            marca=t.marca,
+            modelo=t.modelo,
+            versao=t.versao,
+            ano_fabricacao=t.ano_fabricacao or ano_fallback,
+            ano_modelo=t.ano_modelo or t.ano_fabricacao or ano_fallback,
+            placa=t.placa,
+            km=t.km or 0,
+            cor=t.cor,
+            preco_custo=t.valor_avaliacao,
+            status=StatusVeiculo.RASCUNHO,
+            publicado_marketplace=False,
+            origem=OrigemVeiculo.TROCA,
+            contrato_origem_id=contrato.id,
+        )
+        db.add(v_troca)
+        trocas_criadas.append(v_troca)
 
-    # 4. Gravar o comprador no veículo (Carteira do Proprietário — M018)
+    # 5. Receita = só o que entra de fato em caixa (dinheiro + financiado).
+    #    O valor das trocas vira custo de estoque dos veículos criados acima.
+    receita = round(dinheiro + fin_valor, 2)
+    if receita > 0:
+        composicao = []
+        if dinheiro:
+            composicao.append(f"dinheiro/PIX R$ {dinheiro:,.2f}")
+        if fin_valor:
+            composicao.append(f"financiado R$ {fin_valor:,.2f}" + (f" em {parcelas}x" if parcelas else ""))
+        if total_trocas:
+            composicao.append(f"troca(s) R$ {total_trocas:,.2f} (entraram no estoque)")
+        lancamento = LancamentoFinanceiro(
+            loja_id=ctx.loja.id,
+            tipo=TipoLancamento.RECEITA,
+            descricao=f"Venda: {veiculo.marca} {veiculo.modelo} — {cliente.nome}",
+            valor=receita,
+            veiculo_id=veiculo.id,
+            categoria="venda_veiculo",
+            observacoes="Composição: " + ", ".join(composicao) if composicao else None,
+            data=datetime.now(timezone.utc),
+        )
+        db.add(lancamento)
+
+    # 6. Gravar o comprador no veículo (Carteira do Proprietário — M018)
     veiculo.comprador_id = cliente.id
 
-    # 5. Abrir a esteira pós-venda + semear o checklist invisível (§6.4)
+    # 7. Abrir a esteira pós-venda + semear o checklist invisível (§6.4)
     try:
         origem = OrigemLead(body.origem) if body.origem else OrigemLead.MANUAL
     except ValueError:
@@ -384,21 +469,61 @@ async def vender_veiculo(
     await db.flush()  # garante esteira.id para os itens
     for item in montar_checklist(
         esteira, veiculo, contrato,
-        valor_entrada=body.valor_entrada,
-        parcelas=body.parcelas,
-        financiado=bool(body.financiado),
+        valor_entrada=entrada_total or None,
+        parcelas=parcelas,
+        financiado=financiado,
         data_venda=datetime.now(timezone.utc),
     ):
         db.add(item)
+
+    # 8. Comissão automática do vendedor (TDD 2026-07-02)
+    #    % resolvido: override do membro → padrão da loja → 0 (nunca silenciosa:
+    #    com % 0 a comissão aparece no financeiro como "definir %").
+    #    O excedente da troca (composto > venda) soma na comissão — volta ao
+    #    cliente não existe na prática.
+    membro_res = await db.execute(
+        select(MembroLoja.percentual_comissao).where(
+            MembroLoja.usuario_id == ctx.usuario.id,
+            MembroLoja.loja_id == ctx.loja.id,
+        )
+    )
+    percentual_membro = membro_res.scalar_one_or_none()
+    percentual = (
+        percentual_membro
+        if percentual_membro is not None
+        else (ctx.loja.percentual_comissao_padrao or 0.0)
+    )
+    comissao = ComissaoVenda(
+        loja_id=ctx.loja.id,
+        vendedor_id=ctx.usuario.id,
+        veiculo_id=veiculo.id,
+        esteira_id=esteira.id,
+        valor_venda=valor_venda,
+        percentual=percentual,
+        valor_comissao=round(valor_venda * (percentual / 100.0) + excedente, 2),
+        pago=False,
+    )
+    db.add(comissao)
 
     await db.commit()
     await db.refresh(contrato)
     await db.refresh(esteira)
 
+    detalhe_trocas = f" {len(trocas_criadas)} veículo(s) recebidos em troca." if trocas_criadas else ""
+    detalhe_excedente = f" Excedente de R$ {excedente:,.2f} somado à comissão do vendedor." if excedente > 0 else ""
     await registrar_auditoria(
-        db, ctx.usuario.id, "veiculo_vendido",
-        f"Veículo {veiculo.marca} {veiculo.modelo} vendido para {cliente.nome}. "
-        f"Contrato {numero}. Esteira pós-venda {esteira.id} aberta.",
+        db=db,
+        loja_id=ctx.loja.id,
+        ator_id=ctx.usuario.id,
+        ator_nome=ctx.usuario.nome,
+        acao="veiculo.vender",
+        entidade="veiculo",
+        entidade_id=veiculo.id,
+        detalhes=(
+            f"Veículo {veiculo.marca} {veiculo.modelo} vendido para {cliente.nome}. "
+            f"Contrato {numero}. Esteira pós-venda {esteira.id} aberta."
+            f"{detalhe_trocas}{detalhe_excedente}"
+        ),
     )
 
     return VenderVeiculoResponse(
@@ -406,6 +531,8 @@ async def vender_veiculo(
         contrato_id=contrato.id,
         veiculo_id=veiculo.id,
         esteira_id=esteira.id,
+        trocas_veiculo_ids=[v.id for v in trocas_criadas],
+        comissao_excedente=excedente if excedente > 0 else None,
     )
 
 

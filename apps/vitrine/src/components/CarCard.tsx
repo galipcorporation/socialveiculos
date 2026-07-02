@@ -15,6 +15,7 @@ export interface Veiculo {
   loja_logo?: string
   loja_cidade?: string
   loja_estado?: string
+  loja_whatsapp?: string
   loja_verificada?: boolean
   seguindo_loja?: boolean
   marca: string
@@ -229,12 +230,14 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
         </div>
 
         <div className="vt-card-cta">
-          <button className="vt-btn-negociar" onClick={() => onWhatsApp(veiculo)}>
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor">
-              <path d="M.06 24l1.7-6.2A11.9 11.9 0 1 1 12 24a11.9 11.9 0 0 1-5.7-1.5L.06 24zM6.6 20l.4.2a9.9 9.9 0 1 0-3.4-3.4l.2.4-1 3.7 3.8-.9z"/>
-            </svg>
-            WhatsApp
-          </button>
+          {veiculo.loja_whatsapp && (
+            <button className="vt-btn-negociar" onClick={() => onWhatsApp(veiculo)}>
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor">
+                <path d="M.06 24l1.7-6.2A11.9 11.9 0 1 1 12 24a11.9 11.9 0 0 1-5.7-1.5L.06 24zM6.6 20l.4.2a9.9 9.9 0 1 0-3.4-3.4l.2.4-1 3.7 3.8-.9z"/>
+              </svg>
+              WhatsApp
+            </button>
+          )}
           <button className="vt-btn-chat" onClick={() => onConversar(veiculo)}>
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />

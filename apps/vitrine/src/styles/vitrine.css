@@ -786,6 +786,68 @@ a {
   color: var(--vt-text);
 }
 
+/* ── Páginas institucionais (Sobre / Termos / Privacidade / Anuncie) ── */
+.vt-institucional {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 20px 120px;
+  color: var(--vt-text);
+}
+.vt-institucional h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+.vt-institucional .vt-inst-sub {
+  color: var(--vt-text-dim);
+  font-size: 14px;
+  margin: 0 0 32px;
+}
+.vt-institucional h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 32px 0 12px;
+}
+.vt-institucional p,
+.vt-institucional li {
+  color: var(--vt-text-dim);
+  line-height: 1.7;
+  font-size: 15px;
+}
+.vt-institucional ul { padding-left: 20px; margin: 8px 0; }
+.vt-institucional a { color: var(--vt-primary); }
+.vt-institucional a:hover { color: var(--vt-primary-hover); }
+.vt-inst-back {
+  display: inline-block;
+  margin-bottom: 24px;
+  color: var(--vt-text-dim);
+  font-size: 14px;
+}
+.vt-inst-nota {
+  background: var(--vt-primary-light);
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius);
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--vt-text-dim);
+  margin: 24px 0;
+}
+.vt-inst-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--vt-success);
+  color: #fff;
+  padding: 12px 22px;
+  border-radius: var(--vt-radius);
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none;
+  margin-top: 8px;
+  transition: background var(--vt-transition);
+}
+.vt-inst-cta:hover { background: var(--vt-success-hover); color: #fff; }
+
 /* ── Responsive ──────────────────────────────────────────────── */
 
 @media (max-width: 900px) {

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
-from database import get_db
+from database import get_db, async_session
 from deps import get_current_user, get_optional_user
 from models import (
     Usuario, Veiculo, Favorito, Conversa, Mensagem, Loja,
@@ -91,7 +91,7 @@ async def listar_favoritos(
     stmt = (
         select(Veiculo)
         .join(Favorito, Favorito.veiculo_id == Veiculo.id)
-        .options(selectinload(Veiculo.midias))
+        .options(selectinload(Veiculo.midias), selectinload(Veiculo.loja))
         .where(Favorito.usuario_id == current_user.id)
         .order_by(Favorito.created_at.desc())
     )
@@ -104,6 +104,15 @@ async def listar_favoritos(
         count_res = await db.execute(count_stmt)
         v.total_favoritos = count_res.scalar() or 0
         v.favoritado_por_mim = True
+
+        # Dados da loja que anuncia (mesma hidratação do feed)
+        loja = v.loja
+        v.loja_nome = loja.nome if loja else None
+        v.loja_logo = loja.logo_url if loja else None
+        v.loja_cidade = loja.cidade if loja else None
+        v.loja_estado = loja.estado if loja else None
+        v.loja_whatsapp = loja.whatsapp if loja else None
+        v.loja_verificada = bool(loja.verificada) if loja else False
 
     return vehicles
 

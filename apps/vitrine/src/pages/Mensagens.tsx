@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { api } from '../lib/api'
+import { createReconnectingSocket, type ReconnectingSocket } from '../lib/ws'
 import { useAuthStore } from '../stores/authStore'
 import { LoginModal } from '../components/LoginModal'
 
@@ -66,7 +67,7 @@ export function Mensagens() {
   const [loadingMsgs, setLoadingMsgs] = useState(false)
   const [sidebarHidden, setSidebarHidden] = useState(false)
 
-  const socketRef = useRef<WebSocket | null>(null)
+  const socketRef = useRef<ReconnectingSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
@@ -107,19 +108,19 @@ export function Mensagens() {
     if (!isAuthenticated || !token || !selected) {
       socketRef.current?.close(); socketRef.current = null; return
     }
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/v1/vitrine/chat/ws?token=${token}`)
-    socketRef.current = ws
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data)
-        if (msg.conversa_id === selected.id) {
-          setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-        }
-        fetchConversas()
-      } catch {}
-    }
-    return () => ws.close()
+    const sock = createReconnectingSocket(`/v1/vitrine/chat/ws?token=${token}`, {
+      onMessage: (e) => {
+        try {
+          const msg = JSON.parse(e.data)
+          if (msg.conversa_id === selected.id) {
+            setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          }
+          fetchConversas()
+        } catch {}
+      },
+    })
+    socketRef.current = sock
+    return () => { sock.close(); socketRef.current = null }
   }, [isAuthenticated, token, selected])
 
   useEffect(() => {

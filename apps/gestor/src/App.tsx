@@ -7,6 +7,7 @@ import { Estoque } from './pages/Estoque'
 import { CRM } from './pages/CRM'
 import { Ferramentas } from './pages/Ferramentas'
 import { Financeiro } from './pages/Financeiro'
+import { MinhasComissoes } from './pages/MinhasComissoes'
 import { Equipe } from './pages/Equipe'
 import { Configuracoes } from './pages/Configuracoes'
 import { RedeSocial } from './pages/RedeSocial'
@@ -122,6 +123,7 @@ export default function App() {
           <Route path="ferramentas/fipe" element={<FipePage />} />
           <Route path="assistente" element={<ModuleGuard modulo="assistente"><AssistenteIA /></ModuleGuard>} />
           <Route path="financeiro" element={<ModuleGuard modulo="financeiro"><Financeiro /></ModuleGuard>} />
+          <Route path="minhas-comissoes" element={<MinhasComissoes />} />
           <Route path="aprovacoes" element={<Aprovacoes />} />
           <Route path="equipe" element={<Equipe />} />
           <Route path="configuracoes" element={<Configuracoes />} />

@@ -44,12 +44,25 @@ async def client():
         yield ac
 
 
+_token_cache: dict[str, str] = {}
+
+
 async def _login(client: httpx.AsyncClient, email: str, senha: str) -> str | None:
-    """Faz login e devolve o access_token, ou None se a conta não existir/senha errada."""
+    """Faz login e devolve o access_token, ou None se a conta não existir/senha errada.
+
+    Cacheia o token por e-mail durante a sessão de testes: o login tem
+    rate_limit(5/60s) e cada fixture refazia login — a partir do 6º teste vinha
+    429 e os testes skipavam com mensagem enganosa de "banco não seedado".
+    """
+    if email in _token_cache:
+        return _token_cache[email]
     resp = await client.post("/v1/auth/login", json={"email": email, "senha": senha})
     if resp.status_code != 200:
         return None
-    return resp.json().get("access_token")
+    token = resp.json().get("access_token")
+    if token:
+        _token_cache[email] = token
+    return token
 
 
 @pytest_asyncio.fixture

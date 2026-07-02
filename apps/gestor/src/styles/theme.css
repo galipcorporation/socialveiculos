@@ -4460,3 +4460,282 @@ input[type="date"] {
   font-weight: 400;
   color: var(--sv-text-muted);
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   FECHAR VENDA — modal composto (cliente rápido + pagamento componível)
+   ═══════════════════════════════════════════════════════════════ */
+
+.fv-veiculo-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  background: var(--sv-surface-dim);
+  border-radius: var(--sv-radius-md);
+}
+
+.fv-veiculo-box .fv-nome { font-weight: 700; font-size: 15px; color: var(--sv-text); }
+.fv-veiculo-box .fv-placa { font-size: 12px; color: var(--sv-text-muted); margin-top: 2px; }
+
+.fv-preco { text-align: right; }
+.fv-preco small {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--sv-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.fv-preco input {
+  width: 130px;
+  border: none;
+  background: transparent;
+  font-family: var(--sv-font);
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--sv-text);
+  text-align: right;
+  padding: 0;
+  outline: none;
+  border-bottom: 1px dashed transparent;
+}
+.fv-preco input:hover, .fv-preco input:focus { border-bottom-color: var(--sv-border-hover); }
+
+.fv-sec-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sv-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.fv-link-btn {
+  background: none;
+  border: none;
+  color: var(--sv-primary-text);
+  font-family: var(--sv-font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.fv-link-btn:hover { text-decoration: underline; }
+
+.fv-hint { margin-top: 8px; font-size: 13px; color: var(--sv-text-muted); }
+
+/* Cadastro rápido / forms inline (mesma casca tracejada) */
+.fv-inline-form {
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px dashed var(--sv-border-hover);
+  border-radius: var(--sv-radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--sv-overlay-soft);
+}
+.fv-inline-form .fv-form-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sv-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fv-inline-form .fv-form-title span { font-weight: 400; color: var(--sv-text-muted); font-size: 12px; }
+
+.fv-row { display: flex; gap: 12px; }
+.fv-row > * { flex: 1; min-width: 0; }
+
+.fv-field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sv-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 5px;
+}
+.fv-field input {
+  width: 100%;
+  height: 40px;
+  padding: 10px 12px;
+  font-family: var(--sv-font);
+  font-size: 14px;
+  background: var(--sv-input-bg);
+  border: 1px solid var(--sv-border);
+  border-radius: 6px;
+  color: var(--sv-text);
+  outline: none;
+}
+.fv-field input:focus { border-color: var(--sv-primary); }
+
+.fv-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Cliente selecionado */
+.fv-cliente-sel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--sv-surface-dim);
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-md);
+}
+.fv-cliente-sel .fv-nome {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--sv-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fv-cliente-sel .fv-doc { font-size: 12px; color: var(--sv-text-muted); margin-top: 2px; }
+
+.fv-chip {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: var(--sv-radius-full);
+}
+.fv-chip-novo { background: rgba(74, 222, 128, 0.12); color: var(--sv-success); }
+.fv-chip-keplaca { background: rgba(123, 208, 255, 0.12); color: var(--sv-info); }
+[data-theme='light'] .fv-chip-novo { background: rgba(22, 163, 74, 0.10); }
+[data-theme='light'] .fv-chip-keplaca { background: rgba(37, 99, 235, 0.08); }
+
+/* Botões de adicionar forma de pagamento */
+.fv-pay-adders { display: flex; gap: 8px; margin-bottom: 12px; }
+.fv-pay-adder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 0;
+  font-family: var(--sv-font);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sv-text-dim);
+  background: transparent;
+  border: 1px dashed var(--sv-border-hover);
+  border-radius: var(--sv-radius);
+  cursor: pointer;
+  transition: all var(--sv-transition);
+}
+.fv-pay-adder:hover:not(:disabled) { color: var(--sv-primary-text); border-color: var(--sv-primary); }
+.fv-pay-adder:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.fv-pay-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--sv-text-muted);
+  border: 1px dashed var(--sv-border);
+  border-radius: var(--sv-radius-md);
+}
+
+/* Cards de pagamento */
+.fv-pay-list { display: flex; flex-direction: column; gap: 8px; }
+.fv-pay-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-md);
+  background: var(--sv-surface-solid);
+}
+.fv-pay-ico {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--sv-radius);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  background: var(--sv-overlay);
+}
+.fv-pay-info { flex: 1; min-width: 0; }
+.fv-pay-info .fv-t {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sv-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fv-pay-info .fv-s { font-size: 12px; color: var(--sv-text-muted); margin-top: 1px; }
+.fv-pay-valor { font-weight: 800; font-size: 15px; color: var(--sv-text); white-space: nowrap; }
+.fv-pay-x {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--sv-text-muted);
+  font-size: 15px;
+  cursor: pointer;
+  border-radius: var(--sv-radius-sm);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fv-pay-x:hover { color: var(--sv-error); background: var(--sv-overlay); }
+
+/* Resultado da consulta de placa */
+.fv-keplaca-hit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--sv-success);
+  background: rgba(74, 222, 128, 0.12);
+  padding: 8px 12px;
+  border-radius: var(--sv-radius);
+}
+[data-theme='light'] .fv-keplaca-hit { background: rgba(22, 163, 74, 0.10); }
+
+/* Rodapé vivo (saldo) */
+.fv-saldo-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 28px;
+  border-top: 1px solid var(--sv-border);
+  background: var(--sv-overlay-soft);
+  font-size: 13px;
+}
+.fv-saldo-bar .fv-comp { color: var(--sv-text-dim); }
+.fv-saldo-bar .fv-comp strong { color: var(--sv-text); }
+
+.fv-saldo-pill {
+  font-weight: 800;
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: var(--sv-radius-full);
+  white-space: nowrap;
+}
+.fv-pill-falta { background: rgba(251, 146, 60, 0.12); color: var(--sv-warning); }
+.fv-pill-ok { background: rgba(74, 222, 128, 0.12); color: var(--sv-success); }
+.fv-pill-comissao { background: rgba(123, 208, 255, 0.12); color: var(--sv-info); }
+[data-theme='light'] .fv-pill-falta { background: rgba(234, 88, 12, 0.10); }
+[data-theme='light'] .fv-pill-ok { background: rgba(22, 163, 74, 0.10); }
+[data-theme='light'] .fv-pill-comissao { background: rgba(37, 99, 235, 0.08); }
+
+.fv-saldo-note {
+  font-size: 11.5px;
+  color: var(--sv-text-muted);
+  padding: 0 28px 10px;
+  background: var(--sv-overlay-soft);
+}

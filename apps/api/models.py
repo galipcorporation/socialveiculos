@@ -241,6 +241,8 @@ class Loja(Base):
     cidade = Column(String(100), nullable=True)
     estado = Column(String(2), nullable=True)
     cep = Column(String(10), nullable=True)
+    # Comissão: % padrão aplicado às vendas da loja (override por membro em MembroLoja)
+    percentual_comissao_padrao = Column(Float, nullable=False, default=0.0, server_default="0")
     verificada = Column(Boolean, default=False)
     ativa = Column(Boolean, default=True)
     created_at = Column(DateTime, default=_now)
@@ -292,6 +294,8 @@ class MembroLoja(Base):
     loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
     papel = Column(Enum(PapelUsuario), nullable=False)
     modulos = Column(Text, nullable=True)  # JSON array de módulos habilitados para vendedor
+    # Comissão: % individual do membro; NULL = usa Loja.percentual_comissao_padrao
+    percentual_comissao = Column(Float, nullable=True)
     ativo = Column(Boolean, default=True)
     created_at = Column(DateTime, default=_now)
 
@@ -399,6 +403,7 @@ class Veiculo(Base):
     # Origem / rastreamento (troca/rolo)
     origem = Column(Enum(OrigemVeiculo), default=OrigemVeiculo.COMPRA, nullable=False)
     negociacao_origem_id = Column(String(36), ForeignKey("negociacao.id", ondelete="SET NULL"), nullable=True)
+    contrato_origem_id = Column(String(36), ForeignKey("contrato.id", ondelete="SET NULL"), nullable=True)  # venda que originou a troca
 
     # Descrição
     descricao = Column(Text, nullable=True)
@@ -725,6 +730,8 @@ class ComissaoVenda(Base):
     loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
     vendedor_id = Column(String(36), ForeignKey("usuario.id", ondelete="SET NULL"), nullable=True)
     veiculo_id = Column(String(36), ForeignKey("veiculo.id", ondelete="SET NULL"), nullable=True)
+    # Venda formal que originou a comissão (NULL = comissão manual avulsa)
+    esteira_id = Column(String(36), ForeignKey("esteira_pos_venda.id", ondelete="SET NULL"), nullable=True)
     valor_venda = Column(Float, nullable=False)
     percentual = Column(Float, nullable=False)
     valor_comissao = Column(Float, nullable=False)
@@ -1155,7 +1162,8 @@ class Contrato(Base):
 
     # Relationships
     loja = relationship("Loja", back_populates="contratos")
-    veiculo = relationship("Veiculo")
+    # foreign_keys explícito: veiculo.contrato_origem_id criou um 2º caminho contrato↔veiculo
+    veiculo = relationship("Veiculo", foreign_keys=[veiculo_id])
     cliente = relationship("ClientePF")
 
     __table_args__ = (

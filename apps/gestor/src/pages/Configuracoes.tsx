@@ -18,6 +18,7 @@ interface Loja {
   cidade?: string
   estado?: string
   cep?: string
+  percentual_comissao_padrao: number
   verificada: boolean
   ativa: boolean
   created_at: string
@@ -71,6 +72,7 @@ export function Configuracoes() {
 
   const [loja, setLoja] = useState<Loja | null>(null)
   const [form, setForm] = useState<Partial<Editaveis>>({})
+  const [percentualComissao, setPercentualComissao] = useState('')
   const [loading, setLoading] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -167,6 +169,7 @@ export function Configuracoes() {
             estado: dataLoja.estado ?? '',
             cep: dataLoja.cep ? mascararCEP(dataLoja.cep) : '',
           })
+          setPercentualComissao(String(dataLoja.percentual_comissao_padrao ?? 0))
         }
         setCredenciais(dataCreds)
         setRedesSociais(dataRedes)
@@ -198,7 +201,12 @@ export function Configuracoes() {
     setError(null)
     setSucesso(false)
     try {
-      const atualizada = await api.patch<Loja>('/configuracoes/loja', form)
+      const pct = Math.min(100, Math.max(0, parseFloat(percentualComissao.replace(',', '.')) || 0))
+      const atualizada = await api.patch<Loja>('/configuracoes/loja', {
+        ...form,
+        percentual_comissao_padrao: pct,
+      })
+      setPercentualComissao(String(atualizada.percentual_comissao_padrao ?? pct))
       setLoja(atualizada)
       setSucesso(true)
       setTimeout(() => setSucesso(false), 3000)
@@ -455,6 +463,25 @@ export function Configuracoes() {
                     />
                   </div>
                 ))}
+              </div>
+              <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--sv-border)' }}>
+                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '10px' }}>Comissão de vendas</div>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Comissão padrão da loja (%)</label>
+                    <input
+                      value={percentualComissao}
+                      onChange={(e) => setPercentualComissao(e.target.value.replace(/[^\d.,]/g, ''))}
+                      placeholder="0"
+                      style={{ width: '160px' }}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <p style={{ fontSize: '12px', color: 'var(--sv-text-muted)', maxWidth: '460px', margin: 0, paddingBottom: '8px' }}>
+                    Aplicada automaticamente a cada venda registrada. Membros com % próprio
+                    (em Equipe) usam o valor individual.
+                  </p>
+                </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
                 <button className="btn btn-primary" type="submit" disabled={salvando}>

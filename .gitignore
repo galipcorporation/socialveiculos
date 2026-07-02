@@ -17,16 +17,25 @@ build/
 .env.*.local
 !.env.example
 
-# IDE
+# IDE e Ferramentas
 .vscode/
 .idea/
 *.swp
 *.swo
+.claude/
+.gemini/
+.agents/
+.copilot/
+
+# Arquivos Temporários
+*.tmp
+_*.tmp
 documentos/
 # OS
 .DS_Store
 Thumbs.db
 desktop.ini
+
 
 # Coverage
 coverage/

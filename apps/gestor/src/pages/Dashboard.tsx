@@ -10,11 +10,14 @@ const FALLBACK_ACTIONS: RecentPage[] = [
 ]
 
 interface DashboardKpis {
+  escopo: 'loja' | 'vendedor'
   estoque_ativo: number
   leads_ativos: number
   vendas_mes: number
-  receita_mes: number
+  receita_mes: number | null // null para vendedor (não recebe receita global)
   veiculos_publicados: number
+  minhas_comissoes_pendentes: number | null
+  minhas_comissoes_pagas_mes: number | null
 }
 
 const formatBRL = (v: number) =>
@@ -53,14 +56,31 @@ export function Dashboard() {
     carregarAlertas()
   }, [])
 
-  const val = (n?: number) => (loading ? '—' : (n ?? 0).toLocaleString('pt-BR'))
+  const val = (n?: number | null) => (loading ? '—' : (n ?? 0).toLocaleString('pt-BR'))
+  const escopoVendedor = kpis?.escopo === 'vendedor'
 
   return (
     <div className="page-content">
       <div className="page-header">
         <h2>Visão Geral</h2>
-        <p>Acompanhe os principais indicadores e atalhos da sua concessionária.</p>
+        <p>
+          {escopoVendedor
+            ? 'Acompanhe as suas vendas e comissões.'
+            : 'Acompanhe os principais indicadores e atalhos da sua concessionária.'}
+        </p>
       </div>
+
+      {escopoVendedor && (
+        <div
+          style={{
+            background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.25)',
+            borderRadius: 'var(--sv-radius)', padding: '10px 14px', fontSize: 13,
+            color: 'var(--sv-primary-text)', marginBottom: 20,
+          }}
+        >
+          👤 Você está vendo <strong>seus números</strong>. Vendas e comissões abaixo são apenas as suas.
+        </div>
+      )}
 
       {error && (
         <div className="login-error-alert" style={{ marginBottom: '24px' }}>
@@ -93,30 +113,32 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="kpi-card">
-          <div>
-            <div className="kpi-label">Leads Ativos</div>
-            <div className="kpi-value">{val(kpis?.leads_ativos)}</div>
-            <div className="kpi-change positive">
-              <span>No funil de vendas</span>
+        {!escopoVendedor && (
+          <div className="kpi-card">
+            <div>
+              <div className="kpi-label">Leads Ativos</div>
+              <div className="kpi-value">{val(kpis?.leads_ativos)}</div>
+              <div className="kpi-change positive">
+                <span>No funil de vendas</span>
+              </div>
+            </div>
+            <div className="kpi-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <line x1="19" y1="8" x2="19" y2="14" />
+                <line x1="22" y1="11" x2="16" y2="11" />
+              </svg>
             </div>
           </div>
-          <div className="kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <line x1="19" y1="8" x2="19" y2="14" />
-              <line x1="22" y1="11" x2="16" y2="11" />
-            </svg>
-          </div>
-        </div>
+        )}
 
         <div className="kpi-card">
           <div>
-            <div className="kpi-label">Vendas (Mês)</div>
+            <div className="kpi-label">{escopoVendedor ? 'Minhas vendas no mês' : 'Vendas (Mês)'}</div>
             <div className="kpi-value">{val(kpis?.vendas_mes)}</div>
             <div className="kpi-change positive">
-              <span>Veículos vendidos no mês</span>
+              <span>{escopoVendedor ? 'vendas registradas por você' : 'Veículos vendidos no mês'}</span>
             </div>
           </div>
           <div className="kpi-icon">
@@ -127,22 +149,61 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="kpi-card">
-          <div>
-            <div className="kpi-label">Receita (Mês)</div>
-            <div className="kpi-value">{loading ? '—' : formatBRL(kpis?.receita_mes ?? 0)}</div>
-            <div className="kpi-change positive">
-              <span>Lançamentos de receita</span>
+        {escopoVendedor ? (
+          <>
+            <div className="kpi-card">
+              <div>
+                <div className="kpi-label">Comissões a receber</div>
+                <div className="kpi-value" style={{ color: 'var(--sv-warning)' }}>
+                  {loading ? '—' : formatBRL(kpis?.minhas_comissoes_pendentes ?? 0)}
+                </div>
+                <div className="kpi-change positive">
+                  <span>pendentes de pagamento</span>
+                </div>
+              </div>
+              <div className="kpi-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              </div>
+            </div>
+            <div className="kpi-card">
+              <div>
+                <div className="kpi-label">Comissões recebidas (mês)</div>
+                <div className="kpi-value" style={{ color: 'var(--sv-tertiary)' }}>
+                  {loading ? '—' : formatBRL(kpis?.minhas_comissoes_pagas_mes ?? 0)}
+                </div>
+                <div className="kpi-change positive">
+                  <span>pagas neste mês</span>
+                </div>
+              </div>
+              <div className="kpi-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="12" y1="1" x2="12" y2="23" />
+                  <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+                </svg>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="kpi-card">
+            <div>
+              <div className="kpi-label">Receita (Mês)</div>
+              <div className="kpi-value">{loading ? '—' : formatBRL(kpis?.receita_mes ?? 0)}</div>
+              <div className="kpi-change positive">
+                <span>Lançamentos de receita</span>
+              </div>
+            </div>
+            <div className="kpi-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
             </div>
           </div>
-          <div className="kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="2" y="3" width="20" height="14" rx="2" />
-              <line x1="8" y1="21" x2="16" y2="21" />
-              <line x1="12" y1="17" x2="12" y2="21" />
-            </svg>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Quick Actions + Alerts */}

@@ -39,6 +39,7 @@ def _montar_membro_response(membro: MembroLoja, usuario: Usuario) -> dict:
         "avatar_url": usuario.avatar_url,
         "papel": membro.papel,
         "modulos": membro.modulos,
+        "percentual_comissao": membro.percentual_comissao,
         "ativo": membro.ativo,
         "created_at": membro.created_at,
     }
@@ -206,6 +207,9 @@ async def atualizar_membro(
         membro.modulos = body["modulos"]
     if "ativo" in body:
         membro.ativo = body["ativo"]
+    if "percentual_comissao" in body:
+        # None explícito limpa o override (volta ao % padrão da loja)
+        membro.percentual_comissao = body["percentual_comissao"]
 
     await db.commit()
     await db.refresh(membro)

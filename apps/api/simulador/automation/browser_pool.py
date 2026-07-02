@@ -201,7 +201,7 @@ class BrowserPool:
             try:
                 browser.execute_script("window.localStorage.clear();")
                 browser.execute_script("window.sessionStorage.clear();")
-            except:
+            except Exception:
                 pass  # Pode falhar se não houver página carregada
 
             # Navegar para página em branco

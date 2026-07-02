@@ -3,7 +3,7 @@ import { StatusSelect } from '../components/StatusSelect'
 import { api, extractErrorDetails, type ApiErrorDetails } from '../lib/api'
 import { UploadMidia } from '../components/UploadMidia'
 import { useUIStore } from '../stores/uiStore'
-import { mascararMoeda, parseMoeda } from '../lib/mascaras'
+import { mascararMoeda, parseMoeda, mascararCPF, mascararTelefone } from '../lib/mascaras'
 import { SimuladorModal } from '../components/SimuladorModal'
 import { VehicleIdentityFields } from '../components/VehicleIdentityFields'
 import { TIPOS_VEICULO, regraDoTipo, type Veiculo } from '../lib/veiculo'
@@ -550,7 +550,7 @@ export function Estoque() {
                       {v.status === 'disponivel' && (
                         <button
                           className="action-btn"
-                          title="Vender Veículo"
+                          title="Fechar Venda"
                           onClick={() => setVendendoVeiculo(v)}
                           style={{ color: 'var(--sv-success)' }}
                         >
@@ -1691,6 +1691,24 @@ export function VeiculoModal({
    MODAL DE VENDA (VenderVeiculo)
    ══════════════════════════════════════════════════════════════ */
 
+type PagamentoTroca = {
+  tipo: 'troca'
+  marca: string
+  modelo: string
+  versao?: string
+  ano_fabricacao?: number
+  ano_modelo?: number
+  placa?: string
+  km?: number
+  cor?: string
+  valor: number
+  keplaca: boolean
+}
+type PagamentoItem =
+  | PagamentoTroca
+  | { tipo: 'dinheiro'; valor: number }
+  | { tipo: 'financiamento'; valor: number; parcelas?: number }
+
 export function VenderModal({
   veiculo,
   onClose,
@@ -1702,18 +1720,42 @@ export function VenderModal({
   onSaved: (contratoId: string) => void
   onError: (msg: string) => void
 }) {
+  // ── Cliente: existente (busca) ou novo (cadastro rápido) ──
   const [clienteId, setClienteId] = useState('')
-  const [valorStr, setValorStr] = useState(mascararMoeda(veiculo.preco_venda || 0))
-  const [entradaStr, setEntradaStr] = useState('')
-  const [parcelas, setParcelas] = useState('')
-  const [observacoes, setObservacoes] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const [clientes, setClientes] = useState<any[]>([])
   const [clienteSearch, setClienteSearch] = useState('')
+  const [clientes, setClientes] = useState<any[]>([])
+  const [quickOpen, setQuickOpen] = useState(false)
+  const [clienteNovo, setClienteNovo] = useState<{ nome: string; cpf: string; telefone: string } | null>(null)
+  const [qNome, setQNome] = useState('')
+  const [qCpf, setQCpf] = useState('')
+  const [qTel, setQTel] = useState('')
+
+  // ── Venda e pagamento composto ──
+  const [valorStr, setValorStr] = useState(mascararMoeda(veiculo.preco_venda || 0))
+  const [pagamentos, setPagamentos] = useState<PagamentoItem[]>([])
+  const [formAberto, setFormAberto] = useState<null | 'troca' | 'dinheiro' | 'financiamento'>(null)
+
+  // Form de troca
+  const [tPlaca, setTPlaca] = useState('')
+  const [tMarca, setTMarca] = useState('')
+  const [tModelo, setTModelo] = useState('')
+  const [tAno, setTAno] = useState('')
+  const [tKm, setTKm] = useState('')
+  const [tValorStr, setTValorStr] = useState('')
+  const [tCor, setTCor] = useState('')
+  const [tKeplacaHit, setTKeplacaHit] = useState<string | null>(null)
+  const [buscandoPlaca, setBuscandoPlaca] = useState(false)
+
+  // Forms de dinheiro / financiamento
+  const [dValorStr, setDValorStr] = useState('')
+  const [fValorStr, setFValorStr] = useState('')
+  const [fParcelas, setFParcelas] = useState('')
+
+  const [saving, setSaving] = useState(false)
 
   // Fetch clientes
   useEffect(() => {
+    if (clienteNovo) return
     const t = setTimeout(async () => {
       try {
         const params: Record<string, string> = { per_page: '10' }
@@ -1723,21 +1765,124 @@ export function VenderModal({
       } catch { /* ignore */ }
     }, 300)
     return () => clearTimeout(t)
-  }, [clienteSearch])
+  }, [clienteSearch, clienteNovo])
+
+  const valorVenda = parseMoeda(valorStr) || 0
+  const composto = Math.round(pagamentos.reduce((s, p) => s + p.valor, 0) * 100) / 100
+  const falta = Math.round((valorVenda - composto) * 100) / 100
+  const excedente = falta < 0 ? -falta : 0
+  const temDinheiro = pagamentos.some(p => p.tipo === 'dinheiro')
+  const temFinanciamento = pagamentos.some(p => p.tipo === 'financiamento')
+
+  const fecharForm = () => {
+    setFormAberto(null)
+    setTPlaca(''); setTMarca(''); setTModelo(''); setTAno(''); setTKm(''); setTValorStr(''); setTCor('')
+    setTKeplacaHit(null)
+    setDValorStr(''); setFValorStr(''); setFParcelas('')
+  }
+
+  // ── Buscar dados da placa da troca (KePlaca, server-side) ──
+  const buscarPlacaTroca = async () => {
+    const p = tPlaca.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (!p) { onError('Informe a placa para buscar.'); return }
+    setBuscandoPlaca(true)
+    try {
+      const res = await api.get<any>(`/veiculos/consulta-placa/${p}`)
+      if (!res?.encontrado) {
+        setTKeplacaHit(null)
+        onError(res?.mensagem || 'Placa não encontrada — preencha os dados manualmente.')
+        return
+      }
+      if (res.marca) setTMarca(res.marca)
+      if (res.modelo) setTModelo(res.modelo)
+      if (res.ano_modelo) setTAno(String(res.ano_modelo))
+      if (res.cor) setTCor(res.cor)
+      setTKeplacaHit(
+        `${res.marca || ''} ${res.modelo || ''}`.trim()
+        + (res.ano_modelo ? ` · ${res.ano_fabricacao || res.ano_modelo}/${res.ano_modelo}` : '')
+        + (res.cor ? ` · ${res.cor}` : '')
+      )
+    } catch (err) {
+      onError(extractErrorDetails(err).message || 'Erro ao consultar a placa.')
+    } finally {
+      setBuscandoPlaca(false)
+    }
+  }
+
+  const adicionarTroca = () => {
+    const valor = parseMoeda(tValorStr)
+    if (!tMarca.trim() || !tModelo.trim()) { onError('Informe marca e modelo do veículo da troca.'); return }
+    if (!valor || valor <= 0) { onError('Informe o valor de avaliação da troca.'); return }
+    const ano = tAno ? parseInt(tAno) : undefined
+    setPagamentos([...pagamentos, {
+      tipo: 'troca',
+      marca: tMarca.trim().toUpperCase(),
+      modelo: tModelo.trim().toUpperCase(),
+      ano_fabricacao: ano,
+      ano_modelo: ano,
+      placa: tPlaca.trim().toUpperCase() || undefined,
+      km: tKm ? parseInt(tKm.replace(/\D/g, '')) : undefined,
+      cor: tCor || undefined,
+      valor,
+      keplaca: !!tKeplacaHit,
+    }])
+    fecharForm()
+  }
+
+  const adicionarDinheiro = () => {
+    const valor = parseMoeda(dValorStr)
+    if (!valor || valor <= 0) { onError('Informe o valor em dinheiro.'); return }
+    setPagamentos([...pagamentos, { tipo: 'dinheiro', valor }])
+    fecharForm()
+  }
+
+  const adicionarFinanciamento = () => {
+    const valor = parseMoeda(fValorStr)
+    if (!valor || valor <= 0) { onError('Informe o valor financiado.'); return }
+    setPagamentos([...pagamentos, { tipo: 'financiamento', valor, parcelas: fParcelas ? parseInt(fParcelas) : undefined }])
+    fecharForm()
+  }
+
+  const removerPagamento = (idx: number) => setPagamentos(pagamentos.filter((_, i) => i !== idx))
+
+  const usarClienteNovo = () => {
+    if (!qNome.trim()) { onError('Informe ao menos o nome do cliente.'); return }
+    setClienteNovo({ nome: qNome.trim(), cpf: qCpf, telefone: qTel })
+    setQuickOpen(false)
+    setClienteId('')
+  }
 
   const handleSubmit = async () => {
-    if (!clienteId) {
-      onError('Selecione um cliente para realizar a venda.')
+    if (!clienteId && !clienteNovo) {
+      onError('Selecione um cliente ou faça o cadastro rápido.')
       return
     }
+    const trocas = pagamentos.filter((p): p is PagamentoTroca => p.tipo === 'troca')
+    const dinheiro = pagamentos.filter(p => p.tipo === 'dinheiro').reduce((s, p) => s + p.valor, 0)
+    const financiamento = pagamentos.find(p => p.tipo === 'financiamento') as { valor: number; parcelas?: number } | undefined
     setSaving(true)
     try {
-      const res = await api.post<{ contrato_id: string }>(`/veiculos/${veiculo.id}/vender`, {
-        cliente_id: clienteId,
-        valor_venda: parseMoeda(valorStr) || null,
-        valor_entrada: parseMoeda(entradaStr) || null,
-        parcelas: parcelas ? parseInt(parcelas) : null,
-        observacoes: observacoes || null,
+      const res = await api.post<{ contrato_id: string; trocas_veiculo_ids: string[] }>(`/veiculos/${veiculo.id}/vender`, {
+        cliente_id: clienteId || null,
+        cliente_novo: clienteNovo ? {
+          nome: clienteNovo.nome,
+          cpf: clienteNovo.cpf || null,
+          telefone: clienteNovo.telefone || null,
+        } : null,
+        valor_venda: valorVenda || null,
+        pagamento_dinheiro: dinheiro || null,
+        financiamento: financiamento ? { valor: financiamento.valor, parcelas: financiamento.parcelas || null } : null,
+        trocas: trocas.map(t => ({
+          marca: t.marca,
+          modelo: t.modelo,
+          versao: t.versao || null,
+          ano_fabricacao: t.ano_fabricacao || null,
+          ano_modelo: t.ano_modelo || null,
+          placa: t.placa || null,
+          km: t.km || 0,
+          cor: t.cor || null,
+          valor_avaliacao: t.valor,
+        })),
       })
       onSaved(res.contrato_id)
     } catch (err) {
@@ -1747,118 +1892,257 @@ export function VenderModal({
     }
   }
 
+  const clienteSel = clientes.find(c => c.id === clienteId)
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
+      <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
         <div className="modal-header">
-          <h3>Vender Veículo</h3>
+          <h3>Fechar Venda</h3>
           <button className="modal-close" onClick={onClose}><XIcon /></button>
         </div>
 
-        <div className="modal-body">
-          <div style={{ marginBottom: 16, padding: 12, background: 'var(--sv-bg)', borderRadius: 8 }}>
-            <div style={{ fontWeight: 600 }}>{veiculo.marca} {veiculo.modelo}</div>
-            <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>Placa: {veiculo.placa || 'Sem placa'}</div>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          {/* Veículo sendo vendido + valor editável */}
+          <div className="fv-veiculo-box">
+            <div>
+              <div className="fv-nome">{veiculo.marca} {veiculo.modelo}</div>
+              <div className="fv-placa">Placa: {veiculo.placa || 'Sem placa'}</div>
+            </div>
+            <div className="fv-preco">
+              <small>Valor da venda</small>
+              <input
+                type="text"
+                value={valorStr}
+                onChange={e => setValorStr(mascararMoeda(parseMoeda(e.target.value)))}
+              />
+            </div>
           </div>
 
-          <div className="form-grid">
-            {/* Cliente */}
-            <div className="form-group" style={{ gridColumn: '1 / -1', position: 'relative' }}>
-              <label>Cliente / Comprador</label>
-              {clienteId ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)', borderRadius: 6 }}>
-                  <div>
-                    <strong style={{ display: 'block', fontSize: 14 }}>
-                      {clientes.find(c => c.id === clienteId)?.nome || 'Cliente Selecionado'}
-                    </strong>
-                    <span style={{ fontSize: 11, color: 'var(--sv-text-dim)' }}>
-                      {clientes.find(c => c.id === clienteId)?.cpf ? `CPF: ${clientes.find(c => c.id === clienteId).cpf}` : ''}
-                    </span>
+          {/* Cliente / Comprador */}
+          <div style={{ position: 'relative' }}>
+            <div className="fv-sec-label">Cliente / Comprador</div>
+
+            {clienteNovo ? (
+              <div className="fv-cliente-sel">
+                <div>
+                  <div className="fv-nome">{clienteNovo.nome} <span className="fv-chip fv-chip-novo">novo</span></div>
+                  <div className="fv-doc">
+                    {[clienteNovo.telefone, clienteNovo.cpf ? `CPF: ${clienteNovo.cpf}` : 'sem CPF'].filter(Boolean).join(' · ')}
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-glass btn-sm"
-                    onClick={() => { setClienteId(''); setClienteSearch('') }}
-                    style={{ padding: '4px 8px', fontSize: 12 }}
-                  >
-                    Alterar
-                  </button>
                 </div>
-              ) : (
-                <>
+                <button type="button" className="fv-link-btn" onClick={() => { setClienteNovo(null); setQNome(''); setQCpf(''); setQTel('') }}>
+                  Alterar
+                </button>
+              </div>
+            ) : clienteId ? (
+              <div className="fv-cliente-sel">
+                <div>
+                  <div className="fv-nome">{clienteSel?.nome || 'Cliente Selecionado'}</div>
+                  <div className="fv-doc">{clienteSel?.cpf ? `CPF: ${clienteSel.cpf}` : (clienteSel?.telefone || '')}</div>
+                </div>
+                <button type="button" className="fv-link-btn" onClick={() => { setClienteId(''); setClienteSearch('') }}>
+                  Alterar
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="fv-field">
                   <input
                     type="text"
                     placeholder="Buscar cliente por nome ou CPF..."
                     value={clienteSearch}
                     onChange={e => setClienteSearch(e.target.value)}
-                    style={{ width: '100%', height: 40, padding: 10, background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)', borderRadius: 6, color: 'var(--sv-text)' }}
                   />
-                  {clientes.length > 0 && (
-                    <div className="custo-list" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: 'var(--sv-surface-solid)', border: '1px solid var(--sv-border)', borderRadius: 6, marginTop: 4, maxHeight: 180, overflowY: 'auto' }}>
-                      {clientes.map(c => (
-                        <div
-                          key={c.id}
-                          className="custo-item"
-                          style={{ cursor: 'pointer', padding: '8px 12px', borderBottom: '1px solid var(--sv-border)' }}
-                          onClick={() => {
-                            setClienteId(c.id)
-                            setClientes([c])
-                          }}
-                        >
-                          <strong style={{ display: 'block', fontSize: 13 }}>{c.nome}</strong>
-                          <span style={{ fontSize: 11, color: 'var(--sv-text-dim)' }}>{c.cpf || c.telefone || 'Sem identificador'}</span>
-                        </div>
-                      ))}
+                </div>
+                {!quickOpen && clienteSearch && clientes.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: 'var(--sv-surface-solid)', border: '1px solid var(--sv-border)', borderRadius: 6, marginTop: 4, maxHeight: 180, overflowY: 'auto' }}>
+                    {clientes.map(c => (
+                      <div
+                        key={c.id}
+                        style={{ cursor: 'pointer', padding: '8px 12px', borderBottom: '1px solid var(--sv-border)' }}
+                        onClick={() => { setClienteId(c.id); setClientes([c]) }}
+                      >
+                        <strong style={{ display: 'block', fontSize: 13 }}>{c.nome}</strong>
+                        <span style={{ fontSize: 11, color: 'var(--sv-text-dim)' }}>{c.cpf || c.telefone || 'Sem identificador'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!quickOpen && (
+                  <div className="fv-hint">
+                    Não achou? <button type="button" className="fv-link-btn" onClick={() => setQuickOpen(true)}>+ Cadastro rápido</button>
+                  </div>
+                )}
+                {quickOpen && (
+                  <div className="fv-inline-form">
+                    <div className="fv-form-title">⚡ Cadastro rápido <span>— o resto completa depois</span></div>
+                    <div className="fv-field">
+                      <label>Nome completo *</label>
+                      <input type="text" value={qNome} onChange={e => setQNome(e.target.value)} autoFocus />
                     </div>
-                  )}
-                </>
+                    <div className="fv-row">
+                      <div className="fv-field">
+                        <label>CPF</label>
+                        <input type="text" placeholder="000.000.000-00" value={qCpf} onChange={e => setQCpf(mascararCPF(e.target.value))} />
+                      </div>
+                      <div className="fv-field">
+                        <label>Telefone</label>
+                        <input type="text" placeholder="(00) 00000-0000" value={qTel} onChange={e => setQTel(mascararTelefone(e.target.value))} />
+                      </div>
+                    </div>
+                    <div className="fv-form-actions">
+                      <button type="button" className="btn btn-outline btn-sm" onClick={() => setQuickOpen(false)}>Cancelar</button>
+                      <button type="button" className="btn btn-primary btn-sm" onClick={usarClienteNovo}>Usar cliente</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Pagamento componível */}
+          <div>
+            <div className="fv-sec-label">Pagamento</div>
+            <div className="fv-pay-adders">
+              <button type="button" className="fv-pay-adder" onClick={() => setFormAberto('troca')}>🚗 Troca</button>
+              <button type="button" className="fv-pay-adder" disabled={temDinheiro} onClick={() => setFormAberto('dinheiro')}>💵 Dinheiro</button>
+              <button type="button" className="fv-pay-adder" disabled={temFinanciamento} onClick={() => setFormAberto('financiamento')}>🏦 Financiamento</button>
+            </div>
+
+            <div className="fv-pay-list">
+              {pagamentos.map((p, idx) => (
+                <div className="fv-pay-card" key={idx}>
+                  <div className="fv-pay-ico">{p.tipo === 'troca' ? '🚗' : p.tipo === 'dinheiro' ? '💵' : '🏦'}</div>
+                  <div className="fv-pay-info">
+                    {p.tipo === 'troca' ? (
+                      <>
+                        <div className="fv-t">
+                          Troca — {p.marca} {p.modelo}
+                          {p.keplaca && <span className="fv-chip fv-chip-keplaca">KePlaca ✓</span>}
+                        </div>
+                        <div className="fv-s">
+                          {[p.placa || 'sem placa', p.ano_modelo ? `${p.ano_fabricacao}/${p.ano_modelo}` : null, 'entra no estoque como rascunho'].filter(Boolean).join(' · ')}
+                        </div>
+                      </>
+                    ) : p.tipo === 'dinheiro' ? (
+                      <>
+                        <div className="fv-t">Dinheiro / PIX</div>
+                        <div className="fv-s">Entrada em espécie</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="fv-t">Financiamento</div>
+                        <div className="fv-s">{p.parcelas ? `${p.parcelas}× · banco` : 'banco'}</div>
+                      </>
+                    )}
+                  </div>
+                  <div className="fv-pay-valor">{mascararMoeda(p.valor)}</div>
+                  <button type="button" className="fv-pay-x" onClick={() => removerPagamento(idx)}>✕</button>
+                </div>
+              ))}
+
+              {formAberto === 'troca' && (
+                <div className="fv-inline-form" style={{ marginTop: 0 }}>
+                  <div className="fv-form-title">🚗 Adicionar troca</div>
+                  <div className="fv-row">
+                    <div className="fv-field" style={{ flex: 1.2 }}>
+                      <label>Placa</label>
+                      <input type="text" placeholder="ABC1D23" value={tPlaca} onChange={e => setTPlaca(e.target.value.toUpperCase())} autoFocus />
+                    </div>
+                    <div className="fv-field" style={{ flex: 0.9, display: 'flex', alignItems: 'flex-end' }}>
+                      <button type="button" className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center' }} disabled={buscandoPlaca} onClick={buscarPlacaTroca}>
+                        {buscandoPlaca ? 'Buscando...' : 'Buscar placa'}
+                      </button>
+                    </div>
+                  </div>
+                  {tKeplacaHit && <div className="fv-keplaca-hit">✓ KePlaca: {tKeplacaHit}</div>}
+                  <div className="fv-row">
+                    <div className="fv-field">
+                      <label>Marca *</label>
+                      <input type="text" value={tMarca} onChange={e => setTMarca(e.target.value)} />
+                    </div>
+                    <div className="fv-field">
+                      <label>Modelo *</label>
+                      <input type="text" value={tModelo} onChange={e => setTModelo(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="fv-row">
+                    <div className="fv-field">
+                      <label>Ano</label>
+                      <input type="number" placeholder="2020" value={tAno} onChange={e => setTAno(e.target.value)} />
+                    </div>
+                    <div className="fv-field">
+                      <label>KM</label>
+                      <input type="text" placeholder="0" value={tKm} onChange={e => setTKm(e.target.value)} />
+                    </div>
+                    <div className="fv-field">
+                      <label>Valor de avaliação *</label>
+                      <input type="text" placeholder="R$ 0,00" value={tValorStr} onChange={e => setTValorStr(mascararMoeda(parseMoeda(e.target.value)))} />
+                    </div>
+                  </div>
+                  <div className="fv-form-actions">
+                    <button type="button" className="btn btn-outline btn-sm" onClick={fecharForm}>Cancelar</button>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={adicionarTroca}>Adicionar</button>
+                  </div>
+                </div>
               )}
-            </div>
 
-            {/* Valores */}
-            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-              <label>Valor da Venda</label>
-              <input
-                type="text"
-                placeholder="R$ 0,00"
-                value={valorStr}
-                onChange={e => setValorStr(mascararMoeda(parseMoeda(e.target.value)))}
-              />
-            </div>
-            
-            <div className="form-group">
-              <label>Entrada (Opcional)</label>
-              <input
-                type="text"
-                placeholder="R$ 0,00"
-                value={entradaStr}
-                onChange={e => setEntradaStr(mascararMoeda(parseMoeda(e.target.value)))}
-              />
-            </div>
-            <div className="form-group">
-              <label>Parcelas (Opcional)</label>
-              <input
-                type="number"
-                placeholder="Ex: 48"
-                value={parcelas}
-                onChange={e => setParcelas(e.target.value)}
-                min="1"
-                max="120"
-              />
-            </div>
+              {formAberto === 'dinheiro' && (
+                <div className="fv-inline-form" style={{ marginTop: 0 }}>
+                  <div className="fv-form-title">💵 Dinheiro / PIX</div>
+                  <div className="fv-field">
+                    <label>Valor *</label>
+                    <input type="text" placeholder="R$ 0,00" value={dValorStr} onChange={e => setDValorStr(mascararMoeda(parseMoeda(e.target.value)))} autoFocus />
+                  </div>
+                  <div className="fv-form-actions">
+                    <button type="button" className="btn btn-outline btn-sm" onClick={fecharForm}>Cancelar</button>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={adicionarDinheiro}>Adicionar</button>
+                  </div>
+                </div>
+              )}
 
-            {/* Observações */}
-            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-              <label>Observações</label>
-              <textarea
-                placeholder="Observações para o contrato..."
-                value={observacoes}
-                onChange={e => setObservacoes(e.target.value)}
-                rows={3}
-              />
+              {formAberto === 'financiamento' && (
+                <div className="fv-inline-form" style={{ marginTop: 0 }}>
+                  <div className="fv-form-title">🏦 Financiamento</div>
+                  <div className="fv-row">
+                    <div className="fv-field">
+                      <label>Valor financiado *</label>
+                      <input type="text" placeholder="R$ 0,00" value={fValorStr} onChange={e => setFValorStr(mascararMoeda(parseMoeda(e.target.value)))} autoFocus />
+                    </div>
+                    <div className="fv-field">
+                      <label>Parcelas</label>
+                      <input type="number" placeholder="Ex: 48" min="1" max="120" value={fParcelas} onChange={e => setFParcelas(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="fv-form-actions">
+                    <button type="button" className="btn btn-outline btn-sm" onClick={fecharForm}>Cancelar</button>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={adicionarFinanciamento}>Adicionar</button>
+                  </div>
+                </div>
+              )}
+
+              {pagamentos.length === 0 && !formAberto && (
+                <div className="fv-pay-empty">Nenhuma forma de pagamento adicionada ainda</div>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Rodapé vivo: composto / falta / comissão */}
+        <div className="fv-saldo-bar">
+          <span className="fv-comp">Composto: <strong>{mascararMoeda(composto)}</strong> de {mascararMoeda(valorVenda)}</span>
+          {excedente > 0 ? (
+            <span className="fv-saldo-pill fv-pill-comissao">Comissão vendedor: {mascararMoeda(excedente)}</span>
+          ) : falta > 0 ? (
+            <span className="fv-saldo-pill fv-pill-falta">Falta {mascararMoeda(falta)}</span>
+          ) : (
+            <span className="fv-saldo-pill fv-pill-ok">✓ Fechado</span>
+          )}
+        </div>
+        {excedente > 0 && (
+          <div className="fv-saldo-note">O excedente é lançado como comissão do vendedor no financeiro.</div>
+        )}
 
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancelar</button>

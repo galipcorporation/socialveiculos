@@ -87,7 +87,7 @@ class ItauAutomation(BaseBankAutomation):
             try:
                 self.browser.switch_to.default_content()
                 logger.debug("Saído do contexto iframe")
-            except:
+            except Exception:
                 pass
 
             # Clicar no botão de login
@@ -111,7 +111,7 @@ class ItauAutomation(BaseBankAutomation):
             # Garantir que saiu do iframe
             try:
                 self.browser.switch_to.default_content()
-            except:
+            except Exception:
                 pass
             self.take_screenshot("itau_login_error")
             raise
@@ -400,7 +400,7 @@ class ItauAutomation(BaseBankAutomation):
             if match:
                 return float(match.group())
             return 0.0
-        except:
+        except Exception:
             return 0.0
 
     def _limpar_percentual(self, texto: str) -> float:
@@ -421,7 +421,7 @@ class ItauAutomation(BaseBankAutomation):
                 valor = match.group(1).replace(",", ".")
                 return float(valor)
             return 0.0
-        except:
+        except Exception:
             return 0.0
 
 

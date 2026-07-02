@@ -5,6 +5,10 @@ import { Mensagens } from './pages/Mensagens'
 import { CarroDetalhe } from './pages/CarroDetalhe'
 import { Loja } from './pages/Loja'
 import { MeusVeiculos } from './pages/MeusVeiculos'
+import { Sobre } from './pages/institucional/Sobre'
+import { Termos } from './pages/institucional/Termos'
+import { Privacidade } from './pages/institucional/Privacidade'
+import { Anuncie } from './pages/institucional/Anuncie'
 import { UIProvider } from './components/UIProvider'
 
 export default function App() {
@@ -18,6 +22,10 @@ export default function App() {
         <Route path="/carro/:id" element={<CarroDetalhe />} />
         <Route path="/loja/:slug" element={<Loja />} />
         <Route path="/minha-conta/veiculos" element={<MeusVeiculos />} />
+        <Route path="/sobre" element={<Sobre />} />
+        <Route path="/termos" element={<Termos />} />
+        <Route path="/privacidade" element={<Privacidade />} />
+        <Route path="/anuncie" element={<Anuncie />} />
       </Routes>
     </>
   )

@@ -24,6 +24,8 @@ from models import (
     StatusVeiculo,
     StatusPagamento,
     EtapaLead,
+    EsteiraPosVenda,
+    PapelUsuario,
 )
 from rbac import exige_permissao, Acao, Recurso
 from schemas import (
@@ -34,6 +36,7 @@ from schemas import (
     CustosVeiculoResponse,
     ComissaoResponse,
     ComissaoCreateRequest,
+    MinhaVendaResponse,
     FinanceiroResumoResponse,
     DashboardKpisResponse,
     MetricasResponse,
@@ -151,8 +154,61 @@ async def get_dashboard_kpis(
     )
     leads_ativos = (await db.execute(stmt_leads)).scalar() or 0
 
-    # Vendas do mês (veículos com status vendido, atualizados no mês corrente)
     inicio_mes = _inicio_mes_corrente()
+
+    # Veículos publicados na vitrine
+    stmt_pub = (
+        select(func.count()).select_from(Veiculo)
+        .where(Veiculo.loja_id == loja_id, Veiculo.publicado_marketplace == True)
+    )
+    veiculos_publicados = (await db.execute(stmt_pub)).scalar() or 0
+
+    # ── Escopo VENDEDOR (TDD 2026-07-02): só os números DELE; sem receita global ──
+    if context.usuario.papel == PapelUsuario.VENDEDOR:
+        stmt_minhas_vendas = (
+            select(func.count()).select_from(EsteiraPosVenda)
+            .where(
+                EsteiraPosVenda.loja_id == loja_id,
+                EsteiraPosVenda.vendedor_id == context.usuario.id,
+                EsteiraPosVenda.aberta_em >= inicio_mes,
+            )
+        )
+        minhas_vendas_mes = (await db.execute(stmt_minhas_vendas)).scalar() or 0
+
+        stmt_pend = (
+            select(func.coalesce(func.sum(ComissaoVenda.valor_comissao), 0.0))
+            .where(
+                ComissaoVenda.loja_id == loja_id,
+                ComissaoVenda.vendedor_id == context.usuario.id,
+                ComissaoVenda.pago == False,
+            )
+        )
+        comissoes_pendentes = float((await db.execute(stmt_pend)).scalar() or 0.0)
+
+        stmt_pagas = (
+            select(func.coalesce(func.sum(ComissaoVenda.valor_comissao), 0.0))
+            .where(
+                ComissaoVenda.loja_id == loja_id,
+                ComissaoVenda.vendedor_id == context.usuario.id,
+                ComissaoVenda.pago == True,
+                ComissaoVenda.created_at >= inicio_mes,
+            )
+        )
+        comissoes_pagas_mes = float((await db.execute(stmt_pagas)).scalar() or 0.0)
+
+        return DashboardKpisResponse(
+            escopo="vendedor",
+            estoque_ativo=estoque_ativo,
+            leads_ativos=leads_ativos,
+            vendas_mes=minhas_vendas_mes,
+            receita_mes=None,  # 🔒 receita global da loja não vaza para vendedor
+            veiculos_publicados=veiculos_publicados,
+            minhas_comissoes_pendentes=comissoes_pendentes,
+            minhas_comissoes_pagas_mes=comissoes_pagas_mes,
+        )
+
+    # ── Escopo GESTOR/ADMIN: comportamento original ──
+    # Vendas do mês (veículos com status vendido, atualizados no mês corrente)
     stmt_vendas = (
         select(func.count()).select_from(Veiculo)
         .where(
@@ -174,13 +230,6 @@ async def get_dashboard_kpis(
         )
     )
     receita_mes = float((await db.execute(stmt_receita)).scalar() or 0.0)
-
-    # Veículos publicados na vitrine
-    stmt_pub = (
-        select(func.count()).select_from(Veiculo)
-        .where(Veiculo.loja_id == loja_id, Veiculo.publicado_marketplace == True)
-    )
-    veiculos_publicados = (await db.execute(stmt_pub)).scalar() or 0
 
     return DashboardKpisResponse(
         estoque_ativo=estoque_ativo,
@@ -758,3 +807,68 @@ async def marcar_comissao_paga(
     await db.commit()
 
     return comissao
+
+
+# ═══════════════════════════════════════════════════════════════
+# ── ESCOPO DO PRÓPRIO USUÁRIO (/me/*) — TDD 2026-07-02
+#    Vendedor não tem Recurso.FINANCEIRO na matriz RBAC de propósito:
+#    estas rotas dão escopo de LINHA (só o que é dele), não de recurso.
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/me/comissoes", response_model=List[ComissaoResponse])
+async def minhas_comissoes(
+    pago: Optional[bool] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """
+    Comissões do usuário autenticado na loja do contexto.
+    🔒 Filtra vendedor_id E loja_id (mesmo padrão do fix B023) — sem permissão
+    FINANCEIRO porque só devolve linhas do próprio usuário.
+    """
+    stmt = (
+        select(ComissaoVenda)
+        .where(
+            ComissaoVenda.loja_id == context.loja_id,
+            ComissaoVenda.vendedor_id == context.usuario.id,
+        )
+        .order_by(ComissaoVenda.created_at.desc())
+    )
+    if pago is not None:
+        stmt = stmt.where(ComissaoVenda.pago == pago)
+    return (await db.execute(stmt)).scalars().all()
+
+
+@router.get("/me/vendas", response_model=List[MinhaVendaResponse])
+async def minhas_vendas(
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """
+    Vendas registradas pelo usuário autenticado (esteiras onde ele é o vendedor),
+    com a comissão vinculada quando existir. 🔒 Escopo de linha por vendedor_id + loja_id.
+    """
+    stmt = (
+        select(EsteiraPosVenda, Veiculo, ComissaoVenda)
+        .join(Veiculo, Veiculo.id == EsteiraPosVenda.veiculo_id, isouter=True)
+        .join(ComissaoVenda, ComissaoVenda.esteira_id == EsteiraPosVenda.id, isouter=True)
+        .where(
+            EsteiraPosVenda.loja_id == context.loja_id,
+            EsteiraPosVenda.vendedor_id == context.usuario.id,
+        )
+        .order_by(EsteiraPosVenda.aberta_em.desc())
+    )
+    rows = (await db.execute(stmt)).all()
+    return [
+        MinhaVendaResponse(
+            esteira_id=e.id,
+            veiculo_id=e.veiculo_id,
+            veiculo_nome=f"{v.marca} {v.modelo}" if v else None,
+            valor_venda=c.valor_venda if c else None,
+            comissao_valor=c.valor_comissao if c else None,
+            comissao_paga=c.pago if c else None,
+            estagio=e.estagio.value,
+            aberta_em=e.aberta_em,
+        )
+        for e, v, c in rows
+    ]

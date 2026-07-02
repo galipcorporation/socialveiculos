@@ -5,7 +5,7 @@ Garante o isolamento por tenant e o redirecionamento de ações restritas de ven
 Tarefa 05 — Enriquecido com:
   - Filtros, busca textual e paginação (5.1/5.3)
   - Troca rápida de status com auditoria (5.2)
-  - Busca por placa — stub plugável (5.5)
+  - Busca por placa — scraping server-side da KePlaca (5.5)
   - Toggle "Publicar na Vitrine" (5.6)
 """
 
@@ -218,6 +218,7 @@ async def get_marketplace_feed(
         v.loja_logo = loja.logo_url if loja else None
         v.loja_cidade = loja.cidade if loja else None
         v.loja_estado = loja.estado if loja else None
+        v.loja_whatsapp = loja.whatsapp if loja else None
         v.loja_verificada = bool(loja.verificada) if loja else False
         v.seguindo_loja = v.loja_id in lojas_seguidas
 
@@ -237,7 +238,7 @@ async def get_veiculo_vitrine_detalhes(
     """
     stmt = (
         select(Veiculo)
-        .options(selectinload(Veiculo.midias))
+        .options(selectinload(Veiculo.midias), selectinload(Veiculo.loja))
         .where(
             Veiculo.id == id,
             Veiculo.publicado_marketplace == True,
@@ -246,7 +247,7 @@ async def get_veiculo_vitrine_detalhes(
     )
     res = await db.execute(stmt)
     veiculo = res.scalar_one_or_none()
-    
+
     if not veiculo:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -265,7 +266,16 @@ async def get_veiculo_vitrine_detalhes(
         veiculo.favoritado_por_mim = check_res.scalar_one_or_none() is not None
     else:
         veiculo.favoritado_por_mim = False
-        
+
+    # Dados da loja que anuncia (mesma hidratação do feed)
+    loja = veiculo.loja
+    veiculo.loja_nome = loja.nome if loja else None
+    veiculo.loja_logo = loja.logo_url if loja else None
+    veiculo.loja_cidade = loja.cidade if loja else None
+    veiculo.loja_estado = loja.estado if loja else None
+    veiculo.loja_whatsapp = loja.whatsapp if loja else None
+    veiculo.loja_verificada = bool(loja.verificada) if loja else False
+
     return veiculo
 
 
@@ -912,7 +922,7 @@ async def toggle_publicar_veiculo(
 
 
 # ═══════════════════════════════════════════════════════════════
-# ── 5.5 — CONSULTA DE PLACA (STUB PLUGÁVEL)
+# ── 5.5 — CONSULTA DE PLACA (KePlaca — scraping server-side)
 # ═══════════════════════════════════════════════════════════════
 
 @router.get(

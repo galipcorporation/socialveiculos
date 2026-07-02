@@ -252,7 +252,7 @@ class BaseBankAutomation(ABC):
         # Tentar clicar
         try:
             element.click()
-        except:
+        except Exception:
             # Se falhar, usar JavaScript
             self.browser.execute_script("arguments[0].click();", element)
 
@@ -290,10 +290,10 @@ class BaseBankAutomation(ABC):
 
         try:
             select.select_by_value(value)
-        except:
+        except Exception:
             try:
                 select.select_by_visible_text(value)
-            except:
+            except Exception:
                 select.select_by_index(int(value))
 
         logger.debug(f"Selecionou '{value}' em '{selector_key}'")

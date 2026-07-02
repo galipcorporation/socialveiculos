@@ -3,6 +3,7 @@ import { api, extractErrorDetails, type ApiErrorDetails } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
 import { useUIStore } from '../stores/uiStore'
 import { mascararMoeda, parseMoeda } from '../lib/mascaras'
+import { createReconnectingSocket, type ReconnectingSocket } from '../lib/ws'
 
 /* ── Types ───────────────────────────────────────────────────── */
 
@@ -895,7 +896,7 @@ function ChatTab({ token, user, addToast, initialConversaId }: { token: string |
   const [loadingConversas, setLoadingConversas] = useState(true)
   const [loadingMensagens, setLoadingMensagens] = useState(false)
 
-  const wsRef = useRef<WebSocket | null>(null)
+  const wsRef = useRef<ReconnectingSocket | null>(null)
   const messageEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -934,24 +935,23 @@ function ChatTab({ token, user, addToast, initialConversaId }: { token: string |
 
   useEffect(() => {
     if (!token) return
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host
-    const ws = new WebSocket(`${protocol}//${host}/v1/b2b/chat/ws?token=${token}`)
-    wsRef.current = ws
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data) as Mensagem
-        if (activeConversa && msg.conversa_id === activeConversa.id) {
-          setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-        }
-        setConversas(prev => prev.map(conv =>
-          conv.id === msg.conversa_id
-            ? { ...conv, ultima_mensagem: msg.conteudo, ultima_mensagem_data: msg.created_at }
-            : conv
-        ))
-      } catch {}
-    }
-    return () => ws.close()
+    const sock = createReconnectingSocket(`/v1/b2b/chat/ws?token=${token}`, {
+      onMessage: (event) => {
+        try {
+          const msg = JSON.parse(event.data) as Mensagem
+          if (activeConversa && msg.conversa_id === activeConversa.id) {
+            setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          }
+          setConversas(prev => prev.map(conv =>
+            conv.id === msg.conversa_id
+              ? { ...conv, ultima_mensagem: msg.conteudo, ultima_mensagem_data: msg.created_at }
+              : conv
+          ))
+        } catch {}
+      },
+    })
+    wsRef.current = sock
+    return () => { sock.close(); wsRef.current = null }
   }, [token, activeConversa])
 
   useEffect(() => { messageEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens])
@@ -1137,7 +1137,7 @@ function ChatClientesTab({ token, user, addToast }: { token: string | null, user
   const [triandoId, setTriandoId] = useState<string | null>(null)
   const messageEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const wsRef = useRef<WebSocket | null>(null)
+  const wsRef = useRef<ReconnectingSocket | null>(null)
 
   const fetchConversas = useCallback(async () => {
     setLoadingConversas(true)
@@ -1173,18 +1173,17 @@ function ChatClientesTab({ token, user, addToast }: { token: string | null, user
 
   useEffect(() => {
     if (!token) return
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host
-    const ws = new WebSocket(`${protocol}//${host}/v1/vitrine/chat/ws?token=${token}`)
-    wsRef.current = ws
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data) as Mensagem
-        if (activeConversa && msg.conversa_id === activeConversa.id)
-          setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-      } catch {}
-    }
-    return () => ws.close()
+    const sock = createReconnectingSocket(`/v1/vitrine/chat/ws?token=${token}`, {
+      onMessage: (event) => {
+        try {
+          const msg = JSON.parse(event.data) as Mensagem
+          if (activeConversa && msg.conversa_id === activeConversa.id)
+            setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+        } catch {}
+      },
+    })
+    wsRef.current = sock
+    return () => { sock.close(); wsRef.current = null }
   }, [token, activeConversa])
 
   const applyFilter = (list: Conversa[], ruido: boolean, q: string) => {

@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,8 @@ from storage import storage_provider
 from schemas import MidiaResponse
 
 router = APIRouter(prefix="/v1", tags=["Mídias B2B"])
+
+logger = logging.getLogger("midias")
 
 
 # Limites
@@ -31,7 +34,7 @@ async def process_media_in_background(file_url: str, mime_type: str):
         # Stub / Placeholder para processamento
         pass
     except Exception as e:
-        print(f"[Media Process] Erro no processamento de mídia em background: {e}")
+        logger.error("Erro no processamento de mídia em background: %s", e)
 
 
 @router.post("/midias/upload", status_code=status.HTTP_201_CREATED)
@@ -185,6 +188,6 @@ async def deletar_midia(
     try:
         await storage_provider.delete_file(url)
     except Exception as e:
-        print(f"[Storage Delete] Erro ao deletar arquivo físico: {e}")
+        logger.error("Erro ao deletar arquivo físico: %s", e)
 
     return {"message": "Mídia removida com sucesso."}

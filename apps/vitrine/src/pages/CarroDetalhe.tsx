@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { fetchVeiculo, carroMeta, formatBRL, type Veiculo, type Midia } from '../lib/loaders'
 import { getSSGData } from '../lib/ssgData'
+import { whatsappLojaLink } from '../lib/contato'
 
 /** Renderiza uma mídia (foto OU vídeo) — foto e vídeo são tratados como a mesma coisa. */
 function MidiaView({ midia, className }: { midia: Midia; className?: string }) {
@@ -61,9 +62,10 @@ export function CarroDetalhe({ initialData }: { initialData?: Veiculo | null }) 
     }
   })()
 
-  const whatsappLink = `https://wa.me/?text=${encodeURIComponent(
+  const whatsappHref = whatsappLojaLink(
+    veiculo.loja_whatsapp,
     `Olá! Tenho interesse no ${veiculo.marca} ${veiculo.modelo} ${veiculo.ano_modelo}.`,
-  )}`
+  )
 
   return (
     <div className="vt-detail">
@@ -136,15 +138,17 @@ export function CarroDetalhe({ initialData }: { initialData?: Veiculo | null }) 
             </div>
           )}
 
-          <a
-            href={whatsappLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="vt-btn vt-btn-primary vt-btn-block"
-            style={{ marginTop: '1.5rem' }}
-          >
-            Chamar no WhatsApp
-          </a>
+          {whatsappHref && (
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="vt-btn vt-btn-primary vt-btn-block"
+              style={{ marginTop: '1.5rem' }}
+            >
+              Chamar no WhatsApp
+            </a>
+          )}
         </div>
       </div>
     </div>

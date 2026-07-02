@@ -50,8 +50,7 @@ class StorageProvider:
                     Bucket=self.bucket_name,
                     Key=unique_filename,
                     Body=file_content,
-                    ContentType=content_type,
-                    ACL="public-read"
+                    ContentType=content_type
                 )
                 if settings.s3_public_url:
                     return f"{settings.s3_public_url.rstrip('/')}/{unique_filename}"

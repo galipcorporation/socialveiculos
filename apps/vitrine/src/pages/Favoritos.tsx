@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
 import { useUIStore } from '../stores/uiStore'
 import { LoginModal } from '../components/LoginModal'
+import { whatsappLojaLink } from '../lib/contato'
 
 export function Favoritos() {
   const { isAuthenticated, openLoginModal } = useAuthStore()
@@ -70,10 +71,13 @@ export function Favoritos() {
   }
 
   const handleWhatsApp = (veiculo: Veiculo) => {
-    const text = encodeURIComponent(
-      `Olá! Vi o carro ${veiculo.marca} ${veiculo.modelo} (${veiculo.ano_fabricacao}/${veiculo.ano_modelo}) na Vitrine do Social Veículos e gostaria de mais informações.`
-    )
-    window.open(`https://wa.me/5511999999999?text=${text}`, '_blank')
+    const text = `Olá! Vi o carro ${veiculo.marca} ${veiculo.modelo} (${veiculo.ano_fabricacao}/${veiculo.ano_modelo}) na Vitrine do Social Veículos e gostaria de mais informações.`
+    const link = whatsappLojaLink(veiculo.loja_whatsapp, text)
+    if (!link) {
+      useUIStore.getState().showToast('Esta loja não tem WhatsApp cadastrado. Use o chat interno.', 'info')
+      return
+    }
+    window.open(link, '_blank')
   }
 
   const handleSeguir = async (lojaId: string, seguindo: boolean) => {

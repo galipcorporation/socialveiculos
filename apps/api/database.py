@@ -69,6 +69,10 @@ async def create_all_tables():
             await conn.execute(text("ALTER TABLE log_auditoria ADD COLUMN ajusteia BOOLEAN DEFAULT 0 NOT NULL"))
         except Exception:
             pass
+        try:
+            await conn.execute(text("ALTER TABLE veiculo ADD COLUMN contrato_origem_id VARCHAR(36) REFERENCES contrato(id) ON DELETE SET NULL"))
+        except Exception:
+            pass
 
 
 async def drop_all_tables():

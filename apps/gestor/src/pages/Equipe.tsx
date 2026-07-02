@@ -15,6 +15,7 @@ interface Membro {
   avatar_url?: string
   papel: Papel | 'admin_plataforma' | 'cliente'
   modulos?: string
+  percentual_comissao?: number | null
   ativo: boolean
   created_at: string
 }
@@ -223,6 +224,7 @@ export function Equipe() {
                 <th style={{ padding: '12px 16px' }}>Nome</th>
                 <th style={{ padding: '12px 16px' }}>E-mail</th>
                 <th style={{ padding: '12px 16px' }}>Papel</th>
+                <th style={{ padding: '12px 16px' }}>Comissão</th>
                 <th style={{ padding: '12px 16px' }}>Status</th>
                 <th style={{ padding: '12px 16px', textAlign: 'right' }}></th>
               </tr>
@@ -233,6 +235,18 @@ export function Equipe() {
                   <td style={{ padding: '12px 16px', fontWeight: 600 }}>{m.nome}</td>
                   <td style={{ padding: '12px 16px', color: 'var(--sv-text-dim)' }}>{m.email}</td>
                   <td style={{ padding: '12px 16px' }}>{PAPEL_LABEL[m.papel] ?? m.papel}</td>
+                  <td style={{ padding: '12px 16px' }}>
+                    {m.papel === 'vendedor' ? (
+                      <ComissaoInput
+                        membro={m}
+                        onSaved={(pct) =>
+                          setMembros((prev) => prev.map((x) => (x.id === m.id ? { ...x, percentual_comissao: pct } : x)))
+                        }
+                      />
+                    ) : (
+                      <span style={{ color: 'var(--sv-text-muted)' }}>—</span>
+                    )}
+                  </td>
                   <td style={{ padding: '12px 16px' }}>
                     <span style={{ color: m.ativo ? 'var(--sv-success)' : 'var(--sv-text-muted)', fontWeight: 600 }}>
                       {m.ativo ? 'Ativo' : 'Inativo'}
@@ -278,6 +292,47 @@ export function Equipe() {
         />
       )}
     </div>
+  )
+}
+
+/** Override de % de comissão por vendedor. Vazio = usa o padrão da loja. Salva no blur. */
+function ComissaoInput({ membro, onSaved }: { membro: Membro; onSaved: (pct: number | null) => void }) {
+  const [valor, setValor] = useState(membro.percentual_comissao != null ? String(membro.percentual_comissao) : '')
+  const [salvando, setSalvando] = useState(false)
+
+  const salvar = async () => {
+    const limpo = valor.trim()
+    const pct = limpo === '' ? null : Math.min(100, Math.max(0, parseFloat(limpo.replace(',', '.')) || 0))
+    if (pct === (membro.percentual_comissao ?? null)) return
+    setSalvando(true)
+    try {
+      await api.patch(`/equipe/${membro.id}`, { percentual_comissao: pct })
+      onSaved(pct)
+    } catch (err) {
+      console.error(err)
+      setValor(membro.percentual_comissao != null ? String(membro.percentual_comissao) : '')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <input
+        value={valor}
+        onChange={(e) => setValor(e.target.value.replace(/[^\d.,]/g, ''))}
+        onBlur={salvar}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+        placeholder="—"
+        disabled={salvando}
+        inputMode="decimal"
+        style={{ width: 64, textAlign: 'right', padding: '4px 8px', fontSize: 13 }}
+        title="% de comissão deste vendedor. Vazio = usa o padrão da loja."
+      />
+      <span style={{ fontSize: 12, color: 'var(--sv-text-muted)', fontStyle: valor === '' ? 'italic' : 'normal' }}>
+        {valor === '' ? 'usa o padrão' : '%'}
+      </span>
+    </span>
   )
 }
 

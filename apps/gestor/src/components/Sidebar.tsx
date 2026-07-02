@@ -91,6 +91,18 @@ const NAV_ITEMS = [
     ),
   },
   {
+    path: '/minhas-comissoes',
+    label: 'Minhas Comissões',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M16 8h-6a2 2 0 100 4h4a2 2 0 110 4H8" />
+        <line x1="12" y1="6" x2="12" y2="8" />
+        <line x1="12" y1="16" x2="12" y2="18" />
+      </svg>
+    ),
+  },
+  {
     path: '/aprovacoes',
     label: 'Aprovações',
     icon: (
@@ -156,6 +168,10 @@ export function Sidebar() {
         // Aprovações e Equipe são exclusivos de gestor.
         if (item.path === '/aprovacoes' || item.path === '/equipe') {
           return user?.papel === 'gestor'
+        }
+        // Minhas Comissões é exclusivo de vendedor (gestor acompanha pelo Financeiro).
+        if (item.path === '/minhas-comissoes') {
+          return user?.papel === 'vendedor'
         }
         return podeVer(item.path)
       })

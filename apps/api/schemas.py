@@ -82,6 +82,7 @@ class VeiculoB2CResponse(BaseModel):
     loja_logo: Optional[str] = None
     loja_cidade: Optional[str] = None
     loja_estado: Optional[str] = None
+    loja_whatsapp: Optional[str] = None
     loja_verificada: bool = False
     seguindo_loja: bool = False
     marca: str
@@ -397,6 +398,7 @@ class LojaResponse(BaseModel):
     cidade: Optional[str] = None
     estado: Optional[str] = None
     cep: Optional[str] = None
+    percentual_comissao_padrao: float = 0.0
     verificada: bool
     ativa: bool
     created_at: datetime
@@ -732,11 +734,27 @@ class ComissaoResponse(BaseModel):
     loja_id: str
     vendedor_id: Optional[str] = None
     veiculo_id: Optional[str] = None
+    esteira_id: Optional[str] = None
     valor_venda: float
     percentual: float
     valor_comissao: float
     pago: bool
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MinhaVendaResponse(BaseModel):
+    """Venda do próprio vendedor (rota /me/vendas — escopo de linha, TDD 2026-07-02)."""
+    esteira_id: str
+    veiculo_id: Optional[str] = None
+    veiculo_nome: Optional[str] = None
+    valor_venda: Optional[float] = None
+    comissao_valor: Optional[float] = None
+    comissao_paga: Optional[bool] = None
+    estagio: str
+    aberta_em: datetime
 
     class Config:
         from_attributes = True
@@ -762,12 +780,21 @@ class FinanceiroResumoResponse(BaseModel):
 # ── Dashboard & Métricas ───────────────────────────────────────
 
 class DashboardKpisResponse(BaseModel):
-    """KPIs reais da loja. Zeros quando a loja ainda não tem dados (estado vazio)."""
-    estoque_ativo: int          # veículos disponíveis
-    leads_ativos: int           # leads fora de fechamento/perdido
-    vendas_mes: int             # veículos com status vendido no mês corrente
-    receita_mes: float          # soma de receitas do mês corrente
-    veiculos_publicados: int    # publicados na vitrine
+    """KPIs reais da loja. Zeros quando a loja ainda não tem dados (estado vazio).
+
+    Escopo por papel (TDD 2026-07-02): para VENDEDOR, `receita_mes` vem None
+    (dado global sensível) e os campos `minhas_*` vêm preenchidos com os números
+    pessoais. Para gestor/admin, comportamento original inalterado.
+    """
+    escopo: str = "loja"                 # "loja" (gestor/admin) | "vendedor"
+    estoque_ativo: int                   # veículos disponíveis
+    leads_ativos: int                    # leads fora de fechamento/perdido
+    vendas_mes: int                      # vendedor: SÓ as vendas dele no mês
+    receita_mes: Optional[float] = None  # None para vendedor (não vaza receita global)
+    veiculos_publicados: int             # publicados na vitrine
+    # Campos pessoais (só quando escopo == "vendedor")
+    minhas_comissoes_pendentes: Optional[float] = None
+    minhas_comissoes_pagas_mes: Optional[float] = None
 
 
 class RankingVeiculoResponse(BaseModel):
@@ -937,6 +964,7 @@ class MembroEquipeResponse(BaseModel):
     avatar_url: Optional[str] = None
     papel: PapelUsuario         # papel dentro da loja
     modulos: Optional[str] = None  # JSON array de módulos liberados ao vendedor
+    percentual_comissao: Optional[float] = None  # override; None = usa o padrão da loja
     ativo: bool
     created_at: datetime
 
@@ -958,6 +986,7 @@ class AtualizarMembroRequest(BaseModel):
     papel: Optional[PapelUsuario] = None
     modulos: Optional[str] = None
     ativo: Optional[bool] = None
+    percentual_comissao: Optional[float] = Field(None, ge=0, le=100)  # override do % da loja
 
 
 # ── Configurações da Loja (Perfil) ─────────────────────────────
@@ -974,6 +1003,8 @@ class LojaUpdateRequest(BaseModel):
     cidade: Optional[str] = Field(None, max_length=100)
     estado: Optional[str] = Field(None, max_length=2)
     cep: Optional[str] = Field(None, max_length=10)
+    # % de comissão padrão da loja (0-100); override individual em MembroLoja
+    percentual_comissao_padrao: Optional[float] = Field(None, ge=0, le=100)
 
 
 # ── Chat B2C & Favoritos ────────────────────────────────────────
@@ -1170,9 +1201,41 @@ class ContratoListResponse(BaseModel):
     pages: int
 
 
+class ClienteNovoInline(BaseModel):
+    """Cadastro rápido de cliente no ato da venda — a ficha completa fica pra depois."""
+    nome: str = Field(..., min_length=1, max_length=200)
+    cpf: Optional[str] = Field(None, max_length=14)
+    telefone: Optional[str] = Field(None, max_length=20)
+
+
+class TrocaVendaInline(BaseModel):
+    """Veículo recebido como parte do pagamento — entra no estoque como rascunho."""
+    marca: str = Field(..., min_length=1, max_length=100)
+    modelo: str = Field(..., min_length=1, max_length=200)
+    versao: Optional[str] = Field(None, max_length=200)
+    ano_fabricacao: Optional[int] = None
+    ano_modelo: Optional[int] = None
+    placa: Optional[str] = Field(None, max_length=10)
+    km: int = Field(default=0, ge=0)
+    cor: Optional[str] = Field(None, max_length=50)
+    valor_avaliacao: float = Field(..., gt=0)  # vira preco_custo e compõe o pagamento
+
+
+class FinanciamentoInline(BaseModel):
+    valor: float = Field(..., gt=0)
+    parcelas: Optional[int] = Field(None, ge=1, le=120)
+
+
 class VenderVeiculoRequest(BaseModel):
-    cliente_id: str
+    # Cliente: existente (cliente_id) OU cadastrado na hora (cliente_novo)
+    cliente_id: Optional[str] = None
+    cliente_novo: Optional[ClienteNovoInline] = None
     valor_venda: Optional[float] = None
+    # Pagamento composto
+    pagamento_dinheiro: Optional[float] = None
+    financiamento: Optional[FinanciamentoInline] = None
+    trocas: List[TrocaVendaInline] = []
+    # Campos legados (mantidos por compatibilidade)
     valor_entrada: Optional[float] = None
     parcelas: Optional[int] = None
     observacoes: Optional[str] = None
@@ -1185,6 +1248,8 @@ class VenderVeiculoResponse(BaseModel):
     contrato_id: str
     veiculo_id: str
     esteira_id: Optional[str] = None
+    trocas_veiculo_ids: List[str] = []
+    comissao_excedente: Optional[float] = None
 
 
 # ═══════════════════════════════════════════════════════════════
