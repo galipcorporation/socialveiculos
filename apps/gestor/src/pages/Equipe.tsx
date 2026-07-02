@@ -321,12 +321,29 @@ function ComissaoInput({ membro, onSaved }: { membro: Membro; onSaved: (pct: num
       <input
         value={valor}
         onChange={(e) => setValor(e.target.value.replace(/[^\d.,]/g, ''))}
-        onBlur={salvar}
+        onFocus={(e) => {
+          e.currentTarget.style.borderColor = 'var(--sv-primary)'
+        }}
+        onBlur={(e) => {
+          salvar()
+          e.currentTarget.style.borderColor = 'var(--sv-border)'
+        }}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
         placeholder="—"
         disabled={salvando}
         inputMode="decimal"
-        style={{ width: 64, textAlign: 'right', padding: '4px 8px', fontSize: 13 }}
+        style={{
+          width: 54,
+          textAlign: 'center',
+          padding: '6px 8px',
+          fontSize: 13,
+          borderRadius: 'var(--sv-radius, 6px)',
+          background: 'var(--sv-surface-dim)',
+          border: '1px solid var(--sv-border)',
+          color: 'var(--sv-text)',
+          outline: 'none',
+          transition: 'border-color 0.2s',
+        }}
         title="% de comissão deste vendedor. Vazio = usa o padrão da loja."
       />
       <span style={{ fontSize: 12, color: 'var(--sv-text-muted)', fontStyle: valor === '' ? 'italic' : 'normal' }}>

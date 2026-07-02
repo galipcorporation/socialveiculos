@@ -1,11 +1,10 @@
 """
 Social Veículos — Seed Script
 Popula o banco com:
-  1. Catálogo FIPE (marcas + modelos brasileiros)
-  2. 1 loja demo
-  3. 1 gestor + 1 vendedor
-  4. Veículos de teste variados
-  5. 1 plano de assinatura
+  1. 1 loja demo
+  2. 1 gestor + 1 vendedor
+  3. Veículos de teste variados
+  4. 1 plano de assinatura
 """
 
 import asyncio
@@ -16,8 +15,6 @@ from sqlalchemy.future import select
 
 from database import async_session, create_all_tables
 from models import (
-    CatalogoMarca,
-    CatalogoModelo,
     Loja,
     Usuario,
     MembroLoja,
@@ -35,104 +32,6 @@ from models import (
 
 def _uuid() -> str:
     return str(uuid4())
-
-
-# ═══════════════════════════════════════════════════════════════
-# CATÁLOGO FIPE — Marcas e modelos do mercado brasileiro
-# ═══════════════════════════════════════════════════════════════
-CATALOGO_FIPE: dict[str, list[str]] = {
-    "Chevrolet": [
-        "Onix", "Onix Plus", "Tracker", "S10", "Spin", "Cruze",
-        "Montana", "Equinox", "Trailblazer", "Bolt EV",
-    ],
-    "Volkswagen": [
-        "Gol", "Polo", "Virtus", "T-Cross", "Nivus", "Taos",
-        "Saveiro", "Amarok", "Tiguan", "Jetta",
-    ],
-    "Fiat": [
-        "Argo", "Cronos", "Mobi", "Strada", "Toro", "Pulse",
-        "Fastback", "Uno", "Fiorino", "Ducato",
-    ],
-    "Toyota": [
-        "Corolla", "Corolla Cross", "Hilux", "SW4", "Yaris",
-        "RAV4", "Camry", "Land Cruiser", "Prius",
-    ],
-    "Honda": [
-        "Civic", "HR-V", "City", "Fit", "CR-V", "ZR-V",
-        "Accord", "WR-V",
-    ],
-    "Hyundai": [
-        "HB20", "HB20S", "Creta", "Tucson", "Santa Fe",
-        "HB20X", "ix35", "Azera", "IONIQ 5",
-    ],
-    "Jeep": [
-        "Renegade", "Compass", "Commander", "Wrangler",
-        "Grand Cherokee", "Gladiator",
-    ],
-    "Renault": [
-        "Kwid", "Sandero", "Logan", "Duster", "Oroch",
-        "Captur", "Kardian", "Master",
-    ],
-    "Ford": [
-        "Ranger", "Territory", "Bronco Sport", "Bronco",
-        "Maverick", "Mustang", "Edge",
-    ],
-    "Nissan": [
-        "Kicks", "Versa", "Sentra", "Frontier", "X-Trail",
-        "Leaf",
-    ],
-    "BMW": [
-        "Série 1", "Série 3", "Série 5", "X1", "X3", "X5",
-        "320i", "330i", "520i", "iX",
-    ],
-    "Mercedes-Benz": [
-        "Classe A", "Classe C", "Classe E", "GLA", "GLB",
-        "GLC", "GLE", "EQA", "EQC",
-    ],
-    "Audi": [
-        "A3", "A4", "A5", "Q3", "Q5", "Q7", "Q8",
-        "e-tron", "RS3", "RS5",
-    ],
-    "Peugeot": [
-        "208", "2008", "3008", "5008", "Partner", "Expert",
-    ],
-    "Citroën": [
-        "C3", "C4 Cactus", "C5 Aircross", "Berlingo", "Jumpy",
-    ],
-    "Mitsubishi": [
-        "L200 Triton", "Outlander", "Eclipse Cross", "ASX",
-        "Pajero Sport", "Pajero Full",
-    ],
-    "Kia": [
-        "Sportage", "Seltos", "Cerato", "Carnival", "Stonic",
-        "EV6", "Sorento",
-    ],
-    "Caoa Chery": [
-        "Tiggo 2", "Tiggo 3X", "Tiggo 5X", "Tiggo 7",
-        "Tiggo 8", "Arrizo 6",
-    ],
-    "Ram": [
-        "Rampage", "1500", "2500", "3500", "Classic",
-    ],
-    "Volvo": [
-        "XC40", "XC60", "XC90", "C40", "S60", "V60",
-    ],
-    "Land Rover": [
-        "Discovery Sport", "Range Rover Evoque",
-        "Range Rover Sport", "Defender", "Range Rover Velar",
-    ],
-    "Porsche": [
-        "Cayenne", "Macan", "911 Carrera", "Taycan",
-        "Panamera", "718 Cayman",
-    ],
-    "BYD": [
-        "Dolphin", "Seal", "Yuan Plus", "Song Plus", "Tan",
-        "Han", "King",
-    ],
-    "GWM": [
-        "Haval H6", "Haval Jolion", "Ora 03", "Tank 300",
-    ],
-}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -208,24 +107,7 @@ async def seed():
     print("  [OK] Tabelas criadas")
 
     async with async_session() as session:
-        # ── 1. Catálogo FIPE ───────────────────────────────────
-        total_marcas = 0
-        total_modelos = 0
-
-        for marca_nome, modelos in CATALOGO_FIPE.items():
-            marca = CatalogoMarca(nome=marca_nome)
-            session.add(marca)
-            await session.flush()  # gerar o ID
-            total_marcas += 1
-
-            for modelo_nome in modelos:
-                session.add(CatalogoModelo(marca_id=marca.id, nome=modelo_nome))
-                total_modelos += 1
-
-        await session.commit()
-        print(f"  [OK] Catalogo FIPE: {total_marcas} marcas, {total_modelos} modelos")
-
-        # ── 2. Loja demo ──────────────────────────────────────
+        # ── 1. Loja demo ──────────────────────────────────────
         loja_id = _uuid()
         loja = Loja(
             id=loja_id,
@@ -244,7 +126,7 @@ async def seed():
         session.add(loja)
         print("  [OK] Loja demo: Auto Premium")
 
-        # ── 3. Usuários ───────────────────────────────────────
+        # ── 2. Usuários ───────────────────────────────────────
         from auth import hash_password
         senha_hash = hash_password("demo123")
 
@@ -299,7 +181,7 @@ async def seed():
         ))
         print("  [OK] Usuarios: gestor + vendedor")
 
-        # ── 4. Veículos demo ──────────────────────────────────
+        # ── 3. Veículos demo ──────────────────────────────────
         from models import Midia, TipoMidia
         for v_orig in VEICULOS_DEMO:
             v = v_orig.copy()
@@ -317,7 +199,7 @@ async def seed():
 
         print(f"  [OK] Veiculos: {len(VEICULOS_DEMO)} veiculos de teste")
 
-        # ── 5. Planos + Assinatura ────────────────────────────
+        # ── 4. Planos + Assinatura ─────────────────────────────
         session.add(Plano(
             id=_uuid(),
             nome="Básico",

@@ -4,7 +4,6 @@ Todas as entidades do domínio (social.md §7).
 
 Organização:
   - Tenancy & Auth: Loja, Usuario, MembroLoja, Sessao
-  - Catálogo: CatalogoMarca, CatalogoModelo
   - Estoque: Veiculo, Midia
   - CRM: ClientePF, Lead, Negociacao
   - Social: Favorito, PublicacaoB2B, Comentario, Curtida
@@ -328,39 +327,6 @@ class Sessao(Base):
     __table_args__ = (
         Index("ix_sessao_usuario", "usuario_id"),
         Index("ix_sessao_refresh", "refresh_token"),
-    )
-
-
-# ═══════════════════════════════════════════════════════════════
-# 2.3 — CATÁLOGO CANÔNICO (FIPE-style)
-# ═══════════════════════════════════════════════════════════════
-
-class CatalogoMarca(Base):
-    """Marca canônica (ex: Toyota, Honda, Chevrolet)."""
-    __tablename__ = "catalogo_marca"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    nome = Column(String(100), unique=True, nullable=False)
-    logo_url = Column(String(500), nullable=True)
-    ativa = Column(Boolean, default=True)
-
-    modelos = relationship("CatalogoModelo", back_populates="marca", cascade="all, delete-orphan")
-
-
-class CatalogoModelo(Base):
-    """Modelo canônico (ex: Corolla, Civic, Onix)."""
-    __tablename__ = "catalogo_modelo"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    marca_id = Column(Integer, ForeignKey("catalogo_marca.id", ondelete="CASCADE"), nullable=False)
-    nome = Column(String(200), nullable=False)
-    ativo = Column(Boolean, default=True)
-
-    marca = relationship("CatalogoMarca", back_populates="modelos")
-
-    __table_args__ = (
-        UniqueConstraint("marca_id", "nome", name="uq_modelo_marca_nome"),
-        Index("ix_modelo_marca", "marca_id"),
     )
 
 

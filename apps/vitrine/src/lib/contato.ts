@@ -3,16 +3,17 @@
  *
  * IMPORTANTE (regra de negócio): o contato de um VEÍCULO é sempre da LOJA que o
  * anuncia — use `whatsappLojaLink(loja_whatsapp, ...)`. Os canais globais abaixo
- * são só da PLATAFORMA (páginas institucionais: Sobre, Anuncie), nunca de um carro.
+ * são só da PLATAFORMA (páginas institucionais: Sobre, Anuncie) e de SUPORTE,
+ * nunca de um carro.
  *
- * Sobrescreva por env no build (Vercel): VITE_CONTATO_WHATSAPP, VITE_CONTATO_EMAIL.
- * ⚠️ Valores atuais são TEMPORÁRIOS — trocar pelos canais definitivos antes de escalar.
+ * Configure por env no build (Vercel): VITE_CONTATO_WHATSAPP, VITE_CONTATO_EMAIL.
+ * Sem env definida, cai no e-mail de suporte da plataforma (não é loja/veículo).
  */
 export const CONTATO_WHATSAPP: string =
   (import.meta.env.VITE_CONTATO_WHATSAPP as string | undefined)?.trim() || '5517991110057'
 
 export const CONTATO_EMAIL: string =
-  (import.meta.env.VITE_CONTATO_EMAIL as string | undefined)?.trim() || 'galipcorporation@gmail.com'
+  (import.meta.env.VITE_CONTATO_EMAIL as string | undefined)?.trim() || 'suporte@socialveiculos.com'
 
 /** Normaliza um telefone para o formato wa.me (só dígitos, com DDI 55 se faltar). */
 function normalizarWhatsapp(numero: string): string {

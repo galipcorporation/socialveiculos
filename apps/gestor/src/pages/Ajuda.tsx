@@ -120,7 +120,7 @@ const TOPICOS: Topico[] = [
     modulo: 'simulador' as const,
     icone: 'M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M9 7V4a2 2 0 012-2h9a2 2 0 012 2v9a2 2 0 01-2 2h-3',
     imagem: '/ajuda/simulador.png',
-    descricao: 'Simule financiamentos em múltiplos bancos simultaneamente (BV, PAN, Creditas) e imprima propostas para o cliente.',
+    descricao: 'Simule financiamentos em múltiplos bancos simultaneamente (BV, PAN) e imprima propostas para o cliente.',
     passos: [
       { texto: 'Acesse "Ferramentas → Simulador" no menu lateral. A primeira coisa a fazer é configurar as credenciais dos bancos: clique no botão "Configurar" em cada card de financeira e informe o usuário e senha do portal daquela instituição.' },
       { texto: 'Com as financeiras configuradas, marque os bancos desejados com o checkbox "Selecionar" nos cards do passo 1. Você pode simular em um ou todos os bancos ao mesmo tempo.' },

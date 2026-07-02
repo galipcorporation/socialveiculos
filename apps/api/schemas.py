@@ -306,37 +306,6 @@ class VeiculoListResponse(BaseModel):
     pages: int
 
 
-# ── Catálogo Canônico (Autocomplete) ───────────────────────────
-
-class CatalogoMarcaResponse(BaseModel):
-    id: int
-    nome: str
-    logo_url: Optional[str] = None
-    ativa: bool
-
-    class Config:
-        from_attributes = True
-
-
-class CatalogoModeloResponse(BaseModel):
-    id: int
-    marca_id: int
-    nome: str
-    ativo: bool
-
-    class Config:
-        from_attributes = True
-
-
-class CatalogoMarcaCreateRequest(BaseModel):
-    nome: str = Field(..., min_length=1, max_length=100)
-    logo_url: Optional[str] = Field(None, max_length=500)
-
-
-class CatalogoModeloCreateRequest(BaseModel):
-    nome: str = Field(..., min_length=1, max_length=200)
-
-
 # ── Consulta de Placa ──────────────────────────────────────────
 
 class ConsultaPlacaResponse(BaseModel):

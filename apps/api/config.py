@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     def validate_secure_jwt_secret(self) -> 'Settings':
         if not self.api_debug and (not self.jwt_secret or self.jwt_secret == "troque-esta-chave-em-producao"):
             raise ValueError("JWT_SECRET é obrigatório e deve ser alterado em produção (quando api_debug=False).")
+        # RFC 7518 §3.2 exige chave >= tamanho do hash para HMAC (HS256 = 32 bytes).
+        if not self.api_debug and len(self.jwt_secret.encode("utf-8")) < 32:
+            raise ValueError("JWT_SECRET deve ter no mínimo 32 bytes em produção (quando api_debug=False).")
         if not self.api_debug and (not self.webhook_secret or self.webhook_secret == "troque-webhook-secret-em-producao"):
             raise ValueError("WEBHOOK_SECRET é obrigatório e deve ser alterado em produção (quando api_debug=False).")
         return self

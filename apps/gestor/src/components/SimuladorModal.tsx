@@ -26,7 +26,7 @@ export function SimuladorModal({ veiculo, onClose }: SimuladorModalProps) {
   
   const [entrada, setEntrada] = useState(veiculo.preco_venda ? veiculo.preco_venda * 0.2 : 0)
   const [entradaStr, setEntradaStr] = useState(mascararMoeda(veiculo.preco_venda ? veiculo.preco_venda * 0.2 : 0))
-  const [bancos, setBancos] = useState<string[]>(['bv', 'pan', 'creditas'])
+  const [bancos, setBancos] = useState<string[]>(['bv', 'pan'])
   
   const [loading, setLoading] = useState(false)
   const [resultados, setResultados] = useState<SimulacaoResult[]>([])
@@ -152,7 +152,7 @@ export function SimuladorModal({ veiculo, onClose }: SimuladorModalProps) {
             {paywall ? (
               <div style={{ padding: '24px', background: 'rgba(255,0,0,0.1)', borderRadius: '8px', border: '1px solid var(--sv-danger)' }}>
                 <h4 style={{ color: 'var(--sv-danger)', margin: '0 0 8px 0' }}>Módulo Bloqueado</h4>
-                <p style={{ color: 'var(--sv-text-dim)', fontSize: '14px' }}>A simulação de crédito é um recurso exclusivo do pacote Premium. Assine agora para ter acesso à orquestração paralela com BV, PAN e Creditas.</p>
+                <p style={{ color: 'var(--sv-text-dim)', fontSize: '14px' }}>A simulação de crédito é um recurso exclusivo do pacote Premium. Assine agora para ter acesso à orquestração paralela com BV e PAN.</p>
                 <button className="btn btn-primary" style={{ marginTop: '16px' }} onClick={() => window.location.href = '/gestor/assinatura'}>
                   Ver Planos
                 </button>

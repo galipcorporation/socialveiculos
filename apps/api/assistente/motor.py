@@ -145,8 +145,8 @@ async def gerar_resposta_ia(
     Inclui informações da loja, simulações e CRM.
     """
     if not ANTHROPIC_API_KEY:
-        logger.warning("[CLAUDE] Sem ANTHROPIC_API_KEY. Retornando resposta padrão mock.")
-        return "[BOT] Olá! Recebemos sua mensagem. Um de nossos vendedores entrará em contato em breve!"
+        logger.error("[CLAUDE] Sem ANTHROPIC_API_KEY configurada. Assistente de IA indisponível.")
+        raise RuntimeError("ANTHROPIC_API_KEY não configurada — assistente de IA indisponível")
 
     # 1. Carregar configuração do assistente
     stmt_config = select(AssistenteConfig).where(
@@ -276,10 +276,10 @@ async def gerar_resposta_ia(
             content = res_data.get("content", [])
             if content and len(content) > 0:
                 return content[0].get("text", "")
-            return "[BOT] Obrigado pelo contato. Um momento que irei verificar para você."
+            raise RuntimeError("Resposta do Claude sem conteúdo de texto.")
     except Exception as e:
         logger.error(f"[CLAUDE ERROR] Erro na chamada do Claude: {e}")
-        return "[BOT] Olá! Recebemos sua mensagem. Analisaremos sua proposta e retornaremos o contato em breve."
+        raise
 
 
 async def processar_mensagem_recebida(
@@ -391,7 +391,11 @@ async def processar_mensagem_recebida(
             autonomia = perm.autonomia_default if perm else AutonomiaAssistente.COPILOTO
 
         # Chamar a IA
-        resposta_ia = await gerar_resposta_ia(db, loja_id, usuario_id, conversa, conteudo)
+        try:
+            resposta_ia = await gerar_resposta_ia(db, loja_id, usuario_id, conversa, conteudo)
+        except Exception as e:
+            logger.error(f"[ASSISTENTE ERROR] Falha ao gerar resposta da IA: {e}")
+            return
 
         if autonomia == AutonomiaAssistente.AUTOMATICO:
             # Modo AUTOMATICO: enviar direto pelo worker

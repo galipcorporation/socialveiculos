@@ -97,13 +97,10 @@ app.post('/session/start', authenticate, async (req, res) => {
 
   } else {
     // Lógica real do Baileys
-    // Para simplificar a inicialização rápida em dev, o Baileys seria instanciado aqui.
-    // Em produção o fluxo usará o pacote @whiskeysockets/baileys.
-    // Definimos um stub de conexão que simula caso o Baileys não esteja instalado, mas usando Baileys se disponível.
     try {
       const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = await import('@whiskeysockets/baileys');
       const { state, saveCreds } = await useMultiFileAuthState(`./sessions/auth_info_${usuario_id}`);
-      
+
       const sock = makeWASocket({
         auth: state,
         printQRInTerminal: false
@@ -111,11 +108,19 @@ app.post('/session/start', authenticate, async (req, res) => {
 
       session.sock = sock;
 
+      // Aguarda o primeiro QR (ou conexão via credenciais salvas) antes de responder,
+      // pra evitar que o front receba qr:null no primeiro request e precise esperar o próximo poll.
+      const primeiroEvento = new Promise((resolve) => {
+        session._resolvePrimeiroEvento = resolve;
+        setTimeout(resolve, 8000); // não trava a request indefinidamente
+      });
+
       sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
           session.qr = await qrcode.toDataURL(qr);
           session.status = 'connecting';
+          if (session._resolvePrimeiroEvento) { session._resolvePrimeiroEvento(); session._resolvePrimeiroEvento = null; }
         }
         if (connection === 'close') {
           const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
@@ -134,6 +139,7 @@ app.post('/session/start', authenticate, async (req, res) => {
           console.log(`[BAILEY] Conexao aberta com sucesso para ${usuario_id}`);
           session.status = 'connected';
           session.qr = null;
+          if (session._resolvePrimeiroEvento) { session._resolvePrimeiroEvento(); session._resolvePrimeiroEvento = null; }
           await notifyWebhook({ event: 'connection', usuario_id, status: 'connected' });
         }
       });
@@ -164,8 +170,9 @@ app.post('/session/start', authenticate, async (req, res) => {
         }
       });
 
+      await primeiroEvento;
     } catch (err) {
-      console.error('[BAILEY ERROR] Falha ao instanciar Baileys. Alternando para modo simulador local.', err);
+      console.error('[BAILEY ERROR] Falha ao instanciar sessao Baileys.', err);
       session.status = 'disconnected';
     }
   }

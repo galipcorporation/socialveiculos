@@ -3,22 +3,19 @@ import logging
 import time
 from typing import Dict, List
 
-from config import settings
 from .banks.base_motor import SimulationInput, SimulationOutput
 from .banks.motor_bv import MotorBV
 from .banks.motor_pan import MotorPAN
-from .banks.motor_creditas import MotorCreditas
 
 logger = logging.getLogger(__name__)
 
 class OrquestradorV2:
     def __init__(self):
         self.logger = logging.getLogger("simulador.orquestrador")
-        
+
         self.AVAILABLE_MOTORS = {
             "bv": MotorBV,
             "pan": MotorPAN,
-            "creditas": MotorCreditas,
         }
 
     async def executar_simulacao_paralela(
@@ -42,11 +39,6 @@ class OrquestradorV2:
 
         async def _run_single(code: str, motor):
             try:
-                # Usa api_debug global do app para forçar mock independente de credenciais
-                if settings.api_debug:
-                    self.logger.info(f"Orquestrador: Modo DEBUG ativo. Forçando mock para {code}")
-                    motor.credentials = {} # apaga credenciais para forçar mock internamente
-                
                 result = await motor.simulate(input_data)
                 return code, result
             except Exception as e:

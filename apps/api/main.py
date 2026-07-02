@@ -179,8 +179,7 @@ async def stats():
     """Retorna contagem das principais entidades do banco."""
     from database import async_session
     async with async_session() as session:
-        tables = ["loja", "usuario", "veiculo", "catalogo_marca", "catalogo_modelo",
-                  "cliente_pf", "lead", "plano", "assinatura"]
+        tables = ["loja", "usuario", "veiculo", "cliente_pf", "lead", "plano", "assinatura"]
         counts = {}
         for table in tables:
             try:

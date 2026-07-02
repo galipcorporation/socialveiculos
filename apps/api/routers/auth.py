@@ -112,16 +112,6 @@ class ResetPasswordRequest(BaseModel):
     nova_senha: str = Field(..., min_length=6)
 
 
-class MFAEnrollResponse(BaseModel):
-    secret: str
-    qr_code_mock: str
-    message: str
-
-
-class MFAVerifyRequest(BaseModel):
-    code: str
-
-
 # ── Helpers ────────────────────────────────────────────────────
 
 def slugify(text: str) -> str:
@@ -614,34 +604,3 @@ async def reset_password(data: ResetPasswordRequest, request: Request, db: Async
 
     await db.commit()
     return {"message": "Senha atualizada com sucesso."}
-
-
-# ── MFA (Estrutura inativa para Fase 2) ─────────────────────────
-
-@router.post("/mfa/enroll", response_model=MFAEnrollResponse)
-async def mfa_enroll(current_user: Usuario = Depends(get_current_user)):
-    """
-    Gera as informações para ativação do MFA (Draft desativado por flag).
-    """
-    # Exemplo de lógica que existirá na Fase 2
-    mock_secret = "JBSWY3DPEHPK3PXP" # Base32 TOTP secret mockup
-    return MFAEnrollResponse(
-        secret=mock_secret,
-        qr_code_mock=f"otpauth://totp/SocialVeiculos:{current_user.email}?secret={mock_secret}&issuer=SocialVeiculos",
-        message="MFA desativado nesta fase do projeto. Endpoint apenas para testes estruturais."
-    )
-
-
-@router.post("/mfa/verify", status_code=status.HTTP_200_OK)
-async def mfa_verify(
-    data: MFAVerifyRequest,
-    current_user: Usuario = Depends(get_current_user)
-):
-    """
-    Valida um código MFA (Draft desativado por flag).
-    """
-    # Sempre simula sucesso com aviso de que está desativado
-    return {
-        "status": "MFA_DISABLED",
-        "message": "A verificação de MFA está desligada por flag de configuração."
-    }

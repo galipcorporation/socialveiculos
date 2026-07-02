@@ -55,7 +55,7 @@ class MotorBV(BaseMotor):
     async def simulate(self, input_data: SimulationInput) -> SimulationOutput:
         start = time.time()
         if not self.is_configured:
-            output = self._mock_output(input_data)
+            output = self._error_output("Credenciais não configuradas para BV.")
             output.execution_time_ms = int((time.time() - start) * 1000)
             return output
 

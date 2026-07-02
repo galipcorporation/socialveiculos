@@ -100,10 +100,10 @@ async def simular_credito(
         entrada=data.entrada
     )
 
-    # 3. Credenciais dos motores V2 (API REST: bv/pan/creditas) não vêm de CredencialBanco —
+    # 3. Credenciais dos motores V2 (API REST: bv/pan) não vêm de CredencialBanco —
     # essa tabela é exclusiva das credenciais de login (usuário/senha) validadas via Selenium
-    # na tela de Configurações > Credenciais Bancárias. Motores V2 seguem em modo mock até
-    # ganharem fonte própria (env vars ou tabela dedicada).
+    # na tela de Configurações > Credenciais Bancárias. Motores V2 seguem sem simulação até
+    # ganharem fonte própria (env vars ou tabela dedicada); sem credenciais, retornam erro.
     credentials_map: dict = {}
 
     # 4. Criar registro de simulação

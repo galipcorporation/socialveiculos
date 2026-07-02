@@ -86,12 +86,15 @@ async def sincronizar_publicacao_b2b(veiculo: Veiculo, db: AsyncSession, autor_i
 
 @router.get("/vitrine/veiculos", response_model=List[VeiculoB2CResponse])
 async def get_veiculos_vitrine(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Retorna os veículos publicados da vitrine B2C pública.
     🔒 Filtro de Saída B2C: utiliza estritamente o VeiculoB2CResponse (oculta placa, custo e margem).
     """
+    offset = (page - 1) * per_page
     stmt = (
         select(Veiculo)
         .options(selectinload(Veiculo.midias))
@@ -100,6 +103,8 @@ async def get_veiculos_vitrine(
             Veiculo.status == StatusVeiculo.DISPONIVEL
         )
         .order_by(Veiculo.created_at.desc())
+        .offset(offset)
+        .limit(per_page)
     )
     result = await db.execute(stmt)
     return result.scalars().all()

@@ -472,7 +472,7 @@ export function SimuladorPage() {
           <Gem style={{ width: 48, height: 48, color: 'var(--sv-primary)', marginBottom: 16 }} />
           <h3>Recurso Premium</h3>
           <p style={{ color: 'var(--sv-text-dim)', marginTop: 8, marginBottom: 24 }}>
-            O Simulador de Crédito integrado não está ativo no seu plano. Obtenha acesso à simulação automática com múltiplos bancos simultâneos (BV, PAN, Creditas).
+            O Simulador de Crédito integrado não está ativo no seu plano. Obtenha acesso à simulação automática com múltiplos bancos simultâneos (BV, PAN).
           </p>
           <button className="btn btn-primary" onClick={() => navigate('/ferramentas')}>
             Ver Módulos & Assinatura

@@ -31,7 +31,7 @@ class SimulationOutput:
     """Resultado padronizado de simulação."""
     bank_code: str
     bank_name: str
-    status: str  # "approved", "denied", "error", "mock", "browser"
+    status: str  # "approved", "denied", "error", "browser"
     monthly_payment: Optional[float] = None
     interest_rate: Optional[float] = None
     total_amount: Optional[float] = None
@@ -88,29 +88,4 @@ class BaseMotor(ABC):
             bank_name=self.bank_name,
             status="error",
             error_message=message
-        )
-
-    def _mock_output(self, input_data: SimulationInput) -> SimulationOutput:
-        """Helper para criar output mock (quando não há credenciais)."""
-        valor = input_data.valor_veiculo or 50000
-        entrada = input_data.entrada or 0
-        financiado = valor - entrada
-        taxa_mensal = 0.0189  # ~1.89% a.m.
-        prazo = 48
-        
-        if financiado <= 0:
-            return self._error_output("Valor financiado inválido ou menor que zero.")
-
-        parcela = (financiado * taxa_mensal * (1 + taxa_mensal) ** prazo) / ((1 + taxa_mensal) ** prazo - 1)
-
-        return SimulationOutput(
-            bank_code=self.bank_code,
-            bank_name=self.bank_name,
-            status="mock",
-            monthly_payment=round(parcela, 2),
-            interest_rate=round(taxa_mensal * 100, 2),
-            total_amount=round(parcela * prazo, 2),
-            term_months=prazo,
-            error_message="[MOCK] Credenciais não configuradas.",
-            raw_response={"mock": True, "financiado": financiado}
         )

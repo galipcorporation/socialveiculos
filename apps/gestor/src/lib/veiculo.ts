@@ -52,7 +52,7 @@ export const TIPOS_VEICULO: { value: string; label: string }[] = [
   { value: 'outro', label: 'Outro' },
 ]
 
-// Tipos que os bancos integrados (BV/PAN/Creditas) financiam de fato.
+// Tipos que os bancos integrados (BV/PAN) financiam de fato.
 // Verificado no mapeamento do BV: só "carro" tem seletor mapeado.
 // Adicionar 'moto' quando houver seletor no backend das financiadoras.
 export const TIPOS_FINANCIAVEIS = ['carro']

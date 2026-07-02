@@ -42,6 +42,7 @@ export function AssistenteIA() {
   // Estado de conexão do WhatsApp
   const [conexaoStatus, setConexaoStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected')
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
+  const qrGeradoEmRef = useRef<number | null>(null)
   
   // Estado do Chat
   const [conversas, setConversas] = useState<Conversa[]>([])
@@ -67,7 +68,10 @@ export function AssistenteIA() {
       // Checar sessao
       const sessaoRes = await api.get<{ status: 'connected' | 'disconnected' | 'connecting'; qr: string | null }>('/assistente/sessao')
       setConexaoStatus(sessaoRes.status)
-      if (sessaoRes.qr) setQrCodeUrl(sessaoRes.qr)
+      if (sessaoRes.qr) {
+        setQrCodeUrl(sessaoRes.qr)
+        if (!qrGeradoEmRef.current) qrGeradoEmRef.current = Date.now()
+      }
 
       // Se conectado, carregar conversas
       if (sessaoRes.status === 'connected') {
@@ -100,21 +104,42 @@ export function AssistenteIA() {
     }
   }, [carregarStatusEConversas])
 
-  // 2. Conectar WhatsApp
-  const handleConectar = async () => {
+  // 2. Conectar WhatsApp (chamada automática ao entrar na página e para renovar QR expirado)
+  const handleConectar = useCallback(async (silencioso = false) => {
     setConexaoStatus('connecting')
     try {
       const res = await api.post<{ status: string; qr: string | null }>('/assistente/sessao/conectar')
       if (res.qr) {
         setQrCodeUrl(res.qr)
-        showToast('QR Code gerado! Escaneie com seu celular no WhatsApp Web.', 'info')
+        qrGeradoEmRef.current = Date.now()
+        if (!silencioso) showToast('QR Code gerado! Escaneie com seu celular no WhatsApp Web.', 'info')
       }
     } catch (err) {
       console.error(err)
-      showToast('Erro ao solicitar conexao com o WhatsApp.', 'error')
+      if (!silencioso) showToast('Erro ao solicitar conexao com o WhatsApp.', 'error')
       setConexaoStatus('disconnected')
     }
-  }
+  }, [showToast])
+
+  const QR_VALIDADE_MS = 60_000
+
+  // Abre o QR automaticamente assim que detecta desconectado, sem exigir clique
+  useEffect(() => {
+    if (conexaoStatus === 'disconnected') {
+      handleConectar(true)
+    }
+  }, [conexaoStatus, handleConectar])
+
+  // Renova o QR sozinho quando ele expira, sem exigir novo clique
+  useEffect(() => {
+    if (conexaoStatus !== 'connecting') return
+    const interval = setInterval(() => {
+      if (qrGeradoEmRef.current && Date.now() - qrGeradoEmRef.current > QR_VALIDADE_MS) {
+        handleConectar(true)
+      }
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [conexaoStatus, handleConectar])
 
   // 3. Desconectar WhatsApp
   const handleDesconectar = async () => {
@@ -129,6 +154,7 @@ export function AssistenteIA() {
       await api.post('/assistente/sessao/desconectar')
       setConexaoStatus('disconnected')
       setQrCodeUrl(null)
+      qrGeradoEmRef.current = null
       setConversas([])
       setConversaAtiva(null)
       setMensagens([])
@@ -298,9 +324,7 @@ export function AssistenteIA() {
               </p>
 
               {conexaoStatus === 'disconnected' && (
-                <button className="btn btn-primary" onClick={handleConectar} style={{ width: '100%' }}>
-                  Gerar QR Code de Conexão
-                </button>
+                <div className="spinner"></div>
               )}
 
               {conexaoStatus === 'connecting' && (

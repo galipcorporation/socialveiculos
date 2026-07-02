@@ -33,15 +33,32 @@ class StorageProvider:
             self.local_dir = os.path.join(os.path.dirname(__file__), "static", "uploads")
             os.makedirs(self.local_dir, exist_ok=True)
 
-    def generate_filename(self, original_filename: str) -> str:
-        ext = os.path.splitext(original_filename)[1].lower()
+    # Extensão é derivada do content_type já validado pelo router (whitelist),
+    # nunca do nome de arquivo enviado pelo cliente — evita salvar .php/.exe
+    # disfarçado de imagem com Content-Type forjado.
+    CONTENT_TYPE_EXT = {
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "video/mp4": ".mp4",
+        "video/mpeg": ".mpeg",
+        "video/quicktime": ".mov",
+        "video/webm": ".webm",
+        "application/pdf": ".pdf",
+    }
+
+    def generate_filename(self, original_filename: str, content_type: str = "") -> str:
+        ext = self.CONTENT_TYPE_EXT.get(content_type)
+        if ext is None:
+            ext = os.path.splitext(original_filename)[1].lower()
         return f"{uuid.uuid4().hex}{ext}"
 
     async def upload_file(self, file_content: bytes, filename: str, content_type: str) -> str:
         """
         Faz upload do arquivo e retorna a URL pública de acesso.
         """
-        unique_filename = self.generate_filename(filename)
+        unique_filename = self.generate_filename(filename, content_type)
 
         if self.use_s3:
             try:
