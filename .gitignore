@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# Environment (segredos — o .env.example é versionado como template)
+.env
+.env.local
+.env.production
+.env.*.local
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+documentos/
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Python
+*.egg-info/
+*.egg
+.eggs/
+
+# Database (dev) — inclui sidecars WAL/SHM e backups
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.db.bak-*
+*.db-shm.bak-*
+*.db-wal.bak-*

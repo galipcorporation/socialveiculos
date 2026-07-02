@@ -1,0 +1,83 @@
+{
+    "login": {
+        "url": "https://brpioneer.accenture.com/originacao-auto/login",
+        "campo_usuario": [
+            "input[formcontrolname='documentNumber']",
+            "input[formcontrolname='username']",
+            "input[name='username']",
+            "aria/CPF (obrigatório) *"
+        ],
+        "campo_senha": [
+            "input[formcontrolname='password']",
+            "input[type='password']",
+            "aria/Digite a sua senha (obrigatório) *"
+        ],
+        "botao_submit": [
+            "div:nth-of-type(5) > button",
+            "aria/Entrar",
+            "xpath//button[contains(., 'Entrar')]"
+        ]
+    },
+    "navegacao": {
+        "url": "https://brpioneer.accenture.com/originacao-auto/proposal/step-personal",
+        "botao_fechar_modal_pos_login": [
+            "aria/Entendi",
+            "#modal-action-button",
+            "xpath///*[@id=\"modal-action-button\"]"
+        ]
+    },
+    "formulario": {
+        "botao_fechar_modal": [
+            "div.cdk-overlay-container mat-dialog-container header img",
+            "header img",
+            "xpath//html/body/div[3]/div/mat-dialog-container/app-terms-and-conditions-popup/div/header/button/img"
+        ],
+        "cpf": [
+            "input[formcontrolname='taxId']",
+            "aria/Digite o CPF ou CNPJ do cliente (obrigatório) *"
+        ],
+        "nascimento": [
+            "input[formcontrolname='birthDate']",
+            "aria/Data de nascimento (obrigatório) *"
+        ],
+        "estado_veiculo": [
+            "mat-radio-button[value='USADO'] .mat-radio-outer-circle",
+            "text/Usado"
+        ],
+        "selecionar_tipo_busca": [
+            "#mat-radio-3 span.fs-18",
+            "#mat-radio-3 span.mat-radio-label-content",
+            "text/Busca por placa",
+            "xpath///label[contains(., 'Busca por placa')]"
+        ],
+        "placa": [
+            "input[formcontrolname='plate']",
+            "app-auto-search-plate > div div.mat-form-field-infix input",
+            "aria/Placa (obrigatório) *"
+        ],
+        "selecionar_modelo": [
+            "div.model-data div.mat-form-field-infix",
+            "app-card-auto-data div.model-data mat-form-field div.mat-form-field-infix",
+            "text/Modelo (obrigatório)"
+        ],
+        "valor_veiculo": [
+            "input[formcontrolname='vehicleValue']",
+            "div.vehicle-details div.mat-form-field-infix input",
+            "app-card-auto-data div.mat-form-field-infix input",
+            "aria/Valor"
+        ],
+        "botao_concordar_continuar": [
+            "text/Concordar e continuar",
+            "div.col-md-12 > button",
+            "xpath//html/body/app-root/div/div/app-proposal-workflow/div/div/div[2]/div/app-step-personal/div/div/div/section/app-terms-and-conditions/div[3]/button"
+        ],
+        "botao_continuar_modal": [
+            "button.continueButton",
+            "aria/Continuar",
+            "xpath///*[@id=\"mat-dialog-4\"]/app-licensing-state-modal/div/div/button[2]"
+        ]
+    },
+    "resultado": {
+        "ofertas_url": "https://brpioneer.accenture.com/originacao-auto/proposal/step-offers"
+    }
+}

@@ -1,0 +1,528 @@
+"""
+Social Veículos — Rotas de Contratos (B2B)
+Gestão de contratos de compra/venda, consignação e garantia.
+Inclui ação de venda (Estoque → Contrato) e geração de PDF.
+
+Melhoria 14 — Vender veículo → gerar contrato
+"""
+
+import math
+import io
+from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy import func, or_, desc
+
+from database import get_db
+from deps import get_current_b2b_user, B2BContext, registrar_auditoria
+from models import (
+    Contrato, Veiculo, ClientePF, StatusContrato, TipoContrato,
+    StatusVeiculo, LancamentoFinanceiro, TipoLancamento,
+    EsteiraPosVenda, OrigemLead,
+)
+from pos_venda_template import montar_checklist
+from schemas import (
+    ContratoCreateRequest,
+    ContratoUpdateRequest,
+    ContratoResponse,
+    ContratoListResponse,
+    VenderVeiculoRequest,
+    VenderVeiculoResponse,
+)
+
+router = APIRouter(prefix="/v1", tags=["Contratos"])
+
+
+# ── Helpers ────────────────────────────────────────────────────
+
+async def gerar_numero_contrato(db: AsyncSession, loja_id: str, tipo: TipoContrato) -> str:
+    """Gera número sequencial: CV-2026-0001, TC-2026-0001, TG-2026-0001."""
+    prefixos = {
+        TipoContrato.COMPRA_VENDA: "CV",
+        TipoContrato.CONSIGNACAO: "TC",
+        TipoContrato.GARANTIA: "TG",
+    }
+    prefixo = prefixos.get(tipo, "CV")
+    ano = datetime.now(timezone.utc).year
+
+    # Conta contratos existentes do tipo neste ano para esta loja
+    stmt = select(func.count(Contrato.id)).where(
+        Contrato.loja_id == loja_id,
+        Contrato.numero.like(f"{prefixo}-{ano}-%"),
+    )
+    result = await db.execute(stmt)
+    count = result.scalar() or 0
+
+    return f"{prefixo}-{ano}-{count + 1:04d}"
+
+
+def _contrato_to_response(c: Contrato) -> ContratoResponse:
+    """Converte modelo Contrato para response com dados expandidos."""
+    veiculo_nome = None
+    if c.veiculo:
+        v = c.veiculo
+        veiculo_nome = f"{v.marca} {v.modelo}"
+        if v.versao:
+            veiculo_nome += f" {v.versao}"
+
+    cliente_nome = c.cliente.nome if c.cliente else None
+
+    return ContratoResponse(
+        id=c.id,
+        loja_id=c.loja_id,
+        veiculo_id=c.veiculo_id,
+        cliente_id=c.cliente_id,
+        tipo=c.tipo,
+        status=c.status,
+        numero=c.numero,
+        valor_venda=c.valor_venda,
+        valor_entrada=c.valor_entrada,
+        parcelas=c.parcelas,
+        observacoes=c.observacoes,
+        dados_ocr=c.dados_ocr,
+        created_at=c.created_at,
+        updated_at=c.updated_at,
+        veiculo_nome=veiculo_nome,
+        cliente_nome=cliente_nome,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# ── CRUD DE CONTRATOS
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/contratos", response_model=ContratoListResponse)
+async def listar_contratos(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    tipo: Optional[str] = None,
+    q: Optional[str] = None,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lista contratos da loja com filtros e paginação."""
+    stmt = select(Contrato).where(Contrato.loja_id == ctx.loja.id)
+
+    if status_filter:
+        try:
+            s = StatusContrato(status_filter)
+            stmt = stmt.where(Contrato.status == s)
+        except ValueError:
+            pass
+
+    if tipo:
+        try:
+            t = TipoContrato(tipo)
+            stmt = stmt.where(Contrato.tipo == t)
+        except ValueError:
+            pass
+
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(
+            or_(
+                Contrato.numero.ilike(like),
+                Contrato.observacoes.ilike(like),
+            )
+        )
+
+    # Total count
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = (await db.execute(count_stmt)).scalar() or 0
+    pages = max(1, math.ceil(total / per_page))
+
+    # Fetch items
+    from sqlalchemy.orm import selectinload
+    stmt = stmt.options(
+        selectinload(Contrato.veiculo),
+        selectinload(Contrato.cliente),
+    ).order_by(desc(Contrato.created_at))
+    stmt = stmt.offset((page - 1) * per_page).limit(per_page)
+
+    result = await db.execute(stmt)
+    contratos = result.scalars().all()
+
+    return ContratoListResponse(
+        items=[_contrato_to_response(c) for c in contratos],
+        total=total,
+        page=page,
+        per_page=per_page,
+        pages=pages,
+    )
+
+
+@router.post("/contratos", response_model=ContratoResponse, status_code=201)
+async def criar_contrato(
+    body: ContratoCreateRequest,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cria um novo contrato (rascunho)."""
+    numero = await gerar_numero_contrato(db, ctx.loja.id, body.tipo)
+
+    contrato = Contrato(
+        loja_id=ctx.loja.id,
+        veiculo_id=body.veiculo_id,
+        cliente_id=body.cliente_id,
+        tipo=body.tipo,
+        status=StatusContrato.RASCUNHO,
+        numero=numero,
+        valor_venda=body.valor_venda,
+        valor_entrada=body.valor_entrada,
+        parcelas=body.parcelas,
+        observacoes=body.observacoes,
+        dados_ocr=body.dados_ocr,
+    )
+    db.add(contrato)
+    await db.commit()
+    await db.refresh(contrato)
+
+    # Eager-load relationships
+    from sqlalchemy.orm import selectinload
+    stmt = select(Contrato).where(Contrato.id == contrato.id).options(
+        selectinload(Contrato.veiculo),
+        selectinload(Contrato.cliente),
+    )
+    result = await db.execute(stmt)
+    contrato = result.scalar_one()
+
+    await registrar_auditoria(db, ctx.usuario.id, "contrato_criado", f"Contrato {numero} criado")
+
+    return _contrato_to_response(contrato)
+
+
+@router.get("/contratos/{contrato_id}", response_model=ContratoResponse)
+async def obter_contrato(
+    contrato_id: str,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Obtém detalhes de um contrato."""
+    from sqlalchemy.orm import selectinload
+    stmt = select(Contrato).where(
+        Contrato.id == contrato_id,
+        Contrato.loja_id == ctx.loja.id,
+    ).options(
+        selectinload(Contrato.veiculo),
+        selectinload(Contrato.cliente),
+    )
+    result = await db.execute(stmt)
+    contrato = result.scalar_one_or_none()
+    if not contrato:
+        raise HTTPException(status_code=404, detail="Contrato não encontrado")
+
+    return _contrato_to_response(contrato)
+
+
+@router.patch("/contratos/{contrato_id}", response_model=ContratoResponse)
+async def atualizar_contrato(
+    contrato_id: str,
+    body: ContratoUpdateRequest,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Atualiza um contrato (dados ou status)."""
+    stmt = select(Contrato).where(
+        Contrato.id == contrato_id,
+        Contrato.loja_id == ctx.loja.id,
+    )
+    result = await db.execute(stmt)
+    contrato = result.scalar_one_or_none()
+    if not contrato:
+        raise HTTPException(status_code=404, detail="Contrato não encontrado")
+
+    update_data = body.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(contrato, key, value)
+
+    contrato.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    # Reload with relationships
+    from sqlalchemy.orm import selectinload
+    stmt = select(Contrato).where(Contrato.id == contrato.id).options(
+        selectinload(Contrato.veiculo),
+        selectinload(Contrato.cliente),
+    )
+    result = await db.execute(stmt)
+    contrato = result.scalar_one()
+
+    return _contrato_to_response(contrato)
+
+
+@router.get("/contratos/{contrato_id}/pdf")
+async def gerar_pdf_contrato(
+    contrato_id: str,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Gera e retorna PDF do contrato."""
+    from sqlalchemy.orm import selectinload
+    stmt = select(Contrato).where(
+        Contrato.id == contrato_id,
+        Contrato.loja_id == ctx.loja.id,
+    ).options(
+        selectinload(Contrato.veiculo),
+        selectinload(Contrato.cliente),
+    )
+    result = await db.execute(stmt)
+    contrato = result.scalar_one_or_none()
+    if not contrato:
+        raise HTTPException(status_code=404, detail="Contrato não encontrado")
+
+    # Gera HTML do contrato
+    html_content = _gerar_html_contrato(contrato, ctx.loja)
+
+    # Retorna como HTML para impressão (PDF real requer wkhtmltopdf/weasyprint)
+    return StreamingResponse(
+        io.BytesIO(html_content.encode("utf-8")),
+        media_type="text/html",
+        headers={
+            "Content-Disposition": f'inline; filename="contrato-{contrato.numero}.html"',
+        },
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# ── AÇÃO DE VENDA (Estoque → Contrato)
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/veiculos/{veiculo_id}/vender", response_model=VenderVeiculoResponse)
+async def vender_veiculo(
+    veiculo_id: str,
+    body: VenderVeiculoRequest,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Registra a venda de um veículo:
+    1. Muda status do veículo para VENDIDO
+    2. Remove da vitrine (publicado_marketplace = false)
+    3. Cria contrato de compra e venda vinculado
+    4. Registra receita no financeiro
+    """
+    # Buscar veículo
+    stmt = select(Veiculo).where(
+        Veiculo.id == veiculo_id,
+        Veiculo.loja_id == ctx.loja.id,
+    )
+    result = await db.execute(stmt)
+    veiculo = result.scalar_one_or_none()
+    if not veiculo:
+        raise HTTPException(status_code=404, detail="Veículo não encontrado")
+
+    if veiculo.status == StatusVeiculo.VENDIDO:
+        raise HTTPException(status_code=400, detail="Veículo já está vendido")
+
+    # Validar cliente
+    stmt_cli = select(ClientePF).where(
+        ClientePF.id == body.cliente_id,
+        ClientePF.loja_id == ctx.loja.id,
+    )
+    result_cli = await db.execute(stmt_cli)
+    cliente = result_cli.scalar_one_or_none()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    valor_venda = body.valor_venda or veiculo.preco_venda or 0
+
+    # 1. Marcar veículo como vendido
+    veiculo.status = StatusVeiculo.VENDIDO
+    veiculo.publicado_marketplace = False
+    veiculo.updated_at = datetime.now(timezone.utc)
+
+    # 2. Criar contrato de compra e venda
+    numero = await gerar_numero_contrato(db, ctx.loja.id, TipoContrato.COMPRA_VENDA)
+    contrato = Contrato(
+        loja_id=ctx.loja.id,
+        veiculo_id=veiculo.id,
+        cliente_id=cliente.id,
+        tipo=TipoContrato.COMPRA_VENDA,
+        status=StatusContrato.AGUARDANDO,
+        numero=numero,
+        valor_venda=valor_venda,
+        valor_entrada=body.valor_entrada,
+        parcelas=body.parcelas,
+        observacoes=body.observacoes,
+    )
+    db.add(contrato)
+
+    # 3. Registrar receita no financeiro
+    lancamento = LancamentoFinanceiro(
+        loja_id=ctx.loja.id,
+        tipo=TipoLancamento.RECEITA,
+        descricao=f"Venda: {veiculo.marca} {veiculo.modelo} — {cliente.nome}",
+        valor=valor_venda,
+        veiculo_id=veiculo.id,
+        categoria="venda_veiculo",
+        data=datetime.now(timezone.utc),
+    )
+    db.add(lancamento)
+
+    # 4. Gravar o comprador no veículo (Carteira do Proprietário — M018)
+    veiculo.comprador_id = cliente.id
+
+    # 5. Abrir a esteira pós-venda + semear o checklist invisível (§6.4)
+    try:
+        origem = OrigemLead(body.origem) if body.origem else OrigemLead.MANUAL
+    except ValueError:
+        origem = OrigemLead.MANUAL
+    esteira = EsteiraPosVenda(
+        loja_id=ctx.loja.id,
+        veiculo_id=veiculo.id,
+        contrato_id=contrato.id,
+        comprador_id=cliente.id,
+        vendedor_id=ctx.usuario.id,
+        origem=origem,
+    )
+    db.add(esteira)
+    await db.flush()  # garante esteira.id para os itens
+    for item in montar_checklist(
+        esteira, veiculo, contrato,
+        valor_entrada=body.valor_entrada,
+        parcelas=body.parcelas,
+        financiado=bool(body.financiado),
+        data_venda=datetime.now(timezone.utc),
+    ):
+        db.add(item)
+
+    await db.commit()
+    await db.refresh(contrato)
+    await db.refresh(esteira)
+
+    await registrar_auditoria(
+        db, ctx.usuario.id, "veiculo_vendido",
+        f"Veículo {veiculo.marca} {veiculo.modelo} vendido para {cliente.nome}. "
+        f"Contrato {numero}. Esteira pós-venda {esteira.id} aberta.",
+    )
+
+    return VenderVeiculoResponse(
+        message=f"Veículo vendido com sucesso! Contrato {numero} gerado.",
+        contrato_id=contrato.id,
+        veiculo_id=veiculo.id,
+        esteira_id=esteira.id,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# ── GERAÇÃO DE HTML DO CONTRATO (para impressão/PDF)
+# ═══════════════════════════════════════════════════════════════
+
+def _gerar_html_contrato(contrato: Contrato, loja) -> str:
+    """Gera HTML formatado do contrato para impressão."""
+    tipo_labels = {
+        TipoContrato.COMPRA_VENDA: "CONTRATO DE COMPRA E VENDA DE VEÍCULO",
+        TipoContrato.CONSIGNACAO: "TERMO DE CONSIGNAÇÃO DE VEÍCULO",
+        TipoContrato.GARANTIA: "TERMO DE GARANTIA DE VEÍCULO",
+    }
+    titulo = tipo_labels.get(contrato.tipo, "CONTRATO")
+
+    veiculo = contrato.veiculo
+    cliente = contrato.cliente
+    data_str = contrato.created_at.strftime("%d/%m/%Y") if contrato.created_at else "___/___/______"
+
+    def fmt_brl(v):
+        if v is None:
+            return "R$ ___________"
+        return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    veiculo_desc = ""
+    if veiculo:
+        veiculo_desc = f"""
+        <tr><td><strong>Marca/Modelo:</strong></td><td>{veiculo.marca} {veiculo.modelo} {veiculo.versao or ''}</td></tr>
+        <tr><td><strong>Ano:</strong></td><td>{veiculo.ano_fabricacao}/{veiculo.ano_modelo}</td></tr>
+        <tr><td><strong>Placa:</strong></td><td>{veiculo.placa or '___________'}</td></tr>
+        <tr><td><strong>Cor:</strong></td><td>{veiculo.cor or '___________'}</td></tr>
+        <tr><td><strong>KM:</strong></td><td>{veiculo.km:,} km</td></tr>
+        <tr><td><strong>Combustível:</strong></td><td>{(veiculo.combustivel or '___________').replace('_', ' ').title()}</td></tr>
+        """
+
+    cliente_desc = ""
+    if cliente:
+        cliente_desc = f"""
+        <tr><td><strong>Nome:</strong></td><td>{cliente.nome}</td></tr>
+        <tr><td><strong>CPF:</strong></td><td>{cliente.cpf or '___.___.___-__'}</td></tr>
+        <tr><td><strong>RG:</strong></td><td>{cliente.rg or '___________'}</td></tr>
+        <tr><td><strong>Telefone:</strong></td><td>{cliente.telefone or '___________'}</td></tr>
+        <tr><td><strong>Endereço:</strong></td><td>{cliente.endereco or '___________'}, {cliente.cidade or '___________'} - {cliente.estado or '__'}</td></tr>
+        """
+
+    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>{contrato.numero} — {titulo}</title>
+<style>
+  @page {{ margin: 2cm; }}
+  body {{ font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #1a1a1a; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 40px; }}
+  h1 {{ text-align: center; font-size: 18px; margin-bottom: 4px; letter-spacing: 1px; }}
+  .numero {{ text-align: center; color: #666; font-size: 12px; margin-bottom: 30px; }}
+  h2 {{ font-size: 14px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 28px; color: #333; }}
+  table {{ width: 100%; border-collapse: collapse; margin: 8px 0; }}
+  td {{ padding: 4px 8px; vertical-align: top; }}
+  td:first-child {{ width: 180px; color: #555; }}
+  .valor {{ font-size: 16px; font-weight: bold; color: #0053db; }}
+  .assinatura {{ margin-top: 60px; display: flex; justify-content: space-between; gap: 40px; }}
+  .assinatura div {{ flex: 1; text-align: center; border-top: 1px solid #333; padding-top: 8px; }}
+  .obs {{ background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; margin: 12px 0; }}
+  .footer {{ margin-top: 40px; text-align: center; font-size: 11px; color: #999; }}
+  @media print {{ body {{ padding: 0; }} }}
+</style>
+</head>
+<body>
+<h1>{titulo}</h1>
+<p class="numero">Nº {contrato.numero} — {data_str}</p>
+
+<h2>VENDEDOR (LOJA)</h2>
+<table>
+  <tr><td><strong>Razão Social:</strong></td><td>{loja.nome}</td></tr>
+  <tr><td><strong>CNPJ:</strong></td><td>{loja.cnpj or '___.___.___/____-__'}</td></tr>
+  <tr><td><strong>Endereço:</strong></td><td>{loja.endereco or '___________'}, {loja.cidade or '___________'} - {loja.estado or '__'}</td></tr>
+  <tr><td><strong>Telefone:</strong></td><td>{loja.telefone or loja.whatsapp or '___________'}</td></tr>
+</table>
+
+<h2>COMPRADOR</h2>
+<table>
+  {cliente_desc or '<tr><td colspan="2">___________________________________________</td></tr>'}
+</table>
+
+<h2>VEÍCULO</h2>
+<table>
+  {veiculo_desc or '<tr><td colspan="2">___________________________________________</td></tr>'}
+</table>
+
+<h2>CONDIÇÕES</h2>
+<table>
+  <tr><td><strong>Valor da Venda:</strong></td><td class="valor">{fmt_brl(contrato.valor_venda)}</td></tr>
+  <tr><td><strong>Entrada:</strong></td><td>{fmt_brl(contrato.valor_entrada)}</td></tr>
+  <tr><td><strong>Parcelas:</strong></td><td>{contrato.parcelas or '___'} x</td></tr>
+</table>
+
+{f'<div class="obs"><strong>Observações:</strong> {contrato.observacoes}</div>' if contrato.observacoes else ''}
+
+<h2>CLÁUSULAS</h2>
+<p>1. O VENDEDOR declara que o veículo descrito acima é de sua propriedade, livre e desembaraçado de quaisquer ônus.</p>
+<p>2. O COMPRADOR declara ter examinado o veículo e estar de acordo com suas condições.</p>
+<p>3. A transferência de propriedade junto ao DETRAN é de responsabilidade do COMPRADOR, devendo ser realizada no prazo máximo de 30 dias.</p>
+<p>4. O VENDEDOR se responsabiliza por quaisquer multas e infrações anteriores à data deste contrato.</p>
+<p>5. Este contrato é firmado em caráter irrevogável e irretratável, obrigando as partes, seus herdeiros e sucessores.</p>
+
+<div class="assinatura">
+  <div>
+    <p>{loja.nome}</p>
+    <small>VENDEDOR</small>
+  </div>
+  <div>
+    <p>{cliente.nome if cliente else '________________________'}</p>
+    <small>COMPRADOR</small>
+  </div>
+</div>
+
+<p class="footer">{loja.cidade or '___________'} - {loja.estado or '__'}, {data_str}<br>Gerado por SocialVeículos</p>
+</body>
+</html>"""

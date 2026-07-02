@@ -1,0 +1,119 @@
+{
+    "login": {
+        "url": "https://c6auto.com.br/originacaolojista/login",
+        "botao_iniciar_login": [
+            "#submit-button",
+            "text/Iniciar Login",
+            "text/INICIAR LOGIN",
+            "button.mat-flat-button",
+            "div.inputs-group span.mat-button-wrapper",
+            "xpath///button[contains(., 'Iniciar Login')]",
+            "xpath///*[@id=\"submit-button\"]/span[1]"
+        ],
+        "campo_usuario": [
+            "#username",
+            "aria/CPF",
+            "xpath///*[@id=\"username\"]",
+            "input[formcontrolname='username']"
+        ],
+        "campo_senha": [
+            "#password",
+            "aria/Senha",
+            "xpath///*[@id=\"password\"]",
+            "input[formcontrolname='password']"
+        ],
+        "botao_submit": [
+            "text/Entrar",
+            "#kc-login",
+            "button[type='submit']",
+            "xpath///button[contains(., 'Entrar')]"
+        ],
+        "botao_fechar_modal": [
+            "div.cdk-overlay-container mat-icon",
+            "xpath///*[@id=\"modal-content-wrapper\"]/div/button/span[1]/mat-icon",
+            "button[aria-label='Close']"
+        ]
+    },
+    "navegacao": {
+        "botao_criar_nova": [
+            "aria/CRIAR UMA NOVA PROPOSTA",
+            "app-shopkeeper-header button",
+            "text/CRIAR UMA NOVA PROPOSTA",
+            "text/Criar uma nova"
+        ]
+    },
+    "formulario": {
+        "url": "https://c6auto.com.br/originacaolojista/shopkeeper-panel",
+        "cpf": [
+            "input[formcontrolname='cpf']",
+            "aria/CPF"
+        ],
+        "telefone": [
+            "input[formcontrolname='phone']",
+            "input[formcontrolname='cellphone']",
+            "aria/Celular"
+        ],
+        "nascimento": [
+            "input[formcontrolname='birthDate']",
+            "input[formcontrolname='dataNascimento']",
+            "aria/Data de Nascimento"
+        ],
+        "estado": [
+            "mat-select[formcontrolname='state']",
+            "div:nth-of-type(8) div.mat-form-field-flex > div",
+            "aria/Estado"
+        ],
+        "placa": [
+            "input[formcontrolname='plate']",
+            "input[formcontrolname='placa']",
+            "aria/Placa"
+        ],
+        "valor_veiculo": [
+            "input[formcontrolname*='vehicle']",
+            "input[formcontrolname*='price']",
+            "input[formcontrolname*='valor']",
+            "input[formcontrolname*='veiculo']"
+        ],
+        "valor_entrada": [
+            "input[formcontrolname*='entrada']",
+            "input[type='tel'][formcontrolname]"
+        ],
+        "taxa_lojista": [
+            "div.cdk-overlay-container div.mat-form-field-infix",
+            "xpath///*[@id=\"mat-dialog-0\"]/app-shopkeeper-config-modal/mat-dialog-content/form/mat-form-field/div/div[1]/div[1]",
+            "text/0%Porcentagem",
+            "app-shopkeeper-config-modal mat-form-field input"
+        ],
+        "botao_simular": [
+            "text/SIMULAR",
+            "text/Simular",
+            "aria/SIMULAR",
+            "div.container button",
+            "xpath//html/body/app-root/div/app-pre-analysis-workflow/div[2]/app-pre-analysis-forms/div/div[2]/form/div[18]/div/button",
+            "xpath///button[contains(., 'SIMULAR')]"
+        ]
+    },
+    "resultado": {
+        "taxa_lojista": [
+            "app-shopkeeper-config-modal mat-form-field input",
+            "div.cdk-overlay-container div.mat-form-field-infix input",
+            "xpath///*[@id=\"mat-dialog-0\"]/app-shopkeeper-config-modal/mat-dialog-content/form/mat-form-field//input"
+        ],
+        "parcela_principal": [
+            "wl-payment-installment-toggle > div > div > div:nth-of-type(1) button",
+            "wl-payment-installment-toggle > div > div > div:nth-of-type(1) span > span",
+            "div.dashboard wl-payment-installment-toggle > div > div > div:nth-of-type(1) button"
+        ],
+        "parcela_48x": [
+            "wl-payment-installment-toggle > div > div > div:nth-of-type(2) button",
+            "wl-payment-installment-toggle > div > div > div:nth-of-type(2) span > span"
+        ],
+        "parcela_36x": [
+            "wl-payment-installment-toggle > div > div > div:nth-of-type(3) button",
+            "wl-payment-installment-toggle > div > div > div:nth-of-type(3) span > span"
+        ],
+        "parcela_24x": [
+            "wl-payment-installment-toggle > div > div > div:nth-of-type(4) button"
+        ]
+    }
+}

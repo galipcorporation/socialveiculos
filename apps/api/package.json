@@ -1,0 +1,10 @@
+{
+  "name": "@sv/api",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000",
+    "typecheck": "echo 'python — skip'",
+    "lint": "echo 'python — skip'"
+  }
+}

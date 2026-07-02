@@ -1,0 +1,265 @@
+import React, { useState } from 'react'
+import { useAuthStore } from '../stores/authStore'
+import { useUIStore } from '../stores/uiStore'
+import { api } from '../lib/api'
+import { X, Mail, KeyRound, User, Phone, AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { mascararTelefone, capitalizarNome } from '../lib/mascaras'
+
+export function LoginModal() {
+  const isOpen = useAuthStore((state) => state.isLoginModalOpen)
+  const tab = useAuthStore((state) => state.loginModalTab)
+  const setTab = useAuthStore((state) => state.openLoginModal)
+  const close = useAuthStore((state) => state.closeLoginModal)
+  const loginStore = useAuthStore((state) => state.login)
+
+  const [nome, setNome] = useState('')
+  const [email, setEmail] = useState('')
+  const [senha, setSenha] = useState('')
+  const [telefone, setTelefone] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+  const [showPasswordLogin, setShowPasswordLogin] = useState(false)
+  const [showPasswordRegister, setShowPasswordRegister] = useState(false)
+
+  if (!isOpen) return null
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email || !senha) return
+    setLoading(true)
+    setErro(null)
+
+    try {
+      const data: any = await api.post('/auth/login', { email, senha })
+      loginStore(data.access_token, data.refresh_token, data.user)
+      close()
+    } catch (err: any) {
+      setErro(err.message || 'E-mail ou senha incorretos.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!nome || !email || !senha) return
+    setLoading(true)
+    setErro(null)
+
+    try {
+      // 1. Cadastra Cliente B2C
+      await api.post('/auth/register-b2c', { nome, email, senha, telefone: telefone || undefined })
+      
+      // 2. Faz login imediatamente após o cadastro
+      const data: any = await api.post('/auth/login', { email, senha })
+      loginStore(data.access_token, data.refresh_token, data.user)
+      close()
+    } catch (err: any) {
+      setErro(err.message || 'Falha ao realizar cadastro. Tente outro e-mail.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="vt-modal-overlay" onClick={close}>
+      <div className="vt-modal-card" onClick={(e) => e.stopPropagation()}>
+        <button className="vt-modal-close" onClick={close}>
+          <X size={20} />
+        </button>
+
+        <div className="vt-modal-header">
+          <h3>Sua jornada automotiva começa aqui</h3>
+          <p>Conecte-se para favoritar veículos, enviar propostas e conversar diretamente com as concessionárias.</p>
+        </div>
+
+        {/* Abas */}
+        <div className="vt-modal-tabs">
+          <button
+            className={`vt-modal-tab-btn ${tab === 'login' ? 'active' : ''}`}
+            onClick={() => {
+              setErro(null)
+              setSenha('')
+              setShowPasswordLogin(false)
+              setShowPasswordRegister(false)
+              setTab('login')
+            }}
+            disabled={loading}
+          >
+            Entrar
+          </button>
+          <button
+            className={`vt-modal-tab-btn ${tab === 'register' ? 'active' : ''}`}
+            onClick={() => {
+              setErro(null)
+              setSenha('')
+              setShowPasswordLogin(false)
+              setShowPasswordRegister(false)
+              setTab('register')
+            }}
+            disabled={loading}
+          >
+            Cadastrar
+          </button>
+        </div>
+
+        {erro && (
+          <div className="vt-modal-error">
+            <AlertCircle size={16} />
+            <span>{erro}</span>
+          </div>
+        )}
+
+        {/* Formulário de Login */}
+        {tab === 'login' ? (
+          <form onSubmit={handleLoginSubmit} className="vt-modal-form">
+            <div className="vt-form-group">
+              <label>E-mail</label>
+              <div className="vt-input-wrapper">
+                <Mail className="vt-input-icon" size={16} />
+                <input
+                  type="email"
+                  placeholder="Seu e-mail"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value.replace(/\s+/g, ''))}
+                  onKeyDown={(e) => {
+                    if (e.key === ' ') {
+                      e.preventDefault();
+                    }
+                  }}
+                  required
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <div className="vt-form-group">
+              <label>Senha</label>
+              <div className="vt-input-wrapper">
+                <KeyRound className="vt-input-icon" size={16} />
+                <input
+                  type={showPasswordLogin ? 'text' : 'password'}
+                  className="vt-input-password"
+                  placeholder="Sua senha"
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  required
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  className="vt-btn-toggle-password"
+                  onClick={() => setShowPasswordLogin(!showPasswordLogin)}
+                  tabIndex={-1}
+                >
+                  {showPasswordLogin ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" className="vt-btn vt-btn-primary vt-btn-block" disabled={loading}>
+              {loading ? <span className="spinner"></span> : 'Acessar Conta'}
+            </button>
+          </form>
+        ) : (
+          /* Formulário de Cadastro */
+          <form onSubmit={handleRegisterSubmit} className="vt-modal-form">
+            <div className="vt-form-group">
+              <label>Nome Completo</label>
+              <div className="vt-input-wrapper">
+                <User className="vt-input-icon" size={16} />
+                <input
+                  type="text"
+                  placeholder="Seu nome"
+                  value={nome}
+                  onChange={(e) => setNome(capitalizarNome(e.target.value))}
+                  required
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <div className="vt-form-group">
+              <label>E-mail</label>
+              <div className="vt-input-wrapper">
+                <Mail className="vt-input-icon" size={16} />
+                <input
+                  type="email"
+                  placeholder="Seu e-mail"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value.replace(/\s+/g, ''))}
+                  onKeyDown={(e) => {
+                    if (e.key === ' ') {
+                      e.preventDefault();
+                    }
+                  }}
+                  required
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <div className="vt-form-group">
+              <label>Telefone (opcional)</label>
+              <div className="vt-input-wrapper">
+                <Phone className="vt-input-icon" size={16} />
+                <input
+                  type="tel"
+                  placeholder="(11) 99999-9999"
+                  value={telefone}
+                  onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <div className="vt-form-group">
+              <label>Senha de Acesso</label>
+              <div className="vt-input-wrapper">
+                <KeyRound className="vt-input-icon" size={16} />
+                <input
+                  type={showPasswordRegister ? 'text' : 'password'}
+                  className="vt-input-password"
+                  placeholder="Mínimo 6 caracteres"
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  required
+                  minLength={6}
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  className="vt-btn-toggle-password"
+                  onClick={() => setShowPasswordRegister(!showPasswordRegister)}
+                  tabIndex={-1}
+                >
+                  {showPasswordRegister ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" className="vt-btn vt-btn-primary vt-btn-block" disabled={loading}>
+              {loading ? <span className="spinner"></span> : 'Criar minha Conta'}
+            </button>
+          </form>
+        )}
+
+        {/* Divisor */}
+        <div className="vt-modal-divider">
+          <span>ou continue com</span>
+        </div>
+
+        {/* Login Social Mock */}
+        <button
+          type="button"
+          className="vt-btn vt-btn-social"
+          onClick={() => useUIStore.getState().showToast('O login social com o Google estará disponível em breve.', 'info')}
+          disabled={loading}
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style={{ marginRight: 8 }}><path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.113-5.111 4.113-3.419 0-6.202-2.783-6.202-6.202 0-3.419 2.783-6.202 6.202-6.202 1.481 0 2.836.526 3.902 1.488l3.125-3.125C18.992 2.378 15.82 1 12.016 1c-6.075 0-11 4.925-11 11s4.925 11 11 11c5.787 0 10.373-4.084 10.373-10.428 0-.687-.06-1.3-.173-1.857H12.24z"/></svg>
+          <span>Google (Em breve)</span>
+        </button>
+      </div>
+    </div>
+  )
+}

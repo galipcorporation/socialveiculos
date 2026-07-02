@@ -1,0 +1,27 @@
+{
+  "name": "socialveiculos",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Social Veículos — Plataforma SaaS para gestão de lojas de veículos + vitrine B2C",
+  "scripts": {
+    "dev": "pnpm --parallel --filter './apps/*' run dev",
+    "dev:gestor": "pnpm --filter @sv/gestor run dev",
+    "dev:vitrine": "pnpm --filter @sv/vitrine run dev",
+    "dev:api": "pnpm --filter @sv/api run dev",
+    "build": "pnpm --filter './apps/*' run build",
+    "typecheck": "pnpm --filter './apps/*' --filter './packages/*' run typecheck",
+    "lint": "pnpm --filter './apps/*' --filter './packages/*' run lint",
+    "test": "pnpm --filter './apps/*' --filter './packages/*' run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.5.0",
+    "typescript": "^5.8.0"
+  },
+  "packageManager": "pnpm@10.10.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  }
+}

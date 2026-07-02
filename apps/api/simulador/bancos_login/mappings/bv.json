@@ -1,0 +1,132 @@
+{
+    "login": {
+        "url": "https://parceiro.bv.com.br/ng-gpar-base-login/",
+        "campo_usuario": [
+            "input[formcontrolname='login']",
+            "input[formcontrolname='username']",
+            "input[type='text']",
+            "aria/Usuário"
+        ],
+        "campo_senha": [
+            "input[formcontrolname='password']",
+            "input[type='password']",
+            "aria/Senha"
+        ],
+        "botao_submit": [
+            "aria/Entrar",
+            "app-root button",
+            "text/Entrar"
+        ]
+    },
+    "navegacao": {
+        "aceitar_cookies": [
+            "#onetrust-accept-btn-handler",
+            "aria/Aceitar todos os cookies"
+        ],
+        "fechar_modal": [
+            "polygon:nth-of-type(2)",
+            "xpath///*[@id=\"icon-close-new-stroke\"]/g/g/g/polygon[2]"
+        ],
+        "botao_criar_nova": [
+            "div.menu-footer > app-button > div",
+            "text/Nova proposta"
+        ]
+    },
+    "formulario": {
+        "url": "https://parceiro.bv.com.br/ang-ppar-base-micro-simulacao/aprovometro/simulacao/dados-do-cliente",
+        "tipo_financiamento": [
+            "#customer-data > div:nth-of-type(1) > div:nth-of-type(1) label",
+            "text/Financiamento",
+            "xpath///label[contains(., 'Financiamento')]",
+            "foundation-option-select label"
+        ],
+        "tipo_pessoa": [
+            "div:nth-of-type(2) > div:nth-of-type(1) span.radio-button",
+            "text/Pessoa f",
+            "xpath///label[contains(., 'Pessoa f')]",
+            "foundation-radio-button label"
+        ],
+        "cpf": [
+            "#proponent-document-cpf",
+            "aria/  "
+        ],
+        "nascimento": [
+            "aria/dd/mm/aaaa"
+        ],
+        "termo_aceite": [
+            "metalon-radio-button.permission-accord-class div.mat-radio-outer-circle",
+            "xpath///*[@id=\"permission-accord\"]/label/div[1]/div[1]"
+        ],
+        "botao_tentar_outro_cpf": [
+            "aria/Tentar com outro CPF",
+            "foundation-primary-button",
+            "text/Tentar com outro CPF"
+        ],
+        "tipo_veiculo_carro": [
+            "div.col-sm-8 > div > div:nth-of-type(1) label",
+            "xpath///*[@id=\"customer-data\"]/div[5]/div/div[1]/foundation-option-select/div/label"
+        ],
+        "placa": [
+            "#vehicle-data-plate",
+            "aria/Placa"
+        ],
+        "selecionar_primeiro_veiculo": [
+            "app-simulation-vehicles section > div:nth-of-type(1)",
+            "#vehicles-data-form section > div:nth-of-type(1)",
+            "xpath///*[@id=\"vehicles-data-form\"]/div[2]/section/div[1]",
+            "section > div:nth-of-type(1) foundation-radio-button label"
+        ],
+        "valor_veiculo": [
+            "#vehicle-data-value",
+            "aria/Valor"
+        ],
+        "valor_entrada": [
+            "#result-input-value",
+            "aria/Valor de entrada"
+        ],
+        "botao_simular": [
+            "aria/Simular",
+            "#button-simulate",
+            "button.btn-primary",
+            "span.mat-content"
+        ]
+    },
+    "resultado": {
+        "dialog_recusa": [
+            "#dialog-title",
+            "xpath//h2[@id='dialog-title'][contains(., 'não pode ser')]",
+            "text/Esse financiamento não pode ser aprovado"
+        ],
+        "parcela_60x": [
+            "#left-column div > div:nth-of-type(1) p",
+            "metalon-radio-button > div > div > div:nth-of-type(1) p",
+            "app-result-installment metalon-radio-button:nth-of-type(1)",
+            "#result-installments div:nth-of-type(1) p",
+            "div.installment-item:nth-of-type(1)"
+        ],
+        "parcela_48x": [
+            "#left-column div > div:nth-of-type(2) p",
+            "metalon-radio-button > div > div > div:nth-of-type(2) p",
+            "app-result-installment metalon-radio-button:nth-of-type(2)",
+            "#result-installments div:nth-of-type(2) p"
+        ],
+        "parcela_36x": [
+            "#left-column div:nth-of-type(3) p",
+            "metalon-radio-button > div > div > div:nth-of-type(3) p"
+        ],
+        "parcela_24x": [
+            "div:nth-of-type(4) > label > div",
+            "metalon-radio-button > div > div > div:nth-of-type(4) p"
+        ],
+        "selecionar_tabela_t4": [
+            "#result-change-comercial-condition-4 div.mat-radio-outer-circle",
+            "#result-change-comercial-condition-4 input[type='radio']",
+            "#result-change-comercial-condition-4",
+            "xpath///*[@id='result-change-comercial-condition-4']//div[contains(@class,'mat-radio-outer-circle')]"
+        ],
+        "tabela_comercial": [
+            "#result-change-comercial-table span",
+            "app-result span.value"
+        ]
+    }
+}

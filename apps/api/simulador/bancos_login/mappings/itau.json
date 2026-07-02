@@ -1,0 +1,91 @@
+{
+    "login": {
+        "url": "https://www.credlineitau.com.br/",
+        "iframe": [
+            "iframe"
+        ],
+        "campo_usuario": [
+            "#username",
+            "aria/e-mail"
+        ],
+        "campo_senha": [
+            "#password",
+            "aria/senha"
+        ],
+        "botao_submit": [
+            "#kc-login",
+            "text/entrar"
+        ]
+    },
+    "navegacao": {
+        "url": "https://www.credlineitau.com.br/new-simulator",
+        "step1_header": [
+            "div.sidenav-header"
+        ],
+        "botao_menu": [
+            "[data-cy='menu'] > span",
+            "text/menu_hamburger"
+        ],
+        "botao_simulacao": [
+            "aria/Novo Simulador PF",
+            "div.sidenav-content > div:nth-of-type(2) button",
+            "text/veiculo_outline"
+        ]
+    },
+    "formulario": {
+        "url": "https://www.credlineitau.com.br/new-simulator",
+        "cpf": [
+            "[data-cy='client-document']",
+            "aria/CPF"
+        ],
+        "botao_continuar_scr": [
+            "[data-cy='scr-button']",
+            "text/Continuar",
+            "form > div.ids-d-flex span"
+        ],
+        "tab_placa": [
+            "#ids-tabs-0-2",
+            "#ids-tabs-0-2 > span",
+            "text/Placa"
+        ],
+        "placa": [
+            "[data-cy='vehicle-identification']",
+            "aria/Placa[role=\"textbox\"]"
+        ],
+        "botao_buscar_veiculo": [
+            "#financing-simulation-vehicle button",
+            "text/Buscar veículo"
+        ],
+        "selecionar_primeiro_veiculo": [
+            "input[name='vehicle']",
+            "ids-radio-button input[type='radio']",
+            "input[type='radio'][name='vehicle']",
+            "input[type='radio']"
+        ],
+        "valor_veiculo": [
+            "[data-cy='vehicle-value']",
+            "aria/valor do veículo"
+        ],
+        "valor_entrada": [
+            "[data-cy='entry-value']",
+            "aria/Valor de entrada"
+        ],
+        "botao_simular": [
+            "[data-cy='create-simulation-button']",
+            "aria/Simular financiamento"
+        ]
+    },
+    "resultado": {
+        "parcela": [
+            "[data-cy='select-installment']"
+        ],
+        "mostrar_mais": [
+            "#show-more-or-less-installments-btn",
+            "text/mais Mostrar"
+        ],
+        "data_primeira_parcela": [
+            "[data-cy='first-payment-date']",
+            "aria/Data da primeira parcela"
+        ]
+    }
+}

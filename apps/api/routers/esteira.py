@@ -1,0 +1,546 @@
+"""
+Social Veículos — Esteira pós-venda (/v1/esteira)
+
+O que acontece DEPOIS do clique em "Vender": contrato, pagamento, documentos ao
+novo dono e transferência no DETRAN. Ver ESTEIRA-POS-VENDA.md.
+
+A esteira nunca trava a venda; ela acompanha. O estágio exibido é a frente
+pendente mais atrasada (não um funil). Só "concluído" é portão duro: exige
+todos os itens obrigatórios resolvidos.
+"""
+from datetime import datetime, timezone, timedelta
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from database import get_db
+from deps import get_current_b2b_user, B2BContext, registrar_auditoria
+from models import (
+    EsteiraPosVenda,
+    ItemChecklist,
+    Veiculo,
+    ClientePF,
+    VeiculoDocumento,
+    EstagioPosVenda,
+    StatusItemChecklist,
+    CategoriaItem,
+    LancamentoFinanceiro,
+    TipoLancamento,
+    ComissaoVenda,
+)
+from schemas import (
+    EsteiraResumoResponse,
+    EsteiraDetalheResponse,
+    ItemChecklistResponse,
+    ItemChecklistUpdate,
+    TransferenciaUpdate,
+    VeiculoResumo,
+    CompradorResumo,
+    EsteiraDashboardResponse,
+)
+
+router = APIRouter(prefix="/v1/esteira", tags=["Esteira Pós-venda"])
+
+# Ordem das frentes → mapeia categoria de item para o estágio da esteira.
+_CATEGORIA_ESTAGIO = {
+    CategoriaItem.CONTRATO: EstagioPosVenda.CONTRATO,
+    CategoriaItem.FINANCEIRO: EstagioPosVenda.PAGAMENTO,
+    CategoriaItem.DOCUMENTO: EstagioPosVenda.DOCUMENTOS,
+    CategoriaItem.TRANSFERENCIA: EstagioPosVenda.TRANSFERENCIA,
+}
+_ORDEM_ESTAGIO = [
+    EstagioPosVenda.CONTRATO,
+    EstagioPosVenda.PAGAMENTO,
+    EstagioPosVenda.DOCUMENTOS,
+    EstagioPosVenda.TRANSFERENCIA,
+]
+
+# Itens que bloqueiam a conclusão (§5).
+_ITENS_BLOQUEIO_CONCLUSAO = {
+    "contrato_assinado",
+    "recibo_entregue",
+    "comunicacao_venda",
+    "transferencia_concluida",
+    "debitos_quitados",
+}
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _aware(dt: Optional[datetime]) -> Optional[datetime]:
+    """SQLite devolve datetimes naive; normaliza para UTC-aware para comparar."""
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _vencido(item: ItemChecklist) -> bool:
+    prazo = _aware(item.prazo_em)
+    if prazo is None or item.status in (StatusItemChecklist.CONCLUIDO, StatusItemChecklist.NAO_APLICAVEL):
+        return False
+    return prazo < _now()
+
+
+def _pendente(item: ItemChecklist) -> bool:
+    return item.status in (StatusItemChecklist.PENDENTE, StatusItemChecklist.EM_ANDAMENTO)
+
+
+def recalcular_estagio(esteira: EsteiraPosVenda) -> EstagioPosVenda:
+    """Estágio = frente pendente mais 'atrasada' — a primeira, na ordem das frentes,
+    com um item OBRIGATÓRIO/bloqueante ainda pendente. Itens opcionais pendentes
+    (garantia, nota, vistoria) não prendem o estágio. A conclusão é explícita
+    (POST /concluir); enquanto não concluída e sem obrigatório pendente, fica na
+    última frente (transferência)."""
+    if esteira.concluida_em is not None:
+        return EstagioPosVenda.CONCLUIDO
+    for estagio in _ORDEM_ESTAGIO:
+        for item in esteira.itens:
+            bloqueia = item.obrigatorio or item.chave in _ITENS_BLOQUEIO_CONCLUSAO
+            if bloqueia and _CATEGORIA_ESTAGIO[item.categoria] == estagio and _pendente(item):
+                return estagio
+    # nenhum obrigatório pendente: fica na transferência até concluir explicitamente
+    return EstagioPosVenda.TRANSFERENCIA
+
+
+def _obrigatorios_faltando(esteira: EsteiraPosVenda) -> List[str]:
+    """Itens que impedem a conclusão (§5)."""
+    faltando = []
+    for item in esteira.itens:
+        bloqueia = item.obrigatorio or item.chave in _ITENS_BLOQUEIO_CONCLUSAO
+        if bloqueia and item.status not in (StatusItemChecklist.CONCLUIDO, StatusItemChecklist.NAO_APLICAVEL):
+            faltando.append(item.titulo)
+    return faltando
+
+
+def _veiculo_resumo(v: Optional[Veiculo]) -> Optional[VeiculoResumo]:
+    if not v:
+        return None
+    foto = None
+    midias = getattr(v, "midias", None)
+    if midias:
+        foto = getattr(midias[0], "url", None)
+    return VeiculoResumo(
+        id=v.id, marca=v.marca, modelo=v.modelo,
+        ano_modelo=getattr(v, "ano_modelo", None),
+        placa=getattr(v, "placa", None), foto=foto,
+    )
+
+
+def _comprador_resumo(c: Optional[ClientePF]) -> Optional[CompradorResumo]:
+    if not c:
+        return None
+    return CompradorResumo(
+        id=c.id, nome=getattr(c, "nome", None),
+        telefone=getattr(c, "telefone", None),
+    )
+
+
+# itens financeiros que, quando pagos pela loja, viram DESPESA no financeiro (§6.6)
+_ITENS_DESPESA = {
+    "debitos_quitados": "Débitos do veículo (IPVA/licenciamento/multas)",
+    "taxa_transferencia_paga": "Taxa de transferência",
+}
+_ITEM_RECEITA = {"entrada_recebida": "Entrada"}
+
+
+async def _lancar_financeiro(db: AsyncSession, esteira: EsteiraPosVenda, item: ItemChecklist) -> None:
+    """Ao concluir um item financeiro, gera o LancamentoFinanceiro correspondente,
+    sem duplicar (idempotente pela descrição+veiculo)."""
+    if item.chave in _ITENS_DESPESA:
+        tipo, rotulo, categoria = TipoLancamento.DESPESA, _ITENS_DESPESA[item.chave], "documentacao"
+    elif item.chave in _ITEM_RECEITA:
+        tipo, rotulo, categoria = TipoLancamento.RECEITA, _ITEM_RECEITA[item.chave], "venda_veiculo"
+    else:
+        return
+
+    descricao = f"{rotulo} — esteira {esteira.id[:8]}"
+    ja = await db.execute(
+        select(LancamentoFinanceiro.id).where(
+            LancamentoFinanceiro.loja_id == esteira.loja_id,
+            LancamentoFinanceiro.descricao == descricao,
+        ).limit(1)
+    )
+    if ja.first():
+        return
+    db.add(LancamentoFinanceiro(
+        loja_id=esteira.loja_id, tipo=tipo, descricao=descricao,
+        valor=0.0, veiculo_id=esteira.veiculo_id, categoria=categoria,
+        observacoes="Lançado automaticamente pela esteira pós-venda. Ajuste o valor.",
+    ))
+
+
+async def _comissao_paga(db: AsyncSession, esteira: EsteiraPosVenda) -> Optional[bool]:
+    """Lê ComissaoVenda.pago do veículo, se houver."""
+    if not esteira.veiculo_id:
+        return None
+    res = await db.execute(
+        select(ComissaoVenda.pago).where(ComissaoVenda.veiculo_id == esteira.veiculo_id).limit(1)
+    )
+    row = res.first()
+    return bool(row[0]) if row else None
+
+
+async def _carregar_esteira(db: AsyncSession, esteira_id: str, loja_id: str) -> EsteiraPosVenda:
+    stmt = (
+        select(EsteiraPosVenda)
+        .where(EsteiraPosVenda.id == esteira_id, EsteiraPosVenda.loja_id == loja_id)
+        .options(
+            selectinload(EsteiraPosVenda.itens),
+            selectinload(EsteiraPosVenda.veiculo).selectinload(Veiculo.midias),
+            selectinload(EsteiraPosVenda.comprador),
+        )
+    )
+    res = await db.execute(stmt)
+    esteira = res.scalar_one_or_none()
+    if not esteira:
+        raise HTTPException(status_code=404, detail="Esteira não encontrada")
+    return esteira
+
+
+# ═══════════════════════════════════════════════════════════════
+# BOARD
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("", response_model=List[EsteiraResumoResponse])
+async def listar_board(
+    estagio: Optional[EstagioPosVenda] = Query(None),
+    atrasadas: bool = Query(False),
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Board (Kanban) das esteiras da loja. Não mostra concluídas por padrão."""
+    stmt = (
+        select(EsteiraPosVenda)
+        .where(EsteiraPosVenda.loja_id == ctx.loja.id)
+        .options(
+            selectinload(EsteiraPosVenda.itens),
+            selectinload(EsteiraPosVenda.veiculo).selectinload(Veiculo.midias),
+            selectinload(EsteiraPosVenda.comprador),
+        )
+        .order_by(EsteiraPosVenda.aberta_em.desc())
+    )
+    if estagio:
+        stmt = stmt.where(EsteiraPosVenda.estagio == estagio)
+    else:
+        stmt = stmt.where(EsteiraPosVenda.estagio != EstagioPosVenda.CONCLUIDO)
+
+    res = await db.execute(stmt)
+    esteiras = res.scalars().all()
+
+    cards: List[EsteiraResumoResponse] = []
+    for e in esteiras:
+        aplicaveis = [i for i in e.itens if i.status != StatusItemChecklist.NAO_APLICAVEL]
+        concluidos = [i for i in aplicaveis if i.status == StatusItemChecklist.CONCLUIDO]
+        pendentes = [i for i in e.itens if _pendente(i)]
+        vencidos = [i for i in e.itens if _vencido(i)]
+        # próximo item = pendente com prazo mais próximo, senão o primeiro pendente
+        pendentes_ordenados = sorted(
+            pendentes, key=lambda i: (_aware(i.prazo_em) is None, _aware(i.prazo_em) or _now())
+        )
+        proximo = pendentes_ordenados[0] if pendentes_ordenados else None
+        prazos = [_aware(i.prazo_em) for i in pendentes if _aware(i.prazo_em)]
+
+        if atrasadas and not vencidos:
+            continue
+
+        cards.append(EsteiraResumoResponse(
+            id=e.id, estagio=e.estagio, origem=e.origem,
+            veiculo=_veiculo_resumo(e.veiculo),
+            comprador=_comprador_resumo(e.comprador),
+            proximo_item=proximo.titulo if proximo else None,
+            prazo_mais_proximo=min(prazos) if prazos else None,
+            tem_vencido=bool(vencidos),
+            total_itens=len(aplicaveis),
+            concluidos=len(concluidos),
+            aberta_em=e.aberta_em,
+        ))
+    return cards
+
+
+# ═══════════════════════════════════════════════════════════════
+# DASHBOARD (nudges §7 + indicadores §10)
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/dashboard/resumo", response_model=EsteiraDashboardResponse)
+async def dashboard_resumo(
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(EsteiraPosVenda)
+        .where(
+            EsteiraPosVenda.loja_id == ctx.loja.id,
+            EsteiraPosVenda.estagio != EstagioPosVenda.CONCLUIDO,
+        )
+        .options(selectinload(EsteiraPosVenda.itens))
+    )
+    esteiras = (await db.execute(stmt)).scalars().all()
+
+    agora = _now()
+    limiar_d7 = agora + timedelta(days=7)
+    por_estagio: dict = {}
+    vencendo_7d = comunicacao_vencida = itens_vencidos = travados_30d = 0
+
+    for e in esteiras:
+        por_estagio[e.estagio.value] = por_estagio.get(e.estagio.value, 0) + 1
+        aberta = _aware(e.aberta_em)
+        if aberta and (agora - aberta).days > 30:
+            travados_30d += 1
+        for i in e.itens:
+            if _vencido(i):
+                itens_vencidos += 1
+                if i.chave == "comunicacao_venda":
+                    comunicacao_vencida += 1
+            prazo = _aware(i.prazo_em)
+            if (i.chave == "transferencia_concluida" and _pendente(i)
+                    and prazo and agora <= prazo <= limiar_d7):
+                vencendo_7d += 1
+
+    return EsteiraDashboardResponse(
+        total_ativas=len(esteiras),
+        por_estagio=por_estagio,
+        transferencias_vencendo_7d=vencendo_7d,
+        comunicacao_venda_vencida=comunicacao_vencida,
+        itens_vencidos=itens_vencidos,
+        vendidos_travados_30d=travados_30d,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# DETALHE
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/{esteira_id}", response_model=EsteiraDetalheResponse)
+async def detalhe(
+    esteira_id: str,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    e = await _carregar_esteira(db, esteira_id, ctx.loja.id)
+
+    # espelha o status real da comissão (ComissaoVenda.pago) no item da esteira
+    comissao_pago = await _comissao_paga(db, e)
+    if comissao_pago:
+        for i in e.itens:
+            if i.chave == "comissao_paga" and i.status != StatusItemChecklist.CONCLUIDO:
+                i.status = StatusItemChecklist.CONCLUIDO
+                i.concluido_em = i.concluido_em or _now()
+        await db.commit()
+
+    itens_resp = []
+    vencidos = 0
+    for i in sorted(e.itens, key=lambda x: (x.categoria.value, x.chave)):
+        venc = _vencido(i)
+        if venc:
+            vencidos += 1
+        r = ItemChecklistResponse.model_validate(i)
+        r.vencido = venc
+        itens_resp.append(r)
+    aplicaveis = [i for i in e.itens if i.status != StatusItemChecklist.NAO_APLICAVEL]
+    concluidos = sum(1 for i in aplicaveis if i.status == StatusItemChecklist.CONCLUIDO)
+
+    return EsteiraDetalheResponse(
+        id=e.id, estagio=e.estagio, origem=e.origem,
+        veiculo=_veiculo_resumo(e.veiculo),
+        comprador=_comprador_resumo(e.comprador),
+        contrato_id=e.contrato_id, vendedor_id=e.vendedor_id,
+        comunicacao_venda_em=e.comunicacao_venda_em,
+        transferencia_em=e.transferencia_em,
+        aberta_em=e.aberta_em, concluida_em=e.concluida_em,
+        itens=itens_resp,
+        total_itens=len(aplicaveis), concluidos=concluidos, vencidos=vencidos,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# ATUALIZAR ITEM
+# ═══════════════════════════════════════════════════════════════
+
+@router.patch("/{esteira_id}/itens/{item_id}", response_model=EsteiraDetalheResponse)
+async def atualizar_item(
+    esteira_id: str,
+    item_id: str,
+    body: ItemChecklistUpdate,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    e = await _carregar_esteira(db, esteira_id, ctx.loja.id)
+    if e.concluida_em is not None:
+        raise HTTPException(status_code=400, detail="Esteira já concluída")
+    item = next((i for i in e.itens if i.id == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+
+    if body.status is not None:
+        item.status = body.status
+        if body.status == StatusItemChecklist.CONCLUIDO:
+            item.concluido_em = _now()
+            item.concluido_por = ctx.usuario.id
+            if item.categoria == CategoriaItem.FINANCEIRO:
+                await _lancar_financeiro(db, e, item)
+        else:
+            item.concluido_em = None
+            item.concluido_por = None
+    if body.observacao is not None:
+        item.observacao = body.observacao
+    if body.prazo_em is not None:
+        item.prazo_em = body.prazo_em
+    if body.doc_id is not None:
+        item.doc_id = body.doc_id
+
+    e.estagio = recalcular_estagio(e)
+    await db.commit()
+    await registrar_auditoria(
+        db, ctx.usuario.id, "esteira_item_atualizado",
+        f"Item '{item.titulo}' → {item.status.value} (esteira {e.id}).",
+    )
+    return await detalhe(esteira_id, ctx, db)
+
+
+# ═══════════════════════════════════════════════════════════════
+# DOCUMENTOS (reusa M018 VeiculoDocumento)
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/{esteira_id}/documentos", response_model=EsteiraDetalheResponse)
+async def anexar_documento(
+    esteira_id: str,
+    item_chave: str = Query(..., description="chave do item de documento a ligar"),
+    nome: str = Query(...),
+    url: str = Query(...),
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Registra um VeiculoDocumento e liga ao item de documento correspondente."""
+    e = await _carregar_esteira(db, esteira_id, ctx.loja.id)
+    if not e.veiculo_id:
+        raise HTTPException(status_code=400, detail="Esteira sem veículo vinculado")
+    item = next((i for i in e.itens if i.chave == item_chave and i.categoria == CategoriaItem.DOCUMENTO), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item de documento não encontrado")
+
+    doc = VeiculoDocumento(
+        veiculo_id=e.veiculo_id, loja_id=ctx.loja.id,
+        nome=nome, url=url, visivel_comprador=True,
+    )
+    db.add(doc)
+    await db.flush()
+    item.doc_id = doc.id
+    item.status = StatusItemChecklist.CONCLUIDO
+    item.concluido_em = _now()
+    item.concluido_por = ctx.usuario.id
+    e.estagio = recalcular_estagio(e)
+    await db.commit()
+    await registrar_auditoria(
+        db, ctx.usuario.id, "esteira_documento_anexado",
+        f"Documento '{nome}' anexado ao item '{item.titulo}' (esteira {e.id}).",
+    )
+    return await detalhe(esteira_id, ctx, db)
+
+
+# ═══════════════════════════════════════════════════════════════
+# TRANSFERÊNCIA (comunicação de venda + transferência DETRAN)
+# ═══════════════════════════════════════════════════════════════
+
+@router.patch("/{esteira_id}/transferencia", response_model=EsteiraDetalheResponse)
+async def registrar_transferencia(
+    esteira_id: str,
+    body: TransferenciaUpdate,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Grava comunicacao_venda_em e/ou transferencia_em e liga os itens correspondentes."""
+    e = await _carregar_esteira(db, esteira_id, ctx.loja.id)
+    if body.comunicacao_venda_em is not None:
+        e.comunicacao_venda_em = body.comunicacao_venda_em
+        item = next((i for i in e.itens if i.chave == "comunicacao_venda"), None)
+        if item:
+            item.status = StatusItemChecklist.CONCLUIDO
+            item.concluido_em = _now()
+            item.concluido_por = ctx.usuario.id
+    if body.transferencia_em is not None:
+        e.transferencia_em = body.transferencia_em
+        item = next((i for i in e.itens if i.chave == "transferencia_concluida"), None)
+        if item:
+            item.status = StatusItemChecklist.CONCLUIDO
+            item.concluido_em = _now()
+            item.concluido_por = ctx.usuario.id
+
+    e.estagio = recalcular_estagio(e)
+    await db.commit()
+    await registrar_auditoria(
+        db, ctx.usuario.id, "esteira_transferencia",
+        f"Transferência atualizada (esteira {e.id}).",
+    )
+    return await detalhe(esteira_id, ctx, db)
+
+
+# ═══════════════════════════════════════════════════════════════
+# CONSULTAS DETRAN (Fase 3 — plugável, sem inventar dado)
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/{esteira_id}/debitos")
+async def consultar_debitos(
+    esteira_id: str,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Consulta débitos do veículo no DETRAN (IPVA/licenciamento/multas).
+    Retorna disponivel=false enquanto não houver provedor configurado."""
+    from detran_provider import detran_provider
+    e = await _carregar_esteira(db, esteira_id, ctx.loja.id)
+    placa = getattr(e.veiculo, "placa", None) if e.veiculo else None
+    if not placa:
+        raise HTTPException(status_code=400, detail="Veículo sem placa para consulta")
+    r = await detran_provider.consultar_debitos(placa)
+    return r
+
+
+@router.get("/{esteira_id}/situacao")
+async def consultar_situacao(
+    esteira_id: str,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Consulta situação da ATPV-e/transferência no DETRAN.
+    Retorna disponivel=false enquanto não houver provedor configurado."""
+    from detran_provider import detran_provider
+    e = await _carregar_esteira(db, esteira_id, ctx.loja.id)
+    placa = getattr(e.veiculo, "placa", None) if e.veiculo else None
+    if not placa:
+        raise HTTPException(status_code=400, detail="Veículo sem placa para consulta")
+    r = await detran_provider.consultar_situacao(placa)
+    return r
+
+
+# ═══════════════════════════════════════════════════════════════
+# CONCLUIR (portão duro)
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/{esteira_id}/concluir", response_model=EsteiraDetalheResponse)
+async def concluir(
+    esteira_id: str,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    e = await _carregar_esteira(db, esteira_id, ctx.loja.id)
+    if e.concluida_em is not None:
+        raise HTTPException(status_code=400, detail="Esteira já concluída")
+    faltando = _obrigatorios_faltando(e)
+    if faltando:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Itens obrigatórios pendentes", "faltando": faltando},
+        )
+    e.estagio = EstagioPosVenda.CONCLUIDO
+    e.concluida_em = _now()
+    await db.commit()
+    await registrar_auditoria(
+        db, ctx.usuario.id, "esteira_concluida",
+        f"Esteira pós-venda {e.id} concluída — arquivada na Carteira do Proprietário.",
+    )
+    return await detalhe(esteira_id, ctx, db)

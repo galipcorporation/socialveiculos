@@ -1,0 +1,19 @@
+{
+  "name": "@sv/whatsapp-worker",
+  "version": "1.0.0",
+  "description": "Serviço persistente para sessões WhatsApp (Baileys) - Social Veículos",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "pino": "^9.4.0",
+    "qrcode": "^1.5.4"
+  }
+}
