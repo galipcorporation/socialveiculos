@@ -491,12 +491,12 @@ async def consultar_debitos(
 ):
     """Consulta débitos do veículo no DETRAN (IPVA/licenciamento/multas).
     Retorna disponivel=false enquanto não houver provedor configurado."""
-    from detran_provider import detran_provider
+    from detran_provider import consultar_debitos as _detran_debitos
     e = await _carregar_esteira(db, esteira_id, ctx.loja.id)
     placa = getattr(e.veiculo, "placa", None) if e.veiculo else None
     if not placa:
         raise HTTPException(status_code=400, detail="Veículo sem placa para consulta")
-    r = await detran_provider.consultar_debitos(placa)
+    r = await _detran_debitos(ctx.loja.id, placa, db)
     return r
 
 
@@ -508,12 +508,12 @@ async def consultar_situacao(
 ):
     """Consulta situação da ATPV-e/transferência no DETRAN.
     Retorna disponivel=false enquanto não houver provedor configurado."""
-    from detran_provider import detran_provider
+    from detran_provider import consultar_situacao as _detran_situacao
     e = await _carregar_esteira(db, esteira_id, ctx.loja.id)
     placa = getattr(e.veiculo, "placa", None) if e.veiculo else None
     if not placa:
         raise HTTPException(status_code=400, detail="Veículo sem placa para consulta")
-    r = await detran_provider.consultar_situacao(placa)
+    r = await _detran_situacao(ctx.loja.id, placa, db)
     return r
 
 

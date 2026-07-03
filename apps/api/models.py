@@ -931,6 +931,28 @@ class CredencialIA(Base):
     )
 
 
+class CredencialDetran(Base):
+    """Credencial do fornecedor de consulta DETRAN (BYOF) de uma loja.
+
+    Cada loja contrata o próprio agregador (Infosimples, despachante-tech, etc.)
+    e cadastra a URL base + chave. O provider consulta de verdade quando ativo;
+    sem credencial, retorna disponivel=false (nunca dado fake — social.md §6).
+    """
+    __tablename__ = "credencial_detran"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False, unique=True)
+    api_url = Column(String(500), nullable=False)   # base do fornecedor, ex: https://api.fornecedor.com/detran
+    api_key_cifrada = Column(Text, nullable=False)   # Fernet
+    ativo = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+    __table_args__ = (
+        UniqueConstraint("loja_id", name="uq_credencial_detran_loja"),
+    )
+
+
 class MarketingUsage(Base):
     """Registro de consumo de IA por chamada de marketing (billing futuro)."""
     __tablename__ = "marketing_usage"

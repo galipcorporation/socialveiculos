@@ -3,23 +3,34 @@ Provedor plugável de consultas ao DETRAN para a esteira pós-venda
 (ESTEIRA-POS-VENDA.md §11 Fase 3): débitos (IPVA/licenciamento/multas),
 situação da ATPV-e e vistoria.
 
-Mesma filosofia da busca por placa e do StorageProvider: plugável e
-**sem inventar dado**. Enquanto não houver provedor real configurado,
-`disponivel=False` e a UI mostra "consulta indisponível" — nunca um valor fake
-(regra do dado real, social.md §6).
+BYOF (Bring Your Own Fornecedor): cada loja contrata o próprio agregador
+(Infosimples, despachante-tech, etc.) e cadastra URL + chave em
+Configurações → Consulta DETRAN. A credencial fica cifrada por loja
+(models.CredencialDetran). Sem credencial ativa → `disponivel=False` e a UI
+mostra "consulta indisponível" — nunca um valor fake (social.md §6).
 
-Para plugar um provedor real: implemente `_ConsultaReal` chamando a API
-(ex.: SINESP/despachante) e ative via settings (DETRAN_API_KEY etc.).
+Contrato HTTP esperado do fornecedor da loja (documentado na UI):
+    POST {api_url}/debitos   Auth: Bearer {chave}   body: {"placa", "renavam"}
+      → {"ipva", "licenciamento", "multas", "total", "fonte"?}
+    POST {api_url}/situacao  Auth: Bearer {chave}   body: {"placa", "renavam"}
+      → {"atpve_emitida", "transferencia_concluida", "proprietario_atual", "fonte"?}
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import logging
+from dataclasses import dataclass
 from typing import Optional
 
-try:
-    from config import settings
-except Exception:  # pragma: no cover - defensivo p/ testes isolados
-    settings = None
+import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+
+from models import CredencialDetran
+from simulador.crypt import decrypt_credentials
+
+logger = logging.getLogger(__name__)
+
+_TIMEOUT = httpx.Timeout(15.0)
 
 
 @dataclass
@@ -43,35 +54,82 @@ class ConsultaSituacao:
     mensagem: str = "Consulta de situação indisponível — nenhum provedor configurado."
 
 
-class DetranProvider:
-    def __init__(self) -> None:
-        # ativa provedor real só quando as credenciais existirem
-        self.ativo = bool(
-            settings
-            and getattr(settings, "detran_api_key", None)
-            and getattr(settings, "detran_api_url", None)
+def _as_float(v) -> Optional[float]:
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_bool(v) -> Optional[bool]:
+    if isinstance(v, bool) or v is None:
+        return v
+    if isinstance(v, str):
+        return v.strip().lower() in {"true", "1", "sim", "yes"}
+    return bool(v)
+
+
+async def _carregar_credencial(loja_id: str, db: AsyncSession) -> Optional[CredencialDetran]:
+    res = await db.execute(
+        select(CredencialDetran).where(
+            CredencialDetran.loja_id == loja_id,
+            CredencialDetran.ativo == True,  # noqa: E712
         )
-        if self.ativo:
-            print("[DETRAN] Provedor real configurado.")
-        else:
-            print("[DETRAN] Sem provedor — consultas retornam indisponível (sem inventar dado).")
-
-    async def consultar_debitos(self, placa: str, renavam: Optional[str] = None) -> ConsultaDebitos:
-        if not self.ativo:
-            return ConsultaDebitos()
-        return await self._consultar_debitos_real(placa, renavam)
-
-    async def consultar_situacao(self, placa: str, renavam: Optional[str] = None) -> ConsultaSituacao:
-        if not self.ativo:
-            return ConsultaSituacao()
-        return await self._consultar_situacao_real(placa, renavam)
-
-    # ── ganchos para o provedor real (implementar ao contratar) ──
-    async def _consultar_debitos_real(self, placa: str, renavam: Optional[str]) -> ConsultaDebitos:
-        raise NotImplementedError("Integração DETRAN real ainda não implementada.")
-
-    async def _consultar_situacao_real(self, placa: str, renavam: Optional[str]) -> ConsultaSituacao:
-        raise NotImplementedError("Integração DETRAN real ainda não implementada.")
+    )
+    return res.scalar_one_or_none()
 
 
-detran_provider = DetranProvider()
+async def _post(cred: CredencialDetran, path: str, placa: str, renavam: Optional[str]) -> Optional[dict]:
+    """Chama o fornecedor da loja. Retorna dict da resposta ou None em falha
+    (mantém a regra: nunca inventa dado — falha vira indisponível)."""
+    api_key = decrypt_credentials(cred.api_key_cifrada)
+    url = cred.api_url.rstrip("/") + path
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            r = await client.post(
+                url,
+                headers={"Authorization": f"Bearer {api_key}", "content-type": "application/json"},
+                json={"placa": placa, "renavam": renavam},
+            )
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        logger.error(f"[DETRAN] Falha ao consultar {url}: {e}")
+        return None
+
+
+async def consultar_debitos(loja_id: str, placa: str, db: AsyncSession, renavam: Optional[str] = None) -> ConsultaDebitos:
+    cred = await _carregar_credencial(loja_id, db)
+    if not cred:
+        return ConsultaDebitos()
+    data = await _post(cred, "/debitos", placa, renavam)
+    if data is None:
+        return ConsultaDebitos(mensagem="Consulta de débitos temporariamente indisponível — falha no provedor.")
+    return ConsultaDebitos(
+        disponivel=True,
+        total=_as_float(data.get("total")),
+        ipva=_as_float(data.get("ipva")),
+        licenciamento=_as_float(data.get("licenciamento")),
+        multas=_as_float(data.get("multas")),
+        fonte=data.get("fonte") or "Fornecedor configurado",
+        mensagem="",
+    )
+
+
+async def consultar_situacao(loja_id: str, placa: str, db: AsyncSession, renavam: Optional[str] = None) -> ConsultaSituacao:
+    cred = await _carregar_credencial(loja_id, db)
+    if not cred:
+        return ConsultaSituacao()
+    data = await _post(cred, "/situacao", placa, renavam)
+    if data is None:
+        return ConsultaSituacao(mensagem="Consulta de situação temporariamente indisponível — falha no provedor.")
+    return ConsultaSituacao(
+        disponivel=True,
+        atpve_emitida=_as_bool(data.get("atpve_emitida")),
+        transferencia_concluida=_as_bool(data.get("transferencia_concluida")),
+        proprietario_atual=data.get("proprietario_atual"),
+        fonte=data.get("fonte") or "Fornecedor configurado",
+        mensagem="",
+    )

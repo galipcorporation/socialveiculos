@@ -66,7 +66,7 @@ export interface RedeSocialStatus {
 export function Configuracoes() {
   const location = useLocation()
   const abaInicial = (location.state as { aba?: string } | null)?.aba
-  const [abaAtual, setAbaAtual] = useState<'perfil' | 'credenciais' | 'ia' | 'redes'>(
+  const [abaAtual, setAbaAtual] = useState<'perfil' | 'credenciais' | 'ia' | 'redes' | 'detran'>(
     abaInicial === 'redes' ? 'redes' : 'perfil'
   )
 
@@ -126,12 +126,21 @@ export function Configuracoes() {
   const [salvandoIA, setSalvandoIA] = useState(false)
   const [removendoIA, setRemovendoIA] = useState('')
 
+  // Fornecedor DETRAN (BYOF)
+  interface CredencialDetran { configurada: boolean; api_url: string | null; ativo: boolean }
+  const [detran, setDetran] = useState<CredencialDetran>({ configurada: false, api_url: null, ativo: false })
+  const [detranUrl, setDetranUrl] = useState('')
+  const [detranKey, setDetranKey] = useState('')
+  const [detranMostrarKey, setDetranMostrarKey] = useState(false)
+  const [salvandoDetran, setSalvandoDetran] = useState(false)
+  const [removendoDetran, setRemovendoDetran] = useState(false)
+
   useEffect(() => {
     const carregar = async () => {
       setLoading(true)
       setError(null)
       try {
-        const [dataLoja, dataCreds, dataBancos, dataCredsIA, dataRedes] = await Promise.all([
+        const [dataLoja, dataCreds, dataBancos, dataCredsIA, dataRedes, dataDetran] = await Promise.all([
           api.get<Loja>('/configuracoes/loja').catch(err => {
             console.warn('Falha ao obter loja:', err)
             return null
@@ -151,6 +160,10 @@ export function Configuracoes() {
           api.get<RedeSocialStatus[]>('/configuracoes/redes-sociais').catch(err => {
             console.warn('Falha ao obter redes sociais:', err)
             return []
+          }),
+          api.get<CredencialDetran>('/configuracoes/credenciais-detran').catch(err => {
+            console.warn('Falha ao obter credencial detran:', err)
+            return { configurada: false, api_url: null, ativo: false }
           }),
         ])
         setCredsIA(dataCredsIA)
@@ -173,6 +186,8 @@ export function Configuracoes() {
         }
         setCredenciais(dataCreds)
         setRedesSociais(dataRedes)
+        setDetran(dataDetran)
+        if (dataDetran.api_url) setDetranUrl(dataDetran.api_url)
       } catch (err) {
         console.warn('Erro ao carregar configurações:', err)
       } finally {
@@ -311,6 +326,40 @@ export function Configuracoes() {
     } finally { setRemovendoIA('') }
   }
 
+  const handleSalvarDetran = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!detranUrl.trim() || !detranKey.trim()) { setError('URL e chave do fornecedor são obrigatórias.'); return }
+    setSalvandoDetran(true); setError(null); setSucesso(false)
+    try {
+      const salva = await api.post<CredencialDetran>('/configuracoes/credenciais-detran', {
+        api_url: detranUrl.trim(),
+        api_key: detranKey.trim(),
+      })
+      setDetran(salva)
+      setSucesso(true); setDetranKey(''); setTimeout(() => setSucesso(false), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao salvar fornecedor DETRAN.')
+    } finally { setSalvandoDetran(false) }
+  }
+
+  const handleRemoverDetran = async () => {
+    const ok = await useUIStore.getState().confirm({
+      title: 'Remover fornecedor DETRAN',
+      message: 'As consultas de débitos e situação voltarão a ficar indisponíveis. Continuar?',
+      confirmText: 'Remover',
+      cancelText: 'Cancelar',
+    })
+    if (!ok) return
+    setRemovendoDetran(true)
+    try {
+      await api.delete('/configuracoes/credenciais-detran')
+      setDetran({ configurada: false, api_url: null, ativo: false })
+      setDetranUrl(''); setDetranKey('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao remover fornecedor.')
+    } finally { setRemovendoDetran(false) }
+  }
+
   const handleConectarMeta = async () => {
     setError(null)
     try {
@@ -409,6 +458,19 @@ export function Configuracoes() {
             fontWeight: 600
           }}>
           Redes Sociais
+        </button>
+        <button
+          onClick={() => setAbaAtual('detran')}
+          style={{
+            background: abaAtual === 'detran' ? 'var(--sv-primary)' : 'transparent',
+            color: abaAtual === 'detran' ? '#fff' : 'var(--sv-text-dim)',
+            border: 'none',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 600
+          }}>
+          Consulta DETRAN
         </button>
       </div>
 
@@ -713,6 +775,82 @@ export function Configuracoes() {
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <button className="btn btn-primary" type="submit" disabled={salvandoIA || !iaApiKey.trim()}>
                     {salvandoIA ? 'Validando e salvando...' : 'Salvar chave'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {abaAtual === 'detran' && (
+            <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <p style={{ fontSize: 14, color: 'var(--sv-text-dim)', margin: 0 }}>
+                Conecte o seu fornecedor de consulta veicular para exibir débitos (IPVA, licenciamento, multas) e a situação
+                da transferência/ATPV-e direto na esteira de pós-venda. Sem fornecedor configurado, essas consultas ficam
+                indisponíveis — nunca mostramos valores fictícios.
+              </p>
+
+              <div style={{ padding: '12px 16px', borderRadius: 8, border: '1px solid var(--sv-border)', background: 'var(--sv-overlay-soft)', fontSize: 13, color: 'var(--sv-text-muted)' }}>
+                <strong style={{ color: 'var(--sv-text-dim)' }}>Contrato esperado do fornecedor</strong>
+                <div style={{ marginTop: 8, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.7 }}>
+                  POST {'{sua URL}'}/debitos&nbsp;&nbsp;Bearer {'{sua chave}'} → {'{ ipva, licenciamento, multas, total }'}<br />
+                  POST {'{sua URL}'}/situacao&nbsp;&nbsp;Bearer {'{sua chave}'} → {'{ atpve_emitida, transferencia_concluida, proprietario_atual }'}
+                </div>
+              </div>
+
+              {detran.configurada && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 8, border: '1px solid var(--sv-border)', background: 'var(--sv-overlay-soft)' }}>
+                  <div>
+                    <strong>Fornecedor configurado</strong>
+                    {detran.api_url && <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--sv-text-muted)' }}>{detran.api_url}</span>}
+                    <span style={{ marginLeft: 12, fontSize: 12, color: 'var(--sv-success)' }}>✓ Ativo</span>
+                  </div>
+                  <button
+                    onClick={handleRemoverDetran}
+                    disabled={removendoDetran}
+                    style={{ background: 'none', border: '1px solid var(--sv-error)', color: 'var(--sv-error)', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 12 }}
+                  >
+                    {removendoDetran ? 'Removendo...' : 'Remover'}
+                  </button>
+                </div>
+              )}
+
+              <form onSubmit={handleSalvarDetran} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', color: 'var(--sv-text-dim)' }}>
+                  {detran.configurada ? 'Atualizar fornecedor' : 'Conectar fornecedor'}
+                </h4>
+
+                <div className="form-group">
+                  <label>URL base do fornecedor</label>
+                  <input
+                    type="text"
+                    value={detranUrl}
+                    onChange={e => setDetranUrl(e.target.value)}
+                    placeholder="https://api.seufornecedor.com/detran"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Chave de API</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={detranMostrarKey ? 'text' : 'password'}
+                      value={detranKey}
+                      onChange={e => setDetranKey(e.target.value)}
+                      placeholder={detran.configurada ? '•••••••• (deixe para manter a atual)' : 'Sua chave do fornecedor'}
+                      autoComplete="new-password"
+                      style={{ width: '100%', paddingRight: '40px' }}
+                    />
+                    <button type="button" onClick={() => setDetranMostrarKey(v => !v)}
+                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--sv-text-dim)', cursor: 'pointer', fontSize: 13 }}>
+                      {detranMostrarKey ? '🙈' : '👁'}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button className="btn btn-primary" type="submit" disabled={salvandoDetran || !detranUrl.trim() || !detranKey.trim()}>
+                    {salvandoDetran ? 'Salvando...' : 'Salvar fornecedor'}
                   </button>
                 </div>
               </form>

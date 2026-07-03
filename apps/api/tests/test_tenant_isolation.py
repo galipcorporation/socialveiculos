@@ -21,6 +21,7 @@ from models import (
     Conversa,
     Mensagem,
     CredencialBanco,
+    CredencialDetran,
     TipoConversa,
     StatusVeiculo,
     BancoSimulador,
@@ -263,6 +264,65 @@ async def test_credencial_banco_isolamento_tenant(client):
     finally:
         async with async_session() as db:
             await db.execute(delete(CredencialBanco).where(CredencialBanco.id == credencial_b_id))
+            await db.execute(delete(MembroLoja).where(MembroLoja.id == membro_a_id))
+            await db.execute(delete(Usuario).where(Usuario.id == gestor_a_id))
+            await db.execute(delete(Loja).where(Loja.id.in_([loja_a_id, loja_b_id])))
+            await db.commit()
+
+
+@pytest.mark.asyncio
+async def test_credencial_detran_isolamento_tenant(client):
+    """Gestor da loja A consulta o fornecedor DETRAN -> vê o SEU fornecedor,
+    nunca o da loja B; loja sem credencial retorna configurada=false."""
+    loja_a_id = _uid()
+    gestor_a_id = _uid()
+    membro_a_id = _uid()
+
+    loja_b_id = _uid()
+
+    crypted = encrypt_credentials("chave-secreta-loja-b")
+
+    async with async_session() as db:
+        db.add(Loja(id=loja_a_id, nome="Loja A (detran)", slug=f"loja-a-{loja_a_id[:8]}"))
+        db.add(Usuario(
+            id=gestor_a_id,
+            nome="Gestor A",
+            email=f"gestor_a_{gestor_a_id[:8]}@teste.com",
+            senha_hash="hash_fake",
+            papel=PapelUsuario.GESTOR,
+            ativo=True,
+        ))
+        db.add(MembroLoja(
+            id=membro_a_id, usuario_id=gestor_a_id, loja_id=loja_a_id,
+            papel=PapelUsuario.GESTOR, ativo=True,
+        ))
+        # Loja B com fornecedor DETRAN configurado
+        db.add(Loja(id=loja_b_id, nome="Loja B", slug=f"loja-b-{loja_b_id[:8]}"))
+        db.add(CredencialDetran(
+            loja_id=loja_b_id,
+            api_url="https://fornecedor-secreto-da-loja-b.com",
+            api_key_cifrada=crypted,
+            ativo=True,
+        ))
+        await db.commit()
+
+    token = create_access_token(
+        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value}
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        # Loja A ainda não configurou -> configurada=false, sem vazar a URL da B
+        resp = await client.get("/v1/configuracoes/credenciais-detran", headers=headers)
+        assert resp.status_code == 200, f"GET detran falhou -> {resp.status_code} {resp.text}"
+        data = resp.json()
+        assert data["configurada"] is False, "Loja A não configurou, mas veio configurada=true"
+        assert data.get("api_url") != "https://fornecedor-secreto-da-loja-b.com", (
+            "Vazamento (CredencialDetran): loja A enxergou a URL do fornecedor da loja B"
+        )
+    finally:
+        async with async_session() as db:
+            await db.execute(delete(CredencialDetran).where(CredencialDetran.loja_id.in_([loja_a_id, loja_b_id])))
             await db.execute(delete(MembroLoja).where(MembroLoja.id == membro_a_id))
             await db.execute(delete(Usuario).where(Usuario.id == gestor_a_id))
             await db.execute(delete(Loja).where(Loja.id.in_([loja_a_id, loja_b_id])))

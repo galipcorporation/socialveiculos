@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     s3_region: Optional[str] = Field(default="us-east-1")
     s3_public_url: Optional[str] = Field(default=None)
 
+    # IA — Assistente do Vendedor (Groq: Llama 3.3 70B + Whisper) e voz (ElevenLabs)
+    groq_api_key: Optional[str] = Field(default=None)
+    elevenlabs_api_key: Optional[str] = Field(default=None)
+
     @property
     def modulo_urls(self) -> dict[str, str]:
         return {
