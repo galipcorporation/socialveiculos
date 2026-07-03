@@ -18,6 +18,8 @@ from sqlalchemy.orm import selectinload
 
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
+from rbac import can, Acao, Recurso
+import json
 from models import (
     EsteiraPosVenda,
     ItemChecklist,
@@ -377,6 +379,18 @@ async def atualizar_item(
         raise HTTPException(status_code=404, detail="Item não encontrado")
 
     if body.status is not None:
+        if body.status == StatusItemChecklist.CONCLUIDO and item.categoria == CategoriaItem.FINANCEIRO:
+            modulos_liberados = None
+            if ctx.membro and ctx.membro.modulos:
+                try:
+                    modulos_liberados = json.loads(ctx.membro.modulos)
+                except (TypeError, ValueError):
+                    modulos_liberados = None
+            if not can(ctx.usuario, Acao.CRIAR, Recurso.FINANCEIRO, modulos_liberados):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Permissão negada para concluir item financeiro da esteira.",
+                )
         item.status = body.status
         if body.status == StatusItemChecklist.CONCLUIDO:
             item.concluido_em = _now()
