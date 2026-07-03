@@ -1449,6 +1449,8 @@ class EsteiraPosVenda(Base):
         "ItemChecklist", back_populates="esteira",
         cascade="all, delete-orphan", order_by="ItemChecklist.categoria",
     )
+    veiculo = relationship("Veiculo", foreign_keys=[veiculo_id], viewonly=True)
+    comprador = relationship("ClientePF", foreign_keys=[comprador_id], viewonly=True)
 
     __table_args__ = (
         Index("ix_esteira_loja", "loja_id"),

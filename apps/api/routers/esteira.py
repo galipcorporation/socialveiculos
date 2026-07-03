@@ -410,7 +410,7 @@ async def atualizar_item(
     e.estagio = recalcular_estagio(e)
     await db.commit()
     await registrar_auditoria(
-        db, ctx.usuario.id, "esteira_item_atualizado",
+        db, e.loja_id, ctx.usuario.id, ctx.usuario.nome, "esteira_item_atualizado", "esteira_pos_venda", e.id,
         f"Item '{item.titulo}' → {item.status.value} (esteira {e.id}).",
     )
     return await detalhe(esteira_id, ctx, db)
@@ -468,7 +468,7 @@ async def anexar_documento(
         raise HTTPException(status_code=404, detail="Item de documento não encontrado")
     await db.commit()
     await registrar_auditoria(
-        db, ctx.usuario.id, "esteira_documento_anexado",
+        db, e.loja_id, ctx.usuario.id, ctx.usuario.nome, "esteira_documento_anexado", "esteira_pos_venda", e.id,
         f"Documento '{nome}' anexado ao item '{item_chave}' (esteira {e.id}).",
     )
     return await detalhe(esteira_id, ctx, db)
@@ -505,7 +505,7 @@ async def registrar_transferencia(
     e.estagio = recalcular_estagio(e)
     await db.commit()
     await registrar_auditoria(
-        db, ctx.usuario.id, "esteira_transferencia",
+        db, e.loja_id, ctx.usuario.id, ctx.usuario.nome, "esteira_transferencia", "esteira_pos_venda", e.id,
         f"Transferência atualizada (esteira {e.id}).",
     )
     return await detalhe(esteira_id, ctx, db)
@@ -572,7 +572,7 @@ async def concluir(
     e.concluida_em = _now()
     await db.commit()
     await registrar_auditoria(
-        db, ctx.usuario.id, "esteira_concluida",
+        db, e.loja_id, ctx.usuario.id, ctx.usuario.nome, "esteira_concluida", "esteira_pos_venda", e.id,
         f"Esteira pós-venda {e.id} concluída — arquivada na Carteira do Proprietário.",
     )
     return await detalhe(esteira_id, ctx, db)
