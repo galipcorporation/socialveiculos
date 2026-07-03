@@ -9,7 +9,7 @@ Contrato esperado do fornecedor (documentado na UI):
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import Optional
@@ -33,8 +33,7 @@ class CredencialDetranResponse(BaseModel):
     api_url: Optional[str] = None
     ativo: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 def _to_response(c: Optional[CredencialDetran]) -> dict:

@@ -4,7 +4,7 @@ import logging
 from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -96,8 +96,7 @@ class WebhookMessagePayload(BaseModel):
     timestamp: int
     authorName: str
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 class WebhookPayload(BaseModel):
     event: str  # "message" ou "connection"

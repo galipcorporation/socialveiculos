@@ -11,7 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from config import settings
 from database import get_db
@@ -36,8 +36,7 @@ class LojaPublicaResponse(BaseModel):
     total_veiculos: int = 0
     veiculos: List[VeiculoB2CResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 async def _hidratar_favoritos(db: AsyncSession, vehicles: list) -> None:

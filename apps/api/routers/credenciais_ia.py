@@ -5,7 +5,7 @@ Permite ao gestor cadastrar sua própria chave de API de IA (Anthropic, OpenAI, 
 
 import json
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import Optional, List
@@ -35,8 +35,7 @@ class CredencialIAResponse(BaseModel):
     configurada: bool
     ativo: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 def _to_response(c: CredencialIA) -> dict:

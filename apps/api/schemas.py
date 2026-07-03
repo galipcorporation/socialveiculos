@@ -5,9 +5,8 @@ Garante o não-vazamento de dados confidenciais para o feed B2C da Vitrine.
 
 import re
 from datetime import datetime
-from typing import Optional, List, Generic, TypeVar
-from pydantic import BaseModel, Field, field_validator, model_validator
-from pydantic.generics import GenericModel
+from typing import Optional, List
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 from models import StatusVeiculo, OrigemVeiculo, TipoCambio, TipoCombustivel, TipoMidia, StatusAprovacao, TipoAcaoAprovacao, PapelUsuario, TipoLancamento, EtapaLead, OrigemLead, StatusAssinatura, StatusPagamento, StatusPropostaRepasse, TipoConversa, BancoSimulador, StatusSimulacao, StatusResultadoBanco, TipoContrato, StatusContrato
 
@@ -68,8 +67,7 @@ class MidiaResponse(BaseModel):
     url: str
     ordem: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ── Veículo B2C (Vitrine Pública) ──────────────────────────────
@@ -105,8 +103,7 @@ class VeiculoB2CResponse(BaseModel):
     total_favoritos: int = 0
     favoritado_por_mim: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ── Veículo B2B (Gestor Privado) ──────────────────────────────
@@ -143,8 +140,7 @@ class VeiculoB2BResponse(BaseModel):
     updated_at: datetime
     midias: List[MidiaResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ── Criação e Edição de Veículo ────────────────────────────────
@@ -327,8 +323,7 @@ class UsuarioSimples(BaseModel):
     nome: str
     email: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SolicitacaoAprovacaoResponse(BaseModel):
@@ -344,8 +339,7 @@ class SolicitacaoAprovacaoResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProcessaSolicitacaoRequest(BaseModel):
@@ -372,8 +366,7 @@ class LojaResponse(BaseModel):
     ativa: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ── Auditoria ──────────────────────────────────────────────────
@@ -392,8 +385,7 @@ class LogAuditoriaResponse(BaseModel):
     ajusteia: bool = False
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ── Clientes (CRM) ─────────────────────────────────────────────
@@ -422,8 +414,7 @@ class ClienteResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class _ClienteValidatorsMixin(BaseModel):
@@ -516,8 +507,7 @@ class ClienteSimples(BaseModel):
     nome: str
     telefone: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NegociacaoResponse(BaseModel):
@@ -531,8 +521,7 @@ class NegociacaoResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NegociacaoCreateRequest(BaseModel):
@@ -557,8 +546,7 @@ class LeadResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LeadCreateRequest(BaseModel):
@@ -602,8 +590,7 @@ class PlanoResponse(BaseModel):
     modulos_incluidos: Optional[str] = None  # JSON array string
     ativo: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AssinaturaResponse(BaseModel):
@@ -615,8 +602,7 @@ class AssinaturaResponse(BaseModel):
     fim: Optional[datetime] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ModuloHabilitadoResponse(BaseModel):
@@ -625,8 +611,7 @@ class ModuloHabilitadoResponse(BaseModel):
     nome_modulo: str
     ativo: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AssinarPlanoRequest(BaseModel):
@@ -657,8 +642,7 @@ class LancamentoResponse(BaseModel):
     status_pagamento: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LancamentoCreateRequest(BaseModel):
@@ -710,8 +694,7 @@ class ComissaoResponse(BaseModel):
     pago: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MinhaVendaResponse(BaseModel):
@@ -725,8 +708,7 @@ class MinhaVendaResponse(BaseModel):
     estagio: str
     aberta_em: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ComissaoCreateRequest(BaseModel):
@@ -816,8 +798,7 @@ class ComentarioB2BResponse(BaseModel):
     conteudo: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CurtidaB2BResponse(BaseModel):
@@ -826,8 +807,7 @@ class CurtidaB2BResponse(BaseModel):
     usuario_id: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PublicacaoB2BResponse(BaseModel):
@@ -847,8 +827,7 @@ class PublicacaoB2BResponse(BaseModel):
     curtidas: List[CurtidaB2BResponse] = []
     curtido_por_mim: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ComentarioB2BCreateRequest(BaseModel):
@@ -871,8 +850,7 @@ class PropostaRepasseResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PropostaRepasseCreateRequest(BaseModel):
@@ -900,8 +878,7 @@ class ConversaB2BResponse(BaseModel):
     ultima_mensagem: Optional[str] = None
     ultima_mensagem_data: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MensagemB2BResponse(BaseModel):
@@ -913,8 +890,7 @@ class MensagemB2BResponse(BaseModel):
     lida: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MensagemB2BCreateRequest(BaseModel):
@@ -937,8 +913,7 @@ class MembroEquipeResponse(BaseModel):
     ativo: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConvidarMembroRequest(BaseModel):
@@ -988,8 +963,7 @@ class FavoritoResponse(BaseModel):
     veiculo_id: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConversaB2CResponse(BaseModel):
@@ -1008,8 +982,7 @@ class ConversaB2CResponse(BaseModel):
     ultima_mensagem: Optional[str] = None
     ultima_mensagem_data: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MensagemB2CResponse(BaseModel):
@@ -1021,8 +994,7 @@ class MensagemB2CResponse(BaseModel):
     lida: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConversaB2CCreateRequest(BaseModel):
@@ -1053,8 +1025,7 @@ class SimuladorBancoCredencialResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SimuladorTestarConexaoRequest(BaseModel):
@@ -1092,8 +1063,7 @@ class SimulacaoResultadoResponse(BaseModel):
     erro: Optional[str] = None
     tempo_ms: int = 0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SimulacaoResponse(BaseModel):
@@ -1107,8 +1077,7 @@ class SimulacaoResponse(BaseModel):
     created_at: datetime
     resultados: List[SimulacaoResultadoResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1158,8 +1127,7 @@ class ContratoResponse(BaseModel):
     veiculo_nome: Optional[str] = None
     cliente_nome: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ContratoListResponse(BaseModel):
@@ -1267,8 +1235,7 @@ class VeiculoDocumentoResponse(BaseModel):
     visivel_comprador: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class VincularCompradorRequest(BaseModel):
@@ -1314,8 +1281,7 @@ class NotificacaoResponse(BaseModel):
     link: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1344,8 +1310,7 @@ class ItemChecklistResponse(BaseModel):
     concluido_em: Optional[datetime] = None
     vencido: bool = False   # calculado no router
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class VeiculoResumo(BaseModel):
@@ -1377,8 +1342,7 @@ class EsteiraResumoResponse(BaseModel):
     concluidos: int = 0
     aberta_em: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EsteiraDetalheResponse(BaseModel):
@@ -1399,8 +1363,7 @@ class EsteiraDetalheResponse(BaseModel):
     concluidos: int = 0
     vencidos: int = 0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ItemChecklistUpdate(BaseModel):
