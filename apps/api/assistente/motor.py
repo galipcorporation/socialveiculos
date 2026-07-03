@@ -24,7 +24,15 @@ from models import (
 
 logger = logging.getLogger("assistente_ia.motor")
 
-# Configurações de API carregadas do ambiente
+# Configurações de API carregadas do ambiente.
+# Groq (API compatível com OpenAI) faz o chat (Llama) E a transcrição (Whisper).
+# ElevenLabs faz a clonagem e síntese de voz. ANTHROPIC/OPENAI ficam como
+# fallback opcional caso as chaves sejam fornecidas.
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+GROQ_CHAT_MODEL = os.getenv("GROQ_CHAT_MODEL", "llama-3.3-70b-versatile")
+GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3")
+
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
@@ -35,21 +43,25 @@ WHATSAPP_WORKER_TOKEN = os.getenv("WHATSAPP_WORKER_TOKEN", "whatsapp-worker-secr
 
 async def transcrever_audio_vendedor(audio_content: bytes, filename: str = "audio.mp3") -> str:
     """
-    Usa a API do Whisper (OpenAI) para transcrever o áudio do vendedor.
-    Retorna o texto transcrito.
+    Transcreve o áudio com Whisper. Usa a Groq (compatível com OpenAI) por padrão;
+    cai para a OpenAI se só ela estiver configurada. Retorna o texto transcrito.
     """
-    if not OPENAI_API_KEY:
-        logger.warning("[WHISPER] Sem OPENAI_API_KEY. Ignorando transcricao.")
+    if GROQ_API_KEY:
+        api_key, base_url, model = GROQ_API_KEY, GROQ_BASE_URL, GROQ_WHISPER_MODEL
+    elif OPENAI_API_KEY:
+        api_key, base_url, model = OPENAI_API_KEY, "https://api.openai.com/v1", "whisper-1"
+    else:
+        logger.warning("[WHISPER] Sem GROQ_API_KEY/OPENAI_API_KEY. Ignorando transcricao.")
         return "Audio enviado (transcricao nao disponível)."
 
     try:
         async with httpx.AsyncClient() as client:
-            headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+            headers = {"Authorization": f"Bearer {api_key}"}
             files = {"file": (filename, audio_content, "audio/mpeg")}
-            data = {"model": "whisper-1"}
-            
+            data = {"model": model}
+
             response = await client.post(
-                "https://api.openai.com/v1/audio/transcriptions",
+                f"{base_url}/audio/transcriptions",
                 headers=headers,
                 files=files,
                 data=data,
@@ -144,9 +156,9 @@ async def gerar_resposta_ia(
     Garante que o tom e estilo do vendedor configurados sejam seguidos.
     Inclui informações da loja, simulações e CRM.
     """
-    if not ANTHROPIC_API_KEY:
-        logger.error("[CLAUDE] Sem ANTHROPIC_API_KEY configurada. Assistente de IA indisponível.")
-        raise RuntimeError("ANTHROPIC_API_KEY não configurada — assistente de IA indisponível")
+    if not GROQ_API_KEY and not ANTHROPIC_API_KEY:
+        logger.error("[IA] Sem GROQ_API_KEY/ANTHROPIC_API_KEY. Assistente de IA indisponível.")
+        raise RuntimeError("Nenhuma chave de IA configurada (GROQ_API_KEY) — assistente indisponível")
 
     # 1. Carregar configuração do assistente
     stmt_config = select(AssistenteConfig).where(
@@ -240,45 +252,51 @@ async def gerar_resposta_ia(
     if contexto_extra:
         prompt_system += f"\nContexto do Lead e do Veículo obtidos no CRM:\n{contexto_extra}\n"
 
-    # Criar chamada HTTP da API do Claude
+    # Montar histórico no formato OpenAI/Groq (system + turnos user/assistant)
+    messages = [{"role": "system", "content": prompt_system}]
+    for m in msgs:
+        role = "user" if m.autor_tipo == "lead" else "assistant"
+        messages.append({"role": role, "content": m.conteudo})
+    # Adicionar última mensagem caso não esteja no histórico
+    if messages[-1]["role"] != "user" or messages[-1]["content"] != nova_mensagem:
+        messages.append({"role": "user", "content": nova_mensagem})
+
+    # Groq (Llama) por padrão; API compatível com OpenAI.
+    if GROQ_API_KEY:
+        api_key, base_url, model = GROQ_API_KEY, GROQ_BASE_URL, GROQ_CHAT_MODEL
+    else:
+        # Fallback: se um dia setarem OPENAI_API_KEY, usa o endpoint dela.
+        api_key, base_url, model = OPENAI_API_KEY, "https://api.openai.com/v1", "gpt-4o-mini"
+
     try:
         async with httpx.AsyncClient() as client:
             headers = {
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
             }
-            messages = []
-            # Adicionar histórico formatado
-            for m in msgs:
-                role = "user" if m.autor_tipo == "lead" else "assistant"
-                messages.append({"role": role, "content": m.conteudo})
-            
-            # Adicionar última mensagem caso não esteja no histórico
-            if not messages or messages[-1]["content"] != nova_mensagem:
-                messages.append({"role": "user", "content": nova_mensagem})
-
             data = {
-                "model": "claude-opus-4-8",
+                "model": model,
                 "max_tokens": 500,
-                "system": prompt_system,
-                "messages": messages
+                "temperature": 0.7,
+                "messages": messages,
             }
 
             response = await client.post(
-                "https://api.anthropic.com/v1/messages",
+                f"{base_url}/chat/completions",
                 headers=headers,
                 json=data,
                 timeout=30.0
             )
             response.raise_for_status()
             res_data = response.json()
-            content = res_data.get("content", [])
-            if content and len(content) > 0:
-                return content[0].get("text", "")
-            raise RuntimeError("Resposta do Claude sem conteúdo de texto.")
+            choices = res_data.get("choices", [])
+            if choices:
+                texto = choices[0].get("message", {}).get("content", "")
+                if texto:
+                    return texto.strip()
+            raise RuntimeError("Resposta da IA sem conteúdo de texto.")
     except Exception as e:
-        logger.error(f"[CLAUDE ERROR] Erro na chamada do Claude: {e}")
+        logger.error(f"[IA ERROR] Erro na chamada da IA (Groq): {e}")
         raise
 
 
