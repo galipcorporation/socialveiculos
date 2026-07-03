@@ -46,6 +46,9 @@ class StorageProvider:
         "video/quicktime": ".mov",
         "video/webm": ".webm",
         "application/pdf": ".pdf",
+        "audio/mpeg": ".mp3",
+        "audio/mp3": ".mp3",
+        "audio/ogg": ".ogg",
     }
 
     def generate_filename(self, original_filename: str, content_type: str = "") -> str:

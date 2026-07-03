@@ -23,6 +23,7 @@ from models import (
     MembroLoja,
 )
 from modulos import exige_modulo, Modulo
+from storage import storage_provider
 from assistente.motor import (
     transcrever_audio_vendedor,
     clonar_voz_vendedor,
@@ -469,7 +470,7 @@ async def enviar_mensagem(
             )
             response.raise_for_status()
             res_worker = response.json()
-            message_id = res_worker.get("messageId", f"manual-{Date.now() if 'Date' in globals() else datetime.now().timestamp()}")
+            message_id = res_worker.get("messageId", f"manual-{datetime.now(timezone.utc).timestamp()}")
     except Exception as e:
         logger.error(f"[WORKER SEND ERROR] Falha no disparo de mensagem pelo worker: {e}")
         raise HTTPException(
@@ -500,7 +501,118 @@ async def enviar_mensagem(
     conversa.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(msg)
-    
+
+    return msg
+
+
+@router.post(
+    "/conversas/{conversa_id}/mensagens/audio",
+    response_model=MensagemWhatsappResponse,
+    dependencies=[Depends(exige_modulo(Modulo.ASSISTENTE_IA)), Depends(valida_permissao_assistente)]
+)
+async def enviar_mensagem_audio(
+    conversa_id: str,
+    data: EnviarMensagemRequest,
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user)
+):
+    """
+    Sintetiza o texto (sugestão da IA, possivelmente editada) na voz clonada do
+    vendedor e envia como nota de voz (PTT) pelo WhatsApp via worker.
+    Modo Copiloto: o vendedor decide enviar; nada sai sem esta ação.
+    """
+    conteudo = (data.conteudo or "").strip()
+    if not conteudo:
+        raise HTTPException(status_code=400, detail="Conteúdo do áudio não pode ser vazio.")
+
+    stmt_conv = select(ConversaWhatsapp).where(
+        ConversaWhatsapp.id == conversa_id,
+        ConversaWhatsapp.loja_id == context.loja_id,
+        ConversaWhatsapp.usuario_id == context.usuario.id
+    )
+    res_conv = await db.execute(stmt_conv)
+    conversa = res_conv.scalar_one_or_none()
+    if not conversa:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    # 1. Carregar voz clonada do vendedor
+    stmt_config = select(AssistenteConfig).where(
+        AssistenteConfig.loja_id == context.loja_id,
+        AssistenteConfig.usuario_id == context.usuario.id
+    )
+    res_config = await db.execute(stmt_config)
+    config = res_config.scalar_one_or_none()
+    voz_id = config.voz_id if config else None
+    if not voz_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Você ainda não treinou sua voz. Vá em Configurações da IA, marque o consentimento e envie um áudio de amostra para clonar sua voz."
+        )
+
+    # 2. Sintetizar áudio (ElevenLabs) → MP3 bytes
+    audio_bytes = await sintetizar_voz_resposta(conteudo, voz_id)
+    if not audio_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Não foi possível gerar o áudio. Verifique a configuração da voz (ELEVENLABS_API_KEY) e tente novamente."
+        )
+
+    # 3. Subir MP3 no storage (para a UI reproduzir o que foi enviado)
+    midia_url = await storage_provider.upload_file(audio_bytes, "resposta.mp3", "audio/mpeg")
+
+    # 4. Enviar via worker como nota de voz
+    import base64 as _b64
+    try:
+        async with httpx.AsyncClient() as client:
+            headers = {"Authorization": f"Bearer {WHATSAPP_WORKER_TOKEN}"}
+            payload = {
+                "usuario_id": context.usuario.id,
+                "contato_jid": conversa.conversa_whatsapp_id,
+                "audio_base64": _b64.b64encode(audio_bytes).decode("ascii"),
+                "transcricao": conteudo,
+            }
+            response = await client.post(
+                f"{WHATSAPP_WORKER_URL}/messages/send-audio",
+                headers=headers,
+                json=payload,
+                timeout=40.0
+            )
+            response.raise_for_status()
+            res_worker = response.json()
+            message_id = res_worker.get("messageId", f"audio-{datetime.now(timezone.utc).timestamp()}")
+    except Exception as e:
+        logger.error(f"[WORKER SEND-AUDIO ERROR] Falha ao enviar áudio pelo worker: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="WhatsApp Worker falhou ao enviar o áudio."
+        )
+
+    # 5. Salvar a mensagem com mídia
+    msg = MensagemWhatsapp(
+        conversa_id=conversa.id,
+        mensagem_whatsapp_id=message_id,
+        autor_tipo="vendedor",
+        conteudo=conteudo,
+        midia_url=midia_url,
+        midia_tipo="audio",
+        enviada_ia=False
+    )
+    db.add(msg)
+
+    # 6. Limpar a sugestão da última mensagem do lead (já respondida)
+    stmt_ult = select(MensagemWhatsapp).where(
+        MensagemWhatsapp.conversa_id == conversa.id,
+        MensagemWhatsapp.autor_tipo == "lead"
+    ).order_by(MensagemWhatsapp.created_at.desc()).limit(1)
+    res_ult = await db.execute(stmt_ult)
+    ult_msg = res_ult.scalar_one_or_none()
+    if ult_msg:
+        ult_msg.sugestao_ia = None
+
+    conversa.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(msg)
+
     return msg
 
 

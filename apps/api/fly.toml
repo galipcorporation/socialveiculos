@@ -1,0 +1,31 @@
+# Fly.io — Social Veículos API (FastAPI)
+# Deploy: cd apps/api && fly deploy
+app = "socialveiculos-api"
+primary_region = "gru"  # São Paulo
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  API_HOST = "0.0.0.0"
+  API_PORT = "8000"
+  API_DEBUG = "false"
+  APP_ENV = "production"
+  # Worker roda no mesmo app privado do Fly (rede .internal).
+  WHATSAPP_WORKER_URL = "http://socialveiculos-worker.internal:8090"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false   # backend tem worker de marketing + WebSockets: NÃO parar
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

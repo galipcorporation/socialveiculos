@@ -1,0 +1,47 @@
+# Normalização de fim de linha do repositório.
+# Motivo: sem isto, arquivos com CRLF no working tree (Windows) aparecem como
+# "modificados" no git status mesmo sem mudança de conteúdo — ruído que poluía
+# todo diff/commit (27 arquivos afetados em 2026-07-02). Ver Execução #15.
+#
+# Após adicionar este arquivo, rodar UMA vez para renormalizar o histórico local:
+#   git add --renormalize .
+#   git commit -m "chore: normaliza fins de linha (LF) via .gitattributes"
+
+# Padrão: o git decide texto vs binário e normaliza para LF no repositório.
+* text=auto eol=lf
+
+# Fontes de texto — sempre LF no repositório.
+*.py    text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.jsx   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.csv   text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.toml  text eol=lf
+*.sh    text eol=lf
+*.env   text eol=lf
+
+# Scripts do Windows mantêm CRLF (PowerShell/Batch esperam CRLF).
+*.ps1   text eol=crlf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Binários — nunca normalizar.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.db    binary
+*.sqlite binary

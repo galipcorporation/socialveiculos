@@ -1,0 +1,32 @@
+# Fly.io — Social Veículos WhatsApp Worker (Baileys)
+# Deploy: cd apps/whatsapp-worker && fly deploy
+app = "socialveiculos-worker"
+primary_region = "gru"  # São Paulo
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8090"
+  MOCK_WHATSAPP = "false"
+  # A API fala com o worker via rede interna; webhook aponta de volta pra API.
+  FASTAPI_WEBHOOK_URL = "http://socialveiculos-api.internal:8000/v1/assistente/webhook"
+
+# Sem [http_service] público: o worker só é acessível pela rede privada .internal.
+# Expõe a porta apenas internamente.
+[[services]]
+  internal_port = 8090
+  protocol = "tcp"
+  auto_stop_machines = false   # sessões Baileys caem se a máquina parar
+  auto_start_machines = true
+  min_machines_running = 1
+
+# Volume persistente: as credenciais do WhatsApp (Baileys) ficam em ./sessions.
+# Criar antes: fly volumes create wa_sessions --size 1 --region gru -a socialveiculos-worker
+[mounts]
+  source = "wa_sessions"
+  destination = "/app/sessions"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

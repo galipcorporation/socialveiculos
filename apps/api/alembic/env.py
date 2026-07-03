@@ -3,16 +3,22 @@ Social Veículos — Alembic env.py
 Configuração de migrações com auto-detect de modelos SQLAlchemy.
 """
 
+import asyncio
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import pool
+from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 # Importar todos os modelos para que o metadata os conheça
 import models  # noqa: F401
-from database import Base
+from database import Base, _get_async_url
 
 # Alembic Config object
 config = context.config
+
+# Em produção a URL vem do ambiente (DATABASE_URL, via settings), não do
+# alembic.ini — sobrescrevemos aqui para migrar o Postgres real (asyncpg).
+config.set_main_option("sqlalchemy.url", _get_async_url())
 
 # Logging
 if config.config_file_name is not None:
@@ -36,22 +42,28 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
-    """Run migrations in 'online' mode — conecta ao banco real."""
-    connectable = engine_from_config(
+def _do_run_migrations(connection) -> None:
+    context.configure(connection=connection, target_metadata=target_metadata)
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+async def run_migrations_online() -> None:
+    """Run migrations in 'online' mode — conecta ao banco real (async/asyncpg)."""
+    connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args={"statement_cache_size": 0} if "asyncpg" in _get_async_url() else {},
     )
 
-    with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+    async with connectable.connect() as connection:
+        await connection.run_sync(_do_run_migrations)
 
-        with context.begin_transaction():
-            context.run_migrations()
+    await connectable.dispose()
 
 
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    asyncio.run(run_migrations_online())

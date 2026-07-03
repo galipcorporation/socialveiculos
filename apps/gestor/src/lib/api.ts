@@ -123,7 +123,7 @@ class ApiClient {
       if (response.status >= 500) {
         void reportarErroServidor({ path, status: response.status, timestamp: ts, requestId, origem: 'gestor' })
       }
-      throw new ApiError(friendlyHttpMessage(response.status, body.error), {
+      throw new ApiError(friendlyHttpMessage(response.status, body.error ?? body.detail), {
         status: response.status,
         path,
         timestamp: ts,

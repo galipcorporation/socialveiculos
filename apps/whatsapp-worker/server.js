@@ -2,8 +2,33 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import qrcode from 'qrcode';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
+import { PassThrough, Readable } from 'stream';
 
 dotenv.config();
+
+if (ffmpegStatic) ffmpeg.setFfmpegPath(ffmpegStatic);
+
+// Converte um Buffer de áudio (MP3/qualquer) para OGG/Opus, formato que o
+// WhatsApp reconhece como nota de voz (PTT). Resolve com o Buffer convertido.
+function convertToOpus(inputBuffer) {
+  return new Promise((resolve, reject) => {
+    const output = new PassThrough();
+    const chunks = [];
+    output.on('data', (c) => chunks.push(c));
+    output.on('end', () => resolve(Buffer.concat(chunks)));
+    output.on('error', reject);
+
+    ffmpeg(Readable.from(inputBuffer))
+      .audioCodec('libopus')
+      .audioChannels(1)
+      .audioBitrate('48k')
+      .format('ogg')
+      .on('error', reject)
+      .pipe(output, { end: true });
+  });
+}
 
 const app = express();
 app.use(cors());
@@ -273,6 +298,57 @@ app.post('/messages/send', authenticate, async (req, res) => {
   } catch (err) {
     console.error('[BAILEY SEND ERROR]', err);
     res.status(500).json({ error: 'Falha ao enviar mensagem pelo WhatsApp' });
+  }
+});
+
+// Envia áudio como nota de voz (PTT)
+app.post('/messages/send-audio', authenticate, async (req, res) => {
+  const { usuario_id, contato_jid, audio_base64, transcricao } = req.body;
+  if (!usuario_id || !contato_jid || !audio_base64) {
+    return res.status(400).json({ error: 'usuario_id, contato_jid e audio_base64 sao obrigatorios' });
+  }
+
+  console.log(`[SEND-AUDIO] Enviando audio de ${usuario_id} para ${contato_jid}`);
+
+  if (MOCK_WHATSAPP) {
+    setTimeout(async () => {
+      await notifyWebhook({
+        event: 'message',
+        usuario_id,
+        message: {
+          id: `mock-audio-${Date.now()}`,
+          from: contato_jid,
+          fromMe: true,
+          body: transcricao || '[audio]',
+          timestamp: Math.floor(Date.now() / 1000),
+          authorName: 'Vendedor'
+        }
+      });
+    }, 1000);
+    return res.json({ success: true, messageId: `mock-audio-${Date.now()}` });
+  }
+
+  // Caso real Baileys
+  if (!sessions.has(usuario_id)) {
+    return res.status(400).json({ error: 'Sessao desconectada' });
+  }
+  const s = sessions.get(usuario_id);
+  if (s.status !== 'connected' || !s.sock) {
+    return res.status(400).json({ error: 'WhatsApp nao conectado' });
+  }
+
+  try {
+    const inputBuffer = Buffer.from(audio_base64, 'base64');
+    const oggBuffer = await convertToOpus(inputBuffer);
+    const sent = await s.sock.sendMessage(contato_jid, {
+      audio: oggBuffer,
+      ptt: true,
+      mimetype: 'audio/ogg; codecs=opus'
+    });
+    res.json({ success: true, messageId: sent.key.id });
+  } catch (err) {
+    console.error('[BAILEY SEND-AUDIO ERROR]', err);
+    res.status(500).json({ error: 'Falha ao enviar audio pelo WhatsApp' });
   }
 });
 

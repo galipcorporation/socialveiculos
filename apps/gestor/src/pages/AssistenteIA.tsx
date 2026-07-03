@@ -50,6 +50,7 @@ export function AssistenteIA() {
   const [mensagens, setMensagens] = useState<Mensagem[]>([])
   const [textoMensagem, setTextoMensagem] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [enviandoAudio, setEnviandoAudio] = useState(false)
   
   // Modais
   const [mostrarConfigModal, setMostrarConfigModal] = useState(false)
@@ -224,6 +225,35 @@ export function AssistenteIA() {
       showToast('Erro ao enviar mensagem. Confirme a conexao do WhatsApp.', 'error')
     } finally {
       setEnviando(false)
+    }
+  }
+
+  // 5b. Enviar resposta como áudio (voz clonada do vendedor)
+  const handleEnviarAudio = async (texto: string) => {
+    const msg = (texto || '').trim()
+    if (!msg || !conversaAtiva || enviandoAudio) return
+
+    setEnviandoAudio(true)
+    showToast('Gerando áudio com sua voz clonada...', 'info')
+    try {
+      const novaMsg = await api.post<Mensagem>(`/assistente/conversas/${conversaAtiva.id}/mensagens/audio`, {
+        conteudo: msg
+      })
+      setMensagens((prev) => [...prev, novaMsg])
+      setConversas((prev) =>
+        prev.map((c) => c.id === conversaAtiva.id ? { ...c, ultima_mensagem: '🎙️ Áudio', ultima_mensagem_data: new Date().toISOString() } : c)
+      )
+      showToast('Áudio enviado com sua voz!', 'success')
+    } catch (err: any) {
+      console.error(err)
+      if (err.status === 422) {
+        showToast(err.message || 'Treine sua voz nas Configurações da IA antes de enviar áudios.', 'warning')
+        setMostrarConfigModal(true)
+      } else {
+        showToast('Erro ao enviar áudio. Confirme a conexão do WhatsApp.', 'error')
+      }
+    } finally {
+      setEnviandoAudio(false)
     }
   }
 
@@ -431,8 +461,15 @@ export function AssistenteIA() {
                             position: 'relative'
                           }}
                         >
+                          {m.midia_tipo === 'audio' && m.midia_url && (
+                            <audio
+                              controls
+                              src={m.midia_url}
+                              style={{ width: '100%', maxWidth: 240, marginBottom: 6, display: 'block' }}
+                            />
+                          )}
                           <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--sv-text)', whiteSpace: 'pre-wrap' }}>
-                            {m.conteudo}
+                            {m.midia_tipo === 'audio' ? <span style={{ color: 'var(--sv-text-muted)', fontStyle: 'italic' }}>🎙️ {m.conteudo}</span> : m.conteudo}
                           </p>
                           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 4 }}>
                             <span style={{ fontSize: 9, color: 'var(--sv-text-muted)' }}>
@@ -469,6 +506,15 @@ export function AssistenteIA() {
                             Copiar p/ Editar
                           </button>
                           <button
+                            className="btn btn-outline"
+                            style={{ padding: '4px 10px', fontSize: 11 }}
+                            onClick={() => handleEnviarAudio(mensagens[mensagens.length - 1].sugestao_ia || '')}
+                            disabled={enviandoAudio || enviando}
+                            title="Enviar como nota de voz com sua voz clonada"
+                          >
+                            {enviandoAudio ? 'Gerando áudio...' : '🎙️ Enviar como áudio'}
+                          </button>
+                          <button
                             className="btn btn-primary"
                             style={{ padding: '4px 10px', fontSize: 11 }}
                             onClick={() => handleEnviar(undefined, mensagens[mensagens.length - 1].sugestao_ia || '')}
@@ -501,6 +547,15 @@ export function AssistenteIA() {
                         outline: 'none'
                       }}
                     />
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={() => handleEnviarAudio(textoMensagem)}
+                      disabled={!textoMensagem.trim() || enviandoAudio || enviando}
+                      title="Enviar como nota de voz com sua voz clonada"
+                    >
+                      {enviandoAudio ? '🎙️...' : '🎙️'}
+                    </button>
                     <button className="btn btn-primary" type="submit" disabled={!textoMensagem.trim() || enviando}>
                       {enviando ? 'Enviando...' : 'Enviar'}
                     </button>
