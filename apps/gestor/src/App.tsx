@@ -18,6 +18,8 @@ import { SimuladorPage } from './pages/ferramentas/Simulador'
 import { ContratosPage } from './pages/ferramentas/Contratos'
 import { MarketingPage } from './pages/ferramentas/Marketing'
 import { FipePage } from './pages/ferramentas/Fipe'
+import { FiscalPage } from './pages/ferramentas/Fiscal'
+import { NotasFiscaisPage } from './pages/ferramentas/NotasFiscais'
 import { AdminPage } from './pages/Admin'
 import { AdminLayout } from './components/AdminLayout'
 import { ImpersonarPage } from './pages/Impersonar'
@@ -122,6 +124,8 @@ export default function App() {
           <Route path="ferramentas/contratos" element={<ModuleGuard modulo="contratos"><ContratosPage /></ModuleGuard>} />
           <Route path="ferramentas/marketing" element={<ModuleGuard modulo="marketing"><MarketingPage /></ModuleGuard>} />
           <Route path="ferramentas/fipe" element={<FipePage />} />
+          <Route path="ferramentas/fiscal" element={<ModuleGuard modulo="fiscal"><FiscalPage /></ModuleGuard>} />
+          <Route path="ferramentas/notas-fiscais" element={<ModuleGuard modulo="fiscal"><NotasFiscaisPage /></ModuleGuard>} />
           <Route path="assistente" element={<ModuleGuard modulo="assistente"><AssistenteIA /></ModuleGuard>} />
           <Route path="financeiro" element={<ModuleGuard modulo="financeiro"><Financeiro /></ModuleGuard>} />
           <Route path="minhas-comissoes" element={<MinhasComissoes />} />

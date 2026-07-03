@@ -214,6 +214,7 @@ from routers.contratos import router as contratos_router
 from routers.marketing import router as marketing_router
 from routers.credenciais_ia import router as credenciais_ia_router
 from routers.credenciais_detran import router as credenciais_detran_router
+from routers.fiscal import router as fiscal_router
 from routers.marketing_social import router as marketing_social_router
 from routers.stories import router as stories_router
 from routers.triagem import router as triagem_router
@@ -244,6 +245,7 @@ app.include_router(contratos_router)
 app.include_router(marketing_router)
 app.include_router(credenciais_ia_router)
 app.include_router(credenciais_detran_router)
+app.include_router(fiscal_router)
 app.include_router(marketing_social_router)
 app.include_router(stories_router)
 app.include_router(triagem_router)

@@ -953,6 +953,86 @@ class CredencialDetran(Base):
     )
 
 
+class ConfiguracaoFiscal(Base):
+    """Dados fiscais + certificado A1 de uma loja para emissão de NF-e (M039, Fase 1).
+
+    Certificado e token do gateway (Focus NFe) ficam cifrados (Fernet, mesmo
+    padrão de CredencialIA/CredencialDetran). `ativo` só vira True quando a
+    config mínima + certificado estão completos — controla o botão "Emitir NF-e".
+    """
+    __tablename__ = "configuracao_fiscal"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False, unique=True)
+
+    inscricao_estadual = Column(String(20), nullable=True)
+    regime_tributario = Column(String(20), nullable=False, default="simples")  # simples|presumido|real
+    cnae = Column(String(10), nullable=True)
+
+    certificado_a1_cifrado = Column(Text, nullable=True)      # Fernet — .pfx em base64
+    certificado_senha_cifrada = Column(Text, nullable=True)   # Fernet
+    certificado_validade = Column(DateTime, nullable=True)
+
+    serie_nfe = Column(String(3), nullable=False, default="1")
+    proximo_numero = Column(Integer, nullable=False, default=1)
+    ambiente = Column(String(15), nullable=False, default="homologacao")  # homologacao|producao
+
+    focus_nfe_token_cifrado = Column(Text, nullable=True)  # Fernet — token da "empresa" alocada à loja no Focus NFe
+
+    natureza_operacao = Column(String(60), nullable=False, default="Venda de veículo usado")
+    cfop_venda = Column(String(4), nullable=False, default="5102")
+    ncm_padrao = Column(String(8), nullable=False, default="87032310")
+    csosn = Column(String(4), nullable=True)
+    cst = Column(String(3), nullable=True)
+    origem_mercadoria = Column(String(1), nullable=False, default="0")
+
+    ativo = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+    __table_args__ = (
+        UniqueConstraint("loja_id", name="uq_configuracao_fiscal_loja"),
+    )
+
+
+class NotaFiscal(Base):
+    """NF-e emitida via gateway fiscal (Focus NFe) a partir de uma venda (M039, Fase 1)."""
+    __tablename__ = "nota_fiscal"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
+    contrato_id = Column(String(36), ForeignKey("contrato.id", ondelete="SET NULL"), nullable=True)
+    veiculo_id = Column(String(36), ForeignKey("veiculo.id", ondelete="SET NULL"), nullable=True)
+    cliente_id = Column(String(36), ForeignKey("cliente_pf.id", ondelete="SET NULL"), nullable=True)
+
+    tipo = Column(String(10), nullable=False, default="saida")  # só "saida" na Fase 1
+    ambiente = Column(String(15), nullable=False)
+    modelo = Column(String(2), nullable=False, default="55")
+    serie = Column(String(3), nullable=False)
+    numero = Column(Integer, nullable=False)
+
+    focus_nfe_ref = Column(String(60), nullable=False, unique=True)
+    chave_acesso = Column(String(44), nullable=True)
+    protocolo = Column(String(20), nullable=True)
+    status = Column(String(20), nullable=False, default="processando")
+    # processando | autorizada | rejeitada | erro
+
+    valor_total = Column(Float, nullable=False)
+    impostos_json = Column(Text, nullable=True)
+
+    xml_url = Column(String(500), nullable=True)
+    danfe_pdf_url = Column(String(500), nullable=True)
+    motivo_rejeicao = Column(Text, nullable=True)
+
+    emitida_em = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+    __table_args__ = (
+        Index("ix_nota_fiscal_loja", "loja_id"),
+    )
+
+
 class MarketingUsage(Base):
     """Registro de consumo de IA por chamada de marketing (billing futuro)."""
     __tablename__ = "marketing_usage"

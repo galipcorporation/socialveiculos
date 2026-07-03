@@ -22,6 +22,7 @@ from models import (
     Mensagem,
     CredencialBanco,
     CredencialDetran,
+    ConfiguracaoFiscal,
     TipoConversa,
     StatusVeiculo,
     BancoSimulador,
@@ -323,6 +324,72 @@ async def test_credencial_detran_isolamento_tenant(client):
     finally:
         async with async_session() as db:
             await db.execute(delete(CredencialDetran).where(CredencialDetran.loja_id.in_([loja_a_id, loja_b_id])))
+            await db.execute(delete(MembroLoja).where(MembroLoja.id == membro_a_id))
+            await db.execute(delete(Usuario).where(Usuario.id == gestor_a_id))
+            await db.execute(delete(Loja).where(Loja.id.in_([loja_a_id, loja_b_id])))
+            await db.commit()
+
+
+@pytest.mark.asyncio
+async def test_configuracao_fiscal_isolamento_tenant(client):
+    """Gestor da loja A consulta a config fiscal -> vê a SUA config (ou nenhuma),
+    nunca a IE/token da loja B."""
+    loja_a_id = _uid()
+    gestor_a_id = _uid()
+    membro_a_id = _uid()
+
+    loja_b_id = _uid()
+
+    token_cifrado_b = encrypt_credentials("token-secreto-focus-loja-b")
+
+    async with async_session() as db:
+        db.add(Loja(id=loja_a_id, nome="Loja A (fiscal)", slug=f"loja-a-{loja_a_id[:8]}"))
+        db.add(Usuario(
+            id=gestor_a_id,
+            nome="Gestor A",
+            email=f"gestor_a_{gestor_a_id[:8]}@teste.com",
+            senha_hash="hash_fake",
+            papel=PapelUsuario.GESTOR,
+            ativo=True,
+        ))
+        db.add(MembroLoja(
+            id=membro_a_id, usuario_id=gestor_a_id, loja_id=loja_a_id,
+            papel=PapelUsuario.GESTOR, ativo=True,
+        ))
+        # Loja B com config fiscal completa
+        db.add(Loja(id=loja_b_id, nome="Loja B", slug=f"loja-b-{loja_b_id[:8]}"))
+        db.add(ConfiguracaoFiscal(
+            loja_id=loja_b_id,
+            inscricao_estadual="ISENTO-SECRETO-B",
+            focus_nfe_token_cifrado=token_cifrado_b,
+            ativo=True,
+        ))
+        await db.commit()
+
+    token = create_access_token(
+        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value}
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        resp = await client.get("/v1/fiscal/config", headers=headers)
+        assert resp.status_code == 200, f"GET config fiscal falhou -> {resp.status_code} {resp.text}"
+        data = resp.json()
+        assert data["configurada"] is False, "Loja A não configurou, mas veio configurada=true"
+        assert data.get("inscricao_estadual") != "ISENTO-SECRETO-B", (
+            "Vazamento (ConfiguracaoFiscal): loja A enxergou a IE da loja B"
+        )
+
+        # Emitir NF-e sem config ativa -> bloqueado, nunca nota fake
+        resp_emitir = await client.post(
+            "/v1/fiscal/notas", json={"contrato_id": _uid()}, headers=headers
+        )
+        assert resp_emitir.status_code in (400, 402, 403, 404), (
+            f"Emissão de NF-e sem config/módulo deveria ser bloqueada -> {resp_emitir.status_code} {resp_emitir.text}"
+        )
+    finally:
+        async with async_session() as db:
+            await db.execute(delete(ConfiguracaoFiscal).where(ConfiguracaoFiscal.loja_id.in_([loja_a_id, loja_b_id])))
             await db.execute(delete(MembroLoja).where(MembroLoja.id == membro_a_id))
             await db.execute(delete(Usuario).where(Usuario.id == gestor_a_id))
             await db.execute(delete(Loja).where(Loja.id.in_([loja_a_id, loja_b_id])))

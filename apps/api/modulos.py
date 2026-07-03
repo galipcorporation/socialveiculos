@@ -20,6 +20,7 @@ class Modulo(str, enum.Enum):
     SIMULADOR = "simulador"
     MARKETING = "marketing"
     ASSISTENTE_IA = "assistente_ia"
+    FISCAL = "fiscal"
 
 
 # Status de assinatura que permitem acesso aos módulos.

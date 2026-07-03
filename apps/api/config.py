@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     groq_api_key: Optional[str] = Field(default=None)
     elevenlabs_api_key: Optional[str] = Field(default=None)
 
+    # Fiscal — token da conta mestre da plataforma no gateway Focus NFe (M039)
+    focus_nfe_master_token: Optional[str] = Field(default=None)
+    focus_nfe_webhook_secret: Optional[str] = Field(default=None)
+
     @property
     def modulo_urls(self) -> dict[str, str]:
         return {

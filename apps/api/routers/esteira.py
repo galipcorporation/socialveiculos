@@ -406,6 +406,36 @@ async def atualizar_item(
 # DOCUMENTOS (reusa M018 VeiculoDocumento)
 # ═══════════════════════════════════════════════════════════════
 
+async def anexar_documento_interno(
+    db: AsyncSession,
+    e: EsteiraPosVenda,
+    item_chave: str,
+    nome: str,
+    url: str,
+    concluido_por: Optional[str] = None,
+) -> Optional[VeiculoDocumento]:
+    """Núcleo de `anexar_documento`, reusável fora do HTTP (ex.: webhook do gateway fiscal).
+    Não commita nem recarrega a esteira — quem chama decide o momento do commit."""
+    if not e.veiculo_id:
+        return None
+    item = next((i for i in e.itens if i.chave == item_chave and i.categoria == CategoriaItem.DOCUMENTO), None)
+    if not item:
+        return None
+
+    doc = VeiculoDocumento(
+        veiculo_id=e.veiculo_id, loja_id=e.loja_id,
+        nome=nome, url=url, visivel_comprador=True,
+    )
+    db.add(doc)
+    await db.flush()
+    item.doc_id = doc.id
+    item.status = StatusItemChecklist.CONCLUIDO
+    item.concluido_em = _now()
+    item.concluido_por = concluido_por
+    e.estagio = recalcular_estagio(e)
+    return doc
+
+
 @router.post("/{esteira_id}/documentos", response_model=EsteiraDetalheResponse)
 async def anexar_documento(
     esteira_id: str,
@@ -419,25 +449,13 @@ async def anexar_documento(
     e = await _carregar_esteira(db, esteira_id, ctx.loja.id)
     if not e.veiculo_id:
         raise HTTPException(status_code=400, detail="Esteira sem veículo vinculado")
-    item = next((i for i in e.itens if i.chave == item_chave and i.categoria == CategoriaItem.DOCUMENTO), None)
-    if not item:
+    doc = await anexar_documento_interno(db, e, item_chave, nome, url, concluido_por=ctx.usuario.id)
+    if doc is None:
         raise HTTPException(status_code=404, detail="Item de documento não encontrado")
-
-    doc = VeiculoDocumento(
-        veiculo_id=e.veiculo_id, loja_id=ctx.loja.id,
-        nome=nome, url=url, visivel_comprador=True,
-    )
-    db.add(doc)
-    await db.flush()
-    item.doc_id = doc.id
-    item.status = StatusItemChecklist.CONCLUIDO
-    item.concluido_em = _now()
-    item.concluido_por = ctx.usuario.id
-    e.estagio = recalcular_estagio(e)
     await db.commit()
     await registrar_auditoria(
         db, ctx.usuario.id, "esteira_documento_anexado",
-        f"Documento '{nome}' anexado ao item '{item.titulo}' (esteira {e.id}).",
+        f"Documento '{nome}' anexado ao item '{item_chave}' (esteira {e.id}).",
     )
     return await detalhe(esteira_id, ctx, db)
 

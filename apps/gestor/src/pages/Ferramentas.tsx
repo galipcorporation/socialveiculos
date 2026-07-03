@@ -6,7 +6,7 @@ import { useUIStore } from '../stores/uiStore'
 /* ── Types ───────────────────────────────────────────────────── */
 
 interface ModuloStatus {
-  modulo: 'contratos' | 'simulador' | 'marketing' | 'assistente_ia'
+  modulo: 'contratos' | 'simulador' | 'marketing' | 'assistente_ia' | 'fiscal'
   contratado: boolean
   liberado: boolean
   cta_upgrade?: string | null
@@ -133,6 +133,12 @@ const ModuloIcons: Record<string, ReactElement> = {
       <path d="M8 10h.01M12 10h.01M16 10h.01" />
     </svg>
   ),
+  fiscal: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ width: 28, height: 28 }}>
+      <path d="M9 2h6l5 5v13a2 2 0 01-2 2H9a2 2 0 01-2-2V4a2 2 0 012-2z" />
+      <path d="M9 12h6M9 16h4" />
+    </svg>
+  ),
 }
 
 const MODULO_INFO: Record<string, { titulo: string; desc: string }> = {
@@ -151,6 +157,10 @@ const MODULO_INFO: Record<string, { titulo: string; desc: string }> = {
   assistente_ia: {
     titulo: 'Assistente de IA',
     desc: 'Conecte seu WhatsApp pessoal ou comercial e deixe a IA responder ou sugerir mensagens (copiloto) para seus leads.',
+  },
+  fiscal: {
+    titulo: 'Fiscal / NF-e',
+    desc: 'Emita nota fiscal de venda direto do contrato, com impostos calculados automaticamente.',
   },
 }
 
@@ -257,6 +267,7 @@ function ModulosTab({
     contratos: '/ferramentas/contratos',
     marketing: '/ferramentas/marketing',
     assistente_ia: '/assistente',
+    fiscal: '/ferramentas/fiscal',
   }
 
   const abrirModulo = (modulo: string) => {
