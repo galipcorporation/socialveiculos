@@ -20,6 +20,7 @@ from models import (
     ComissaoVenda,
     Veiculo,
     Lead,
+    MembroLoja,
     TipoLancamento,
     StatusVeiculo,
     StatusPagamento,
@@ -722,6 +723,36 @@ async def criar_comissao(
     Registra uma comissão de venda. O valor da comissão é derivado de valor_venda × percentual.
     🔒 Isolamento por Tenant.
     """
+    # Integridade multi-tenant: veículo e vendedor referenciados, quando informados,
+    # DEVEM pertencer à loja do contexto. Sem isto, um gestor da loja A poderia
+    # atribuir a comissão a um veículo/vendedor de outra loja (ou a um id inexistente,
+    # já que a FK é ON DELETE SET NULL e o SQLite não força FK por padrão), corrompendo
+    # a atribuição de comissões e os relatórios financeiros.
+    if data.veiculo_id:
+        veic_ok = (await db.execute(
+            select(Veiculo.id).where(
+                Veiculo.id == data.veiculo_id,
+                Veiculo.loja_id == context.loja_id,
+            )
+        )).scalar_one_or_none()
+        if not veic_ok:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Veículo não encontrado nesta loja.",
+            )
+    if data.vendedor_id:
+        vinc_ok = (await db.execute(
+            select(MembroLoja.id).where(
+                MembroLoja.usuario_id == data.vendedor_id,
+                MembroLoja.loja_id == context.loja_id,
+            )
+        )).scalar_one_or_none()
+        if not vinc_ok:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Vendedor não encontrado nesta loja.",
+            )
+
     valor_comissao = round(data.valor_venda * (data.percentual / 100.0), 2)
     comissao = ComissaoVenda(
         loja_id=context.loja_id,
