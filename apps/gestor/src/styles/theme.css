@@ -36,7 +36,7 @@
 
   --sv-text: #e8e9ea;
   --sv-text-dim: #a1a3a8;
-  --sv-text-muted: #6f7177;
+  --sv-text-muted: #888a90;
 
   --sv-border: rgba(255, 255, 255, 0.09);
   --sv-border-hover: rgba(255, 255, 255, 0.18);
@@ -458,7 +458,12 @@ a:hover {
   transform: translateY(-50%);
   width: 16px;
   height: 16px;
-  color: var(--sv-text-muted);
+  color: var(--sv-text-dim);
+  transition: color var(--sv-transition);
+}
+
+.topbar-search:focus-within svg {
+  color: var(--sv-primary);
 }
 
 .topbar-actions {
@@ -609,7 +614,7 @@ a:hover {
 
 .topbar-user-dropdown-email {
   font-size: 12px;
-  color: var(--sv-text-muted);
+  color: var(--sv-text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

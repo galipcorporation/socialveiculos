@@ -13,6 +13,7 @@ import { Configuracoes } from './pages/Configuracoes'
 import { RedeSocial } from './pages/RedeSocial'
 import { AssistenteIA } from './pages/AssistenteIA'
 import { Ajuda } from './pages/Ajuda'
+import { PosVenda } from './pages/PosVenda'
 import { SimuladorPage } from './pages/ferramentas/Simulador'
 import { ContratosPage } from './pages/ferramentas/Contratos'
 import { MarketingPage } from './pages/ferramentas/Marketing'
@@ -128,6 +129,7 @@ export default function App() {
           <Route path="equipe" element={<Equipe />} />
           <Route path="configuracoes" element={<Configuracoes />} />
           <Route path="ajuda" element={<Ajuda />} />
+          <Route path="pos-venda" element={<PosVenda />} />
         </Route>
 
       </Route>

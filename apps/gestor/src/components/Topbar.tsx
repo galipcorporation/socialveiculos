@@ -16,7 +16,7 @@ interface PageItem {
 const PAGES: PageItem[] = [
   { label: 'Dashboards', path: '/', tags: ['dashboard', 'painel', 'inicio', 'home', 'indicadores', 'graficos'], category: 'Módulo' },
   { label: 'Rede Social', path: '/rede-social', tags: ['rede social', 'parceiros', 'b2b', 'diretorio', 'lojas', 'conversas'], category: 'Módulo' },
-  { label: 'CRM', path: '/crm', tags: ['crm', 'clientes', 'leads', 'vendas', 'funil', 'negociacoes', 'atendimentos'], category: 'Módulo' },
+  { label: 'Clientes (CRM)', path: '/crm', tags: ['crm', 'clientes', 'leads', 'vendas', 'funil', 'negociacoes', 'atendimentos'], category: 'Módulo' },
   { label: 'Estoque', path: '/estoque', tags: ['estoque', 'veiculos', 'carros', 'cadastrar carro', 'carros cadastrados', 'km', 'preco'], category: 'Módulo' },
   { label: 'Financeiro', path: '/financeiro', tags: ['financeiro', 'caixa', 'lancamentos', 'fluxo de caixa', 'comissoes', 'despesas', 'receitas'], category: 'Módulo' },
   { label: 'Aprovações', path: '/aprovacoes', tags: ['aprovacoes', 'solicitacoes', 'vendas', 'descontos', 'exclusoes', 'autorizacoes'], category: 'Módulo' },

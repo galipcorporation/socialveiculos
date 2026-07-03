@@ -4,8 +4,8 @@ import { api } from '../lib/api'
 import { getRecentPages, type RecentPage } from '../lib/recentPages'
 
 const FALLBACK_ACTIONS: RecentPage[] = [
-  { path: '/estoque', label: 'Estoque', icon: 'M1 3h15a2 2 0 012 2v6a2 2 0 01-2 2H1V3zm0 0v13m4 2a2 2 0 100-4 2 2 0 000 4zm13 0a2 2 0 100-4 2 2 0 000 4z' },
-  { path: '/crm', label: 'CRM', icon: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zm10 1v6m3-3h-6' },
+  { path: '/estoque', label: 'Estoque', icon: 'M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 002 12v4c0 .6.4 1 1 1h2 M7 15a2 2 0 100 4 2 2 0 000-4 M9 17h6 M17 15a2 2 0 100 4 2 2 0 000-4' },
+  { path: '/crm', label: 'Clientes (CRM)', icon: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zm10 1v6m3-3h-6' },
   { path: '/financeiro', label: 'Financeiro', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' },
 ]
 
@@ -76,9 +76,17 @@ export function Dashboard() {
             background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.25)',
             borderRadius: 'var(--sv-radius)', padding: '10px 14px', fontSize: 13,
             color: 'var(--sv-primary-text)', marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
           }}
         >
-          👤 Você está vendo <strong>seus números</strong>. Vendas e comissões abaixo são apenas as suas.
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: 16, height: 16, flexShrink: 0 }}>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          <span>Você está vendo <strong>seus números</strong>. Vendas e comissões abaixo são apenas as suas.</span>
         </div>
       )}
 

@@ -207,7 +207,7 @@ const ORIGEM_LABELS: Record<string, string> = {
    ══════════════════════════════════════════════════════════════ */
 
 export function CRM() {
-  const [activeTab, setActiveTab] = useState<'kanban' | 'clientes'>('kanban')
+  const [activeTab, setActiveTab] = useState<'kanban' | 'clientes'>('clientes')
   const [toasts, setToasts] = useState<Toast[]>([])
 
   const addToast = useCallback((type: ToastType, message: string, details?: ApiErrorDetails) => {
@@ -233,21 +233,21 @@ export function CRM() {
       {/* Tabs */}
       <div className="crm-tabs">
         <button
-          className={`crm-tab-btn ${activeTab === 'kanban' ? 'active' : ''}`}
-          onClick={() => setActiveTab('kanban')}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <KanbanIcon />
-            <span>Funil de Vendas</span>
-          </div>
-        </button>
-        <button
           className={`crm-tab-btn ${activeTab === 'clientes' ? 'active' : ''}`}
           onClick={() => setActiveTab('clientes')}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <UsersIcon />
             <span>Clientes</span>
+          </div>
+        </button>
+        <button
+          className={`crm-tab-btn ${activeTab === 'kanban' ? 'active' : ''}`}
+          onClick={() => setActiveTab('kanban')}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <KanbanIcon />
+            <span>Funil de Vendas (CRM)</span>
           </div>
         </button>
       </div>
