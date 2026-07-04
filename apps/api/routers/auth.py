@@ -64,7 +64,8 @@ class RegisterB2BRequest(BaseModel):
     loja_nome: str = Field(..., min_length=2, max_length=200)
     loja_cnpj: Optional[str] = Field(None, max_length=18)
     loja_telefone: Optional[str] = Field(None, max_length=20)
-    
+    loja_whatsapp: Optional[str] = Field(None, max_length=20)
+
     # Dados do Gestor
     nome: str = Field(..., min_length=2, max_length=200)
     email: EmailStr
@@ -156,6 +157,7 @@ async def register_b2b(data: RegisterB2BRequest, request: Request, db: AsyncSess
         slug=slug,
         cnpj=data.loja_cnpj,
         telefone=data.loja_telefone,
+        whatsapp=data.loja_whatsapp,
         ativa=True
     )
     db.add(nova_loja)

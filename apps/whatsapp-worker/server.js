@@ -165,7 +165,8 @@ app.post('/session/start', authenticate, async (req, res) => {
           session.status = 'connected';
           session.qr = null;
           if (session._resolvePrimeiroEvento) { session._resolvePrimeiroEvento(); session._resolvePrimeiroEvento = null; }
-          await notifyWebhook({ event: 'connection', usuario_id, status: 'connected' });
+          const numeroPareado = sock.user?.id ? sock.user.id.split(':')[0] : null;
+          await notifyWebhook({ event: 'connection', usuario_id, status: 'connected', numero_pareado: numeroPareado });
         }
       });
 

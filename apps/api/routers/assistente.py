@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import re
 from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
@@ -21,6 +22,7 @@ from models import (
     TomAssistente,
     Usuario,
     MembroLoja,
+    Loja,
 )
 from modulos import exige_modulo, Modulo
 from storage import storage_provider
@@ -102,6 +104,7 @@ class WebhookPayload(BaseModel):
     event: str  # "message" ou "connection"
     usuario_id: str
     status: Optional[str] = None
+    numero_pareado: Optional[str] = None  # número extraído de sock.user.id ao conectar (Baileys)
     message: Optional[dict] = None  # Recebemos como dict livre para parse manual
 
 # ── DEPENDÊNCIA DE PERMISSÃO INDIVIDUAL ───────────────────────
@@ -678,7 +681,15 @@ async def webhook_recebido(
     # 2. Processar Evento de Conexão
     if payload.event == "connection":
         logger.info(f"[WEBHOOK] Conexao do usuario {payload.usuario_id} mudou para {payload.status}")
-        # Podemos registrar isso na auditoria
+        if payload.status == "connected" and payload.numero_pareado:
+            res_loja = await db.execute(select(Loja).where(Loja.id == loja_id))
+            loja = res_loja.scalar_one_or_none()
+            if loja:
+                loja.whatsapp_pareado = payload.numero_pareado
+                cadastrado_digitos = re.sub(r"\D", "", loja.whatsapp or "")
+                pareado_digitos = re.sub(r"\D", "", payload.numero_pareado)
+                loja.whatsapp_divergente = bool(cadastrado_digitos) and cadastrado_digitos != pareado_digitos
+                await db.commit()
         return {"status": "processed"}
 
     # 3. Processar Evento de Mensagem

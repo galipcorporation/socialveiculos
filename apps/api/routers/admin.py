@@ -65,6 +65,7 @@ class EditarLojaRequest(BaseModel):
     cidade: Optional[str] = None
     estado: Optional[str] = None
     telefone: Optional[str] = None
+    whatsapp: Optional[str] = None
 
 
 class StatusLojaRequest(BaseModel):
@@ -265,6 +266,8 @@ async def editar_loja(
         loja.estado = data.estado
     if data.telefone is not None:
         loja.telefone = data.telefone
+    if data.whatsapp is not None:
+        loja.whatsapp = data.whatsapp
 
     await db.commit()
     await db.refresh(loja)

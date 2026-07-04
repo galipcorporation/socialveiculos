@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, FlaskConical, Play, CheckCircle2, XCircle } from 'lucide-react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, FlaskConical, Play, CheckCircle2, XCircle, Pencil } from 'lucide-react'
 import { api } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
+import { mascararTelefone } from '../lib/mascaras'
 
 // ── Tipos ────────────────────────────────────────────────────────
 
@@ -11,6 +12,10 @@ interface LojaItem {
   slug: string
   cidade?: string | null
   estado?: string | null
+  telefone?: string | null
+  whatsapp?: string | null
+  whatsapp_pareado?: string | null
+  whatsapp_divergente?: boolean
   ativa: boolean
   created_at: string
 }
@@ -187,6 +192,7 @@ function AbaLojas() {
   const [busca, setBusca] = useState('')
   const [modalAberto, setModalAberto] = useState(false)
   const [toggleLoading, setToggleLoading] = useState<string | null>(null)
+  const [lojaEditando, setLojaEditando] = useState<LojaItem | null>(null)
 
   const carregar = useCallback(() => {
     setLoading(true)
@@ -246,7 +252,7 @@ function AbaLojas() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--sv-border)' }}>
-                {['Nome', 'Cidade / UF', 'Status', 'Criado em', 'Ações'].map((h) => (
+                {['Nome', 'Cidade / UF', 'WhatsApp', 'Status', 'Criado em', 'Ações'].map((h) => (
                   <th key={h} style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', textAlign: 'left', color: 'var(--sv-text-muted)', fontWeight: 500 }}>{h}</th>
                 ))}
               </tr>
@@ -257,6 +263,25 @@ function AbaLojas() {
                   <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-primary)', fontWeight: 500 }}>{loja.nome}</td>
                   <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>
                     {loja.cidade && loja.estado ? `${loja.cidade} / ${loja.estado}` : loja.cidade || loja.estado || '—'}
+                  </td>
+                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>{loja.whatsapp || '—'}</span>
+                      {loja.whatsapp_divergente && (
+                        <span
+                          title={`Número pareado no WhatsApp (${loja.whatsapp_pareado}) diverge do cadastrado`}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '1px 8px', borderRadius: 999,
+                            fontSize: 'var(--sv-text-xs)', fontWeight: 600,
+                            background: 'color-mix(in srgb, var(--sv-warning) 15%, transparent)',
+                            color: 'var(--sv-warning)',
+                          }}
+                        >
+                          <AlertTriangle size={11} /> Divergente
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
                     <span style={{
@@ -274,6 +299,14 @@ function AbaLojas() {
                   <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>{fmtData(loja.created_at)}</td>
                   <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
                     <div style={{ display: 'flex', gap: 'var(--sv-space-2)' }}>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: 'var(--sv-text-xs)', display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => setLojaEditando(loja)}
+                        title="Editar dados da loja"
+                      >
+                        <Pencil size={14} /> Editar
+                      </button>
                       <button
                         className="btn btn-secondary"
                         style={{ padding: '4px 10px', fontSize: 'var(--sv-text-xs)', display: 'flex', alignItems: 'center', gap: 4 }}
@@ -302,6 +335,89 @@ function AbaLojas() {
       )}
 
       {modalAberto && <ModalNovaLoja onClose={() => setModalAberto(false)} onSaved={carregar} />}
+      {lojaEditando && (
+        <ModalEditarLoja
+          loja={lojaEditando}
+          onClose={() => setLojaEditando(null)}
+          onSaved={carregar}
+        />
+      )}
+    </div>
+  )
+}
+
+function ModalEditarLoja({ loja, onClose, onSaved }: { loja: LojaItem; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({
+    nome: loja.nome,
+    cidade: loja.cidade || '',
+    estado: loja.estado || '',
+    telefone: loja.telefone || '',
+    whatsapp: loja.whatsapp || '',
+  })
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setErro(null)
+    try {
+      await api.patch(`/admin/lojas/${loja.id}`, form)
+      onSaved()
+      onClose()
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao salvar loja.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <h3 className="modal-title">Editar Loja</h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-4)' }}>
+          {erro && <p style={{ color: 'var(--sv-danger)', fontSize: 'var(--sv-text-sm)' }}>{erro}</p>}
+
+          <div className="form-group">
+            <label>Nome da Loja</label>
+            <input className="form-input" value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} required />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: 'var(--sv-space-3)' }}>
+            <div className="form-group">
+              <label>Cidade</label>
+              <input className="form-input" value={form.cidade} onChange={(e) => setForm((f) => ({ ...f, cidade: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label>UF</label>
+              <input className="form-input" value={form.estado} onChange={(e) => setForm((f) => ({ ...f, estado: e.target.value.toUpperCase() }))} maxLength={2} style={{ textTransform: 'uppercase' }} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Telefone</label>
+            <input className="form-input" value={form.telefone} onChange={(e) => setForm((f) => ({ ...f, telefone: mascararTelefone(e.target.value) }))} placeholder="(11) 99999-9999" />
+          </div>
+          <div className="form-group">
+            <label>WhatsApp</label>
+            <input className="form-input" value={form.whatsapp} onChange={(e) => setForm((f) => ({ ...f, whatsapp: mascararTelefone(e.target.value) }))} placeholder="(11) 99999-9999" />
+            {loja.whatsapp_divergente && (
+              <p style={{ fontSize: 'var(--sv-text-xs)', color: 'var(--sv-warning)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <AlertTriangle size={12} /> Número pareado no WhatsApp ({loja.whatsapp_pareado}) diverge do cadastrado. Confirme qual usar — não é sobrescrito automaticamente.
+              </p>
+            )}
+          </div>
+
+          <div className="modal-footer" style={{ paddingTop: 'var(--sv-space-4)' }}>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? <span className="spinner" /> : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

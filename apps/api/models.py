@@ -235,6 +235,8 @@ class Loja(Base):
     logo_url = Column(String(500), nullable=True)
     telefone = Column(String(20), nullable=True)
     whatsapp = Column(String(20), nullable=True)
+    whatsapp_pareado = Column(String(20), nullable=True)  # último número visto conectado via QR (Baileys)
+    whatsapp_divergente = Column(Boolean, default=False)   # True se whatsapp_pareado != whatsapp cadastrado
     email = Column(String(200), nullable=True)
     endereco = Column(String(300), nullable=True)
     cidade = Column(String(100), nullable=True)

@@ -356,6 +356,8 @@ class LojaResponse(BaseModel):
     cnpj: Optional[str] = None
     telefone: Optional[str] = None
     whatsapp: Optional[str] = None
+    whatsapp_pareado: Optional[str] = None
+    whatsapp_divergente: Optional[bool] = False
     email: Optional[str] = None
     endereco: Optional[str] = None
     cidade: Optional[str] = None
