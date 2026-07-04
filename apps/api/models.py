@@ -92,6 +92,7 @@ class OrigemLead(str, enum.Enum):
     SIMULADOR = "simulador"
     WHATSAPP = "whatsapp"
     REPASSE = "repasse"   # venda B2B para outra loja (via PropostaRepasse)
+    SITE_PROPRIO = "site_proprio"  # formulário de contato do site white-label (M038)
 
 
 # ── Esteira pós-venda (ESTEIRA-POS-VENDA.md §6.1) ──

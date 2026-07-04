@@ -1,0 +1,259 @@
+/* ═══════════════════════════════════════════════════════════════
+   Site próprio (white-label) — tokens sobrescrevíveis por loja.
+   As cores reais (--site-primary/--site-secondary) são injetadas
+   inline via <style> a partir de SiteLoja.cor_primaria/cor_secundaria;
+   os valores abaixo são só o fallback default (tema "clean").
+   ═══════════════════════════════════════════════════════════════ */
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --site-primary: #2563eb;
+  --site-secondary: #1e293b;
+  --site-bg: #f8fafc;
+  --site-surface: #ffffff;
+  --site-border: #e2e8f0;
+  --site-text: #0f172a;
+  --site-text-dim: #64748b;
+  --site-radius: 0.5rem;
+  --site-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --site-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+}
+
+body {
+  font-family: var(--site-font);
+  background: var(--site-bg);
+  color: var(--site-text);
+  line-height: 1.5;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.site-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--site-surface);
+  border-bottom: 1px solid var(--site-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.site-header-logo {
+  height: 40px;
+  object-fit: contain;
+}
+
+.site-header-nome {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.site-header-nav {
+  display: flex;
+  gap: 24px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ── Hero (template "clean") ────────────────────────────────── */
+
+.site-hero {
+  padding: 64px 20px;
+  text-align: center;
+  background: linear-gradient(180deg, var(--site-surface) 0%, var(--site-bg) 100%);
+}
+
+.site-hero-titulo {
+  font-size: 36px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.site-hero-subtitulo {
+  font-size: 18px;
+  color: var(--site-text-dim);
+  margin-bottom: 24px;
+}
+
+.site-hero-cta {
+  display: inline-block;
+  padding: 12px 28px;
+  background: var(--site-primary);
+  color: #fff;
+  border-radius: var(--site-radius);
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+/* ── Hero (template "premium") — banner de fundo ───────────── */
+
+.site-hero-premium {
+  padding: 96px 20px;
+  text-align: center;
+  color: #fff;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.site-hero-premium::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.site-hero-premium > * {
+  position: relative;
+}
+
+.site-hero-premium .site-hero-titulo,
+.site-hero-premium .site-hero-subtitulo {
+  color: #fff;
+}
+
+/* ── Hero (template "compacto") — banner estreito, alinhado à esquerda ── */
+
+.site-hero-compacto {
+  padding: 32px 20px;
+  text-align: left;
+  background: var(--site-secondary);
+  color: #fff;
+}
+
+.site-hero-compacto .site-hero-titulo,
+.site-hero-compacto .site-hero-subtitulo {
+  color: #fff;
+}
+
+.site-hero-compacto .site-hero-titulo {
+  font-size: 26px;
+}
+
+/* ── Grid de estoque ────────────────────────────────────────── */
+
+.site-estoque-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+  padding: 40px 0;
+}
+
+.site-card {
+  background: var(--site-surface);
+  border: 1px solid var(--site-border);
+  border-radius: var(--site-radius);
+  overflow: hidden;
+  box-shadow: var(--site-shadow);
+}
+
+.site-card-img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  background: var(--site-bg);
+}
+
+.site-card-body {
+  padding: 14px;
+}
+
+.site-card-titulo {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.site-card-info {
+  font-size: 13px;
+  color: var(--site-text-dim);
+  margin-bottom: 8px;
+}
+
+.site-card-preco {
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--site-primary);
+}
+
+/* ── Sobre / Contato ────────────────────────────────────────── */
+
+.site-section {
+  padding: 48px 0;
+  border-top: 1px solid var(--site-border);
+}
+
+.site-section-titulo {
+  font-size: 24px;
+  font-weight: 800;
+  margin-bottom: 16px;
+}
+
+.site-form-group {
+  margin-bottom: 14px;
+}
+
+.site-form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.site-form-group input,
+.site-form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--site-border);
+  border-radius: var(--site-radius);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.site-form-submit {
+  padding: 12px 24px;
+  background: var(--site-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--site-radius);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ── Footer ─────────────────────────────────────────────────── */
+
+.site-footer {
+  padding: 24px 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--site-text-dim);
+  border-top: 1px solid var(--site-border);
+}
+
+.site-empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--site-text-dim);
+}

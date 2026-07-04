@@ -1,10 +1,10 @@
 """
-Social Veículos — Construtor de Sites (M038, Fase 1)
+Social Veículos — Construtor de Sites (M038, Fase 1 e 2)
 
 Site próprio/white-label por loja: builder no gestor + resolução por host
-para o futuro app público (apps/site, fora de escopo desta fase). Fase 1
-cobre só subdomínio automático ({slug}.socialveiculos.com.br); domínio
-próprio/SSL fica para a Fase 2. Rascunho (`rascunho_json`) nunca vaza ao
++ captura de lead pública para o app público (apps/site). Fase 1 cobre só
+subdomínio automático ({slug}.socialveiculos.com.br); domínio próprio/SSL
+(Cloudflare for SaaS) é Fase 2. Rascunho (`rascunho_json`) nunca vaza ao
 público — só o conteúdo publicado é servido em /public/site/{host}.
 """
 from __future__ import annotations
@@ -14,13 +14,14 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from database import get_db
 from deps import get_current_b2b_user, B2BContext
-from models import SiteLoja, Loja
+from limiter import rate_limit
+from models import SiteLoja, Loja, ClientePF, Lead, OrigemLead, EtapaLead
 from modulos import Modulo, exige_modulo
 from rbac import exige_permissao, Acao, Recurso
 
@@ -189,6 +190,24 @@ async def despublicar_site(
 
 
 # ═══════════════════════════════════════════════════════════════
+# SITEMAP (consumido pelo prerender de apps/site)
+# ═══════════════════════════════════════════════════════════════
+
+@public_router.get("/_sitemap/hosts")
+async def listar_hosts_publicados(db: AsyncSession = Depends(get_db)):
+    """Lista os hosts (subdomínio, e domínio próprio quando ativo) de todos os
+    sites publicados — consumido pelo script de prerender do apps/site."""
+    res = await db.execute(select(SiteLoja).where(SiteLoja.publicado == True))
+    sites = res.scalars().all()
+    hosts = []
+    for s in sites:
+        hosts.append(f"{s.subdominio}.socialveiculos.com.br")
+        if s.dominio_customizado and s.dominio_status == "ativo":
+            hosts.append(s.dominio_customizado)
+    return {"hosts": hosts}
+
+
+# ═══════════════════════════════════════════════════════════════
 # RESOLUÇÃO POR HOST (público — consumido pelo futuro app apps/site)
 # ═══════════════════════════════════════════════════════════════
 
@@ -216,3 +235,55 @@ async def obter_site_publico(host: str, db: AsyncSession = Depends(get_db)):
         "site": _to_response(site),
         "loja": {"id": loja.id, "nome": loja.nome, "slug": loja.slug, "whatsapp": loja.whatsapp},
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# CAPTURA DE LEAD (público, anônimo — form de contato do site)
+# ═══════════════════════════════════════════════════════════════
+
+class LeadSiteRequest(BaseModel):
+    host: str
+    nome: str = Field(..., min_length=2, max_length=200)
+    telefone: str = Field(..., min_length=8, max_length=20)
+    email: Optional[EmailStr] = None
+    mensagem: Optional[str] = Field(None, max_length=1000)
+    veiculo_id: Optional[str] = None
+
+
+@public_router.post("/lead", dependencies=[Depends(rate_limit(5, 60))])
+async def criar_lead_site(data: LeadSiteRequest, db: AsyncSession = Depends(get_db)):
+    """Formulário de contato do site público → Lead no CRM da loja, com
+    origem `site_proprio`. Endpoint anônimo — protegido por rate limit
+    (5/min) já que não exige autenticação nem publicação prévia de conta."""
+    subdominio = data.host.split(".")[0] if "." in data.host else data.host
+    res = await db.execute(
+        select(SiteLoja).where(
+            (SiteLoja.subdominio == subdominio) | (SiteLoja.dominio_customizado == data.host),
+            SiteLoja.publicado == True,
+        )
+    )
+    site = res.scalar_one_or_none()
+    if not site:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Site não encontrado ou não publicado.")
+
+    # Reaproveita ClientePF existente pelo telefone, ou cria um novo (sem exigir login).
+    res_cliente = await db.execute(
+        select(ClientePF).where(ClientePF.loja_id == site.loja_id, ClientePF.telefone == data.telefone)
+    )
+    cliente = res_cliente.scalar_one_or_none()
+    if not cliente:
+        cliente = ClientePF(loja_id=site.loja_id, nome=data.nome, telefone=data.telefone, email=data.email)
+        db.add(cliente)
+        await db.flush()
+
+    lead = Lead(
+        loja_id=site.loja_id,
+        cliente_id=cliente.id,
+        veiculo_id=data.veiculo_id,
+        origem=OrigemLead.SITE_PROPRIO,
+        etapa=EtapaLead.LEAD,
+        observacoes=f"Lead gerado via site próprio. Mensagem: {data.mensagem}" if data.mensagem else "Lead gerado via site próprio.",
+    )
+    db.add(lead)
+    await db.commit()
+    return {"ok": True}
