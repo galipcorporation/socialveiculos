@@ -1410,6 +1410,61 @@ class LojaConfig(Base):
     loja = relationship("Loja")
 
 
+class SiteLoja(Base):
+    """Site próprio/white-label da loja (M038, Fase 1 — MVP).
+
+    Uma linha por loja. `subdominio` deriva de `Loja.slug` e é gerado
+    automaticamente ({slug}.socialveiculos.com.br); `dominio_customizado`
+    fica para a Fase 2 (domínio próprio + SSL). `rascunho_json` guarda a
+    config ainda não publicada — só o conteúdo em `publicado=True` fica
+    visível no site público.
+    """
+    __tablename__ = "site_loja"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False, unique=True)
+
+    subdominio = Column(String(100), nullable=False)  # deriva de Loja.slug
+    dominio_customizado = Column(String(255), nullable=True)
+    dominio_status = Column(String(20), nullable=False, default="pendente")  # pendente|verificando|ativo|erro
+
+    publicado = Column(Boolean, default=False)
+    template = Column(String(30), nullable=False, default="clean")  # clean|premium|compacto
+
+    cor_primaria = Column(String(9), nullable=True)    # hex, ex: #3B82F6
+    cor_secundaria = Column(String(9), nullable=True)
+    logo_url = Column(String(500), nullable=True)
+    banner_url = Column(String(500), nullable=True)
+    favicon_url = Column(String(500), nullable=True)
+
+    hero_titulo = Column(String(200), nullable=True)
+    hero_subtitulo = Column(String(300), nullable=True)
+    hero_cta = Column(String(50), nullable=True)
+    sobre_texto = Column(Text, nullable=True)
+
+    secoes_ativas = Column(Text, nullable=True)  # JSON: {"home":true,"estoque":true,"sobre":true,"contato":true}
+    redes = Column(Text, nullable=True)          # JSON: {"instagram":"...","facebook":"..."}
+
+    seo_title = Column(String(200), nullable=True)
+    seo_description = Column(String(300), nullable=True)
+    og_image_url = Column(String(500), nullable=True)
+    ga4_id = Column(String(30), nullable=True)
+    meta_pixel_id = Column(String(30), nullable=True)
+
+    rascunho_json = Column(Text, nullable=True)  # snapshot da config não publicada
+
+    criado_em = Column(DateTime, default=_now)
+    atualizado_em = Column(DateTime, default=_now, onupdate=_now)
+
+    loja = relationship("Loja")
+
+    __table_args__ = (
+        UniqueConstraint("loja_id", name="uq_site_loja_loja"),
+        UniqueConstraint("subdominio", name="uq_site_loja_subdominio"),
+        Index("ix_site_loja_subdominio", "subdominio"),
+    )
+
+
 class LeadTriagem(Base):
     """Score IA de triagem de leads B2C — só para conversas de clientes finais."""
     __tablename__ = "lead_triagem"

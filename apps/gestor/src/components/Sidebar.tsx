@@ -20,6 +20,7 @@ const FERRAMENTAS_CHILDREN = [
   { path: '/assistente', label: 'Assistente IA' },
   { path: '/ferramentas/fiscal', label: 'Fiscal / NF-e' },
   { path: '/ferramentas/notas-fiscais', label: 'Notas Fiscais' },
+  { path: '/ferramentas/meu-site', label: 'Meu Site' },
 ]
 
 const ADMIN_NAV_ITEMS = [

@@ -11,6 +11,7 @@ export type ModuloKey =
   | 'marketing'
   | 'assistente'
   | 'fiscal'
+  | 'site'
 
 export interface ModuloDef {
   key: ModuloKey
@@ -28,6 +29,7 @@ export const MODULOS: ModuloDef[] = [
   { key: 'marketing', label: 'Marketing', paths: ['/ferramentas/marketing'] },
   { key: 'assistente', label: 'Assistente de IA', paths: ['/assistente'] },
   { key: 'fiscal', label: 'Fiscal / NF-e', paths: ['/ferramentas/fiscal', '/ferramentas/notas-fiscais'] },
+  { key: 'site', label: 'Meu Site', paths: ['/ferramentas/meu-site'] },
 ]
 
 export const TODOS_MODULOS: ModuloKey[] = MODULOS.map((m) => m.key)
