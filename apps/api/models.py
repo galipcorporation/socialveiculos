@@ -1026,12 +1026,48 @@ class NotaFiscal(Base):
     danfe_pdf_url = Column(String(500), nullable=True)
     motivo_rejeicao = Column(Text, nullable=True)
 
+    # cancelamento (M039 Fase 2)
+    justificativa_cancelamento = Column(Text, nullable=True)
+    cancelada_em = Column(DateTime, nullable=True)
+
     emitida_em = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
+    cartas_correcao = relationship(
+        "CartaCorrecaoNfe", back_populates="nota", cascade="all, delete-orphan",
+        order_by="CartaCorrecaoNfe.created_at",
+    )
+
     __table_args__ = (
         Index("ix_nota_fiscal_loja", "loja_id"),
+    )
+
+
+class CartaCorrecaoNfe(Base):
+    """Carta de Correção eletrônica (CC-e) de uma NF-e já autorizada (M039 Fase 2).
+    Corrige apenas dado não-essencial — nunca valores, impostos, partes ou datas."""
+    __tablename__ = "carta_correcao_nfe"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    nota_fiscal_id = Column(String(36), ForeignKey("nota_fiscal.id", ondelete="CASCADE"), nullable=False)
+
+    correcao = Column(Text, nullable=False)
+    sequencia = Column(Integer, nullable=False, default=1)
+    status = Column(String(20), nullable=False, default="processando")
+    # processando | registrada | rejeitada
+
+    protocolo = Column(String(20), nullable=True)
+    motivo_rejeicao = Column(Text, nullable=True)
+    xml_url = Column(String(500), nullable=True)
+
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+    nota = relationship("NotaFiscal", back_populates="cartas_correcao")
+
+    __table_args__ = (
+        Index("ix_cce_nota", "nota_fiscal_id"),
     )
 
 

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api, extractErrorDetails } from '../../lib/api'
 import { useUIStore } from '../../stores/uiStore'
 import { SearchSelect, type SearchSelectOption } from '../../components/SearchSelect'
-import { Gem, FileText, Download, RefreshCw } from 'lucide-react'
+import { Gem, FileText, Download, RefreshCw, Ban, MessageSquarePlus, X } from 'lucide-react'
 
 interface NotaFiscalItem {
   id: string
@@ -19,6 +19,8 @@ interface NotaFiscalItem {
   danfe_pdf_url?: string
   motivo_rejeicao?: string
   emitida_em?: string
+  justificativa_cancelamento?: string
+  cancelada_em?: string
 }
 
 interface ContratoOpcao {
@@ -32,6 +34,7 @@ interface ContratoOpcao {
 const STATUS_LABELS: Record<string, string> = {
   processando: 'Processando',
   processando_autorizacao: 'Processando',
+  processando_cancelamento: 'Cancelando…',
   autorizada: 'Autorizada',
   rejeitada: 'Rejeitada',
   erro: 'Erro',
@@ -43,6 +46,7 @@ const STATUS_COLORS: Record<string, string> = {
   rejeitada: 'var(--sv-error)',
   erro: 'var(--sv-error)',
   cancelada: 'var(--sv-text-muted)',
+  processando_cancelamento: 'var(--sv-warning)',
 }
 
 function formatBRL(v?: number) {
@@ -62,6 +66,9 @@ export function NotasFiscaisPage() {
   const [contratoLabel, setContratoLabel] = useState('')
   const [contratosOpcoes, setContratosOpcoes] = useState<SearchSelectOption[]>([])
   const [emitindo, setEmitindo] = useState(false)
+
+  const [notaCancelando, setNotaCancelando] = useState<NotaFiscalItem | null>(null)
+  const [notaCce, setNotaCce] = useState<NotaFiscalItem | null>(null)
 
   useEffect(() => {
     const verificar = async () => {
@@ -201,6 +208,7 @@ export function NotasFiscaisPage() {
                 <th>Valor</th>
                 <th>Chave de acesso</th>
                 <th>Documentos</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -213,6 +221,9 @@ export function NotasFiscaisPage() {
                     </span>
                     {n.motivo_rejeicao && (
                       <div style={{ fontSize: 12, color: 'var(--sv-error)' }}>{n.motivo_rejeicao}</div>
+                    )}
+                    {n.status === 'cancelada' && n.justificativa_cancelamento && (
+                      <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>{n.justificativa_cancelamento}</div>
                     )}
                   </td>
                   <td>{formatBRL(n.valor_total)}</td>
@@ -231,11 +242,160 @@ export function NotasFiscaisPage() {
                       )}
                     </div>
                   </td>
+                  <td>
+                    {n.status === 'autorizada' && (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          className="btn btn-outline"
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                          onClick={() => setNotaCce(n)}
+                          title="Emitir carta de correção"
+                        >
+                          <MessageSquarePlus style={{ width: 14, height: 14 }} /> CC-e
+                        </button>
+                        <button
+                          className="btn btn-outline"
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--sv-error)' }}
+                          onClick={() => setNotaCancelando(n)}
+                          title="Cancelar NF-e"
+                        >
+                          <Ban style={{ width: 14, height: 14 }} /> Cancelar
+                        </button>
+                      </div>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+      </div>
+
+      {notaCancelando && (
+        <ModalCancelarNota
+          nota={notaCancelando}
+          onClose={() => setNotaCancelando(null)}
+          onDone={() => { setNotaCancelando(null); carregarNotas() }}
+        />
+      )}
+      {notaCce && (
+        <ModalCartaCorrecao
+          nota={notaCce}
+          onClose={() => setNotaCce(null)}
+          onDone={() => { setNotaCce(null); carregarNotas() }}
+        />
+      )}
+    </div>
+  )
+}
+
+function ModalCancelarNota({ nota, onClose, onDone }: { nota: NotaFiscalItem; onClose: () => void; onDone: () => void }) {
+  const [justificativa, setJustificativa] = useState('')
+  const [loading, setLoading] = useState(false)
+  const showToast = useUIStore((s) => s.showToast)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await api.post(`/fiscal/notas/${nota.id}/cancelar`, { justificativa })
+      showToast('Cancelamento solicitado — acompanhe o status na lista.', 'success')
+      onDone()
+    } catch (err) {
+      const { message, details } = extractErrorDetails(err)
+      useUIStore.getState().showError(message || 'Erro ao cancelar NF-e.', details)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <h3 className="modal-title">Cancelar NF-e {nota.serie}/{nota.numero}</h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-4)' }}>
+          <p style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>
+            O cancelamento é solicitado à SEFAZ e só é aceito dentro do prazo legal (tipicamente 24h após a autorização). Esta ação não pode ser desfeita.
+          </p>
+          <div className="form-group">
+            <label>Justificativa (mín. 15 caracteres)</label>
+            <textarea
+              className="form-input"
+              rows={3}
+              minLength={15}
+              maxLength={255}
+              required
+              value={justificativa}
+              onChange={(e) => setJustificativa(e.target.value)}
+              placeholder="Ex.: Venda desfeita por desistência do comprador."
+            />
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>Voltar</button>
+            <button type="submit" className="btn btn-primary" disabled={loading || justificativa.length < 15} style={{ background: 'var(--sv-error)' }}>
+              {loading ? <span className="spinner" /> : 'Confirmar Cancelamento'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function ModalCartaCorrecao({ nota, onClose, onDone }: { nota: NotaFiscalItem; onClose: () => void; onDone: () => void }) {
+  const [correcao, setCorrecao] = useState('')
+  const [loading, setLoading] = useState(false)
+  const showToast = useUIStore((s) => s.showToast)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await api.post(`/fiscal/notas/${nota.id}/carta-correcao`, { correcao })
+      showToast('Carta de correção enviada.', 'success')
+      onDone()
+    } catch (err) {
+      const { message, details } = extractErrorDetails(err)
+      useUIStore.getState().showError(message || 'Erro ao emitir carta de correção.', details)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <h3 className="modal-title">Carta de Correção — NF-e {nota.serie}/{nota.numero}</h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-4)' }}>
+          <p style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>
+            Use a CC-e apenas para corrigir dado não-essencial (ex.: descrição, endereço). Valores, impostos, partes e datas não podem ser alterados por CC-e — nesses casos, cancele e emita novamente.
+          </p>
+          <div className="form-group">
+            <label>Texto da correção (mín. 15 caracteres)</label>
+            <textarea
+              className="form-input"
+              rows={4}
+              minLength={15}
+              maxLength={1000}
+              required
+              value={correcao}
+              onChange={(e) => setCorrecao(e.target.value)}
+              placeholder="Ex.: Correção da descrição do item para incluir a cor do veículo."
+            />
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={loading || correcao.length < 15}>
+              {loading ? <span className="spinner" /> : 'Enviar Correção'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )

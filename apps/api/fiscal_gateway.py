@@ -90,6 +90,28 @@ async def consultar_nfe(config: ConfiguracaoFiscal, ref: str) -> dict:
         return r.json()
 
 
+async def cancelar_nfe(config: ConfiguracaoFiscal, ref: str, justificativa: str) -> dict:
+    """Solicita o cancelamento da NF-e (prazo SEFAZ típico: 24h após autorização).
+    Assíncrono como a emissão — o status final chega pelo mesmo webhook."""
+    token = decrypt_credentials(config.focus_nfe_token_cifrado)
+    url = f"{_base_url(config.ambiente)}/v2/nfe/{ref}"
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        r = await client.request("DELETE", url, auth=(token, ""), json={"justificativa": justificativa})
+        r.raise_for_status()
+        return r.json()
+
+
+async def emitir_carta_correcao(config: ConfiguracaoFiscal, ref: str, correcao: str) -> dict:
+    """Emite Carta de Correção (CC-e) para corrigir dado não-essencial de uma
+    NF-e já autorizada (não pode alterar valores, impostos, partes ou datas)."""
+    token = decrypt_credentials(config.focus_nfe_token_cifrado)
+    url = f"{_base_url(config.ambiente)}/v2/nfe/{ref}/carta_correcao"
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        r = await client.post(url, auth=(token, ""), json={"correcao": correcao})
+        r.raise_for_status()
+        return r.json()
+
+
 def montar_payload_venda(config: ConfiguracaoFiscal, loja, cliente, veiculo, valor_total: float) -> dict:
     """Monta o payload mínimo de uma NF-e de venda de veículo usado a partir
     da configuração fiscal da loja + dados da venda."""

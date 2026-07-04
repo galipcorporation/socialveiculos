@@ -17,6 +17,7 @@ from typing import Optional
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, Field, ConfigDict
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -28,6 +29,7 @@ from deps import get_current_b2b_user, B2BContext, registrar_auditoria
 from models import (
     ConfiguracaoFiscal,
     NotaFiscal,
+    CartaCorrecaoNfe,
     Contrato,
     Loja,
     EsteiraPosVenda,
@@ -193,6 +195,30 @@ class NotaFiscalResponse(BaseModel):
     danfe_pdf_url: Optional[str]
     motivo_rejeicao: Optional[str]
     emitida_em: Optional[datetime]
+    justificativa_cancelamento: Optional[str] = None
+    cancelada_em: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CancelarNotaRequest(BaseModel):
+    justificativa: str = Field(..., min_length=15, max_length=255)
+
+
+class CartaCorrecaoRequest(BaseModel):
+    correcao: str = Field(..., min_length=15, max_length=1000)
+
+
+class CartaCorrecaoResponse(BaseModel):
+    id: str
+    nota_fiscal_id: str
+    correcao: str
+    sequencia: int
+    status: str
+    protocolo: Optional[str]
+    motivo_rejeicao: Optional[str]
+    xml_url: Optional[str]
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -275,6 +301,14 @@ async def listar_notas(
     return res.scalars().all()
 
 
+async def _carregar_nota(db: AsyncSession, nota_id: str, loja_id: str) -> NotaFiscal:
+    res = await db.execute(select(NotaFiscal).where(NotaFiscal.id == nota_id, NotaFiscal.loja_id == loja_id))
+    nota = res.scalar_one_or_none()
+    if not nota:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Nota fiscal não encontrada.")
+    return nota
+
+
 @router.get("/notas/{nota_id}", response_model=NotaFiscalResponse,
             dependencies=[Depends(exige_permissao(Acao.VER, Recurso.FINANCEIRO))])
 async def detalhe_nota(
@@ -282,11 +316,115 @@ async def detalhe_nota(
     db: AsyncSession = Depends(get_db),
     context: B2BContext = Depends(get_current_b2b_user),
 ):
-    res = await db.execute(select(NotaFiscal).where(NotaFiscal.id == nota_id, NotaFiscal.loja_id == context.loja_id))
-    nota = res.scalar_one_or_none()
-    if not nota:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Nota fiscal não encontrada.")
+    return await _carregar_nota(db, nota_id, context.loja_id)
+
+
+# ═══════════════════════════════════════════════════════════════
+# CANCELAMENTO (M039 Fase 2)
+# ═══════════════════════════════════════════════════════════════
+
+
+@router.post("/notas/{nota_id}/cancelar", response_model=NotaFiscalResponse,
+             dependencies=[Depends(exige_modulo(Modulo.FISCAL)), Depends(exige_permissao(Acao.EDITAR, Recurso.FINANCEIRO))])
+async def cancelar_nota(
+    nota_id: str,
+    data: CancelarNotaRequest,
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """Solicita o cancelamento da NF-e ao gateway. Só permitido para notas
+    autorizadas e ainda não canceladas — o prazo (tipicamente 24h) é validado
+    pela própria SEFAZ/gateway, não replicado aqui para não divergir por UF."""
+    nota = await _carregar_nota(db, nota_id, context.loja_id)
+    if nota.status != "autorizada":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Só é possível cancelar uma NF-e autorizada.")
+    if nota.cancelada_em:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Esta NF-e já foi cancelada.")
+
+    config = await _carregar_config(db, context.loja_id)
+    if not config or not config.ativo:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Configuração fiscal indisponível.")
+
+    try:
+        await fiscal_gateway.cancelar_nfe(config, nota.focus_nfe_ref, data.justificativa)
+    except Exception as e:
+        logger.error(f"[Fiscal] Falha ao solicitar cancelamento da nota {nota.id}: {e}")
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Falha ao comunicar com o gateway fiscal. Tente novamente.")
+
+    nota.justificativa_cancelamento = data.justificativa
+    nota.status = "processando_cancelamento"
+    await db.commit()
+    await db.refresh(nota)
+    await registrar_auditoria(
+        db, context.usuario.id, "nfe_cancelamento_solicitado",
+        f"Cancelamento solicitado para NF-e {nota.numero} (ref {nota.focus_nfe_ref}): {data.justificativa}",
+    )
     return nota
+
+
+# ═══════════════════════════════════════════════════════════════
+# CARTA DE CORREÇÃO — CC-e (M039 Fase 2)
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/notas/{nota_id}/carta-correcao", response_model=CartaCorrecaoResponse,
+             dependencies=[Depends(exige_modulo(Modulo.FISCAL)), Depends(exige_permissao(Acao.EDITAR, Recurso.FINANCEIRO))])
+async def emitir_carta_correcao(
+    nota_id: str,
+    data: CartaCorrecaoRequest,
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """Emite uma CC-e para corrigir dado não-essencial de uma nota autorizada
+    (nunca valores/impostos/partes/datas — isso exige cancelamento e reemissão)."""
+    nota = await _carregar_nota(db, nota_id, context.loja_id)
+    if nota.status != "autorizada":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Só é possível emitir carta de correção para uma NF-e autorizada.")
+
+    config = await _carregar_config(db, context.loja_id)
+    if not config or not config.ativo:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Configuração fiscal indisponível.")
+
+    res_seq = await db.execute(
+        select(func.count(CartaCorrecaoNfe.id)).where(CartaCorrecaoNfe.nota_fiscal_id == nota.id)
+    )
+    sequencia = (res_seq.scalar() or 0) + 1
+
+    try:
+        resposta = await fiscal_gateway.emitir_carta_correcao(config, nota.focus_nfe_ref, data.correcao)
+    except Exception as e:
+        logger.error(f"[Fiscal] Falha ao emitir CC-e da nota {nota.id}: {e}")
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Falha ao comunicar com o gateway fiscal. Tente novamente.")
+
+    cce = CartaCorrecaoNfe(
+        nota_fiscal_id=nota.id,
+        correcao=data.correcao,
+        sequencia=sequencia,
+        status=resposta.get("status", "processando"),
+    )
+    db.add(cce)
+    await db.commit()
+    await db.refresh(cce)
+    await registrar_auditoria(
+        db, context.usuario.id, "nfe_cce_emitida",
+        f"Carta de correção #{sequencia} solicitada para NF-e {nota.numero}.",
+    )
+    return cce
+
+
+@router.get("/notas/{nota_id}/carta-correcao", response_model=list[CartaCorrecaoResponse],
+            dependencies=[Depends(exige_permissao(Acao.VER, Recurso.FINANCEIRO))])
+async def listar_cartas_correcao(
+    nota_id: str,
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    await _carregar_nota(db, nota_id, context.loja_id)
+    res = await db.execute(
+        select(CartaCorrecaoNfe)
+        .where(CartaCorrecaoNfe.nota_fiscal_id == nota_id)
+        .order_by(CartaCorrecaoNfe.sequencia)
+    )
+    return res.scalars().all()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -313,14 +451,34 @@ async def webhook_focus(
     if not nota:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Nota fiscal não encontrada para esta ref.")
 
+    # Evento de Carta de Correção — atualiza a CC-e mais recente ainda em processamento
+    if payload.get("tipo_evento") == "carta_correcao":
+        res_cce = await db.execute(
+            select(CartaCorrecaoNfe)
+            .where(CartaCorrecaoNfe.nota_fiscal_id == nota.id, CartaCorrecaoNfe.status == "processando")
+            .order_by(CartaCorrecaoNfe.sequencia.desc())
+        )
+        cce = res_cce.scalars().first()
+        if cce:
+            cce_status = payload.get("status")
+            cce.status = {"registrada": "registrada", "erro_carta_correcao": "rejeitada"}.get(cce_status, cce_status or cce.status)
+            cce.protocolo = payload.get("numero_protocolo")
+            cce.motivo_rejeicao = payload.get("mensagem_sefaz")
+            await db.commit()
+        return {"ok": True}
+
     novo_status = payload.get("status")
     nota.status = {
         "autorizado": "autorizada",
         "erro_autorizacao": "rejeitada",
         "cancelado": "cancelada",
+        "erro_cancelamento": "autorizada",  # cancelamento falhou — nota continua válida
     }.get(novo_status, novo_status or nota.status)
     nota.impostos_json = json.dumps(payload.get("impostos") or {})
     nota.motivo_rejeicao = payload.get("mensagem_sefaz")
+
+    if nota.status == "cancelada":
+        nota.cancelada_em = datetime.now(timezone.utc)
 
     if nota.status == "autorizada":
         nota.chave_acesso = payload.get("chave_nfe")
