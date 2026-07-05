@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useUIStore } from '../stores/uiStore'
 import { LoginModal } from '../components/LoginModal'
+import { MfaSettingsModal } from '../components/MfaSettingsModal'
 import { api } from '../lib/api'
 import { whatsappLojaLink } from '../lib/contato'
 import { CarCard } from '../components/CarCard'
@@ -102,6 +103,7 @@ export function Feed() {
   const [stories, setStories] = useState<Story[]>([])
   const [storyAberto, setStoryAberto] = useState<Story | null>(null)
   const [showPerfilModal, setShowPerfilModal] = useState(false)
+  const [showMfaModal, setShowMfaModal] = useState(false)
 
   // Avatar (foto de perfil) states
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
@@ -667,6 +669,13 @@ export function Feed() {
               >
                 🚗 Meus Veículos
               </button>
+              <button
+                className="vt-btn vt-btn-outline"
+                style={{ width: '100%', textAlign: 'left' }}
+                onClick={() => setShowMfaModal(true)}
+              >
+                🔒 Verificação em duas etapas {user.mfa_ativo ? '(ativada)' : ''}
+              </button>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <button className="vt-btn vt-btn-outline" style={{ borderColor: 'var(--vt-error)', color: 'var(--vt-error)' }} onClick={async () => {
                   const ok = await useUIStore.getState().confirm({
@@ -690,6 +699,14 @@ export function Feed() {
 
       {/* Login Gate Modal */}
       <LoginModal />
+
+      {showMfaModal && user && (
+        <MfaSettingsModal
+          mfaAtivo={!!user.mfa_ativo}
+          onClose={() => setShowMfaModal(false)}
+          onChange={(ativo) => updateUser({ mfa_ativo: ativo })}
+        />
+      )}
     </>
   )
 }

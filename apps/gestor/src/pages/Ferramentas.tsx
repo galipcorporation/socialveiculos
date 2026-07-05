@@ -6,7 +6,7 @@ import { useUIStore } from '../stores/uiStore'
 /* ── Types ───────────────────────────────────────────────────── */
 
 interface ModuloStatus {
-  modulo: 'contratos' | 'simulador' | 'marketing' | 'assistente_ia' | 'fiscal'
+  modulo: 'contratos' | 'simulador' | 'marketing' | 'assistente_ia' | 'fiscal' | 'site'
   contratado: boolean
   liberado: boolean
   cta_upgrade?: string | null
@@ -139,6 +139,13 @@ const ModuloIcons: Record<string, ReactElement> = {
       <path d="M9 12h6M9 16h4" />
     </svg>
   ),
+  site: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ width: 28, height: 28 }}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  ),
 }
 
 const MODULO_INFO: Record<string, { titulo: string; desc: string }> = {
@@ -161,6 +168,10 @@ const MODULO_INFO: Record<string, { titulo: string; desc: string }> = {
   fiscal: {
     titulo: 'Fiscal / NF-e',
     desc: 'Emita nota fiscal de venda direto do contrato, com impostos calculados automaticamente.',
+  },
+  site: {
+    titulo: 'Meu Site / Vitrine',
+    desc: 'Crie e personalize um site exclusivo para a sua loja com o seu estoque integrado em tempo real.',
   },
 }
 
@@ -267,7 +278,8 @@ function ModulosTab({
     contratos: '/ferramentas/contratos',
     marketing: '/ferramentas/marketing',
     assistente_ia: '/assistente',
-    fiscal: '/ferramentas/fiscal',
+    fiscal: '/ferramentas/notas-fiscais',
+    site: '/ferramentas/meu-site',
   }
 
   const abrirModulo = (modulo: string) => {
@@ -287,11 +299,11 @@ function ModulosTab({
   return (
     <div className="modulos-grid">
       {modulos.map(m => {
-        const info = MODULO_INFO[m.modulo]
+        const info = MODULO_INFO[m.modulo] || { titulo: m.modulo, desc: 'Módulo premium.' }
         return (
           <div key={m.modulo} className={`modulo-card ${m.liberado ? '' : 'locked'}`}>
             <div className="modulo-card-top">
-              <div className="modulo-icon">{ModuloIcons[m.modulo]}</div>
+              <div className="modulo-icon">{ModuloIcons[m.modulo] || <WrenchIcon />}</div>
               {m.liberado ? (
                 <span className="modulo-badge success"><CheckIcon /> Ativo</span>
               ) : m.contratado ? (

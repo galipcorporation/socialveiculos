@@ -8,6 +8,7 @@ export interface User {
   papel: string
   ativo: boolean
   avatar_url?: string | null
+  mfa_ativo?: boolean
 }
 
 interface AuthState {

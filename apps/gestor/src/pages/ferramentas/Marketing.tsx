@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useUIStore } from '../../stores/uiStore'
-import { Megaphone, Loader2, Sparkles, Copy, Check, Gem, Car, Search, Send, Clock, History, X } from 'lucide-react'
+import { Megaphone, Loader2, Sparkles, Copy, Check, Gem, Car, Send, Clock, History, X } from 'lucide-react'
+import { SearchSelect } from '../../components/SearchSelect'
 
 interface VeiculoItem {
   id: string
@@ -63,6 +64,7 @@ export function MarketingPage() {
   const [loadingVeiculos, setLoadingVeiculos] = useState(false)
   const [busca, setBusca] = useState('')
   const [veiculoId, setVeiculoId] = useState('')
+  const [veiculoDisplay, setVeiculoDisplay] = useState('')
 
   const [rede, setRede] = useState('instagram')
   const [tom, setTom] = useState('vendedor')
@@ -303,27 +305,24 @@ export function MarketingPage() {
             <h3 style={{ margin: 0 }}>Configurar anúncio</h3>
           </div>
 
-          <div className="form-group">
-            <label>Veículo do estoque *</label>
-            <div style={{ position: 'relative', marginBottom: 8 }}>
-              <Search style={{ width: 16, height: 16, position: 'absolute', left: 10, top: 12, color: 'var(--sv-text-dim)' }} />
-              <input
-                type="text"
-                placeholder="Filtrar por marca, modelo ou placa..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                style={{ width: '100%', paddingLeft: 32 }}
-              />
-            </div>
-            <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} style={{ width: '100%' }}>
-              <option value="">{loadingVeiculos ? 'Carregando estoque...' : 'Selecione um veículo'}</option>
-              {veiculosFiltrados.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.marca} {v.modelo} {v.versao || ''} {v.ano_modelo} {v.placa ? `· ${v.placa}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+            <SearchSelect
+              label="Veículo do estoque"
+              placeholder="Filtrar por marca, modelo ou placa..."
+              value={veiculoId}
+              displayValue={veiculoDisplay}
+              options={veiculosFiltrados.map((v) => ({
+                id: v.id,
+                label: `${v.marca} ${v.modelo}${v.versao ? ' ' + v.versao : ''} (${v.ano_modelo})`,
+                sub: v.placa || undefined,
+              }))}
+              onSearch={setBusca}
+              onSelect={(id, label) => {
+                setVeiculoId(id)
+                setVeiculoDisplay(label)
+              }}
+              loading={loadingVeiculos}
+              required
+            />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">

@@ -14,6 +14,8 @@ export function SiteHeader({ dados }: { dados: SitePublicoResponse }) {
       <nav className="site-header-nav">
         <Link to="/">Início</Link>
         <Link to="/estoque">Estoque</Link>
+        {dados.site.sobre_texto && <Link to="/sobre">Sobre</Link>}
+        <Link to="/financiamento">Financiamento</Link>
         <Link to="/contato">Contato</Link>
       </nav>
     </header>

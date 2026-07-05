@@ -38,6 +38,13 @@ export function render(url: string, host: string, ssgData?: unknown) {
       headTags.push(m)
       return ''
     })
+    // Scripts do Helmet (GA4, Meta Pixel, JSON-LD) — todos os que este app declara
+    // via <Helmet><script>...</script></Helmet> em App.tsx acabam soltos no início
+    // do body renderizado; movê-los para o <head> do HTML estático.
+    .replace(/<script(?:(?!<\/script>).)*?(?:googletagmanager|gtag\(|fbq\(|application\/ld\+json)(?:(?!<\/script>).)*?<\/script>/gis, (m) => {
+      headTags.push(m)
+      return ''
+    })
 
   return { html, head: headTags.join('\n    ') }
 }

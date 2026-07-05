@@ -19,6 +19,22 @@ from schemas import SolicitacaoAprovacaoResponse, ProcessaSolicitacaoRequest
 router = APIRouter(prefix="/v1/aprovacoes", tags=["Aprovações B2B"])
 
 
+async def _build_solicitacao_response(db: AsyncSession, s: SolicitacaoAprovacao) -> SolicitacaoAprovacaoResponse:
+    # Buscar veículo associado
+    stmt = select(Veiculo).where(Veiculo.id == s.entidade_id)
+    res = await db.execute(stmt)
+    v = res.scalar_one_or_none()
+    
+    resp = SolicitacaoAprovacaoResponse.model_validate(s)
+    if v:
+        resp.veiculo_marca = v.marca
+        resp.veiculo_modelo = v.modelo
+        resp.veiculo_placa = v.placa
+        resp.veiculo_ano = v.ano_modelo
+        resp.veiculo_cor = v.cor
+    return resp
+
+
 @router.get(
     "/pendentes",
     response_model=List[SolicitacaoAprovacaoResponse],
@@ -33,7 +49,7 @@ async def get_solicitacoes_pendentes(
     """
     stmt = (
         select(SolicitacaoAprovacao)
-        .options(selectinload(SolicitacaoAprovacao.requisitante))
+        .options(selectinload(SolicitacaoAprovacao.requinitante if hasattr(SolicitacaoAprovacao, "requinitante") else SolicitacaoAprovacao.requisitante))
         .where(
             SolicitacaoAprovacao.loja_id == context.loja_id,
             SolicitacaoAprovacao.status == StatusAprovacao.PENDENTE
@@ -41,7 +57,8 @@ async def get_solicitacoes_pendentes(
         .order_by(SolicitacaoAprovacao.created_at.desc())
     )
     result = await db.execute(stmt)
-    return result.scalars().all()
+    solicitacoes = result.scalars().all()
+    return [await _build_solicitacao_response(db, s) for s in solicitacoes]
 
 
 @router.post(
@@ -102,7 +119,7 @@ async def processar_solicitacao(
             ip=request.client.host if request.client else None
         )
         await db.commit()
-        return solicitacao
+        return await _build_solicitacao_response(db, solicitacao)
 
     # Se APROVADO:
     # 3. Aplicar as alterações solicitadas
@@ -168,4 +185,4 @@ async def processar_solicitacao(
 
     await db.commit()
     await db.refresh(solicitacao)
-    return solicitacao
+    return await _build_solicitacao_response(db, solicitacao)

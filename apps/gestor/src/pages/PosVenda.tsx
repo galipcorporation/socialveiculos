@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, extractErrorDetails } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
+import { useAuthStore } from '../stores/authStore'
+import { Trash2, Plus, CheckCircle2 } from 'lucide-react'
 
 /* ── Types ───────────────────────────────────────────────────── */
 
@@ -91,7 +93,10 @@ const ESTAGIOS: EstagioDef[] = [
 
 export function PosVenda() {
   const [esteiras, setEsteiras] = useState<EsteiraResumoResponse[]>([])
+  const [finalizadas, setFinalizadas] = useState<EsteiraResumoResponse[]>([])
   const [loading, setLoading] = useState(true)
+  const [mostrarFinalizadas, setMostrarFinalizadas] = useState(false)
+  const [carregandoFinalizadas, setCarregandoFinalizadas] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const showError = useUIStore((state) => state.showError)
 
@@ -108,9 +113,26 @@ export function PosVenda() {
     }
   }, [showError])
 
+  const carregarFinalizadas = useCallback(async () => {
+    setCarregandoFinalizadas(true)
+    try {
+      const data = await api.get<EsteiraResumoResponse[]>('/esteira', { estagio: 'concluido' })
+      setFinalizadas(data)
+    } catch (err) {
+      const { message } = extractErrorDetails(err)
+      showError(message || 'Erro ao carregar esteiras finalizadas.')
+    } finally {
+      setCarregandoFinalizadas(false)
+    }
+  }, [showError])
+
   useEffect(() => {
     carregarEsteiras()
   }, [carregarEsteiras])
+
+  useEffect(() => {
+    if (mostrarFinalizadas) carregarFinalizadas()
+  }, [mostrarFinalizadas, carregarFinalizadas])
 
   const formatData = (dateStr?: string | null) => {
     if (!dateStr) return '—'
@@ -136,7 +158,7 @@ export function PosVenda() {
       <style>{`
         .posvenda-board {
           display: grid;
-          grid-template-columns: repeat(4, minmax(280px, 1fr));
+          grid-template-columns: repeat(${mostrarFinalizadas ? 5 : 4}, minmax(280px, 1fr));
           gap: 16px;
           margin-top: 20px;
           align-items: start;
@@ -330,9 +352,35 @@ export function PosVenda() {
         }
       `}</style>
 
-      <div className="page-header">
-        <h2>Esteira Pós-venda</h2>
-        <p>Acompanhe e gerencie as etapas posteriores à venda dos veículos da sua loja.</p>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <h2>Esteira Pós-venda</h2>
+          <p>Acompanhe e gerencie as etapas posteriores à venda dos veículos da sua loja.</p>
+        </div>
+        <button
+          className="btn btn-outline"
+          style={{
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+            color: 'var(--sv-text)',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease',
+            ...(!mostrarFinalizadas
+              ? {
+                  background: 'var(--sv-primary)',
+                  borderColor: 'var(--sv-primary)',
+                  color: 'white',
+                }
+              : {}),
+          }}
+          onClick={() => setMostrarFinalizadas((v) => !v)}
+        >
+          <CheckCircle2 style={{ width: 16, height: 16 }} />
+          {mostrarFinalizadas ? 'Ocultar finalizados' : 'Mostrar finalizados'}
+        </button>
       </div>
 
       {loading && esteiras.length === 0 ? (
@@ -362,13 +410,56 @@ export function PosVenda() {
                 </div>
 
                 <div className="posvenda-cards-container">
-                  {list.map((esteira) => {
-                    const progressPercent = esteira.total_itens > 0 
-                      ? Math.round((esteira.concluidos / esteira.total_itens) * 100)
-                      : 0
+                  {list.map((esteira) => renderCard(esteira))}
+                </div>
+              </div>
+            )
+          })}
 
-                    return (
-                      <div
+          {mostrarFinalizadas && (
+            <div className="posvenda-column">
+              <div className="posvenda-column-header">
+                <h4>
+                  <span>Finalizado</span>
+                </h4>
+                <span className="count">{finalizadas.length}</span>
+              </div>
+
+              <div className="posvenda-cards-container">
+                {carregandoFinalizadas ? (
+                  <div style={{ textAlign: 'center', padding: 20 }}>
+                    <div className="spinner" />
+                  </div>
+                ) : finalizadas.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 20, fontSize: 12, color: 'var(--sv-text-muted)' }}>
+                    Nenhuma esteira finalizada ainda.
+                  </div>
+                ) : (
+                  finalizadas.map((esteira) => renderCard(esteira))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {selectedId && (
+        <EsteiraDetalheModal
+          esteiraId={selectedId}
+          onClose={() => setSelectedId(null)}
+          onUpdated={() => { carregarEsteiras(); if (mostrarFinalizadas) carregarFinalizadas() }}
+        />
+      )}
+    </div>
+  )
+
+  function renderCard(esteira: EsteiraResumoResponse) {
+    const progressPercent = esteira.total_itens > 0
+      ? Math.round((esteira.concluidos / esteira.total_itens) * 100)
+      : 0
+
+    return (
+      <div
                         key={esteira.id}
                         className="posvenda-card"
                         role="button"
@@ -470,24 +561,8 @@ export function PosVenda() {
                           )}
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {selectedId && (
-        <EsteiraDetalheModal
-          esteiraId={selectedId}
-          onClose={() => setSelectedId(null)}
-          onUpdated={carregarEsteiras}
-        />
-      )}
-    </div>
-  )
+    )
+  }
 }
 
 /* ── Modal de detalhe / checklist ────────────────────────────── */
@@ -515,6 +590,14 @@ function EsteiraDetalheModal({
   const [uploadItem, setUploadItem] = useState<string | null>(null)
   const showError = useUIStore((state) => state.showError)
   const showToast = useUIStore((state) => state.showToast)
+  const user = useAuthStore((state) => state.user)
+  const podeGerenciarChecklist = user?.papel === 'gestor' || user?.papel === 'admin_plataforma'
+
+  // Estados para adicionar item personalizado
+  const [adicionandoCat, setAdicionandoCat] = useState<CategoriaItem | null>(null)
+  const [novoItemTitulo, setNovoItemTitulo] = useState('')
+  const [novoItemObrigatorio, setNovoItemObrigatorio] = useState(false)
+  const [salvandoNovoItem, setSalvandoNovoItem] = useState(false)
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -556,6 +639,52 @@ function EsteiraDetalheModal({
       showError(message || 'Erro ao atualizar item.')
     } finally {
       setSavingItem(null)
+    }
+  }
+
+  const handleCriarItem = async (cat: CategoriaItem) => {
+    if (!esteira || !novoItemTitulo.trim()) return
+    setSalvandoNovoItem(true)
+    try {
+      const atualizado = await api.post<EsteiraDetalheResponse>(
+        `/esteira/${esteira.id}/itens`,
+        {
+          titulo: novoItemTitulo.trim(),
+          categoria: cat,
+          obrigatorio: novoItemObrigatorio,
+        }
+      )
+      setEsteira(atualizado)
+      onUpdated()
+      setAdicionandoCat(null)
+      setNovoItemTitulo('')
+      setNovoItemObrigatorio(false)
+    } catch (err) {
+      const { message } = extractErrorDetails(err)
+      showError(message || 'Erro ao criar item personalizado.')
+    } finally {
+      setSalvandoNovoItem(false)
+    }
+  }
+
+  const handleDeletarItem = async (itemId: string) => {
+    if (!esteira) return
+    const ok = await useUIStore.getState().confirm({
+      title: 'Remover Item',
+      message: 'Deseja realmente remover este item do checklist?',
+      confirmText: 'Remover',
+      cancelText: 'Cancelar',
+    })
+    if (!ok) return
+    try {
+      const atualizado = await api.delete<EsteiraDetalheResponse>(
+        `/esteira/${esteira.id}/itens/${itemId}`
+      )
+      setEsteira(atualizado)
+      onUpdated()
+    } catch (err) {
+      const { message } = extractErrorDetails(err)
+      showError(message || 'Erro ao remover item do checklist.')
     }
   }
 
@@ -635,12 +764,61 @@ function EsteiraDetalheModal({
 
               {categorias.map((cat) => {
                 const itensCat = esteira.itens.filter((i) => i.categoria === cat)
-                if (itensCat.length === 0) return null
+                if (itensCat.length === 0 && esteira.concluida_em) return null
                 return (
                   <div key={cat} style={{ marginBottom: 18 }}>
-                    <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--sv-text)', marginBottom: 8 }}>
-                      {CATEGORIA_LABEL[cat]}
+                    <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--sv-text)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>{CATEGORIA_LABEL[cat]}</span>
+                      {!esteira.concluida_em && podeGerenciarChecklist && (
+                        <button
+                          className="btn btn-outline"
+                          style={{ fontSize: 11, padding: '2px 8px', height: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}
+                          onClick={() => setAdicionandoCat(adicionandoCat === cat ? null : cat)}
+                        >
+                          <Plus style={{ width: 12, height: 12 }} /> Adicionar
+                        </button>
+                      )}
                     </h4>
+
+                    {adicionandoCat === cat && (
+                      <div style={{ padding: 12, border: '1px dashed var(--sv-border)', borderRadius: 'var(--sv-radius)', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8, background: 'var(--sv-overlay-soft)' }}>
+                        <input
+                          type="text"
+                          placeholder="Título do item..."
+                          value={novoItemTitulo}
+                          onChange={(e) => setNovoItemTitulo(e.target.value)}
+                          style={{ width: '100%', fontSize: 12, padding: '6px 8px', borderRadius: 4, border: '1px solid var(--sv-border)', background: 'var(--sv-input-bg)', color: 'var(--sv-text)' }}
+                          autoFocus
+                        />
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--sv-text-dim)', cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={novoItemObrigatorio}
+                              onChange={(e) => setNovoItemObrigatorio(e.target.checked)}
+                            />
+                            Obrigatório para conclusão
+                          </label>
+                          <div style={{ flex: 1 }} />
+                          <button
+                            className="btn btn-outline"
+                            style={{ fontSize: 11, padding: '4px 8px', height: 'auto' }}
+                            onClick={() => { setAdicionandoCat(null); setNovoItemTitulo(''); setNovoItemObrigatorio(false) }}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            className="btn btn-primary"
+                            style={{ fontSize: 11, padding: '4px 8px', height: 'auto' }}
+                            disabled={!novoItemTitulo.trim() || salvandoNovoItem}
+                            onClick={() => handleCriarItem(cat)}
+                          >
+                            {salvandoNovoItem ? 'Salvando...' : 'Salvar'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {itensCat.map((item) => (
                         <div
@@ -653,13 +831,18 @@ function EsteiraDetalheModal({
                             borderRadius: 'var(--sv-radius)',
                             border: '1px solid var(--sv-border)',
                             background: item.vencido ? 'color-mix(in srgb, var(--sv-error) 8%, transparent)' : 'var(--sv-surface)',
+                            cursor: (savingItem === item.id || item.status === 'nao_aplicavel' || !!esteira.concluida_em) ? 'default' : 'pointer',
+                          }}
+                          onClick={() => {
+                            if (savingItem === item.id || item.status === 'nao_aplicavel' || !!esteira.concluida_em) return
+                            alternarStatus(item)
                           }}
                         >
                           <input
                             type="checkbox"
                             checked={item.status === 'concluido'}
                             disabled={savingItem === item.id || item.status === 'nao_aplicavel' || !!esteira.concluida_em}
-                            onChange={() => alternarStatus(item)}
+                            readOnly
                           />
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 13, color: 'var(--sv-text)' }}>
@@ -673,7 +856,11 @@ function EsteiraDetalheModal({
                             )}
                           </div>
                           {item.categoria === 'documento' && item.status !== 'concluido' && !esteira.concluida_em && (
-                            <label className="btn btn-glass" style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer' }}>
+                            <label 
+                              className="btn btn-glass" 
+                              style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer' }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               {uploadItem === item.id ? <span className="spinner" /> : 'Anexar'}
                               <input
                                 type="file"
@@ -685,6 +872,18 @@ function EsteiraDetalheModal({
                                 }}
                               />
                             </label>
+                          )}
+                          {!esteira.concluida_em && podeGerenciarChecklist && (
+                            <button
+                              style={{ background: 'none', border: 'none', color: 'var(--sv-text-dim)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDeletarItem(item.id)
+                              }}
+                              title="Remover item"
+                            >
+                              <Trash2 style={{ width: 14, height: 14 }} />
+                            </button>
                           )}
                           <span
                             style={{
@@ -711,18 +910,33 @@ function EsteiraDetalheModal({
             </>
           )}
         </div>
-        <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+        <div className="modal-footer" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <button className="btn btn-outline" onClick={onClose}>Fechar</button>
-          {esteira && !esteira.concluida_em && (
-            <button
-              className="btn btn-primary"
-              disabled={!podeConcluir || concluindo}
-              title={!podeConcluir ? 'Conclua todos os itens obrigatórios antes de finalizar' : undefined}
-              onClick={concluir}
-            >
-              {concluindo ? <span className="spinner" /> : 'Concluir esteira'}
-            </button>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {!podeConcluir && esteira && !esteira.concluida_em && (
+              <span style={{ fontSize: 12, color: 'var(--sv-text-dim)', fontWeight: 500 }}>
+                Restam itens obrigatórios
+              </span>
+            )}
+            {esteira && !esteira.concluida_em && (
+              podeConcluir ? (
+                <button
+                  className="btn btn-primary"
+                  disabled={concluindo}
+                  onClick={concluir}
+                >
+                  {concluindo ? <span className="spinner" /> : 'Concluir esteira'}
+                </button>
+              ) : (
+                <button
+                  className="btn btn-primary"
+                  onClick={onClose}
+                >
+                  Salvar
+                </button>
+              )
+            )}
+          </div>
         </div>
       </div>
     </div>

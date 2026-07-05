@@ -32,6 +32,7 @@ from models import (
     LancamentoFinanceiro,
     TipoLancamento,
     ComissaoVenda,
+    PapelUsuario,
 )
 from schemas import (
     EsteiraResumoResponse,
@@ -42,6 +43,7 @@ from schemas import (
     VeiculoResumo,
     CompradorResumo,
     EsteiraDashboardResponse,
+    ItemChecklistCreate,
 )
 
 router = APIRouter(prefix="/v1/esteira", tags=["Esteira Pós-venda"])
@@ -547,6 +549,84 @@ async def consultar_situacao(
         raise HTTPException(status_code=400, detail="Veículo sem placa para consulta")
     r = await _detran_situacao(ctx.loja.id, placa, db)
     return r
+
+
+# ═══════════════════════════════════════════════════════════════
+# GERENCIAR ITENS PERSONALIZADOS
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/{esteira_id}/itens", response_model=EsteiraDetalheResponse)
+async def criar_item(
+    esteira_id: str,
+    body: ItemChecklistCreate,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if ctx.usuario.papel not in (PapelUsuario.GESTOR, PapelUsuario.ADMIN_PLATAFORMA):
+        raise HTTPException(
+            status_code=403,
+            detail="Permissão negada. Apenas gestores podem gerenciar itens do checklist.",
+        )
+    e = await _carregar_esteira(db, esteira_id, ctx.loja.id)
+    if e.concluida_em is not None:
+        raise HTTPException(status_code=400, detail="Esteira já concluída")
+    
+    # Gerar chave slug a partir do título
+    import re
+    from unicodedata import normalize
+    clean_title = normalize('NFKD', body.titulo).encode('ASCII', 'ignore').decode('ASCII')
+    key = re.sub(r'[^a-z0-9_]', '', clean_title.lower().replace(' ', '_'))[:50]
+    if not key:
+        key = "item_customizado"
+    
+    item = ItemChecklist(
+        esteira_id=e.id,
+        chave=key,
+        titulo=body.titulo,
+        categoria=body.categoria,
+        responsavel=body.responsavel,
+        status=StatusItemChecklist.PENDENTE,
+        obrigatorio=body.obrigatorio,
+        prazo_em=body.prazo_em,
+    )
+    db.add(item)
+    e.estagio = recalcular_estagio(e)
+    await db.commit()
+    await registrar_auditoria(
+        db, e.loja_id, ctx.usuario.id, ctx.usuario.nome, "esteira_item_criado", "esteira_pos_venda", e.id,
+        f"Item personalizado '{body.titulo}' criado na esteira {e.id}.",
+    )
+    return await detalhe(esteira_id, ctx, db)
+
+
+@router.delete("/{esteira_id}/itens/{item_id}", response_model=EsteiraDetalheResponse)
+async def deletar_item(
+    esteira_id: str,
+    item_id: str,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if ctx.usuario.papel not in (PapelUsuario.GESTOR, PapelUsuario.ADMIN_PLATAFORMA):
+        raise HTTPException(
+            status_code=403,
+            detail="Permissão negada. Apenas gestores podem gerenciar itens do checklist.",
+        )
+    e = await _carregar_esteira(db, esteira_id, ctx.loja.id)
+    if e.concluida_em is not None:
+        raise HTTPException(status_code=400, detail="Esteira já concluída")
+    
+    item = next((i for i in e.itens if i.id == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+        
+    await db.delete(item)
+    e.estagio = recalcular_estagio(e)
+    await db.commit()
+    await registrar_auditoria(
+        db, e.loja_id, ctx.usuario.id, ctx.usuario.nome, "esteira_item_deletado", "esteira_pos_venda", e.id,
+        f"Item '{item.titulo}' removido da esteira {e.id}.",
+    )
+    return await detalhe(esteira_id, ctx, db)
 
 
 # ═══════════════════════════════════════════════════════════════

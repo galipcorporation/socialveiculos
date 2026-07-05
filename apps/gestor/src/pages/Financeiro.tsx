@@ -216,12 +216,13 @@ export function Financeiro() {
         </div>
         
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '8px', background: 'var(--sv-surface)', padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--sv-border)' }}>
-            <span style={{ fontSize: '12px', color: 'var(--sv-text-dim)', alignSelf: 'center', textTransform: 'uppercase' }}>Fechamento:</span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: 'var(--sv-text-dim)', fontWeight: 600, textTransform: 'uppercase', marginRight: '4px' }}>Fechamento:</span>
             <select 
               value={filtroMes} 
               onChange={e => setFiltroMes(e.target.value)}
-              style={{ background: 'transparent', border: 'none', color: 'var(--sv-text)', outline: 'none', cursor: 'pointer' }}
+              className="filter-select"
+              style={{ height: '36px', padding: '0 28px 0 10px', fontSize: '12px' }}
             >
               <option value="">Todos</option>
               {meses.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
@@ -229,7 +230,8 @@ export function Financeiro() {
             <select 
               value={filtroAno} 
               onChange={e => setFiltroAno(e.target.value)}
-              style={{ background: 'transparent', border: 'none', color: 'var(--sv-text)', outline: 'none', cursor: 'pointer' }}
+              className="filter-select"
+              style={{ height: '36px', padding: '0 28px 0 10px', fontSize: '12px' }}
             >
               <option value="">--</option>
               {anos.map(a => <option key={a} value={a}>{a}</option>)}

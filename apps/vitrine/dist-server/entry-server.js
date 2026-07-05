@@ -3,12 +3,12 @@ var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { en
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 import { jsx, jsxs, Fragment } from "react/jsx-runtime";
 import { renderToString } from "react-dom/server";
-import { useNavigate, useLocation, useParams, Link, Routes, Route, StaticRouter } from "react-router-dom";
+import { useNavigate, Link, useLocation, useParams, Routes, Route, StaticRouter } from "react-router-dom";
 import { Helmet, HelmetProvider } from "react-helmet-async";
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { X, AlertCircle, Mail, KeyRound, EyeOff, Eye, User, Phone } from "lucide-react";
+import { X, AlertCircle, KeyRound, Mail, EyeOff, Eye, User, Phone } from "lucide-react";
 const useAuthStore = create()(
   persist(
     (set) => ({
@@ -251,6 +251,8 @@ function LoginModal() {
   const [erro, setErro] = useState(null);
   const [showPasswordLogin, setShowPasswordLogin] = useState(false);
   const [showPasswordRegister, setShowPasswordRegister] = useState(false);
+  const [mfaChallengeToken, setMfaChallengeToken] = useState(null);
+  const [mfaCodigo, setMfaCodigo] = useState("");
   if (!isOpen) return null;
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -259,10 +261,32 @@ function LoginModal() {
     setErro(null);
     try {
       const data = await api.post("/auth/login", { email, senha });
+      if (data.mfa_required) {
+        setMfaChallengeToken(data.mfa_challenge_token);
+        return;
+      }
       loginStore(data.access_token, data.refresh_token, data.user);
       close();
     } catch (err) {
       setErro(err.message || "E-mail ou senha incorretos.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handleMfaSubmit = async (e) => {
+    e.preventDefault();
+    if (!mfaChallengeToken || mfaCodigo.length !== 6) return;
+    setLoading(true);
+    setErro(null);
+    try {
+      const data = await api.post("/auth/mfa/verify-login", {
+        mfa_challenge_token: mfaChallengeToken,
+        codigo: mfaCodigo
+      });
+      loginStore(data.access_token, data.refresh_token, data.user);
+      close();
+    } catch (err) {
+      setErro(err.message || "Código inválido.");
     } finally {
       setLoading(false);
     }
@@ -325,7 +349,43 @@ function LoginModal() {
       /* @__PURE__ */ jsx(AlertCircle, { size: 16 }),
       /* @__PURE__ */ jsx("span", { children: erro })
     ] }),
-    tab === "login" ? /* @__PURE__ */ jsxs("form", { onSubmit: handleLoginSubmit, className: "vt-modal-form", children: [
+    mfaChallengeToken ? /* @__PURE__ */ jsxs("form", { onSubmit: handleMfaSubmit, className: "vt-modal-form", children: [
+      /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+        /* @__PURE__ */ jsx("label", { children: "Código do autenticador" }),
+        /* @__PURE__ */ jsxs("div", { className: "vt-input-wrapper", children: [
+          /* @__PURE__ */ jsx(KeyRound, { className: "vt-input-icon", size: 16 }),
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              type: "text",
+              inputMode: "numeric",
+              placeholder: "000000",
+              maxLength: 6,
+              value: mfaCodigo,
+              onChange: (e) => setMfaCodigo(e.target.value.replace(/\D/g, "")),
+              required: true,
+              autoFocus: true,
+              disabled: loading
+            }
+          )
+        ] })
+      ] }),
+      /* @__PURE__ */ jsx("button", { type: "submit", className: "vt-btn vt-btn-primary vt-btn-block", disabled: loading || mfaCodigo.length !== 6, children: loading ? /* @__PURE__ */ jsx("span", { className: "spinner" }) : "Confirmar código" }),
+      /* @__PURE__ */ jsx(
+        "button",
+        {
+          type: "button",
+          className: "vt-btn vt-btn-social",
+          onClick: () => {
+            setMfaChallengeToken(null);
+            setMfaCodigo("");
+            setErro(null);
+          },
+          disabled: loading,
+          children: "Voltar"
+        }
+      )
+    ] }) : tab === "login" ? /* @__PURE__ */ jsxs("form", { onSubmit: handleLoginSubmit, className: "vt-modal-form", children: [
       /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
         /* @__PURE__ */ jsx("label", { children: "E-mail" }),
         /* @__PURE__ */ jsxs("div", { className: "vt-input-wrapper", children: [
@@ -467,21 +527,149 @@ function LoginModal() {
         /* @__PURE__ */ jsx("button", { type: "submit", className: "vt-btn vt-btn-primary vt-btn-block", disabled: loading, children: loading ? /* @__PURE__ */ jsx("span", { className: "spinner" }) : "Criar minha Conta" })
       ] })
     ),
-    /* @__PURE__ */ jsx("div", { className: "vt-modal-divider", children: /* @__PURE__ */ jsx("span", { children: "ou continue com" }) }),
-    /* @__PURE__ */ jsxs(
-      "button",
-      {
-        type: "button",
-        className: "vt-btn vt-btn-social",
-        onClick: () => useUIStore.getState().showToast("O login social com o Google estará disponível em breve.", "info"),
-        disabled: loading,
-        children: [
-          /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", width: "18", height: "18", fill: "currentColor", style: { marginRight: 8 }, children: /* @__PURE__ */ jsx("path", { d: "M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.113-5.111 4.113-3.419 0-6.202-2.783-6.202-6.202 0-3.419 2.783-6.202 6.202-6.202 1.481 0 2.836.526 3.902 1.488l3.125-3.125C18.992 2.378 15.82 1 12.016 1c-6.075 0-11 4.925-11 11s4.925 11 11 11c5.787 0 10.373-4.084 10.373-10.428 0-.687-.06-1.3-.173-1.857H12.24z" }) }),
-          /* @__PURE__ */ jsx("span", { children: "Google (Em breve)" })
-        ]
-      }
-    )
+    !mfaChallengeToken && /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx("div", { className: "vt-modal-divider", children: /* @__PURE__ */ jsx("span", { children: "ou continue com" }) }),
+      /* @__PURE__ */ jsxs(
+        "button",
+        {
+          type: "button",
+          className: "vt-btn vt-btn-social",
+          onClick: () => {
+            window.location.href = "/v1/auth/google/login";
+          },
+          disabled: loading,
+          children: [
+            /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", width: "18", height: "18", fill: "currentColor", style: { marginRight: 8 }, children: /* @__PURE__ */ jsx("path", { d: "M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.113-5.111 4.113-3.419 0-6.202-2.783-6.202-6.202 0-3.419 2.783-6.202 6.202-6.202 1.481 0 2.836.526 3.902 1.488l3.125-3.125C18.992 2.378 15.82 1 12.016 1c-6.075 0-11 4.925-11 11s4.925 11 11 11c5.787 0 10.373-4.084 10.373-10.428 0-.687-.06-1.3-.173-1.857H12.24z" }) }),
+            /* @__PURE__ */ jsx("span", { children: "Continuar com Google" })
+          ]
+        }
+      )
+    ] })
   ] }) });
+}
+function MfaSettingsModal({ mfaAtivo, onClose, onChange }) {
+  const [etapa, setEtapa] = useState("inicial");
+  const [qrCode, setQrCode] = useState(null);
+  const [codigo, setCodigo] = useState("");
+  const [senha, setSenha] = useState("");
+  const [erro, setErro] = useState(null);
+  const [loading, setLoading] = useState(false);
+  async function iniciarEnroll() {
+    setLoading(true);
+    setErro(null);
+    try {
+      const data = await api.post("/auth/mfa/enroll", {});
+      setQrCode(data.qr_code_base64);
+      setEtapa("enroll");
+    } catch (err) {
+      setErro(err.message || "Não foi possível iniciar a ativação do MFA.");
+    } finally {
+      setLoading(false);
+    }
+  }
+  async function confirmarEnroll(e) {
+    e.preventDefault();
+    if (codigo.length !== 6) return;
+    setLoading(true);
+    setErro(null);
+    try {
+      await api.post("/auth/mfa/confirm", { codigo });
+      onChange(true);
+      onClose();
+    } catch (err) {
+      setErro(err.message || "Código inválido.");
+    } finally {
+      setLoading(false);
+    }
+  }
+  async function desativar(e) {
+    e.preventDefault();
+    if (!senha) return;
+    setLoading(true);
+    setErro(null);
+    try {
+      await api.post("/auth/mfa/disable", { senha });
+      onChange(false);
+      onClose();
+    } catch (err) {
+      setErro(err.message || "Senha incorreta.");
+    } finally {
+      setLoading(false);
+    }
+  }
+  return /* @__PURE__ */ jsx("div", { className: "vt-modal-overlay", onClick: onClose, children: /* @__PURE__ */ jsxs("div", { className: "vt-modal-card", onClick: (e) => e.stopPropagation(), children: [
+    /* @__PURE__ */ jsx("button", { className: "vt-modal-close", onClick: onClose, children: "×" }),
+    /* @__PURE__ */ jsxs("div", { className: "vt-modal-header", children: [
+      /* @__PURE__ */ jsx("h3", { children: "Verificação em duas etapas" }),
+      /* @__PURE__ */ jsx("p", { children: "Adicione uma camada extra de segurança usando um app autenticador (Google Authenticator, Authy)." })
+    ] }),
+    erro && /* @__PURE__ */ jsx("div", { className: "vt-modal-error", children: /* @__PURE__ */ jsx("span", { children: erro }) }),
+    etapa === "inicial" && !mfaAtivo && /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-primary vt-btn-block", onClick: iniciarEnroll, disabled: loading, children: loading ? "Gerando..." : "Ativar verificação em duas etapas" }),
+    etapa === "inicial" && mfaAtivo && /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-outline vt-btn-block", onClick: () => setEtapa("desativar"), disabled: loading, children: "Desativar verificação em duas etapas" }),
+    etapa === "enroll" && qrCode && /* @__PURE__ */ jsxs("form", { onSubmit: confirmarEnroll, className: "vt-modal-form", children: [
+      /* @__PURE__ */ jsx(
+        "img",
+        {
+          src: `data:image/png;base64,${qrCode}`,
+          alt: "QR Code do autenticador",
+          style: { width: 200, height: 200, alignSelf: "center", background: "#fff", padding: 8, borderRadius: 8 }
+        }
+      ),
+      /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+        /* @__PURE__ */ jsx("label", { children: "Código do autenticador" }),
+        /* @__PURE__ */ jsx(
+          "input",
+          {
+            type: "text",
+            inputMode: "numeric",
+            placeholder: "000000",
+            maxLength: 6,
+            value: codigo,
+            onChange: (e) => setCodigo(e.target.value.replace(/\D/g, "")),
+            required: true,
+            autoFocus: true,
+            disabled: loading
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsx("button", { type: "submit", className: "vt-btn vt-btn-primary vt-btn-block", disabled: loading || codigo.length !== 6, children: loading ? "Confirmando..." : "Confirmar e ativar" })
+    ] }),
+    etapa === "desativar" && /* @__PURE__ */ jsxs("form", { onSubmit: desativar, className: "vt-modal-form", children: [
+      /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+        /* @__PURE__ */ jsx("label", { children: "Confirme sua senha" }),
+        /* @__PURE__ */ jsx(
+          "input",
+          {
+            type: "password",
+            value: senha,
+            onChange: (e) => setSenha(e.target.value),
+            required: true,
+            autoFocus: true,
+            disabled: loading
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsx("button", { type: "submit", className: "vt-btn vt-btn-primary vt-btn-block", disabled: loading || !senha, children: loading ? "Desativando..." : "Desativar" })
+    ] })
+  ] }) });
+}
+const CONTATO_WHATSAPP = "5517991110057";
+const CONTATO_EMAIL = "suporte@socialveiculos.com";
+function normalizarWhatsapp(numero) {
+  const digitos = numero.replace(/\D/g, "");
+  if (!digitos) return "";
+  return digitos.length <= 11 ? `55${digitos}` : digitos;
+}
+function whatsappLink(texto) {
+  const base = `https://wa.me/${CONTATO_WHATSAPP}`;
+  return texto ? `${base}?text=${encodeURIComponent(texto)}` : base;
+}
+function whatsappLojaLink(lojaWhatsapp, texto) {
+  if (!lojaWhatsapp) return null;
+  const numero = normalizarWhatsapp(lojaWhatsapp);
+  if (!numero) return null;
+  const base = `https://wa.me/${numero}`;
+  return texto ? `${base}?text=${encodeURIComponent(texto)}` : base;
 }
 const CarIcon$1 = () => /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: [
   /* @__PURE__ */ jsx("rect", { x: "1", y: "6", width: "22", height: "10", rx: "3" }),
@@ -543,7 +731,10 @@ function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir, isAu
       )
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "vt-car-card-image", children: [
-      currentMidia && !imgError ? currentMidia.tipo === "video" ? /* @__PURE__ */ jsx("video", { src: currentMidia.url, controls: true, muted: true, playsInline: true, style: { width: "100%", height: "100%", objectFit: "cover" } }) : /* @__PURE__ */ jsx("img", { src: currentMidia.url, alt: `${veiculo.marca} ${veiculo.modelo}`, onError: () => setImgError(true) }) : /* @__PURE__ */ jsx(CarIcon$1, {}),
+      currentMidia && !imgError ? currentMidia.tipo === "video" ? /* @__PURE__ */ jsx("video", { src: currentMidia.url, controls: true, muted: true, playsInline: true, style: { width: "100%", height: "100%", objectFit: "cover" } }) : /* @__PURE__ */ jsx("img", { src: currentMidia.url, alt: `${veiculo.marca} ${veiculo.modelo}`, onError: () => setImgError(true) }) : /* @__PURE__ */ jsxs("div", { className: "vt-car-card-placeholder", children: [
+        /* @__PURE__ */ jsx(CarIcon$1, {}),
+        /* @__PURE__ */ jsx("span", { children: "Sem foto disponível" })
+      ] }),
       /* @__PURE__ */ jsxs("div", { className: "vt-car-card-badges", children: [
         /* @__PURE__ */ jsx("span", { className: "vt-badge vt-badge-destaque", children: "Destaque" }),
         ((_a = veiculo.descricao) == null ? void 0 : _a.toLowerCase().includes("troca")) && /* @__PURE__ */ jsx("span", { className: "vt-badge vt-badge-troca", children: "Aceita troca" })
@@ -605,7 +796,7 @@ function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir, isAu
         ] })
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "vt-card-cta", children: [
-        /* @__PURE__ */ jsxs("button", { className: "vt-btn-negociar", onClick: () => onWhatsApp(veiculo), children: [
+        veiculo.loja_whatsapp && /* @__PURE__ */ jsxs("button", { className: "vt-btn-negociar", onClick: () => onWhatsApp(veiculo), children: [
           /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", width: "17", height: "17", fill: "currentColor", children: /* @__PURE__ */ jsx("path", { d: "M.06 24l1.7-6.2A11.9 11.9 0 1 1 12 24a11.9 11.9 0 0 1-5.7-1.5L.06 24zM6.6 20l.4.2a9.9 9.9 0 1 0-3.4-3.4l.2.4-1 3.7 3.8-.9z" }) }),
           "WhatsApp"
         ] }),
@@ -645,6 +836,7 @@ function Feed() {
   const [stories, setStories] = useState([]);
   const [storyAberto, setStoryAberto] = useState(null);
   const [showPerfilModal, setShowPerfilModal] = useState(false);
+  const [showMfaModal, setShowMfaModal] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -781,13 +973,6 @@ function Feed() {
       setSearch(value);
     }, 400);
   };
-  const handleInteraction = (action) => {
-    if (!isAuthenticated) {
-      openLoginModal("login");
-      return;
-    }
-    useUIStore.getState().showToast(`Você clicou em "${action}". Esta funcionalidade estará disponível em breve.`, "info");
-  };
   const handleFavoritar = async (veiculoId, favoritado) => {
     if (!isAuthenticated) {
       openLoginModal("login");
@@ -861,10 +1046,13 @@ function Feed() {
     }
   };
   const handleWhatsApp = (veiculo) => {
-    const text = encodeURIComponent(
-      `Olá! Vi o carro ${veiculo.marca} ${veiculo.modelo} (${veiculo.ano_fabricacao}/${veiculo.ano_modelo}) na Vitrine do Social Veículos e gostaria de mais informações.`
-    );
-    window.open(`https://wa.me/5511999999999?text=${text}`, "_blank");
+    const text = `Olá! Vi o carro ${veiculo.marca} ${veiculo.modelo} (${veiculo.ano_fabricacao}/${veiculo.ano_modelo}) na Vitrine do Social Veículos e gostaria de mais informações.`;
+    const link = whatsappLojaLink(veiculo.loja_whatsapp, text);
+    if (!link) {
+      useUIStore.getState().showToast("Esta loja não tem WhatsApp cadastrado. Use o chat interno.", "info");
+      return;
+    }
+    window.open(link, "_blank");
   };
   const handleFiltroRapido = (f) => {
     if (!isAuthenticated && f !== "Todos") {
@@ -966,22 +1154,10 @@ function Feed() {
     ] }) }),
     /* @__PURE__ */ jsxs("footer", { className: "vt-footer", style: { paddingBottom: "80px" }, children: [
       /* @__PURE__ */ jsxs("div", { className: "vt-footer-links", children: [
-        /* @__PURE__ */ jsx("a", { href: "#", onClick: (e) => {
-          e.preventDefault();
-          handleInteraction("Sobre");
-        }, children: "Sobre" }),
-        /* @__PURE__ */ jsx("a", { href: "#", onClick: (e) => {
-          e.preventDefault();
-          handleInteraction("Privacidade");
-        }, children: "Privacidade" }),
-        /* @__PURE__ */ jsx("a", { href: "#", onClick: (e) => {
-          e.preventDefault();
-          handleInteraction("Termos");
-        }, children: "Termos" }),
-        /* @__PURE__ */ jsx("a", { href: "#", onClick: (e) => {
-          e.preventDefault();
-          handleInteraction("Anuncie");
-        }, children: "Anuncie" })
+        /* @__PURE__ */ jsx(Link, { to: "/sobre", children: "Sobre" }),
+        /* @__PURE__ */ jsx(Link, { to: "/privacidade", children: "Privacidade" }),
+        /* @__PURE__ */ jsx(Link, { to: "/termos", children: "Termos" }),
+        /* @__PURE__ */ jsx(Link, { to: "/anuncie", children: "Anuncie" })
       ] }),
       /* @__PURE__ */ jsx("span", { children: "© 2026 Social Veículos" })
     ] }),
@@ -1117,6 +1293,18 @@ function Feed() {
             children: "🚗 Meus Veículos"
           }
         ),
+        /* @__PURE__ */ jsxs(
+          "button",
+          {
+            className: "vt-btn vt-btn-outline",
+            style: { width: "100%", textAlign: "left" },
+            onClick: () => setShowMfaModal(true),
+            children: [
+              "🔒 Verificação em duas etapas ",
+              user.mfa_ativo ? "(ativada)" : ""
+            ]
+          }
+        ),
         /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
           /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-outline", style: { borderColor: "var(--vt-error)", color: "var(--vt-error)" }, onClick: async () => {
             const ok = await useUIStore.getState().confirm({
@@ -1135,7 +1323,15 @@ function Feed() {
         ] })
       ] })
     ] }) }),
-    /* @__PURE__ */ jsx(LoginModal, {})
+    /* @__PURE__ */ jsx(LoginModal, {}),
+    showMfaModal && user && /* @__PURE__ */ jsx(
+      MfaSettingsModal,
+      {
+        mfaAtivo: !!user.mfa_ativo,
+        onClose: () => setShowMfaModal(false),
+        onChange: (ativo) => updateUser({ mfa_ativo: ativo })
+      }
+    )
   ] });
 }
 function Favoritos() {
@@ -1195,10 +1391,13 @@ function Favoritos() {
     }
   };
   const handleWhatsApp = (veiculo) => {
-    const text = encodeURIComponent(
-      `Olá! Vi o carro ${veiculo.marca} ${veiculo.modelo} (${veiculo.ano_fabricacao}/${veiculo.ano_modelo}) na Vitrine do Social Veículos e gostaria de mais informações.`
-    );
-    window.open(`https://wa.me/5511999999999?text=${text}`, "_blank");
+    const text = `Olá! Vi o carro ${veiculo.marca} ${veiculo.modelo} (${veiculo.ano_fabricacao}/${veiculo.ano_modelo}) na Vitrine do Social Veículos e gostaria de mais informações.`;
+    const link = whatsappLojaLink(veiculo.loja_whatsapp, text);
+    if (!link) {
+      useUIStore.getState().showToast("Esta loja não tem WhatsApp cadastrado. Use o chat interno.", "info");
+      return;
+    }
+    window.open(link, "_blank");
   };
   const handleSeguir = async (lojaId, seguindo) => {
     if (!isAuthenticated) {
@@ -1252,19 +1451,139 @@ function Favoritos() {
     /* @__PURE__ */ jsx(LoginModal, {})
   ] });
 }
+function wsUrl(path) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}${p}`;
+}
+function createReconnectingSocket(path, opts) {
+  const heartbeatMs = opts.heartbeatMs ?? 25e3;
+  const maxDelay = opts.maxReconnectDelayMs ?? 3e4;
+  let ws = null;
+  let closedByUser = false;
+  let attempt = 0;
+  let reconnectTimer = null;
+  let heartbeatTimer = null;
+  const stopHeartbeat = () => {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  };
+  const startHeartbeat = () => {
+    stopHeartbeat();
+    heartbeatTimer = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify({ type: "ping" }));
+        } catch {
+        }
+      }
+    }, heartbeatMs);
+  };
+  const scheduleReconnect = () => {
+    if (closedByUser || reconnectTimer !== null) return;
+    attempt += 1;
+    const capped = Math.min(1e3 * 2 ** (attempt - 1), maxDelay);
+    const delay = capped / 2 + Math.random() * (capped / 2);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  };
+  const connect = () => {
+    if (closedByUser) return;
+    let socket;
+    try {
+      socket = new WebSocket(wsUrl(path));
+    } catch {
+      scheduleReconnect();
+      return;
+    }
+    ws = socket;
+    socket.onopen = () => {
+      var _a, _b;
+      attempt = 0;
+      startHeartbeat();
+      (_a = opts.onStatusChange) == null ? void 0 : _a.call(opts, true);
+      (_b = opts.onOpen) == null ? void 0 : _b.call(opts);
+    };
+    socket.onmessage = (event) => opts.onMessage(event);
+    socket.onclose = () => {
+      var _a;
+      stopHeartbeat();
+      (_a = opts.onStatusChange) == null ? void 0 : _a.call(opts, false);
+      scheduleReconnect();
+    };
+    socket.onerror = () => {
+      try {
+        socket.close();
+      } catch {
+      }
+    };
+  };
+  connect();
+  return {
+    send: (data) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(typeof data === "string" ? data : JSON.stringify(data));
+        return true;
+      }
+      return false;
+    },
+    close: () => {
+      closedByUser = true;
+      if (reconnectTimer !== null) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      stopHeartbeat();
+      try {
+        ws == null ? void 0 : ws.close();
+      } catch {
+      }
+      ws = null;
+    },
+    get readyState() {
+      return ws ? ws.readyState : WebSocket.CLOSED;
+    }
+  };
+}
+function formatTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const now = /* @__PURE__ */ new Date();
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / 864e5);
+  if (diffDays === 0) return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  if (diffDays === 1) return "ontem";
+  if (diffDays < 7) return d.toLocaleDateString("pt-BR", { weekday: "short" });
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+function initials(nome) {
+  return nome.split(" ").slice(0, 2).map((p) => p[0]).join("").toUpperCase();
+}
+const SendIcon = () => /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", children: [
+  /* @__PURE__ */ jsx("line", { x1: "22", y1: "2", x2: "11", y2: "13" }),
+  /* @__PURE__ */ jsx("polygon", { points: "22 2 15 22 11 13 2 9 22 2" })
+] });
 function Mensagens() {
-  var _a;
+  var _a, _b;
   const { isAuthenticated, token, openLoginModal } = useAuthStore();
+  const userId = (_a = useAuthStore.getState().user) == null ? void 0 : _a.id;
   const location = useLocation();
-  const initialConversaId = (_a = location.state) == null ? void 0 : _a.conversaId;
+  const initialConversaId = (_b = location.state) == null ? void 0 : _b.conversaId;
   const [conversas, setConversas] = useState([]);
-  const [selectedConversa, setSelectedConversa] = useState(null);
+  const [filtered, setFiltered] = useState([]);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState(null);
   const [mensagens, setMensagens] = useState([]);
-  const [newMessage, setNewMessage] = useState("");
+  const [newMsg, setNewMsg] = useState("");
   const [loadingConversas, setLoadingConversas] = useState(true);
-  const [loadingMensagens, setLoadingMensagens] = useState(false);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
   const fetchConversas = async () => {
     if (!isAuthenticated) {
       setLoadingConversas(false);
@@ -1274,228 +1593,217 @@ function Mensagens() {
     try {
       const data = await api.get("/vitrine/conversas");
       setConversas(data);
+      setFiltered(data);
       if (initialConversaId) {
         const target = data.find((c) => c.id === initialConversaId);
-        if (target) {
-          setSelectedConversa(target);
-          fetchMensagens(target.id);
-        }
+        if (target) selectConversa(target);
       }
     } catch (err) {
-      console.error("Erro ao buscar conversas B2C:", err);
+      console.error("Erro ao buscar conversas:", err);
     } finally {
       setLoadingConversas(false);
     }
   };
   const fetchMensagens = async (conversaId) => {
-    setLoadingMensagens(true);
+    setLoadingMsgs(true);
     try {
       const data = await api.get(`/vitrine/conversas/${conversaId}/mensagens`);
       setMensagens(data);
     } catch (err) {
-      console.error("Erro ao buscar mensagens B2C:", err);
+      console.error("Erro ao buscar mensagens:", err);
     } finally {
-      setLoadingMensagens(false);
+      setLoadingMsgs(false);
     }
   };
   useEffect(() => {
     fetchConversas();
   }, [isAuthenticated]);
   useEffect(() => {
-    if (!isAuthenticated || !token || !selectedConversa) {
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
-      }
+    var _a2;
+    if (!isAuthenticated || !token || !selected) {
+      (_a2 = socketRef.current) == null ? void 0 : _a2.close();
+      socketRef.current = null;
       return;
     }
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//localhost:8000/v1/vitrine/chat/ws?token=${token}`;
-    const socket = new WebSocket(wsUrl);
-    socketRef.current = socket;
-    socket.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.conversa_id === selectedConversa.id) {
-          setMensagens((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev;
-            return [...prev, msg];
-          });
+    const sock = createReconnectingSocket(`/v1/vitrine/chat/ws?token=${token}`, {
+      onMessage: (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.conversa_id === selected.id) {
+            setMensagens((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
+          }
+          fetchConversas();
+        } catch {
         }
-        fetchConversas();
-      } catch (err) {
-        console.error("Erro ao processar mensagem websocket:", err);
       }
-    };
-    socket.onclose = () => {
-      console.log("WS B2C desconectado");
-    };
+    });
+    socketRef.current = sock;
     return () => {
-      socket.close();
+      sock.close();
+      socketRef.current = null;
     };
-  }, [isAuthenticated, token, selectedConversa]);
+  }, [isAuthenticated, token, selected]);
   useEffect(() => {
     var _a2;
     (_a2 = messagesEndRef.current) == null ? void 0 : _a2.scrollIntoView({ behavior: "smooth" });
   }, [mensagens]);
-  const handleSelectConversa = (conversa) => {
-    setSelectedConversa(conversa);
-    fetchMensagens(conversa.id);
+  const selectConversa = (c) => {
+    setSelected(c);
+    fetchMensagens(c.id);
+    setSidebarHidden(true);
   };
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !selectedConversa) return;
-    const content = newMessage;
-    setNewMessage("");
-    try {
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        socketRef.current.send(JSON.stringify({
-          conversa_id: selectedConversa.id,
-          conteudo: content
-        }));
-      } else {
-        await api.post(`/vitrine/conversas/${selectedConversa.id}/mensagens`, {
-          veiculo_id: selectedConversa.veiculo_id || "",
-          loja_id: selectedConversa.loja_id,
+  const handleSearch = (q) => {
+    setSearch(q);
+    const lower = q.toLowerCase();
+    setFiltered(conversas.filter(
+      (c) => c.loja_nome.toLowerCase().includes(lower) || (c.ultima_mensagem ?? "").toLowerCase().includes(lower) || (c.veiculo_modelo ?? "").toLowerCase().includes(lower)
+    ));
+  };
+  const autoResize = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
+  };
+  const handleSend = async (e) => {
+    var _a2;
+    const content = newMsg.trim();
+    if (!content || !selected) return;
+    setNewMsg("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+    if (((_a2 = socketRef.current) == null ? void 0 : _a2.readyState) === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ conversa_id: selected.id, conteudo: content }));
+    } else {
+      try {
+        await api.post(`/vitrine/conversas/${selected.id}/mensagens`, {
+          veiculo_id: selected.veiculo_id || "",
+          loja_id: selected.loja_id,
           mensagem: content
         });
-        fetchMensagens(selectedConversa.id);
+        fetchMensagens(selected.id);
+      } catch (err) {
+        console.error("Erro ao enviar mensagem:", err);
       }
-    } catch (err) {
-      console.error("Erro ao enviar mensagem:", err);
+    }
+  };
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
   if (!isAuthenticated) {
-    return /* @__PURE__ */ jsxs("div", { className: "vt-page", style: { padding: "40px 20px", textAlign: "center", minHeight: "80vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }, children: [
-      /* @__PURE__ */ jsx("h2", { children: "Faça login para ver suas mensagens" }),
-      /* @__PURE__ */ jsx("p", { style: { color: "var(--vt-text-dim)", marginBottom: 20 }, children: "Converse direto com as lojas sobre os veículos de seu interesse." }),
+    return /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "80vh", gap: 16, padding: 24, textAlign: "center" }, children: [
+      /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.5", style: { width: 56, height: 56, color: "var(--vt-text-muted)", opacity: 0.4 }, children: /* @__PURE__ */ jsx("path", { d: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" }) }),
+      /* @__PURE__ */ jsx("h2", { style: { fontSize: 18, fontWeight: 700 }, children: "Faça login para ver suas mensagens" }),
+      /* @__PURE__ */ jsx("p", { style: { color: "var(--vt-text-dim)", fontSize: 14 }, children: "Converse direto com as lojas sobre os veículos de seu interesse." }),
       /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-primary", onClick: () => openLoginModal("login"), children: "Entrar / Cadastrar" }),
       /* @__PURE__ */ jsx(LoginModal, {})
     ] });
   }
-  return /* @__PURE__ */ jsxs("div", { className: "vt-page", style: { height: "90vh", display: "flex", flexDirection: "column", padding: "16px", paddingBottom: "80px" }, children: [
-    /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 16, height: "100%", background: "var(--vt-surface)", borderRadius: 16, border: "1px solid var(--vt-border)", overflow: "hidden" }, children: [
-      /* @__PURE__ */ jsxs("div", { style: { width: selectedConversa ? "35%" : "100%", borderRight: "1px solid var(--vt-border)", display: selectedConversa ? "none" : "flex", flexDirection: "column", background: "var(--vt-bg)" }, className: "chat-sidebar-responsive", children: [
-        /* @__PURE__ */ jsx("div", { style: { padding: 16, borderBottom: "1px solid var(--vt-border)" }, children: /* @__PURE__ */ jsx("h2", { style: { fontSize: 18, fontWeight: 700 }, children: "Mensagens" }) }),
-        /* @__PURE__ */ jsx("div", { style: { flex: 1, overflowY: "auto" }, children: loadingConversas ? /* @__PURE__ */ jsx("div", { style: { display: "flex", justifyContent: "center", padding: 20 }, children: /* @__PURE__ */ jsx("div", { className: "spinner" }) }) : conversas.length === 0 ? /* @__PURE__ */ jsx("div", { style: { padding: 20, textAlign: "center", color: "var(--vt-text-dim)", fontSize: 14 }, children: "Nenhuma conversa iniciada." }) : conversas.map((c) => {
-          const isSelected = (selectedConversa == null ? void 0 : selectedConversa.id) === c.id;
-          return /* @__PURE__ */ jsxs(
-            "div",
-            {
-              onClick: () => handleSelectConversa(c),
-              style: {
-                padding: 16,
-                borderBottom: "1px solid var(--vt-border)",
-                cursor: "pointer",
-                background: isSelected ? "var(--vt-primary-light)" : "transparent",
-                transition: "background 0.2s"
-              },
-              children: [
-                /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 4 }, children: [
-                  /* @__PURE__ */ jsx("h4", { style: { fontWeight: 600, fontSize: 14 }, children: c.loja_nome }),
-                  /* @__PURE__ */ jsx("span", { style: { fontSize: 10, color: "var(--vt-text-dim)" }, children: c.ultima_mensagem_data ? new Date(c.ultima_mensagem_data).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "" })
-                ] }),
-                c.veiculo_modelo && /* @__PURE__ */ jsxs("div", { style: { fontSize: 11, color: "var(--vt-primary)", marginBottom: 6 }, children: [
-                  "Interesse: ",
-                  c.veiculo_marca,
-                  " ",
-                  c.veiculo_modelo
-                ] }),
-                /* @__PURE__ */ jsx("p", { style: { fontSize: 12, color: "var(--vt-text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: c.ultima_mensagem || "Nenhuma mensagem." })
-              ]
-            },
-            c.id
-          );
-        }) })
-      ] }),
-      selectedConversa ? /* @__PURE__ */ jsxs("div", { style: { flex: 1, display: "flex", flexDirection: "column" }, children: [
-        /* @__PURE__ */ jsxs("div", { style: { padding: 16, borderBottom: "1px solid var(--vt-border)", display: "flex", alignItems: "center", gap: 12, background: "var(--vt-surface-hover)" }, children: [
-          /* @__PURE__ */ jsx(
-            "button",
-            {
-              onClick: () => setSelectedConversa(null),
-              style: { background: "none", border: "none", color: "var(--vt-text)", fontSize: 18, cursor: "pointer", display: "block" },
-              className: "chat-back-btn",
-              children: "←"
-            }
-          ),
-          /* @__PURE__ */ jsxs("div", { children: [
-            /* @__PURE__ */ jsx("h3", { style: { fontSize: 16, fontWeight: 600 }, children: selectedConversa.loja_nome }),
-            selectedConversa.veiculo_modelo && /* @__PURE__ */ jsxs("span", { style: { fontSize: 12, color: "var(--vt-primary)" }, children: [
-              "Carro: ",
-              selectedConversa.veiculo_marca,
-              " ",
-              selectedConversa.veiculo_modelo
-            ] })
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxs("div", { style: { flex: 1, padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }, children: [
-          loadingMensagens ? /* @__PURE__ */ jsx("div", { style: { display: "flex", justifyContent: "center", padding: 20 }, children: /* @__PURE__ */ jsx("div", { className: "spinner" }) }) : mensagens.map((m) => {
-            var _a2;
-            const isMe = m.autor_id === ((_a2 = useAuthStore.getState().user) == null ? void 0 : _a2.id);
-            return /* @__PURE__ */ jsxs(
-              "div",
-              {
-                style: {
-                  alignSelf: isMe ? "flex-end" : "flex-start",
-                  maxWidth: "75%",
-                  background: isMe ? "var(--vt-primary)" : "var(--vt-surface-hover)",
-                  color: isMe ? "#fff" : "var(--vt-text)",
-                  padding: "10px 14px",
-                  borderRadius: 12,
-                  borderBottomRightRadius: isMe ? 2 : 12,
-                  borderBottomLeftRadius: isMe ? 12 : 2,
-                  boxShadow: "var(--vt-shadow)"
-                },
-                children: [
-                  !isMe && /* @__PURE__ */ jsx("div", { style: { fontSize: 10, fontWeight: 700, color: "var(--vt-text-dim)", marginBottom: 2 }, children: m.autor_nome }),
-                  /* @__PURE__ */ jsx("p", { style: { fontSize: 14, margin: 0, wordBreak: "break-word" }, children: m.conteudo }),
-                  /* @__PURE__ */ jsx("div", { style: { fontSize: 9, opacity: 0.5, textAlign: "right", marginTop: 4 }, children: new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })
-                ]
-              },
-              m.id
-            );
-          }),
-          /* @__PURE__ */ jsx("div", { ref: messagesEndRef })
-        ] }),
-        /* @__PURE__ */ jsxs("form", { onSubmit: handleSendMessage, style: { padding: 16, borderTop: "1px solid var(--vt-border)", display: "flex", gap: 8, background: "var(--vt-surface-hover)" }, children: [
+  return /* @__PURE__ */ jsxs("div", { className: "vt-chat-shell", children: [
+    /* @__PURE__ */ jsxs("div", { className: `vt-chat-sidebar${sidebarHidden ? " hidden" : ""}`, children: [
+      /* @__PURE__ */ jsxs("div", { className: "vt-chat-sidebar-head", children: [
+        /* @__PURE__ */ jsx("h2", { children: "Mensagens" }),
+        /* @__PURE__ */ jsxs("div", { className: "vt-chat-search", children: [
+          /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", children: [
+            /* @__PURE__ */ jsx("circle", { cx: "11", cy: "11", r: "8" }),
+            /* @__PURE__ */ jsx("line", { x1: "21", y1: "21", x2: "16.65", y2: "16.65" })
+          ] }),
           /* @__PURE__ */ jsx(
             "input",
             {
               type: "text",
-              value: newMessage,
-              onChange: (e) => setNewMessage(e.target.value),
-              placeholder: "Digite sua mensagem...",
-              style: {
-                flex: 1,
-                background: "var(--vt-bg)",
-                border: "1px solid var(--vt-border)",
-                borderRadius: 8,
-                padding: "10px 14px",
-                color: "var(--vt-text)",
-                outline: "none"
-              }
-            }
-          ),
-          /* @__PURE__ */ jsx(
-            "button",
-            {
-              type: "submit",
-              style: {
-                background: "var(--vt-primary)",
-                color: "#fff",
-                border: "none",
-                borderRadius: 8,
-                padding: "0 16px",
-                fontWeight: 600,
-                cursor: "pointer"
-              },
-              children: "Enviar"
+              placeholder: "Buscar conversa…",
+              value: search,
+              onChange: (e) => handleSearch(e.target.value)
             }
           )
         ] })
-      ] }) : /* @__PURE__ */ jsx("div", { style: { flex: 1, display: "none", alignItems: "center", justifyContent: "center", color: "var(--vt-text-dim)" }, className: "chat-empty-responsive", children: "Selecione uma conversa para começar" })
+      ] }),
+      /* @__PURE__ */ jsx("div", { className: "vt-conv-list", children: loadingConversas ? /* @__PURE__ */ jsx("div", { style: { display: "flex", justifyContent: "center", padding: 24 }, children: /* @__PURE__ */ jsx("div", { className: "spinner" }) }) : filtered.length === 0 ? /* @__PURE__ */ jsx("div", { style: { padding: 24, textAlign: "center", color: "var(--vt-text-dim)", fontSize: 14 }, children: search ? "Nenhuma conversa encontrada." : "Nenhuma conversa ainda." }) : filtered.map((c) => /* @__PURE__ */ jsxs(
+        "div",
+        {
+          className: `vt-conv-item${(selected == null ? void 0 : selected.id) === c.id ? " active" : ""}`,
+          onClick: () => selectConversa(c),
+          children: [
+            /* @__PURE__ */ jsx("div", { className: "vt-conv-avatar", children: initials(c.loja_nome) }),
+            /* @__PURE__ */ jsxs("div", { className: "vt-conv-info", children: [
+              /* @__PURE__ */ jsx("div", { className: "vt-conv-name", children: c.loja_nome }),
+              c.veiculo_modelo && /* @__PURE__ */ jsxs("div", { className: "vt-conv-sub", children: [
+                c.veiculo_marca,
+                " ",
+                c.veiculo_modelo
+              ] }),
+              /* @__PURE__ */ jsx("div", { className: "vt-conv-preview", children: c.ultima_mensagem || "Nenhuma mensagem." })
+            ] }),
+            /* @__PURE__ */ jsx("div", { className: "vt-conv-meta", children: /* @__PURE__ */ jsx("span", { className: "vt-conv-time", children: formatTime(c.ultima_mensagem_data) }) })
+          ]
+        },
+        c.id
+      )) })
     ] }),
+    /* @__PURE__ */ jsx("div", { className: "vt-chat-area", children: selected ? /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx("div", { className: "vt-chat-head", children: /* @__PURE__ */ jsxs("div", { className: "vt-chat-head-left", children: [
+        /* @__PURE__ */ jsx("button", { className: "vt-chat-back", onClick: () => setSidebarHidden(false), children: /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", style: { width: 22, height: 22 }, children: /* @__PURE__ */ jsx("polyline", { points: "15 18 9 12 15 6" }) }) }),
+        /* @__PURE__ */ jsx("div", { className: "vt-chat-head-avatar", children: initials(selected.loja_nome) }),
+        /* @__PURE__ */ jsxs("div", { className: "vt-chat-head-info", children: [
+          /* @__PURE__ */ jsx("h4", { children: selected.loja_nome }),
+          /* @__PURE__ */ jsx("span", { children: "Loja parceira" })
+        ] })
+      ] }) }),
+      selected.veiculo_modelo && /* @__PURE__ */ jsxs("div", { className: "vt-chat-vehicle", children: [
+        /* @__PURE__ */ jsx("div", { className: "vt-chat-vehicle-thumb", children: /* @__PURE__ */ jsx("div", { style: { width: "100%", height: "100%", background: "var(--vt-surface-hover)" } }) }),
+        /* @__PURE__ */ jsxs("div", { className: "vt-chat-vehicle-info", children: [
+          /* @__PURE__ */ jsxs("strong", { children: [
+            selected.veiculo_marca,
+            " ",
+            selected.veiculo_modelo
+          ] }),
+          /* @__PURE__ */ jsx("span", { children: "Ver anúncio" })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { className: "vt-chat-messages", children: [
+        loadingMsgs ? /* @__PURE__ */ jsx("div", { style: { display: "flex", justifyContent: "center", padding: 20 }, children: /* @__PURE__ */ jsx("div", { className: "spinner" }) }) : mensagens.map((m, i) => {
+          const isMe = m.autor_id === userId;
+          const prevIsMe = i > 0 && mensagens[i - 1].autor_id === userId;
+          const showDate = i === 0 || new Date(m.created_at).toDateString() !== new Date(mensagens[i - 1].created_at).toDateString();
+          return /* @__PURE__ */ jsxs(React.Fragment, { children: [
+            showDate && /* @__PURE__ */ jsx("div", { className: "vt-msg-date", children: new Date(m.created_at).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" }) }),
+            /* @__PURE__ */ jsxs("div", { className: `vt-msg-row${isMe ? " me" : " other"}`, style: { marginTop: !isMe && prevIsMe || isMe && !prevIsMe ? 8 : 0 }, children: [
+              !isMe && /* @__PURE__ */ jsx("div", { className: "vt-msg-avatar", children: initials(m.autor_nome) }),
+              /* @__PURE__ */ jsxs("div", { children: [
+                /* @__PURE__ */ jsx("div", { className: "vt-msg-bubble", children: m.conteudo }),
+                /* @__PURE__ */ jsx("div", { className: "vt-msg-time", children: new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) })
+              ] })
+            ] })
+          ] }, m.id);
+        }),
+        /* @__PURE__ */ jsx("div", { ref: messagesEndRef })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { className: "vt-chat-input-bar", children: [
+        /* @__PURE__ */ jsx("div", { className: "vt-chat-input-wrap", children: /* @__PURE__ */ jsx(
+          "textarea",
+          {
+            ref: textareaRef,
+            rows: 1,
+            placeholder: "Mensagem…",
+            value: newMsg,
+            onChange: (e) => {
+              setNewMsg(e.target.value);
+              autoResize();
+            },
+            onKeyDown: handleKeyDown
+          }
+        ) }),
+        /* @__PURE__ */ jsx("button", { className: "vt-chat-send", onClick: () => handleSend(), disabled: !newMsg.trim(), children: /* @__PURE__ */ jsx(SendIcon, {}) })
+      ] })
+    ] }) : /* @__PURE__ */ jsxs("div", { className: "vt-chat-empty", children: [
+      /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: /* @__PURE__ */ jsx("path", { d: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" }) }),
+      /* @__PURE__ */ jsx("p", { children: "Selecione uma conversa para começar" })
+    ] }) }),
     /* @__PURE__ */ jsx(LoginModal, {})
   ] });
 }
@@ -1616,9 +1924,10 @@ function CarroDetalhe({ initialData }) {
       return [];
     }
   })();
-  const whatsappLink = `https://wa.me/?text=${encodeURIComponent(
+  const whatsappHref = whatsappLojaLink(
+    veiculo.loja_whatsapp,
     `Olá! Tenho interesse no ${veiculo.marca} ${veiculo.modelo} ${veiculo.ano_modelo}.`
-  )}`;
+  );
   return /* @__PURE__ */ jsxs("div", { className: "vt-detail", children: [
     /* @__PURE__ */ jsxs(Helmet, { children: [
       /* @__PURE__ */ jsx("title", { children: meta.title }),
@@ -1687,10 +1996,10 @@ function CarroDetalhe({ initialData }) {
           /* @__PURE__ */ jsx("h3", { children: "Opcionais" }),
           /* @__PURE__ */ jsx("div", { className: "vt-detail-chips", children: opcionais.map((o) => /* @__PURE__ */ jsx("span", { className: "vt-chip", children: o }, o)) })
         ] }),
-        /* @__PURE__ */ jsx(
+        whatsappHref && /* @__PURE__ */ jsx(
           "a",
           {
-            href: whatsappLink,
+            href: whatsappHref,
             target: "_blank",
             rel: "noopener noreferrer",
             className: "vt-btn vt-btn-primary vt-btn-block",
@@ -1884,6 +2193,296 @@ function MeusVeiculos() {
     ] }, v.veiculo_id)) })
   ] });
 }
+function InstitucionalLayout({
+  titulo,
+  subtitulo,
+  children
+}) {
+  return /* @__PURE__ */ jsxs("div", { className: "vt-institucional", children: [
+    /* @__PURE__ */ jsx(Link, { to: "/", className: "vt-inst-back", children: "← Voltar ao feed" }),
+    /* @__PURE__ */ jsx("h1", { children: titulo }),
+    subtitulo && /* @__PURE__ */ jsx("p", { className: "vt-inst-sub", children: subtitulo }),
+    children
+  ] });
+}
+function Sobre() {
+  return /* @__PURE__ */ jsxs(
+    InstitucionalLayout,
+    {
+      titulo: "Sobre a Social Veículos",
+      subtitulo: "A rede social de carros da sua região.",
+      children: [
+        /* @__PURE__ */ jsx("p", { children: "A Social Veículos é uma vitrine social onde você acompanha, em um feed, os veículos anunciados pelas lojas parceiras da sua cidade. Diferente de um classificado tradicional, aqui você segue lojas, favorita carros e conversa direto com quem vende — tudo em um só lugar." }),
+        /* @__PURE__ */ jsx("h2", { children: "Como funciona" }),
+        /* @__PURE__ */ jsxs("ul", { children: [
+          /* @__PURE__ */ jsxs("li", { children: [
+            /* @__PURE__ */ jsx("strong", { children: "Explore o feed:" }),
+            " role e descubra carros anunciados perto de você."
+          ] }),
+          /* @__PURE__ */ jsxs("li", { children: [
+            /* @__PURE__ */ jsx("strong", { children: "Favorite:" }),
+            " salve os veículos que te interessam para ver depois."
+          ] }),
+          /* @__PURE__ */ jsxs("li", { children: [
+            /* @__PURE__ */ jsx("strong", { children: "Converse:" }),
+            " fale com a loja pelo chat interno ou pelo WhatsApp."
+          ] })
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "Para lojas" }),
+        /* @__PURE__ */ jsxs("p", { children: [
+          "É lojista e quer anunciar seu estoque na vitrine e organizar suas vendas?",
+          " ",
+          /* @__PURE__ */ jsx(
+            "a",
+            {
+              href: whatsappLink("Olá! Quero saber como anunciar minha loja na Social Veículos."),
+              target: "_blank",
+              rel: "noopener noreferrer",
+              children: "Fale com a gente"
+            }
+          ),
+          "."
+        ] })
+      ]
+    }
+  );
+}
+function Termos() {
+  return /* @__PURE__ */ jsxs(
+    InstitucionalLayout,
+    {
+      titulo: "Termos de Uso",
+      subtitulo: "Última atualização: julho de 2026",
+      children: [
+        /* @__PURE__ */ jsxs("div", { className: "vt-inst-nota", children: [
+          "⚠️ Rascunho inicial. ",
+          /* @__PURE__ */ jsx("strong", { children: "[REVISAR COM ADVOGADO]" }),
+          " antes de considerar juridicamente definitivo. O texto descreve o funcionamento real da plataforma na data acima."
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "1. Aceitação" }),
+        /* @__PURE__ */ jsx("p", { children: 'Ao criar uma conta ou utilizar a Social Veículos (a "Plataforma"), você concorda com estes Termos de Uso. Se não concordar, não utilize a Plataforma.' }),
+        /* @__PURE__ */ jsx("h2", { children: "2. O que a Plataforma é" }),
+        /* @__PURE__ */ jsxs("p", { children: [
+          "A Social Veículos é uma vitrine que conecta pessoas interessadas em comprar veículos às lojas anunciantes. ",
+          /* @__PURE__ */ jsx("strong", { children: "Não somos parte das negociações" }),
+          ": não vendemos veículos, não intermediamos pagamentos e não garantimos o estado, a procedência ou o preço dos veículos anunciados. A responsabilidade pelo anúncio e pela venda é integralmente da loja anunciante."
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "3. Sua conta" }),
+        /* @__PURE__ */ jsxs("ul", { children: [
+          /* @__PURE__ */ jsx("li", { children: "Você é responsável por manter a confidencialidade da sua senha." }),
+          /* @__PURE__ */ jsx("li", { children: "Os dados cadastrados devem ser verdadeiros e mantidos atualizados." }),
+          /* @__PURE__ */ jsx("li", { children: "Contas podem ser suspensas em caso de uso indevido, fraude ou violação destes Termos." })
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "4. Uso aceitável" }),
+        /* @__PURE__ */ jsx("p", { children: "É proibido usar a Plataforma para:" }),
+        /* @__PURE__ */ jsxs("ul", { children: [
+          /* @__PURE__ */ jsx("li", { children: "Publicar conteúdo ilícito, ofensivo, enganoso ou que viole direitos de terceiros." }),
+          /* @__PURE__ */ jsx("li", { children: "Coletar dados de outros usuários ou lojas sem autorização (scraping, automações)." }),
+          /* @__PURE__ */ jsx("li", { children: "Tentar comprometer a segurança ou a disponibilidade da Plataforma." })
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "5. Conteúdo dos anúncios" }),
+        /* @__PURE__ */ jsx("p", { children: "Os anúncios (fotos, descrições, preços, disponibilidade) são de responsabilidade das lojas. A Social Veículos pode remover conteúdo que viole estes Termos ou a lei, a qualquer momento." }),
+        /* @__PURE__ */ jsx("h2", { children: "6. Limitação de responsabilidade" }),
+        /* @__PURE__ */ jsxs("p", { children: [
+          'A Plataforma é fornecida "no estado em que se encontra". Na máxima extensão permitida em lei, a Social Veículos não se responsabiliza por prejuízos decorrentes de negociações entre usuários e lojas. ',
+          /* @__PURE__ */ jsx("strong", { children: "[REVISAR COM ADVOGADO]" })
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "7. Alterações" }),
+        /* @__PURE__ */ jsx("p", { children: "Podemos atualizar estes Termos. Mudanças relevantes serão comunicadas na Plataforma. O uso continuado após a atualização significa concordância com a nova versão." }),
+        /* @__PURE__ */ jsx("h2", { children: "8. Contato" }),
+        /* @__PURE__ */ jsxs("p", { children: [
+          "Dúvidas sobre estes Termos: ",
+          /* @__PURE__ */ jsx("a", { href: `mailto:${CONTATO_EMAIL}`, children: CONTATO_EMAIL }),
+          "."
+        ] })
+      ]
+    }
+  );
+}
+function Privacidade() {
+  return /* @__PURE__ */ jsxs(
+    InstitucionalLayout,
+    {
+      titulo: "Política de Privacidade",
+      subtitulo: "Última atualização: julho de 2026 · Em conformidade com a LGPD (Lei 13.709/2018)",
+      children: [
+        /* @__PURE__ */ jsxs("div", { className: "vt-inst-nota", children: [
+          "⚠️ Rascunho inicial fiel ao que a Plataforma coleta hoje.",
+          " ",
+          /* @__PURE__ */ jsx("strong", { children: "[REVISAR COM ADVOGADO]" }),
+          " antes de considerar juridicamente definitivo."
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "1. Quem trata seus dados" }),
+        /* @__PURE__ */ jsxs("p", { children: [
+          "A Social Veículos é a controladora dos dados coletados na vitrine pública. Para exercer seus direitos ou tirar dúvidas, use o canal em ",
+          /* @__PURE__ */ jsx("a", { href: `mailto:${CONTATO_EMAIL}`, children: CONTATO_EMAIL }),
+          ".",
+          /* @__PURE__ */ jsx("strong", { children: " [REVISAR COM ADVOGADO — razão social, CNPJ e encarregado/DPO]" })
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "2. Quais dados coletamos" }),
+        /* @__PURE__ */ jsxs("ul", { children: [
+          /* @__PURE__ */ jsxs("li", { children: [
+            /* @__PURE__ */ jsx("strong", { children: "Cadastro:" }),
+            " nome, e-mail e telefone informados na criação da conta."
+          ] }),
+          /* @__PURE__ */ jsxs("li", { children: [
+            /* @__PURE__ */ jsx("strong", { children: "Autenticação:" }),
+            " senha (armazenada apenas como hash, nunca em texto)."
+          ] }),
+          /* @__PURE__ */ jsxs("li", { children: [
+            /* @__PURE__ */ jsx("strong", { children: "Uso da vitrine:" }),
+            " veículos favoritados e lojas que você segue."
+          ] }),
+          /* @__PURE__ */ jsxs("li", { children: [
+            /* @__PURE__ */ jsx("strong", { children: "Mensagens:" }),
+            " conteúdo das conversas iniciadas com as lojas pelo chat interno."
+          ] }),
+          /* @__PURE__ */ jsxs("li", { children: [
+            /* @__PURE__ */ jsx("strong", { children: "Dados técnicos:" }),
+            " endereço IP e registros de acesso, para segurança e auditoria."
+          ] })
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "3. Para que usamos" }),
+        /* @__PURE__ */ jsxs("ul", { children: [
+          /* @__PURE__ */ jsx("li", { children: "Permitir seu acesso e o funcionamento das funcionalidades (favoritos, chat, contato com lojas)." }),
+          /* @__PURE__ */ jsx("li", { children: "Conectar você às lojas anunciantes quando você inicia uma conversa ou clica em contato." }),
+          /* @__PURE__ */ jsx("li", { children: "Segurança, prevenção a fraude e cumprimento de obrigações legais." })
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "4. Compartilhamento" }),
+        /* @__PURE__ */ jsx("p", { children: "Quando você entra em contato com uma loja (chat interno ou WhatsApp), os dados necessários ao atendimento (como seu nome e a mensagem) são compartilhados com aquela loja. Também usamos provedores de infraestrutura (hospedagem, armazenamento de imagens e envio de e-mail) que processam dados em nosso nome. Não vendemos seus dados." }),
+        /* @__PURE__ */ jsx("h2", { children: "5. Seus direitos (LGPD)" }),
+        /* @__PURE__ */ jsxs("p", { children: [
+          "Você pode solicitar a qualquer momento: confirmação e acesso aos seus dados, correção, anonimização, portabilidade, eliminação e revogação de consentimento. Basta escrever para",
+          " ",
+          /* @__PURE__ */ jsx("a", { href: `mailto:${CONTATO_EMAIL}`, children: CONTATO_EMAIL }),
+          "."
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "6. Retenção e exclusão" }),
+        /* @__PURE__ */ jsxs("p", { children: [
+          "Mantemos seus dados enquanto sua conta existir e pelo prazo necessário ao cumprimento de obrigações legais. Você pode pedir a exclusão da conta pelo canal acima.",
+          /* @__PURE__ */ jsx("strong", { children: " [REVISAR COM ADVOGADO — prazos legais de retenção]" })
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "7. Segurança" }),
+        /* @__PURE__ */ jsx("p", { children: "Adotamos medidas técnicas para proteger seus dados, incluindo senhas armazenadas com hash e controle de acesso. Nenhum sistema é 100% imune, mas trabalhamos para reduzir riscos." }),
+        /* @__PURE__ */ jsx("h2", { children: "8. Alterações" }),
+        /* @__PURE__ */ jsx("p", { children: "Esta Política pode ser atualizada. Mudanças relevantes serão comunicadas na Plataforma." })
+      ]
+    }
+  );
+}
+function Anuncie() {
+  const msg = "Olá! Tenho uma loja de veículos e quero anunciar meu estoque na Social Veículos.";
+  return /* @__PURE__ */ jsxs(
+    InstitucionalLayout,
+    {
+      titulo: "Anuncie sua loja",
+      subtitulo: "Coloque seu estoque na frente de compradores da sua cidade.",
+      children: [
+        /* @__PURE__ */ jsx("p", { children: "A Social Veículos reúne, num feed social, os veículos das lojas da região. Sua loja ganha vitrine pública com SEO, chat com o comprador e uma ponte direta para o WhatsApp — além do painel de gestão de estoque, clientes e vendas." }),
+        /* @__PURE__ */ jsx("h2", { children: "O que sua loja recebe" }),
+        /* @__PURE__ */ jsxs("ul", { children: [
+          /* @__PURE__ */ jsx("li", { children: "Vitrine pública dos seus veículos, otimizada para busca no Google." }),
+          /* @__PURE__ */ jsx("li", { children: "Chat interno com compradores e integração com WhatsApp." }),
+          /* @__PURE__ */ jsx("li", { children: "Painel de estoque, CRM de clientes e acompanhamento de vendas." })
+        ] }),
+        /* @__PURE__ */ jsx("h2", { children: "Quero anunciar" }),
+        /* @__PURE__ */ jsx("p", { children: "No momento o cadastro de lojas é feito com atendimento direto da nossa equipe. Chame no WhatsApp que a gente coloca sua loja no ar:" }),
+        /* @__PURE__ */ jsx("a", { className: "vt-inst-cta", href: whatsappLink(msg), target: "_blank", rel: "noopener noreferrer", children: "Falar no WhatsApp" }),
+        /* @__PURE__ */ jsxs("p", { style: { marginTop: 16 }, children: [
+          "Prefere e-mail? Escreva para",
+          " ",
+          /* @__PURE__ */ jsx("a", { href: `mailto:${CONTATO_EMAIL}`, children: CONTATO_EMAIL }),
+          "."
+        ] })
+      ]
+    }
+  );
+}
+function GoogleCallback() {
+  const navigate = useNavigate();
+  const loginStore = useAuthStore((state) => state.login);
+  const [erro, setErro] = useState(null);
+  const [mfaChallengeToken, setMfaChallengeToken] = useState(null);
+  const [mfaCodigo, setMfaCodigo] = useState("");
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const erroParam = params.get("erro");
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+    const challenge = params.get("mfa_challenge_token");
+    if (erroParam) {
+      setErro(
+        erroParam === "conta_inativa" ? "Esta conta está inativa." : "Não foi possível concluir o login com o Google."
+      );
+      return;
+    }
+    if (challenge) {
+      setMfaChallengeToken(challenge);
+      return;
+    }
+    if (accessToken && refreshToken) {
+      finalizarComToken(accessToken, refreshToken);
+    } else {
+      setErro("Resposta inválida do login com Google.");
+    }
+  }, []);
+  async function finalizarComToken(accessToken, refreshToken) {
+    try {
+      loginStore(accessToken, refreshToken, { id: "", nome: "", email: "", papel: "cliente", ativo: true });
+      const me = await api.get("/auth/me");
+      loginStore(accessToken, refreshToken, me);
+      navigate("/", { replace: true });
+    } catch {
+      setErro("Não foi possível concluir o login com o Google.");
+    }
+  }
+  async function handleMfaSubmit(e) {
+    e.preventDefault();
+    if (!mfaChallengeToken || mfaCodigo.length !== 6) return;
+    setLoading(true);
+    setErro(null);
+    try {
+      const data = await api.post("/auth/mfa/verify-login", {
+        mfa_challenge_token: mfaChallengeToken,
+        codigo: mfaCodigo
+      });
+      loginStore(data.access_token, data.refresh_token, data.user);
+      navigate("/", { replace: true });
+    } catch (err) {
+      setErro(err.message || "Código inválido.");
+    } finally {
+      setLoading(false);
+    }
+  }
+  if (erro) {
+    return /* @__PURE__ */ jsxs("div", { className: "vt-callback-page", children: [
+      /* @__PURE__ */ jsx("p", { children: erro }),
+      /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-primary", onClick: () => navigate("/", { replace: true }), children: "Voltar ao início" })
+    ] });
+  }
+  if (mfaChallengeToken) {
+    return /* @__PURE__ */ jsx("div", { className: "vt-callback-page", children: /* @__PURE__ */ jsxs("form", { onSubmit: handleMfaSubmit, className: "vt-modal-form", children: [
+      /* @__PURE__ */ jsx("label", { children: "Código do autenticador" }),
+      /* @__PURE__ */ jsx(
+        "input",
+        {
+          type: "text",
+          inputMode: "numeric",
+          placeholder: "000000",
+          maxLength: 6,
+          value: mfaCodigo,
+          onChange: (e) => setMfaCodigo(e.target.value.replace(/\D/g, "")),
+          required: true,
+          autoFocus: true,
+          disabled: loading
+        }
+      ),
+      /* @__PURE__ */ jsx("button", { type: "submit", className: "vt-btn vt-btn-primary", disabled: loading || mfaCodigo.length !== 6, children: loading ? "Confirmando..." : "Confirmar código" })
+    ] }) });
+  }
+  return /* @__PURE__ */ jsx("div", { className: "vt-callback-page", children: /* @__PURE__ */ jsx("p", { children: "Concluindo login com Google..." }) });
+}
 function UIProvider() {
   const { toasts, removeToast, confirmState, _resolveConfirm } = useUIStore();
   return /* @__PURE__ */ jsxs(Fragment, { children: [
@@ -1972,7 +2571,12 @@ function App() {
       /* @__PURE__ */ jsx(Route, { path: "/mensagens", element: /* @__PURE__ */ jsx(Mensagens, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "/carro/:id", element: /* @__PURE__ */ jsx(CarroDetalhe, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "/loja/:slug", element: /* @__PURE__ */ jsx(Loja, {}) }),
-      /* @__PURE__ */ jsx(Route, { path: "/minha-conta/veiculos", element: /* @__PURE__ */ jsx(MeusVeiculos, {}) })
+      /* @__PURE__ */ jsx(Route, { path: "/minha-conta/veiculos", element: /* @__PURE__ */ jsx(MeusVeiculos, {}) }),
+      /* @__PURE__ */ jsx(Route, { path: "/sobre", element: /* @__PURE__ */ jsx(Sobre, {}) }),
+      /* @__PURE__ */ jsx(Route, { path: "/termos", element: /* @__PURE__ */ jsx(Termos, {}) }),
+      /* @__PURE__ */ jsx(Route, { path: "/privacidade", element: /* @__PURE__ */ jsx(Privacidade, {}) }),
+      /* @__PURE__ */ jsx(Route, { path: "/anuncie", element: /* @__PURE__ */ jsx(Anuncie, {}) }),
+      /* @__PURE__ */ jsx(Route, { path: "/auth/google/callback", element: /* @__PURE__ */ jsx(GoogleCallback, {}) })
     ] })
   ] });
 }

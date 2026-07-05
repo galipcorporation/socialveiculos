@@ -18,7 +18,6 @@ import { SimuladorPage } from './pages/ferramentas/Simulador'
 import { ContratosPage } from './pages/ferramentas/Contratos'
 import { MarketingPage } from './pages/ferramentas/Marketing'
 import { FipePage } from './pages/ferramentas/Fipe'
-import { FiscalPage } from './pages/ferramentas/Fiscal'
 import { NotasFiscaisPage } from './pages/ferramentas/NotasFiscais'
 import { MeuSitePage } from './pages/ferramentas/MeuSite'
 import { AdminPage } from './pages/Admin'
@@ -125,7 +124,7 @@ export default function App() {
           <Route path="ferramentas/contratos" element={<ModuleGuard modulo="contratos"><ContratosPage /></ModuleGuard>} />
           <Route path="ferramentas/marketing" element={<ModuleGuard modulo="marketing"><MarketingPage /></ModuleGuard>} />
           <Route path="ferramentas/fipe" element={<FipePage />} />
-          <Route path="ferramentas/fiscal" element={<ModuleGuard modulo="fiscal"><FiscalPage /></ModuleGuard>} />
+          <Route path="ferramentas/fiscal" element={<Navigate to="/configuracoes" state={{ aba: 'fiscal' }} replace />} />
           <Route path="ferramentas/notas-fiscais" element={<ModuleGuard modulo="fiscal"><NotasFiscaisPage /></ModuleGuard>} />
           <Route path="ferramentas/meu-site" element={<ModuleGuard modulo="site"><MeuSitePage /></ModuleGuard>} />
           <Route path="assistente" element={<ModuleGuard modulo="assistente"><AssistenteIA /></ModuleGuard>} />

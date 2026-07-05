@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw } from 'lucide-react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit } from 'lucide-react'
 import { api } from './lib/api'
 import { capitalizarNome, mascararCNPJ, validarCNPJ } from './lib/mascaras'
 
@@ -190,6 +190,199 @@ function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   )
 }
 
+// ── Modal Editar Loja & Módulos ──────────────────────────────────
+
+interface ModalEditarLojaProps {
+  lojaId: string
+  onClose: () => void
+  onSaved: () => void
+}
+
+function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
+  const [form, setForm] = useState({
+    nome: '',
+    cnpj: '',
+    cidade: '',
+    estado: '',
+    telefone: '',
+    whatsapp: '',
+    modulos_ativos: [] as string[],
+  })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.get<any>(`/admin/lojas/${lojaId}`)
+      .then((data) => {
+        setForm({
+          nome: data.nome || '',
+          cnpj: data.cnpj || '',
+          cidade: data.cidade || '',
+          estado: data.estado || '',
+          telefone: data.telefone || '',
+          whatsapp: data.whatsapp || '',
+          modulos_ativos: data.modulos_ativos || [],
+        })
+      })
+      .catch((err) => setErro(err.message || 'Erro ao carregar detalhes da loja.'))
+      .finally(() => setLoading(false))
+  }, [lojaId])
+
+  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value
+    if (field === 'nome' || field === 'cidade') {
+      val = capitalizarNome(val)
+    } else if (field === 'cnpj') {
+      val = mascararCNPJ(val)
+    }
+    setForm((f) => ({ ...f, [field]: val }))
+  }
+
+  const toggleModulo = (modulo: string) => {
+    setForm((f) => {
+      const ativos = f.modulos_ativos.includes(modulo)
+        ? f.modulos_ativos.filter((m) => m !== modulo)
+        : [...f.modulos_ativos, modulo]
+      return { ...f, modulos_ativos: ativos }
+    })
+  }
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setErro(null)
+
+    try {
+      await api.patch(`/admin/lojas/${lojaId}`, form)
+      onSaved()
+      onClose()
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao atualizar loja.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const ALL_MODULES = [
+    { key: 'contratos', label: 'Contratos', desc: 'Geração de termos e contratos com OCR.' },
+    { key: 'simulador', label: 'Simulador', desc: 'Simulação multi-banco e impressão de PDF.' },
+    { key: 'marketing', label: 'Marketing', desc: 'Geração de posts e criativos via IA.' },
+    { key: 'assistente_ia', label: 'Assistente de IA', desc: 'Copiloto de vendas integrado ao WhatsApp.' },
+    { key: 'fiscal', label: 'Fiscal / NF-e', desc: 'Emissão de nota fiscal integrada a contratos.' },
+    { key: 'site', label: 'Meu Site / Vitrine', desc: 'Site exclusivo integrado com estoque.' },
+  ]
+
+  if (loading) {
+    return (
+      <div className="modal-overlay">
+        <div className="modal-container glass-card" style={{ maxWidth: 540, padding: 32, textAlign: 'center' }}>
+          <span className="spinner" />
+          <p style={{ marginTop: 12, color: 'var(--sv-text-dim)' }}>Carregando dados da loja...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+        <div className="modal-header">
+          <h3 className="modal-title">Editar Loja & Módulos</h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '75vh', overflowY: 'auto' }}>
+          {erro && (
+            <div className="login-error-alert" style={{ margin: 0 }}>
+              <AlertTriangle size={16} />
+              <span>{erro}</span>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px', gap: '12px' }}>
+            <div className="form-group">
+              <label>Nome da Loja</label>
+              <input value={form.nome} onChange={set('nome')} required placeholder="Auto Premium SP" />
+            </div>
+            <div className="form-group">
+              <label>CNPJ</label>
+              <input value={form.cnpj} onChange={set('cnpj')} placeholder="00.000.000/0000-00" />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: '12px' }}>
+            <div className="form-group">
+              <label>Cidade</label>
+              <input value={form.cidade} onChange={set('cidade')} placeholder="São Paulo" />
+            </div>
+            <div className="form-group">
+              <label>UF</label>
+              <input value={form.estado} onChange={set('estado')} maxLength={2} placeholder="SP" style={{ textTransform: 'uppercase' }} />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="form-group">
+              <label>Telefone</label>
+              <input value={form.telefone} onChange={set('telefone')} placeholder="(11) 4002-8922" />
+            </div>
+            <div className="form-group">
+              <label>WhatsApp</label>
+              <input value={form.whatsapp} onChange={set('whatsapp')} placeholder="5511999999999" />
+            </div>
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '8px 0' }} />
+          <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 0 }}>Módulos Habilitados</p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {ALL_MODULES.map((m) => {
+              const ativo = form.modulos_ativos.includes(m.key)
+              return (
+                <div
+                  key={m.key}
+                  onClick={() => toggleModulo(m.key)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '10px 14px',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid var(--sv-border)',
+                    borderRadius: 'var(--sv-radius)',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    transition: 'all 0.2s',
+                  }}
+                  className="modulo-item-row"
+                >
+                  <input
+                    type="checkbox"
+                    checked={ativo}
+                    onChange={() => {}} // custom handled by container click
+                    style={{ pointerEvents: 'none' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--sv-text)', margin: 0 }}>{m.label}</p>
+                    <p style={{ fontSize: '12px', color: 'var(--sv-text-muted)', margin: 0 }}>{m.desc}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="modal-footer" style={{ paddingTop: '16px' }}>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? <span className="spinner" /> : 'Salvar Alterações'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Aba Overview ─────────────────────────────────────────────────
 
 function AbaOverview() {
@@ -221,6 +414,7 @@ function AbaLojas() {
   const [loading, setLoading] = useState(true)
   const [busca, setBusca] = useState('')
   const [modalAberto, setModalAberto] = useState(false)
+  const [lojaEditandoId, setLojaEditandoId] = useState<string | null>(null)
   const [toggleLoading, setToggleLoading] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -342,6 +536,14 @@ function AbaLojas() {
                       <button
                         className="btn btn-secondary"
                         style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => setLojaEditandoId(loja.id)}
+                        title="Editar loja e liberar módulos"
+                      >
+                        <Edit size={14} /> Editar
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
                         onClick={() => impersonar(loja)}
                         title="Observar como gestor desta loja"
                       >
@@ -357,6 +559,7 @@ function AbaLojas() {
       )}
 
       {modalAberto && <ModalNovaLoja onClose={() => setModalAberto(false)} onSaved={carregar} />}
+      {lojaEditandoId && <ModalEditarLoja lojaId={lojaEditandoId} onClose={() => setLojaEditandoId(null)} onSaved={carregar} />}
     </div>
   )
 }

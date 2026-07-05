@@ -77,6 +77,17 @@ export function FipePage() {
     }
   }
 
+  const limpar = () => {
+    setTipo('carro')
+    setMarcaCod('')
+    setModeloCod('')
+    setAnoCod('')
+    setModelos([])
+    setAnos([])
+    setResult(null)
+    setErro(null)
+  }
+
   return (
     <div className="page-content">
       <div className="page-header">
@@ -205,13 +216,21 @@ export function FipePage() {
           </div>
         )}
 
-        <div className="fipe-btn-container">
+        <div className="fipe-btn-container" style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
           <button
             className="btn btn-primary"
             onClick={consultar}
             disabled={loadingConsulta || !anoCod}
           >
             {loadingConsulta ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Consultar FIPE'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={limpar}
+            disabled={loadingConsulta}
+            style={{ background: 'rgba(255, 255, 255, 0.08)', color: 'var(--sv-text)' }}
+          >
+            Limpar
           </button>
         </div>
 

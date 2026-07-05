@@ -4,7 +4,7 @@ import { api } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
 import { mascararCNPJ, mascararTelefone, mascararCEP, capitalizarNome } from '../lib/mascaras'
 import { buscarCEP } from '../lib/cep'
-import { Link2, Unlink } from 'lucide-react'
+import { Link2, Unlink, Gem, FileText, ShieldCheck, Upload, AlertTriangle } from 'lucide-react'
 
 interface Loja {
   id: string
@@ -43,16 +43,16 @@ const SENHA_MASCARADA = '••••••••'
 
 type Editaveis = Pick<Loja, 'nome' | 'cnpj' | 'telefone' | 'whatsapp' | 'email' | 'endereco' | 'cidade' | 'estado' | 'cep'>
 
-const CAMPOS: { key: keyof Editaveis; label: string; placeholder?: string }[] = [
-  { key: 'nome', label: 'Nome da loja' },
-  { key: 'cnpj', label: 'CNPJ' },
-  { key: 'telefone', label: 'Telefone' },
-  { key: 'whatsapp', label: 'WhatsApp' },
-  { key: 'email', label: 'E-mail' },
-  { key: 'endereco', label: 'Endereço' },
-  { key: 'cidade', label: 'Cidade' },
-  { key: 'estado', label: 'UF', placeholder: 'SP' },
-  { key: 'cep', label: 'CEP' },
+const CAMPOS: { key: keyof Editaveis; label: string; placeholder?: string; gridColumn?: string }[] = [
+  { key: 'nome', label: 'Nome da loja', gridColumn: 'span 8' },
+  { key: 'cnpj', label: 'CNPJ', gridColumn: 'span 4' },
+  { key: 'telefone', label: 'Telefone', gridColumn: 'span 6' },
+  { key: 'whatsapp', label: 'WhatsApp', gridColumn: 'span 6' },
+  { key: 'email', label: 'E-mail', gridColumn: 'span 6' },
+  { key: 'cep', label: 'CEP', gridColumn: 'span 6' },
+  { key: 'endereco', label: 'Endereço', gridColumn: 'span 12' },
+  { key: 'cidade', label: 'Cidade', gridColumn: 'span 9' },
+  { key: 'estado', label: 'UF', placeholder: 'SP', gridColumn: 'span 3' },
 ]
 
 export interface RedeSocialStatus {
@@ -66,8 +66,8 @@ export interface RedeSocialStatus {
 export function Configuracoes() {
   const location = useLocation()
   const abaInicial = (location.state as { aba?: string } | null)?.aba
-  const [abaAtual, setAbaAtual] = useState<'perfil' | 'credenciais' | 'ia' | 'redes' | 'detran'>(
-    abaInicial === 'redes' ? 'redes' : 'perfil'
+  const [abaAtual, setAbaAtual] = useState<'perfil' | 'credenciais' | 'ia' | 'redes' | 'detran' | 'fiscal'>(
+    (['redes', 'fiscal'] as const).includes(abaInicial as any) ? (abaInicial as 'redes' | 'fiscal') : 'perfil'
   )
 
   const [loja, setLoja] = useState<Loja | null>(null)
@@ -134,6 +134,112 @@ export function Configuracoes() {
   const [detranMostrarKey, setDetranMostrarKey] = useState(false)
   const [salvandoDetran, setSalvandoDetran] = useState(false)
   const [removendoDetran, setRemovendoDetran] = useState(false)
+
+  // Fiscal / NF-e
+  interface ConfiguracaoFiscalResponse {
+    configurada: boolean
+    inscricao_estadual?: string | null
+    regime_tributario?: string | null
+    cnae?: string | null
+    ambiente?: string | null
+    certificado_configurado?: boolean
+    certificado_validade?: string | null
+    ativo?: boolean
+  }
+  const REGIMES_FISCAIS = [
+    { value: 'simples', label: 'Simples Nacional' },
+    { value: 'presumido', label: 'Lucro Presumido' },
+    { value: 'real', label: 'Lucro Real' },
+  ]
+  const [fiscalLiberado, setFiscalLiberado] = useState<boolean | null>(null)
+  const [fiscalConfig, setFiscalConfig] = useState<ConfiguracaoFiscalResponse>({ configurada: false })
+  const [inscricaoEstadual, setInscricaoEstadual] = useState('')
+  const [regimeTributario, setRegimeTributario] = useState('simples')
+  const [cnae, setCnae] = useState('')
+  const [ambienteFiscal, setAmbienteFiscal] = useState('homologacao')
+  const [salvandoFiscal, setSalvandoFiscal] = useState(false)
+  const [certificado, setCertificado] = useState<File | null>(null)
+  const [senhaCertificado, setSenhaCertificado] = useState('')
+  const [enviandoCertificado, setEnviandoCertificado] = useState(false)
+
+  useEffect(() => {
+    if (abaAtual !== 'fiscal' || fiscalLiberado !== null) return
+    const verificar = async () => {
+      try {
+        const res = await api.get<any[]>('/assinaturas/modulos')
+        const mod = res.find((m) => m.modulo === 'fiscal')
+        setFiscalLiberado(mod ? mod.liberado : false)
+      } catch {
+        setFiscalLiberado(false)
+      }
+    }
+    verificar()
+  }, [abaAtual, fiscalLiberado])
+
+  useEffect(() => {
+    if (!fiscalLiberado) return
+    const carregar = async () => {
+      try {
+        const res = await api.get<ConfiguracaoFiscalResponse>('/fiscal/config')
+        setFiscalConfig(res)
+        setInscricaoEstadual(res.inscricao_estadual || '')
+        setRegimeTributario(res.regime_tributario || 'simples')
+        setCnae(res.cnae || '')
+        setAmbienteFiscal(res.ambiente || 'homologacao')
+      } catch (err) {
+        console.warn('Erro ao carregar configuração fiscal:', err)
+      }
+    }
+    carregar()
+  }, [fiscalLiberado])
+
+  const handleSalvarFiscal = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSalvandoFiscal(true)
+    try {
+      const res = await api.put<ConfiguracaoFiscalResponse>('/fiscal/config', {
+        inscricao_estadual: inscricaoEstadual.trim() || null,
+        regime_tributario: regimeTributario,
+        cnae: cnae.trim() || null,
+        ambiente: ambienteFiscal,
+        natureza_operacao: 'Venda de veículo usado',
+        cfop_venda: '5102',
+        ncm_padrao: '87032310',
+        origem_mercadoria: '0',
+      })
+      setFiscalConfig(res)
+      useUIStore.getState().showToast('Dados fiscais salvos.', 'success')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao salvar dados fiscais.'
+      setError(msg)
+    } finally {
+      setSalvandoFiscal(false)
+    }
+  }
+
+  const handleEnviarCertificado = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!certificado || !senhaCertificado.trim()) {
+      useUIStore.getState().showToast('Selecione o arquivo .pfx e informe a senha.', 'error')
+      return
+    }
+    setEnviandoCertificado(true)
+    try {
+      const form = new FormData()
+      form.append('arquivo', certificado)
+      form.append('senha', senhaCertificado)
+      const res = await api.post<ConfiguracaoFiscalResponse>('/fiscal/certificado', form)
+      setFiscalConfig(res)
+      setCertificado(null)
+      setSenhaCertificado('')
+      useUIStore.getState().showToast('Certificado enviado e validado.', 'success')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao enviar certificado.'
+      setError(msg)
+    } finally {
+      setEnviandoCertificado(false)
+    }
+  }
 
   useEffect(() => {
     const carregar = async () => {
@@ -406,7 +512,17 @@ export function Configuracoes() {
         <p>Dados de perfil e credenciais da sua loja.</p>
       </div>
 
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', borderBottom: '1px solid var(--sv-border)', paddingBottom: '12px' }}>
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        marginBottom: '24px',
+        borderBottom: '1px solid var(--sv-border)',
+        paddingBottom: '12px',
+        overflowX: 'auto',
+        width: '100%',
+        maxWidth: '100%',
+        WebkitOverflowScrolling: 'touch',
+      }}>
         <button 
           onClick={() => setAbaAtual('perfil')}
           style={{
@@ -472,6 +588,19 @@ export function Configuracoes() {
           }}>
           Consulta DETRAN
         </button>
+        <button
+          onClick={() => setAbaAtual('fiscal')}
+          style={{
+            background: abaAtual === 'fiscal' ? 'var(--sv-primary)' : 'transparent',
+            color: abaAtual === 'fiscal' ? '#fff' : 'var(--sv-text-dim)',
+            border: 'none',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 600
+          }}>
+          Fiscal / NF-e
+        </button>
       </div>
 
       {error && (
@@ -499,9 +628,9 @@ export function Configuracoes() {
                   <span><strong>Verificada:</strong> {loja.verificada ? 'Sim' : 'Não'}</span>
                 </div>
               )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                {CAMPOS.map(({ key, label, placeholder }) => (
-                  <div key={key} className="form-group">
+              <div className="form-grid-12">
+                {CAMPOS.map(({ key, label, placeholder, gridColumn }) => (
+                  <div key={key} className="form-group" style={{ gridColumn: gridColumn || 'span 6' }}>
                     <label>{label}</label>
                     <input
                       value={(form[key] as string) ?? ''}
@@ -790,10 +919,13 @@ export function Configuracoes() {
               </p>
 
               <div style={{ padding: '12px 16px', borderRadius: 8, border: '1px solid var(--sv-border)', background: 'var(--sv-overlay-soft)', fontSize: 13, color: 'var(--sv-text-muted)' }}>
-                <strong style={{ color: 'var(--sv-text-dim)' }}>Contrato esperado do fornecedor</strong>
-                <div style={{ marginTop: 8, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.7 }}>
-                  POST {'{sua URL}'}/debitos&nbsp;&nbsp;Bearer {'{sua chave}'} → {'{ ipva, licenciamento, multas, total }'}<br />
-                  POST {'{sua URL}'}/situacao&nbsp;&nbsp;Bearer {'{sua chave}'} → {'{ atpve_emitida, transferencia_concluida, proprietario_atual }'}
+                <strong style={{ color: 'var(--sv-text-dim)' }}>Integração com API Veicular</strong>
+                <div style={{ marginTop: 8, lineHeight: 1.6 }}>
+                  Insira abaixo os dados de acesso da API do seu fornecedor de consultas veiculares. O sistema consultará automaticamente os seguintes dados:
+                  <ul style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
+                    <li><strong>Débitos veiculares</strong> (IPVA, licenciamento e multas) através da rota <code style={{ fontFamily: 'monospace', fontSize: 12 }}>/debitos</code>.</li>
+                    <li><strong>Situação da transferência</strong> (status do ATPV-e e proprietário atual) através da rota <code style={{ fontFamily: 'monospace', fontSize: 12 }}>/situacao</code>.</li>
+                  </ul>
                 </div>
               </div>
 
@@ -995,6 +1127,123 @@ export function Configuracoes() {
                 })()}
               </div>
             </div>
+          )}
+
+          {abaAtual === 'fiscal' && (
+            fiscalLiberado === false ? (
+              <div className="glass-card" style={{ padding: '40px', textAlign: 'center', maxWidth: '600px', margin: '0 auto' }}>
+                <Gem style={{ width: 48, height: 48, color: 'var(--sv-primary)', marginBottom: 16 }} />
+                <h3>Recurso Premium</h3>
+                <p style={{ color: 'var(--sv-text-dim)', marginTop: 8, marginBottom: 24 }}>
+                  O módulo Fiscal não está ativo no seu plano. Emita NF-e de venda sem precisar de um sistema fiscal à parte.
+                </p>
+              </div>
+            ) : fiscalLiberado === null ? (
+              <div className="empty-state">Carregando…</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                {(() => {
+                  const diasParaVencer = fiscalConfig.certificado_validade
+                    ? Math.ceil((new Date(fiscalConfig.certificado_validade).getTime() - Date.now()) / 86400000)
+                    : null
+                  return (
+                    <>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 8,
+                        background: fiscalConfig.ativo ? 'rgba(16,185,129,0.08)' : 'rgba(245,158,11,0.08)',
+                        border: `1px solid ${fiscalConfig.ativo ? 'var(--sv-success)' : 'var(--sv-warning, #f59e0b)'}`,
+                        fontSize: 13,
+                      }}>
+                        {fiscalConfig.ativo
+                          ? <ShieldCheck style={{ width: 16, height: 16, color: 'var(--sv-success)', flexShrink: 0 }} />
+                          : <AlertTriangle style={{ width: 16, height: 16, color: 'var(--sv-warning, #f59e0b)', flexShrink: 0 }} />}
+                        <span style={{ color: fiscalConfig.ativo ? 'var(--sv-success)' : 'var(--sv-warning, #f59e0b)' }}>
+                          {fiscalConfig.ativo
+                            ? `Emissão de NF-e habilitada (ambiente: ${fiscalConfig.ambiente}).`
+                            : 'Emissão de NF-e bloqueada — complete os dados fiscais e envie o certificado A1.'}
+                        </span>
+                      </div>
+
+                      {diasParaVencer !== null && diasParaVencer < 30 && (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 8,
+                          background: 'rgba(239,68,68,0.08)', border: '1px solid var(--sv-error)', fontSize: 13,
+                        }}>
+                          <AlertTriangle style={{ width: 16, height: 16, color: 'var(--sv-error)', flexShrink: 0 }} />
+                          <span style={{ color: 'var(--sv-error)' }}>
+                            {diasParaVencer > 0
+                              ? `Certificado vence em ${diasParaVencer} dia(s) — renove para não interromper as emissões.`
+                              : 'Certificado vencido — envie um novo para voltar a emitir NF-e.'}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
+
+                <div className="glass-card">
+                  <h4 style={{ margin: '0 0 16px', fontSize: 13, textTransform: 'uppercase', color: 'var(--sv-text-dim)' }}>
+                    Dados fiscais
+                  </h4>
+                  <form onSubmit={handleSalvarFiscal} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label>Inscrição Estadual</label>
+                        <input type="text" value={inscricaoEstadual} onChange={e => setInscricaoEstadual(e.target.value)} placeholder="000.000.000.000" style={{ width: '100%' }} />
+                      </div>
+                      <div className="form-group">
+                        <label>Regime Tributário</label>
+                        <select value={regimeTributario} onChange={e => setRegimeTributario(e.target.value)} style={{ width: '100%' }}>
+                          {REGIMES_FISCAIS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>CNAE</label>
+                        <input type="text" value={cnae} onChange={e => setCnae(e.target.value)} placeholder="4511-1/02" style={{ width: '100%' }} />
+                      </div>
+                      <div className="form-group">
+                        <label>Ambiente</label>
+                        <select value={ambienteFiscal} onChange={e => setAmbienteFiscal(e.target.value)} style={{ width: '100%' }}>
+                          <option value="homologacao">Homologação (testes)</option>
+                          <option value="producao">Produção</option>
+                        </select>
+                      </div>
+                    </div>
+                    <button type="submit" className="btn btn-primary" disabled={salvandoFiscal} style={{ alignSelf: 'flex-start' }}>
+                      {salvandoFiscal ? 'Salvando…' : 'Salvar dados fiscais'}
+                    </button>
+                  </form>
+                </div>
+
+                <div className="glass-card">
+                  <h4 style={{ margin: '0 0 16px', fontSize: 13, textTransform: 'uppercase', color: 'var(--sv-text-dim)' }}>
+                    Certificado Digital A1
+                  </h4>
+                  {fiscalConfig.certificado_configurado && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderRadius: 8, border: '1px solid var(--sv-border)', background: 'var(--sv-overlay-soft)', marginBottom: 16 }}>
+                      <FileText style={{ width: 18, height: 18, color: 'var(--sv-success)' }} />
+                      <span>Certificado configurado{fiscalConfig.certificado_validade ? ` — validade ${new Date(fiscalConfig.certificado_validade).toLocaleDateString('pt-BR')}` : ''}</span>
+                    </div>
+                  )}
+                  <form onSubmit={handleEnviarCertificado} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label>Arquivo do certificado (.pfx)</label>
+                        <input type="file" accept=".pfx" onChange={e => setCertificado(e.target.files?.[0] || null)} style={{ width: '100%' }} />
+                      </div>
+                      <div className="form-group">
+                        <label>Senha do certificado</label>
+                        <input type="password" value={senhaCertificado} onChange={e => setSenhaCertificado(e.target.value)} placeholder="Senha do arquivo .pfx" style={{ width: '100%' }} />
+                      </div>
+                    </div>
+                    <button type="submit" className="btn btn-primary" disabled={enviandoCertificado} style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Upload style={{ width: 16, height: 16 }} />
+                      {enviandoCertificado ? 'Enviando…' : (fiscalConfig.certificado_configurado ? 'Atualizar certificado' : 'Enviar certificado')}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )
           )}
         </>
       )}

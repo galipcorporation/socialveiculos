@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { useUIStore } from '../stores/uiStore'
 import { api } from '../lib/api'
 import { X, Mail, KeyRound, User, Phone, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { mascararTelefone, capitalizarNome } from '../lib/mascaras'
@@ -20,6 +19,8 @@ export function LoginModal() {
   const [erro, setErro] = useState<string | null>(null)
   const [showPasswordLogin, setShowPasswordLogin] = useState(false)
   const [showPasswordRegister, setShowPasswordRegister] = useState(false)
+  const [mfaChallengeToken, setMfaChallengeToken] = useState<string | null>(null)
+  const [mfaCodigo, setMfaCodigo] = useState('')
 
   if (!isOpen) return null
 
@@ -31,10 +32,34 @@ export function LoginModal() {
 
     try {
       const data: any = await api.post('/auth/login', { email, senha })
+      if (data.mfa_required) {
+        setMfaChallengeToken(data.mfa_challenge_token)
+        return
+      }
       loginStore(data.access_token, data.refresh_token, data.user)
       close()
     } catch (err: any) {
       setErro(err.message || 'E-mail ou senha incorretos.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!mfaChallengeToken || mfaCodigo.length !== 6) return
+    setLoading(true)
+    setErro(null)
+
+    try {
+      const data: any = await api.post('/auth/mfa/verify-login', {
+        mfa_challenge_token: mfaChallengeToken,
+        codigo: mfaCodigo,
+      })
+      loginStore(data.access_token, data.refresh_token, data.user)
+      close()
+    } catch (err: any) {
+      setErro(err.message || 'Código inválido.')
     } finally {
       setLoading(false)
     }
@@ -110,8 +135,39 @@ export function LoginModal() {
           </div>
         )}
 
-        {/* Formulário de Login */}
-        {tab === 'login' ? (
+        {/* Segundo fator (MFA) — aparece após o login por senha indicar que é exigido */}
+        {mfaChallengeToken ? (
+          <form onSubmit={handleMfaSubmit} className="vt-modal-form">
+            <div className="vt-form-group">
+              <label>Código do autenticador</label>
+              <div className="vt-input-wrapper">
+                <KeyRound className="vt-input-icon" size={16} />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="000000"
+                  maxLength={6}
+                  value={mfaCodigo}
+                  onChange={(e) => setMfaCodigo(e.target.value.replace(/\D/g, ''))}
+                  required
+                  autoFocus
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <button type="submit" className="vt-btn vt-btn-primary vt-btn-block" disabled={loading || mfaCodigo.length !== 6}>
+              {loading ? <span className="spinner"></span> : 'Confirmar código'}
+            </button>
+            <button
+              type="button"
+              className="vt-btn vt-btn-social"
+              onClick={() => { setMfaChallengeToken(null); setMfaCodigo(''); setErro(null) }}
+              disabled={loading}
+            >
+              Voltar
+            </button>
+          </form>
+        ) : tab === 'login' ? (
           <form onSubmit={handleLoginSubmit} className="vt-modal-form">
             <div className="vt-form-group">
               <label>E-mail</label>
@@ -244,21 +300,25 @@ export function LoginModal() {
           </form>
         )}
 
-        {/* Divisor */}
-        <div className="vt-modal-divider">
-          <span>ou continue com</span>
-        </div>
+        {!mfaChallengeToken && (
+          <>
+            {/* Divisor */}
+            <div className="vt-modal-divider">
+              <span>ou continue com</span>
+            </div>
 
-        {/* Login Social Mock */}
-        <button
-          type="button"
-          className="vt-btn vt-btn-social"
-          onClick={() => useUIStore.getState().showToast('O login social com o Google estará disponível em breve.', 'info')}
-          disabled={loading}
-        >
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style={{ marginRight: 8 }}><path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.113-5.111 4.113-3.419 0-6.202-2.783-6.202-6.202 0-3.419 2.783-6.202 6.202-6.202 1.481 0 2.836.526 3.902 1.488l3.125-3.125C18.992 2.378 15.82 1 12.016 1c-6.075 0-11 4.925-11 11s4.925 11 11 11c5.787 0 10.373-4.084 10.373-10.428 0-.687-.06-1.3-.173-1.857H12.24z"/></svg>
-          <span>Google (Em breve)</span>
-        </button>
+            {/* Login Social — Google (OAuth 2.0 real, redireciona ao backend) */}
+            <button
+              type="button"
+              className="vt-btn vt-btn-social"
+              onClick={() => { window.location.href = '/v1/auth/google/login' }}
+              disabled={loading}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style={{ marginRight: 8 }}><path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.113-5.111 4.113-3.419 0-6.202-2.783-6.202-6.202 0-3.419 2.783-6.202 6.202-6.202 1.481 0 2.836.526 3.902 1.488l3.125-3.125C18.992 2.378 15.82 1 12.016 1c-6.075 0-11 4.925-11 11s4.925 11 11 11c5.787 0 10.373-4.084 10.373-10.428 0-.687-.06-1.3-.173-1.857H12.24z"/></svg>
+              <span>Continuar com Google</span>
+            </button>
+          </>
+        )}
       </div>
     </div>
   )

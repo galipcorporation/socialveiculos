@@ -64,7 +64,7 @@ const TOPICOS: Topico[] = [
       { texto: 'Acesse "Estoque" no menu lateral. No topo da página, você verá cards com informações resumidas: total de veículos, disponíveis, reservados e vendidos.' },
       { texto: 'Clique no botão "Novo Veículo" (azul) para cadastrar um veículo. Preencha a marca e modelo usando o autocomplete — o sistema sugere automaticamente a partir do catálogo FIPE.' },
       { texto: 'No cadastro, informe: tipo (Carro, Moto, Caminhão, etc.), ano, placa, cor, combustível, câmbio, quilometragem, preço de compra e preço de venda.' },
-      { texto: 'Na aba de fotos/vídeos, arraste e solte as imagens ou clique para selecionar. Você pode reordenar as fotos arrastando-as e definir a foto de capa.', dica: 'A primeira foto será exibida como capa do veículo na vitrine pública.' },
+      { texto: 'Na aba de fotos/vídeos, arraste e solte as imagens ou clique para selecionar. Você pode reordenar as fotos arrastando-as e definir a foto de capa.', dica: 'A primeira foto/vídeo é a capa (thumbnail) do veículo. Na vitrine pública, todas as fotos e vídeos aparecem em carrossel — o cliente pode navegar entre eles.' },
       { texto: 'Use o toggle "Publicar na Vitrine" para controlar se o veículo aparece na vitrine pública (B2C) para clientes finais.' },
       { texto: 'Para filtrar veículos, use a barra de busca (pesquisa por marca, modelo ou placa) e os dropdowns de status e ordenação.' },
       { texto: 'Clique em qualquer veículo da lista para abrir o modal de edição, onde você pode atualizar informações, gerenciar mídias e ver o histórico de custos de preparação.' },
@@ -160,6 +160,44 @@ const TOPICOS: Topico[] = [
       { texto: 'Selecione o veículo que deseja divulgar. As fotos e as informações (marca, modelo, ano, preço) são carregadas automaticamente a partir do cadastro do Estoque.' },
       { texto: 'Escolha o template de arte desejado (formato quadrado para Instagram, stories, etc.). O sistema aplica as informações do veículo e o logotipo da loja no criativo.' },
       { texto: 'Faça o download da arte gerada e publique diretamente nas redes sociais da loja, ou envie pelo WhatsApp para clientes interessados.', dica: 'Para melhores resultados, cadastre os veículos com fotos de alta qualidade. A primeira foto do veículo será usada como imagem principal no criativo.' },
+    ],
+  },
+  {
+    id: 'assistente',
+    titulo: 'Assistente de IA',
+    modulo: 'assistente' as const,
+    icone: 'M12 2a10 10 0 100 20 10 10 0 000-20zm0 5v5l4 2',
+    descricao: 'Converse por texto ou voz com o assistente virtual para tirar dúvidas e agilizar o atendimento de leads.',
+    passos: [
+      { texto: 'Acesse "Assistente IA" no menu lateral. Digite sua pergunta ou clique no ícone de microfone para falar — o áudio é transcrito automaticamente.' },
+      { texto: 'O assistente responde com base nos dados da sua loja (estoque, leads, financeiro) e pode ajudar a redigir mensagens para clientes.' },
+      { texto: 'O histórico de conversas fica salvo e pode ser retomado a qualquer momento.', dica: 'Este módulo é premium e depende do plano contratado pela loja.' },
+    ],
+  },
+  {
+    id: 'fiscal',
+    titulo: 'Fiscal / NF-e',
+    modulo: 'fiscal' as const,
+    icone: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z',
+    descricao: 'Emita notas fiscais eletrônicas (NF-e) das vendas de veículos direto pelo sistema.',
+    passos: [
+      { texto: 'Acesse "Ferramentas → Fiscal" no menu lateral. Cadastre o certificado digital A1 da loja em Configurações antes de emitir a primeira nota.' },
+      { texto: 'Selecione a venda desejada e clique em "Emitir NF-e". Os dados do veículo, cliente e valor são preenchidos automaticamente a partir do cadastro.' },
+      { texto: 'Após a emissão, acompanhe o status do documento (Autorizada, Rejeitada, Cancelada) na listagem.' },
+      { texto: 'Para corrigir uma nota já emitida, use "Cancelar" (dentro do prazo legal) ou "Carta de Correção" para ajustes que não alteram valores.', dica: 'O certificado digital é armazenado de forma criptografada e nunca é exibido novamente após o cadastro.' },
+    ],
+  },
+  {
+    id: 'meu-site',
+    titulo: 'Meu Site',
+    modulo: 'site' as const,
+    icone: 'M3 12h18M12 3v18m9-9a9 9 0 11-18 0 9 9 0 0118 0z',
+    descricao: 'Crie e publique o site público da sua loja com um construtor visual, sem precisar programar.',
+    passos: [
+      { texto: 'Acesse "Ferramentas → Meu Site" no menu lateral. Escolha um template para começar o site da sua loja.' },
+      { texto: 'Personalize textos, cores, logotipo e seções (sobre a loja, veículos em destaque, contato) pelo construtor visual.' },
+      { texto: 'O site exibe automaticamente os veículos publicados no Estoque, sem necessidade de duplicar cadastro.' },
+      { texto: 'Clique em "Publicar" para colocar o site no ar. Visitantes podem enviar leads diretamente pelo formulário de contato do site.', dica: 'Alterações ficam em rascunho até você clicar em "Publicar" novamente.' },
     ],
   },
   {
@@ -337,6 +375,18 @@ export function Ajuda() {
           Central de Ajuda
         </h2>
         <p>Manual completo do sistema SocialVeículos. Encontre instruções detalhadas para cada módulo.</p>
+        <a
+          href="/manual/manual-socialveiculos.pdf"
+          download="Manual-SocialVeiculos.pdf"
+          className="btn btn-secondary ajuda-download-manual"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16 }}>
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Baixar Manual em PDF
+        </a>
       </div>
 
       {/* Barra de busca */}

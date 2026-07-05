@@ -15,7 +15,7 @@ from sqlalchemy import func
 
 from database import get_db
 from deps import get_current_active_user
-from models import Usuario, Loja, Veiculo, LogAuditoria, PapelUsuario, MembroLoja, Lead
+from models import Usuario, Loja, Veiculo, LogAuditoria, PapelUsuario, MembroLoja, Lead, ModuloHabilitado
 from schemas import LojaResponse, LogAuditoriaResponse
 from auth import hash_password, create_access_token
 
@@ -66,6 +66,10 @@ class EditarLojaRequest(BaseModel):
     estado: Optional[str] = None
     telefone: Optional[str] = None
     whatsapp: Optional[str] = None
+    cnpj: Optional[str] = None
+    endereco: Optional[str] = None
+    cep: Optional[str] = None
+    modulos_ativos: Optional[List[str]] = None
 
 
 class StatusLojaRequest(BaseModel):
@@ -132,6 +136,11 @@ async def get_loja_detalhe(
         select(func.count()).select_from(MembroLoja).where(MembroLoja.loja_id == loja_id)
     )).scalar() or 0
 
+    modulos_ativos_db = (await db.execute(
+        select(ModuloHabilitado.nome_modulo)
+        .where(ModuloHabilitado.loja_id == loja_id, ModuloHabilitado.ativo == True)
+    )).scalars().all()
+
     return LojaDetalheResponse(
         id=loja.id,
         nome=loja.nome,
@@ -150,7 +159,7 @@ async def get_loja_detalhe(
         total_veiculos=total_veiculos,
         total_leads=total_leads,
         total_usuarios=total_usuarios,
-        modulos_ativos=[],
+        modulos_ativos=list(modulos_ativos_db),
     )
 
 
@@ -252,22 +261,42 @@ async def editar_loja(
     db: AsyncSession = Depends(get_db),
     _admin: Usuario = Depends(exige_admin_plataforma),
 ):
-    """Edita campos da loja."""
+    """Edita campos da loja e gerencia os módulos habilitados."""
     res = await db.execute(select(Loja).where(Loja.id == loja_id))
     loja = res.scalar_one_or_none()
     if not loja:
         raise HTTPException(status_code=404, detail="Loja não encontrada.")
 
     if data.nome is not None:
-        loja.nome = data.nome
+        loja.nome = data.nome.strip() if data.nome else ""
     if data.cidade is not None:
-        loja.cidade = data.cidade
+        loja.cidade = data.cidade.strip() or None
     if data.estado is not None:
-        loja.estado = data.estado
+        loja.estado = data.estado.strip() or None
     if data.telefone is not None:
-        loja.telefone = data.telefone
+        loja.telefone = data.telefone.strip() or None
     if data.whatsapp is not None:
-        loja.whatsapp = data.whatsapp
+        loja.whatsapp = data.whatsapp.strip() or None
+    if data.cnpj is not None:
+        loja.cnpj = data.cnpj.strip() or None
+    if data.endereco is not None:
+        loja.endereco = data.endereco.strip() or None
+    if data.cep is not None:
+        loja.cep = data.cep.strip() or None
+
+    if data.modulos_ativos is not None:
+        from sqlalchemy import delete
+        # Remover módulos atuais
+        await db.execute(
+            delete(ModuloHabilitado).where(ModuloHabilitado.loja_id == loja_id)
+        )
+        # Adicionar novos módulos habilitados
+        for m_name in data.modulos_ativos:
+            db.add(ModuloHabilitado(
+                loja_id=loja_id,
+                nome_modulo=m_name,
+                ativo=True
+            ))
 
     await db.commit()
     await db.refresh(loja)

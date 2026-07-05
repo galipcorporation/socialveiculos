@@ -21,10 +21,10 @@ interface UploadMidiaProps {
 export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpload, salvandoRascunho }: UploadMidiaProps) {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
+  const processFiles = async (files: FileList) => {
     if (!files || files.length === 0) return
 
     let efectiveId = veiculoId
@@ -99,6 +99,33 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
     }
   }
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) await processFiles(e.target.files)
+    e.target.value = ''
+  }
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+    if (salvandoRascunho) return
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processFiles(e.dataTransfer.files)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!salvandoRascunho) setDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+  }
+
   const handleDelete = async (midiaId: string) => {
     const ok = await useUIStore.getState().confirm({
       title: 'Excluir Mídia',
@@ -167,15 +194,19 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
   const uploadZone = (
     <div
       onClick={() => !salvandoRascunho && fileInputRef.current?.click()}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
       style={{
-        border: '2px dashed var(--sv-border)', borderRadius: 8,
+        border: `2px dashed ${dragOver ? '#3b82f6' : 'var(--sv-border)'}`, borderRadius: 8,
         padding: sidebar ? '16px 12px' : '24px 16px',
-        textAlign: 'center', cursor: salvandoRascunho ? 'wait' : 'pointer', background: 'var(--sv-bg)',
+        textAlign: 'center', cursor: salvandoRascunho ? 'wait' : 'pointer',
+        background: dragOver ? 'rgba(59,130,246,0.08)' : 'var(--sv-bg)',
         transition: 'all 0.2s', display: 'flex', flexDirection: 'column', alignItems: 'center',
         opacity: salvandoRascunho ? 0.6 : 1,
       }}
-      onMouseEnter={(e) => { if (!salvandoRascunho) e.currentTarget.style.borderColor = '#3b82f6' }}
-      onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--sv-border)'}
+      onMouseEnter={(e) => { if (!salvandoRascunho && !dragOver) e.currentTarget.style.borderColor = '#3b82f6' }}
+      onMouseLeave={(e) => { if (!dragOver) e.currentTarget.style.borderColor = 'var(--sv-border)' }}
     >
       {salvandoRascunho ? (
         <span className="spinner" style={{ width: sidebar ? 20 : 28, height: sidebar ? 20 : 28, marginBottom: 6 }} />

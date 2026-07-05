@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # Gestor — URL base do front B2B (usada em links de e-mail: reset de senha etc.)
     gestor_base_url: str = Field(default="http://localhost:5173")
 
+    # API — URL pública desta própria API (usada no Sitemap: do robots.txt por site white-label)
+    api_base_url: str = Field(default="http://localhost:8000")
+
     # E-mail transacional (Resend). Sem chave → cai no modo log (dev): imprime o link no console.
     resend_api_key: Optional[str] = Field(default=None)
     email_from: str = Field(default="Social Veículos <onboarding@resend.dev>")
@@ -61,6 +64,11 @@ class Settings(BaseSettings):
     # Fiscal — token da conta mestre da plataforma no gateway Focus NFe (M039)
     focus_nfe_master_token: Optional[str] = Field(default=None)
     focus_nfe_webhook_secret: Optional[str] = Field(default=None)
+
+    # Login social Google (M029) — criar em https://console.cloud.google.com/apis/credentials
+    google_client_id: Optional[str] = Field(default=None)
+    google_client_secret: Optional[str] = Field(default=None)
+    google_redirect_uri: str = Field(default="http://localhost:8000/v1/auth/google/callback")
 
     @property
     def modulo_urls(self) -> dict[str, str]:

@@ -1011,6 +1011,12 @@ a:hover {
   outline: none;
 }
 
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .btn-sm {
   padding: 6px 12px;
   font-size: 12px;
@@ -2490,6 +2496,21 @@ a:hover {
   grid-column: 1 / -1;
 }
 
+.form-grid-12 {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .form-grid-12 {
+    grid-template-columns: 1fr;
+  }
+  .form-grid-12 > * {
+    grid-column: 1 / -1 !important;
+  }
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
@@ -3430,6 +3451,9 @@ a:hover {
 }
 
 /* ── Custom Confirm Modal ────────────────────────────────────── */
+.sv-confirm-overlay {
+  z-index: 10001;
+}
 .sv-confirm-modal {
   width: 460px;
   max-width: calc(100vw - 32px);
@@ -3529,9 +3553,26 @@ select option {
   padding: 8px;
 }
 
-/* Calendário nativo segue o tema atual (claro/escuro) */
+/* Calendário nativo segue o tema atual (claro/escuro) com visual aprimorado */
 input[type="date"] {
   color-scheme: light dark;
+  position: relative;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'%3E%3C/rect%3E%3Cline x1='16' y1='2' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='8' y1='2' x2='8' y2='6'%3E%3C/line%3E%3Cline x1='3' y1='10' x2='21' y2='10'%3E%3C/line%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  background-position: center;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -4743,4 +4784,67 @@ input[type="date"] {
   color: var(--sv-text-muted);
   padding: 0 28px 10px;
   background: var(--sv-overlay-soft);
+}
+
+/* ── Command Palette (Ctrl+K) ──────────────────────────────── */
+.command-palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  z-index: 10000;
+}
+
+.command-palette {
+  width: 100%;
+  max-width: 560px;
+  background: var(--sv-surface-solid);
+  border: 1px solid var(--sv-border);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.command-palette-input {
+  width: 100%;
+  padding: 16px 20px;
+  font-size: 15px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--sv-border);
+  color: var(--sv-text);
+  outline: none;
+}
+
+.command-palette-input::placeholder {
+  color: var(--sv-text-muted);
+}
+
+.command-palette-list {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.command-palette-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--sv-text-dim);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.command-palette-item.active {
+  background: var(--sv-surface-hover);
+  color: var(--sv-text);
+}
+
+.command-palette-empty {
+  padding: 16px 12px;
+  color: var(--sv-text-muted);
+  font-size: 13.5px;
+  text-align: center;
 }

@@ -28,6 +28,10 @@ export interface LojaPublica {
   nome: string
   slug: string
   whatsapp?: string | null
+  cidade?: string | null
+  estado?: string | null
+  verificada?: boolean
+  total_veiculos?: number
 }
 
 export interface SitePublicoResponse {

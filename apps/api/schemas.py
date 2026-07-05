@@ -226,6 +226,7 @@ class VeiculoUpdateRequest(BaseModel):
     fipe_marca_codigo: Optional[str] = Field(None, max_length=20)
     fipe_modelo_codigo: Optional[str] = Field(None, max_length=20)
     fipe_ano_codigo: Optional[str] = Field(None, max_length=20)
+    motivo: Optional[str] = None
 
     @model_validator(mode='before')
     @classmethod
@@ -336,6 +337,12 @@ class SolicitacaoAprovacaoResponse(BaseModel):
     dados_novos: Optional[str] = None
     status: StatusAprovacao
     justificativa_rejeicao: Optional[str] = None
+    motivo: Optional[str] = None
+    veiculo_marca: Optional[str] = None
+    veiculo_modelo: Optional[str] = None
+    veiculo_placa: Optional[str] = None
+    veiculo_ano: Optional[int] = None
+    veiculo_cor: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -1378,6 +1385,14 @@ class ItemChecklistUpdate(BaseModel):
 class TransferenciaUpdate(BaseModel):
     comunicacao_venda_em: Optional[datetime] = None
     transferencia_em: Optional[datetime] = None
+
+
+class ItemChecklistCreate(BaseModel):
+    titulo: str
+    categoria: CategoriaItem
+    responsavel: Optional[ResponsavelItem] = ResponsavelItem.LOJA
+    obrigatorio: Optional[bool] = False
+    prazo_em: Optional[datetime] = None
 
 
 class EsteiraDashboardResponse(BaseModel):

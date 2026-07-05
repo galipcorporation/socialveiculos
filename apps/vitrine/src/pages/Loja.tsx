@@ -4,6 +4,54 @@ import { Helmet } from 'react-helmet-async'
 import { fetchLoja, lojaMeta, formatBRL, type LojaPublica } from '../lib/loaders'
 import { getSSGData } from '../lib/ssgData'
 
+interface MidiaItem {
+  id: string
+  tipo: 'foto' | 'video'
+  url: string
+  ordem: number
+}
+
+function StoreItemMedia({ midias, alt }: { midias: MidiaItem[]; alt: string }) {
+  const [idx, setIdx] = useState(0)
+  const ordenadas = [...(midias ?? [])].sort((a, b) => a.ordem - b.ordem)
+  const atual = ordenadas[idx]
+
+  const prev = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIdx((i) => (i === 0 ? ordenadas.length - 1 : i - 1))
+  }
+  const next = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIdx((i) => (i === ordenadas.length - 1 ? 0 : i + 1))
+  }
+
+  if (!atual) return <div className="vt-store-item-empty" />
+
+  return (
+    <div className="vt-store-item-media">
+      {atual.tipo === 'video' ? (
+        <video src={atual.url} preload="metadata" muted />
+      ) : (
+        <img src={atual.url} alt={alt} loading="lazy" />
+      )}
+      {ordenadas.length > 1 && (
+        <>
+          <span className="vt-media-count">{idx + 1}/{ordenadas.length}</span>
+          <button className="vt-media-arrow left" onClick={prev}>‹</button>
+          <button className="vt-media-arrow right" onClick={next}>›</button>
+          <div className="vt-media-dots">
+            {ordenadas.map((_, i) => (
+              <span key={i} className={i === idx ? 'on' : ''} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function Loja({ initialData }: { initialData?: LojaPublica | null }) {
   const { slug } = useParams()
   const seed = initialData ?? getSSGData<LojaPublica>()
@@ -75,19 +123,9 @@ export function Loja({ initialData }: { initialData?: LojaPublica | null }) {
       ) : (
         <div className="vt-store-grid">
           {loja.veiculos.map((v) => {
-            // Mídia unificada: a capa é a primeira mídia (foto ou vídeo).
-            const capa = [...(v.midias ?? [])].sort((a, b) => a.ordem - b.ordem)[0]
             return (
               <Link key={v.id} to={`/carro/${v.id}`} className="vt-store-item">
-                {capa ? (
-                  capa.tipo === 'video' ? (
-                    <video src={capa.url} preload="metadata" muted />
-                  ) : (
-                    <img src={capa.url} alt={`${v.marca} ${v.modelo}`} loading="lazy" />
-                  )
-                ) : (
-                  <div className="vt-store-item-empty" />
-                )}
+                <StoreItemMedia midias={v.midias} alt={`${v.marca} ${v.modelo}`} />
                 <div className="vt-store-item-body">
                   <div className="vt-store-item-title">{v.marca} {v.modelo}</div>
                   <div className="vt-store-item-sub">

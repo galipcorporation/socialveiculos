@@ -11,17 +11,21 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Optional
+from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from config import settings
 from database import get_db
 from deps import get_current_b2b_user, B2BContext
 from limiter import rate_limit
-from models import SiteLoja, Loja, ClientePF, Lead, OrigemLead, EtapaLead
+from models import SiteLoja, Loja, Veiculo, ClientePF, Lead, OrigemLead, EtapaLead, StatusVeiculo
 from modulos import Modulo, exige_modulo
 from rbac import exige_permissao, Acao, Recurso
 
@@ -211,10 +215,7 @@ async def listar_hosts_publicados(db: AsyncSession = Depends(get_db)):
 # RESOLUÇÃO POR HOST (público — consumido pelo futuro app apps/site)
 # ═══════════════════════════════════════════════════════════════
 
-@public_router.get("/{host}")
-async def obter_site_publico(host: str, db: AsyncSession = Depends(get_db)):
-    """Resolve um host (subdomínio ou domínio próprio) para a config publicada
-    do site + identidade da loja. Nunca retorna rascunho não publicado."""
+async def _resolver_site_publicado(db: AsyncSession, host: str) -> SiteLoja:
     subdominio = host.split(".")[0] if "." in host else host
     res = await db.execute(
         select(SiteLoja).where(
@@ -225,15 +226,41 @@ async def obter_site_publico(host: str, db: AsyncSession = Depends(get_db)):
     site = res.scalar_one_or_none()
     if not site:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Site não encontrado ou não publicado.")
+    return site
+
+
+@public_router.get("/{host}")
+async def obter_site_publico(host: str, db: AsyncSession = Depends(get_db)):
+    """Resolve um host (subdomínio ou domínio próprio) para a config publicada
+    do site + identidade da loja. Nunca retorna rascunho não publicado."""
+    site = await _resolver_site_publicado(db, host)
 
     res_loja = await db.execute(select(Loja).where(Loja.id == site.loja_id, Loja.ativa == True))
     loja = res_loja.scalar_one_or_none()
     if not loja:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loja não encontrada ou inativa.")
 
+    total_veiculos_res = await db.execute(
+        select(Veiculo.id).where(
+            Veiculo.loja_id == loja.id,
+            Veiculo.publicado_marketplace == True,
+            Veiculo.status == StatusVeiculo.DISPONIVEL,
+        )
+    )
+    total_veiculos = len(total_veiculos_res.all())
+
     return {
         "site": _to_response(site),
-        "loja": {"id": loja.id, "nome": loja.nome, "slug": loja.slug, "whatsapp": loja.whatsapp},
+        "loja": {
+            "id": loja.id,
+            "nome": loja.nome,
+            "slug": loja.slug,
+            "whatsapp": loja.whatsapp,
+            "cidade": loja.cidade,
+            "estado": loja.estado,
+            "verificada": bool(loja.verificada),
+            "total_veiculos": total_veiculos,
+        },
     }
 
 
@@ -255,16 +282,7 @@ async def criar_lead_site(data: LeadSiteRequest, db: AsyncSession = Depends(get_
     """Formulário de contato do site público → Lead no CRM da loja, com
     origem `site_proprio`. Endpoint anônimo — protegido por rate limit
     (5/min) já que não exige autenticação nem publicação prévia de conta."""
-    subdominio = data.host.split(".")[0] if "." in data.host else data.host
-    res = await db.execute(
-        select(SiteLoja).where(
-            (SiteLoja.subdominio == subdominio) | (SiteLoja.dominio_customizado == data.host),
-            SiteLoja.publicado == True,
-        )
-    )
-    site = res.scalar_one_or_none()
-    if not site:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Site não encontrado ou não publicado.")
+    site = await _resolver_site_publicado(db, data.host)
 
     # Reaproveita ClientePF existente pelo telefone, ou cria um novo (sem exigir login).
     res_cliente = await db.execute(
@@ -287,3 +305,46 @@ async def criar_lead_site(data: LeadSiteRequest, db: AsyncSession = Depends(get_
     db.add(lead)
     await db.commit()
     return {"ok": True}
+
+
+# ═══════════════════════════════════════════════════════════════
+# SEO TÉCNICO — sitemap.xml e robots.txt por host publicado
+# ═══════════════════════════════════════════════════════════════
+
+@public_router.get("/{host}/sitemap.xml")
+async def sitemap_site(host: str, db: AsyncSession = Depends(get_db)):
+    """Sitemap XML das páginas estáticas + estoque do site publicado deste host."""
+    site = await _resolver_site_publicado(db, host)
+    base = f"https://{host}"
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    urls = [(f"{base}/", now), (f"{base}/contato", now)]
+    secoes = json.loads(site.secoes_ativas) if site.secoes_ativas else {}
+    if secoes.get("estoque", True):
+        urls.append((f"{base}/estoque", now))
+    if secoes.get("sobre", True) and site.sobre_texto:
+        urls.append((f"{base}/sobre", now))
+    if secoes.get("financiamento", True):
+        urls.append((f"{base}/financiamento", now))
+
+    itens = "".join(
+        f"<url><loc>{xml_escape(loc)}</loc><lastmod>{lastmod}</lastmod></url>"
+        for loc, lastmod in urls
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{itens}"
+        "</urlset>"
+    )
+    return Response(content=xml, media_type="application/xml")
+
+
+@public_router.get("/{host}/robots.txt")
+async def robots_site(host: str, db: AsyncSession = Depends(get_db)):
+    """robots.txt do site publicado — 404 (bloqueia indexação implicitamente
+    via ausência) se o host não corresponder a nenhum site publicado."""
+    await _resolver_site_publicado(db, host)
+    sitemap_url = f"{settings.api_base_url}/v1/public/site/{host}/sitemap.xml"
+    corpo = f"User-agent: *\nAllow: /\n\nSitemap: {sitemap_url}\n"
+    return Response(content=corpo, media_type="text/plain")

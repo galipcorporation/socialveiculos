@@ -20,6 +20,12 @@ interface SolicitacaoAprovacao {
   justificativa_rejeicao?: string
   created_at: string
   updated_at: string
+  veiculo_marca?: string
+  veiculo_modelo?: string
+  veiculo_placa?: string
+  veiculo_ano?: number
+  veiculo_cor?: string
+  motivo?: string
 }
 
 export function Aprovacoes() {
@@ -181,9 +187,15 @@ export function Aprovacoes() {
                       <h4 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--sv-text)' }}>
                         {isExcluir ? 'Solicitação de Exclusão' : 'Alteração de Preço'}
                       </h4>
-                      <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)' }}>
-                        ID do Veículo: {item.entidade_id.substring(0, 8)}...
-                      </span>
+                      {item.veiculo_marca ? (
+                        <div style={{ fontSize: '12px', color: 'var(--sv-primary-text)', fontWeight: 600, marginTop: '2px' }}>
+                          {item.veiculo_marca} {item.veiculo_modelo} {item.veiculo_ano ? `(${item.veiculo_ano})` : ''} {item.veiculo_placa ? `· Placa: ${item.veiculo_placa.toUpperCase()}` : ''}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)' }}>
+                          ID do Veículo: {item.entidade_id.substring(0, 8)}...
+                        </span>
+                      )}
                     </div>
                   </div>
                   <span className="alerts-badge" style={{
@@ -203,6 +215,20 @@ export function Aprovacoes() {
                     <div>
                       <strong>Data:</strong> {new Date(item.created_at).toLocaleString()}
                     </div>
+                    {item.motivo && (
+                      <div style={{ marginTop: '2px' }}>
+                        <strong>Motivo:</strong> <span style={{ fontStyle: 'italic', color: 'var(--sv-text)' }}>"{item.motivo}"</span>
+                      </div>
+                    )}
+                    {item.veiculo_marca ? (
+                      <div style={{ marginTop: '2px' }}>
+                        <strong>Veículo:</strong> {item.veiculo_marca} {item.veiculo_modelo} {item.veiculo_ano ? `(${item.veiculo_ano})` : ''} {item.veiculo_cor ? ` · Cor: ${item.veiculo_cor}` : ''} {item.veiculo_placa ? ` · Placa: ${item.veiculo_placa.toUpperCase()}` : ''}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '11px', color: 'var(--sv-text-muted)', marginTop: '2px' }}>
+                        ID do Veículo: {item.entidade_id}
+                      </div>
+                    )}
                     <div style={{ marginTop: '8px', padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--sv-border)' }}>
                       {isExcluir ? (
                         <span style={{ color: '#ff859b', fontWeight: 500 }}>

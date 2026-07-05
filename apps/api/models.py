@@ -266,14 +266,18 @@ class Usuario(Base):
     nome = Column(String(200), nullable=False)
     email = Column(String(200), unique=True, nullable=False)
     telefone = Column(String(20), nullable=True)
-    senha_hash = Column(String(300), nullable=False)
+    senha_hash = Column(String(300), nullable=True)  # nulo para contas 100% Google (M029)
     avatar_url = Column(String(500), nullable=True)
     papel = Column(Enum(PapelUsuario), nullable=False, default=PapelUsuario.CLIENTE)
     ativo = Column(Boolean, default=True)
 
-    # MFA (estrutura, ativável depois — Tarefa 03 §3.6)
+    # Login social (M029)
+    google_sub = Column(String(64), unique=True, nullable=True)
+
+    # MFA (M029 — pyotp/TOTP)
     mfa_secret = Column(String(100), nullable=True)
     mfa_ativo = Column(Boolean, default=False)
+    mfa_secret_pendente = Column(String(100), nullable=True)  # B031: enroll não sobrescreve o secret ativo
 
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
@@ -838,6 +842,7 @@ class SolicitacaoAprovacao(Base):
     dados_novos = Column(Text, nullable=True)  # JSON com dados propostos
     status = Column(Enum(StatusAprovacao), default=StatusAprovacao.PENDENTE, nullable=False)
     justificativa_rejeicao = Column(Text, nullable=True)
+    motivo = Column(Text, nullable=True)
     
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)

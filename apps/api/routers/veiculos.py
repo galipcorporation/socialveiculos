@@ -19,13 +19,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, U
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, case
 
 from datetime import datetime
 from storage import storage_provider
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria, get_optional_user
-from models import Veiculo, Midia, Usuario, SolicitacaoAprovacao, StatusAprovacao, TipoAcaoAprovacao, StatusVeiculo, OrigemVeiculo, Negociacao, PapelUsuario, PublicacaoB2B, Favorito, ClientePF, VeiculoDocumento, TipoDocumentoVeiculo, LojaSeguidora
+from models import Veiculo, Midia, Usuario, SolicitacaoAprovacao, StatusAprovacao, TipoAcaoAprovacao, StatusVeiculo, OrigemVeiculo, Negociacao, PapelUsuario, PublicacaoB2B, Favorito, ClientePF, VeiculoDocumento, TipoDocumentoVeiculo, LojaSeguidora, Loja
 from rbac import exige_permissao, Acao, Recurso, can
 from schemas import (
     VeiculoB2BResponse,
@@ -97,10 +97,12 @@ async def get_veiculos_vitrine(
     offset = (page - 1) * per_page
     stmt = (
         select(Veiculo)
+        .join(Loja, Veiculo.loja_id == Loja.id)
         .options(selectinload(Veiculo.midias))
         .where(
             Veiculo.publicado_marketplace == True,
-            Veiculo.status == StatusVeiculo.DISPONIVEL
+            Veiculo.status == StatusVeiculo.DISPONIVEL,
+            Loja.ativa == True
         )
         .order_by(Veiculo.created_at.desc())
         .offset(offset)
@@ -146,10 +148,12 @@ async def get_marketplace_feed(
     """
     stmt = (
         select(Veiculo)
+        .join(Loja, Veiculo.loja_id == Loja.id)
         .options(selectinload(Veiculo.midias), selectinload(Veiculo.loja))
         .where(
             Veiculo.publicado_marketplace == True,
-            Veiculo.status == StatusVeiculo.DISPONIVEL
+            Veiculo.status == StatusVeiculo.DISPONIVEL,
+            Loja.ativa == True
         )
     )
 
@@ -243,11 +247,13 @@ async def get_veiculo_vitrine_detalhes(
     """
     stmt = (
         select(Veiculo)
+        .join(Loja, Veiculo.loja_id == Loja.id)
         .options(selectinload(Veiculo.midias), selectinload(Veiculo.loja))
         .where(
             Veiculo.id == id,
             Veiculo.publicado_marketplace == True,
-            Veiculo.status == StatusVeiculo.DISPONIVEL
+            Veiculo.status == StatusVeiculo.DISPONIVEL,
+            Loja.ativa == True
         )
     )
     res = await db.execute(stmt)
@@ -386,13 +392,23 @@ async def get_veiculos_b2b(
     sort_col = sort_columns.get(sort_by, Veiculo.created_at)
     order = sort_col.desc() if sort_order == "desc" else sort_col.asc()
 
+    # Prioridade de status: DISPONIVEL (1), RESERVADO (2), REPASSE (3), VENDIDO (4), INATIVO (5)
+    status_priority = case(
+        (Veiculo.status == StatusVeiculo.DISPONIVEL, 1),
+        (Veiculo.status == StatusVeiculo.RESERVADO, 2),
+        (Veiculo.status == StatusVeiculo.REPASSE, 3),
+        (Veiculo.status == StatusVeiculo.VENDIDO, 4),
+        (Veiculo.status == StatusVeiculo.INATIVO, 5),
+        else_=6
+    )
+
     # ── Query paginada ──
     offset = (page - 1) * per_page
     stmt = (
         select(Veiculo)
         .options(selectinload(Veiculo.midias))
         .where(*base_where)
-        .order_by(order)
+        .order_by(status_priority, order)
         .offset(offset)
         .limit(per_page)
     )
@@ -629,12 +645,14 @@ async def atualizar_veiculo(
             tipo_acao=TipoAcaoAprovacao.ALTERAR_PRECO,
             entidade_id=veiculo.id,
             dados_novos=json.dumps({"preco_venda": preco_proposto}),
-            status=StatusAprovacao.PENDENTE
+            status=StatusAprovacao.PENDENTE,
+            motivo=data.motivo
         )
         db.add(solicitacao)
         
         # Salvar as demais edições do vendedor, se houver, excluindo a alteração de preço
         body_data.pop("preco_venda", None)
+        body_data.pop("motivo", None)
         for key, value in body_data.items():
             setattr(veiculo, key, value)
             
@@ -695,6 +713,7 @@ async def atualizar_veiculo(
 async def deletar_veiculo(
     id: str,
     request: Request,
+    motivo: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     context: B2BContext = Depends(get_current_b2b_user)
 ):
@@ -737,7 +756,8 @@ async def deletar_veiculo(
             requisitante_id=context.usuario.id,
             tipo_acao=TipoAcaoAprovacao.EXCLUIR_VEICULO,
             entidade_id=veiculo.id,
-            status=StatusAprovacao.PENDENTE
+            status=StatusAprovacao.PENDENTE,
+            motivo=motivo
         )
         db.add(solicitacao)
         await db.commit()

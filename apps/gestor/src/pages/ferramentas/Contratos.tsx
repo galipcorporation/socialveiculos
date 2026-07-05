@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, extractErrorDetails } from '../../lib/api'
 import { useUIStore } from '../../stores/uiStore'
+import { useAuthStore } from '../../stores/authStore'
+import { useLojaAtivaStore } from '../../stores/lojaAtivaStore'
 import { mascararMoeda, parseMoeda } from '../../lib/mascaras'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { SearchSelect } from '../../components/SearchSelect'
+import { FileSignature } from 'lucide-react'
 
 /* ── Types ───────────────────────────────────────────────────── */
 
@@ -150,6 +153,7 @@ const WhatsAppIcon = () => (
 
 export function ContratosPage() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [contratos, setContratos] = useState<ContratoItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -193,9 +197,13 @@ export function ContratosPage() {
   // ── Actions ──
   const handleDownloadPdf = async (contrato: ContratoItem) => {
     try {
-      const res = await fetch(`${(api as any).baseUrl || 'http://localhost:8000'}/v1/contratos/${contrato.id}/pdf`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('sv_token') || ''}` },
-      })
+      const { token } = useAuthStore.getState()
+      const { lojaId } = useLojaAtivaStore.getState()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (lojaId) headers['X-Loja-Id'] = lojaId
+
+      const res = await fetch(`/v1/contratos/${contrato.id}/pdf`, { headers })
       const html = await res.text()
       const win = window.open('', '_blank')
       if (win) {
@@ -372,6 +380,15 @@ export function ContratosPage() {
                     >
                       <WhatsAppIcon />
                     </button>
+                    {c.tipo === 'compra_venda' && (
+                      <button
+                        className="action-btn"
+                        title="Emitir NF-e"
+                        onClick={() => navigate(`/ferramentas/notas-fiscais?contrato=${c.id}`)}
+                      >
+                        <FileSignature style={{ width: 18, height: 18 }} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

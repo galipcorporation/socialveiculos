@@ -3,7 +3,8 @@ import { StatusSelect } from '../components/StatusSelect'
 import { api, extractErrorDetails, type ApiErrorDetails } from '../lib/api'
 import { UploadMidia } from '../components/UploadMidia'
 import { useUIStore } from '../stores/uiStore'
-import { mascararMoeda, parseMoeda, mascararCPF, mascararTelefone } from '../lib/mascaras'
+import { useAuthStore } from '../stores/authStore'
+import { mascararMoeda, parseMoeda, mascararCPF, mascararTelefone, capitalizarNome } from '../lib/mascaras'
 import { SimuladorModal } from '../components/SimuladorModal'
 import { VehicleIdentityFields } from '../components/VehicleIdentityFields'
 import { TIPOS_VEICULO, regraDoTipo, type Veiculo } from '../lib/veiculo'
@@ -192,6 +193,8 @@ export function Estoque() {
   const [editingVeiculo, setEditingVeiculo] = useState<Veiculo | null>(null)
   const [simulandoVeiculo, setSimulandoVeiculo] = useState<Veiculo | null>(null)
   const [vendendoVeiculo, setVendendoVeiculo] = useState<Veiculo | null>(null)
+  const [solicitandoExclusaoVeiculo, setSolicitandoExclusaoVeiculo] = useState<Veiculo | null>(null)
+  const [motivoExclusao, setMotivoExclusao] = useState('')
 
   // Toasts
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -321,6 +324,13 @@ export function Estoque() {
 
   // ── Delete ──
   const handleDelete = async (veiculo: Veiculo) => {
+    const isVendedor = useAuthStore.getState().user?.papel === 'vendedor'
+    if (isVendedor) {
+      setSolicitandoExclusaoVeiculo(veiculo)
+      setMotivoExclusao('')
+      return
+    }
+
     const ok = await useUIStore.getState().confirm({
       title: 'Excluir Veículo',
       message: `Tem certeza que deseja excluir o veículo ${veiculo.marca} ${veiculo.modelo}?`,
@@ -701,6 +711,70 @@ export function Estoque() {
           onError={(msg) => addToast('error', msg)}
         />
       )}
+
+      {solicitandoExclusaoVeiculo && (
+        <div className="modal-overlay" onClick={() => setSolicitandoExclusaoVeiculo(null)}>
+          <div className="modal-glass" style={{ width: '450px', padding: '24px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Solicitar Exclusão</h3>
+              <button className="modal-close" onClick={() => setSolicitandoExclusaoVeiculo(null)} style={{ background: 'none', border: 'none', color: 'var(--sv-text-muted)', cursor: 'pointer', fontSize: '20px' }}>✕</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ fontSize: '14px', color: 'var(--sv-text-dim)', margin: 0 }}>
+                Você está solicitando a exclusão de <strong>{solicitandoExclusaoVeiculo.marca} {solicitandoExclusaoVeiculo.modelo}</strong> ({solicitandoExclusaoVeiculo.placa}). Esta ação requer aprovação do gestor.
+              </p>
+              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase' }}>Motivo da Exclusão (obrigatório)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Veículo vendido externamente, dados incorretos..."
+                  value={motivoExclusao}
+                  onChange={e => setMotivoExclusao(e.target.value)}
+                  style={{
+                    background: 'var(--sv-input-bg)',
+                    border: '1px solid var(--sv-border)',
+                    borderRadius: 'var(--sv-radius)',
+                    color: 'var(--sv-text)',
+                    height: '42px',
+                    padding: '0 14px',
+                    fontSize: '14px',
+                    outline: 'none'
+                  }}
+                  required
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
+              <button className="btn btn-outline" onClick={() => setSolicitandoExclusaoVeiculo(null)}>
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary"
+                disabled={!motivoExclusao.trim()}
+                onClick={async () => {
+                  try {
+                    const res = await api.delete<{ message?: string; status?: string }>(
+                      `/veiculos/${solicitandoExclusaoVeiculo.id}?motivo=${encodeURIComponent(motivoExclusao)}`
+                    )
+                    if (res.status === 'APROVACAO_PENDENTE') {
+                      addToast('info', res.message || 'Solicitação enviada para aprovação.')
+                    } else {
+                      addToast('success', 'Veículo excluído com sucesso.')
+                    }
+                    setSolicitandoExclusaoVeiculo(null)
+                    fetchVeiculos()
+                  } catch (err) {
+                    const { message, details } = extractErrorDetails(err)
+                    addToast('error', message || 'Erro ao solicitar exclusão', details)
+                  }
+                }}
+              >
+                Enviar Solicitação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -753,6 +827,7 @@ export function VeiculoModal({
   const [portas, setPortas] = useState(veiculo?.portas || 4)
   const [precoVenda, setPrecoVenda] = useState(veiculo?.preco_venda || 0)
   const [precoVendaStr, setPrecoVendaStr] = useState(mascararMoeda(veiculo?.preco_venda || 0))
+  const [motivo, setMotivo] = useState('')
   const [precoCusto, setPrecoCusto] = useState(veiculo?.preco_custo || 0)
   const [precoCustoStr, setPrecoCustoStr] = useState(mascararMoeda(veiculo?.preco_custo || 0))
   const [midias, setMidias] = useState<any[]>(veiculo?.midias || [])
@@ -947,6 +1022,13 @@ export function VeiculoModal({
       return
     }
 
+    const isVendedor = useAuthStore.getState().user?.papel === 'vendedor'
+    const precoAlterado = isEditing && veiculo && precoVenda !== veiculo.preco_venda
+    if (precoAlterado && isVendedor && !motivo.trim()) {
+      onError('Por favor, informe o motivo para o reajuste de preço.')
+      return
+    }
+
     setSaving(true)
     try {
       const body: any = {
@@ -956,6 +1038,9 @@ export function VeiculoModal({
         publicar_rede_social: publicarRedeSocial,
         valor_repasse: publicarRedeSocial ? (valorRepasse || null) : null,
         status: 'DISPONIVEL',
+      }
+      if (precoAlterado && isVendedor) {
+        body.motivo = motivo
       }
 
       let veiculoId = veiculo?.id
@@ -1209,6 +1294,46 @@ export function VeiculoModal({
                 }}
               />
             </div>
+
+            {isEditing && useAuthStore.getState().user?.papel === 'vendedor' && precoVenda !== veiculo?.preco_venda && (
+              <div className="form-group veic-c12" style={{ marginTop: '8px' }}>
+                <div style={{
+                  background: 'rgba(245, 158, 11, 0.1)',
+                  border: '1px solid var(--sv-warning)',
+                  padding: '12px',
+                  borderRadius: 'var(--sv-radius)',
+                  fontSize: '13px',
+                  color: 'var(--sv-warning)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <span style={{ fontWeight: 600 }}>⚠️ Alterações de preço solicitadas por vendedores exigem aprovação do gestor.</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase' }}>
+                      Motivo do Reajuste de Preço (Obrigatório)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Negociação com cliente, promoção especial..."
+                      value={motivo}
+                      onChange={e => setMotivo(e.target.value)}
+                      style={{
+                        background: 'var(--sv-input-bg)',
+                        border: '1px solid var(--sv-border)',
+                        borderRadius: 'var(--sv-radius)',
+                        color: 'var(--sv-text)',
+                        height: '38px',
+                        padding: '0 12px',
+                        fontSize: '13px',
+                        outline: 'none'
+                      }}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ── Linha 6: Opcionais ── */}
             <div className="veic-section">Opcionais</div>
@@ -1979,7 +2104,7 @@ export function VenderModal({
                     <div className="fv-form-title">⚡ Cadastro rápido <span>— o resto completa depois</span></div>
                     <div className="fv-field">
                       <label>Nome completo *</label>
-                      <input type="text" value={qNome} onChange={e => setQNome(e.target.value)} autoFocus />
+                      <input type="text" value={qNome} onChange={e => setQNome(capitalizarNome(e.target.value))} autoFocus />
                     </div>
                     <div className="fv-row">
                       <div className="fv-field">

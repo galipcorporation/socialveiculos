@@ -1,6 +1,7 @@
 import { Outlet, useNavigate } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
+import { CommandPalette } from './CommandPalette'
 import { useTrackPageVisit } from '../lib/recentPages'
 import { useAuthStore } from '../stores/authStore'
 import { useLojaAtivaStore } from '../stores/lojaAtivaStore'
@@ -68,6 +69,7 @@ export function AppLayout() {
 
       <ImpersonarBanner />
       <Sidebar />
+      <CommandPalette />
 
       <div className="main-area">
         <Topbar />

@@ -9,6 +9,7 @@ import { Sobre } from './pages/institucional/Sobre'
 import { Termos } from './pages/institucional/Termos'
 import { Privacidade } from './pages/institucional/Privacidade'
 import { Anuncie } from './pages/institucional/Anuncie'
+import { GoogleCallback } from './pages/GoogleCallback'
 import { UIProvider } from './components/UIProvider'
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/termos" element={<Termos />} />
         <Route path="/privacidade" element={<Privacidade />} />
         <Route path="/anuncie" element={<Anuncie />} />
+        <Route path="/auth/google/callback" element={<GoogleCallback />} />
       </Routes>
     </>
   )

@@ -18,7 +18,6 @@ const FERRAMENTAS_CHILDREN = [
   { path: '/ferramentas/marketing', label: 'Marketing' },
   { path: '/ferramentas/fipe', label: 'Consulta FIPE' },
   { path: '/assistente', label: 'Assistente IA' },
-  { path: '/ferramentas/fiscal', label: 'Fiscal / NF-e' },
   { path: '/ferramentas/notas-fiscais', label: 'Notas Fiscais' },
   { path: '/ferramentas/meu-site', label: 'Meu Site' },
 ]

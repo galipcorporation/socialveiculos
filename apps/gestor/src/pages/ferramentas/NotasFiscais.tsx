@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, extractErrorDetails } from '../../lib/api'
 import { useUIStore } from '../../stores/uiStore'
 import { SearchSelect, type SearchSelectOption } from '../../components/SearchSelect'
@@ -57,6 +57,7 @@ function formatBRL(v?: number) {
 export function NotasFiscaisPage() {
   const showToast = useUIStore((s) => s.showToast)
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [liberado, setLiberado] = useState<boolean | null>(null)
   const [notas, setNotas] = useState<NotaFiscalItem[]>([])
@@ -100,6 +101,23 @@ export function NotasFiscaisPage() {
     else setLoading(false)
   }, [liberado, carregarNotas])
 
+  // Veio do botão "Emitir NF-e" do contrato (Contratos.tsx) — pré-seleciona o contrato
+  useEffect(() => {
+    const contratoParam = searchParams.get('contrato')
+    if (!contratoParam || liberado !== true) return
+    api.get<ContratoOpcao>(`/contratos/${contratoParam}`)
+      .then((c) => {
+        setContratoId(c.id)
+        setContratoLabel(`${c.numero} — ${c.veiculo_nome || ''}`)
+      })
+      .catch(() => showToast('Contrato não encontrado.', 'error'))
+      .finally(() => {
+        searchParams.delete('contrato')
+        setSearchParams(searchParams, { replace: true })
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liberado])
+
   const buscarContratos = async (q: string) => {
     try {
       const res = await api.get<{ items: ContratoOpcao[] }>('/contratos', { per_page: '10', status: 'aguardando', q })
@@ -127,7 +145,17 @@ export function NotasFiscaisPage() {
       carregarNotas()
     } catch (err) {
       const { message, details } = extractErrorDetails(err)
-      useUIStore.getState().showError(message || 'Erro ao emitir NF-e.', details)
+      if (message?.includes('Configure os dados fiscais')) {
+        const ir = await useUIStore.getState().confirm({
+          title: 'Configuração fiscal pendente',
+          message: `${message} Deseja configurar agora?`,
+          confirmText: 'Configurar agora',
+          cancelText: 'Depois',
+        })
+        if (ir) navigate('/configuracoes', { state: { aba: 'fiscal' } })
+      } else {
+        useUIStore.getState().showError(message || 'Erro ao emitir NF-e.', details)
+      }
     } finally {
       setEmitindo(false)
     }

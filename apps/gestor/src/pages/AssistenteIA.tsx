@@ -592,6 +592,7 @@ function ConfigAssistenteModal({ onClose, showToast }: { onClose: () => void; sh
   // Controle de Áudio
   const [audioFile, setAudioFile] = useState<File | null>(null)
   const [enviandoAudio, setEnviandoAudio] = useState(false)
+  const [mostrarRoteiroModal, setMostrarRoteiroModal] = useState(false)
 
   useEffect(() => {
     const carregarConfig = async () => {
@@ -711,6 +712,14 @@ function ConfigAssistenteModal({ onClose, showToast }: { onClose: () => void; sh
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: 'var(--sv-surface-hover)', padding: 14, borderRadius: 8, border: '1px solid var(--sv-border)' }}>
                 <label style={{ fontSize: 12, fontWeight: 600 }}>Treinar IA com seu Áudio (Gravar amostra de 30-60s)</label>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => setMostrarRoteiroModal(true)}
+                    style={{ padding: '6px 12px', fontSize: 12 }}
+                  >
+                    🎙️ Gravar com roteiro guiado
+                  </button>
                   <input
                     type="file"
                     accept="audio/*"
@@ -726,6 +735,11 @@ function ConfigAssistenteModal({ onClose, showToast }: { onClose: () => void; sh
                     {enviandoAudio ? 'Processando...' : 'Treinar IA'}
                   </button>
                 </div>
+                {audioFile && (
+                  <span style={{ fontSize: 11, color: 'var(--sv-text-dim)' }}>
+                    Arquivo selecionado: {audioFile.name}
+                  </span>
+                )}
                 {config.estilo_resumo && (
                   <div style={{ marginTop: 8, borderTop: '1px solid var(--sv-border)', paddingTop: 8 }}>
                     <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--sv-primary)' }}>Estilo Analisado:</span>
@@ -745,6 +759,202 @@ function ConfigAssistenteModal({ onClose, showToast }: { onClose: () => void; sh
               </div>
             </>
           )}
+        </div>
+      </div>
+
+      {mostrarRoteiroModal && (
+        <RoteiroGravacaoModal
+          onClose={() => setMostrarRoteiroModal(false)}
+          onGravado={(file) => {
+            setAudioFile(file)
+            setMostrarRoteiroModal(false)
+          }}
+          showToast={showToast}
+        />
+      )}
+    </div>
+  )
+}
+
+const ROTEIRO_GRAVACAO = `Olá, tudo bem? Meu nome é [seu nome] da [nome da loja]. Temos um Onix 2022 com 45 mil quilômetros por R$ 68.900, com entrada facilitada e parcelas que cabem no seu bolso. Também temos um Corolla 2021 e uma Hilux 2020 recém-chegados no estoque. Posso te enviar mais fotos e agendar uma visita hoje mesmo? Qualquer dúvida, estou à disposição. Obrigado pela confiança e até logo!`
+
+const DURACAO_MINIMA_SEGUNDOS = 20
+
+function RoteiroGravacaoModal({
+  onClose,
+  onGravado,
+  showToast
+}: {
+  onClose: () => void
+  onGravado: (file: File) => void
+  showToast: (message: string, type?: 'success' | 'error' | 'info' | 'warning') => void
+}) {
+  const [gravando, setGravando] = useState(false)
+  const [segundos, setSegundos] = useState(0)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
+  const [copiado, setCopiado] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const pararStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      pararStream()
+      if (audioUrl) URL.revokeObjectURL(audioUrl)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const iniciarGravacao = async () => {
+    setErro(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+      chunksRef.current = []
+      const recorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data)
+      }
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        setAudioBlob(blob)
+        setAudioUrl(URL.createObjectURL(blob))
+        pararStream()
+      }
+
+      recorder.start()
+      setGravando(true)
+      setSegundos(0)
+      setAudioUrl(null)
+      setAudioBlob(null)
+      timerRef.current = setInterval(() => setSegundos((s) => s + 1), 1000)
+    } catch (err) {
+      console.error(err)
+      setErro('Não foi possível acessar o microfone. Verifique as permissões do navegador.')
+    }
+  }
+
+  const pararGravacao = () => {
+    mediaRecorderRef.current?.stop()
+    setGravando(false)
+  }
+
+  const regravar = () => {
+    if (audioUrl) URL.revokeObjectURL(audioUrl)
+    setAudioUrl(null)
+    setAudioBlob(null)
+    setSegundos(0)
+  }
+
+  const copiarTexto = async () => {
+    try {
+      await navigator.clipboard.writeText(ROTEIRO_GRAVACAO)
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2000)
+    } catch {
+      showToast('Não foi possível copiar o texto.', 'error')
+    }
+  }
+
+  const confirmarUso = () => {
+    if (!audioBlob) return
+    if (segundos < DURACAO_MINIMA_SEGUNDOS) {
+      showToast(`Grave pelo menos ${DURACAO_MINIMA_SEGUNDOS}s para uma clonagem de voz de boa qualidade.`, 'warning')
+      return
+    }
+    const file = new File([audioBlob], `amostra-voz-${Date.now()}.webm`, { type: 'audio/webm' })
+    onGravado(file)
+  }
+
+  const minutos = String(Math.floor(segundos / 60)).padStart(2, '0')
+  const segs = String(segundos % 60).padStart(2, '0')
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-glass" style={{ maxWidth: 520, width: 'min(520px, 92vw)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Gravar amostra de voz</h3>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
+          <div style={{ background: 'var(--sv-surface-hover)', padding: 14, borderRadius: 8, border: '1px solid var(--sv-border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <strong style={{ fontSize: 12 }}>Leia este texto em voz alta (~40-60s):</strong>
+              <button type="button" className="btn btn-outline" onClick={copiarTexto} style={{ padding: '4px 10px', fontSize: 11 }}>
+                {copiado ? 'Copiado!' : 'Copiar texto'}
+              </button>
+            </div>
+            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--sv-text)' }}>{ROTEIRO_GRAVACAO}</p>
+          </div>
+
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--sv-text-dim)' }}>
+            Dica: grave em um ambiente silencioso, fale em tom natural e mantenha o microfone a uma distância constante da boca.
+          </p>
+
+          {erro && (
+            <div style={{ fontSize: 12, color: 'var(--sv-error)', background: 'var(--sv-surface-hover)', padding: 10, borderRadius: 6 }}>
+              {erro}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', padding: 10 }}>
+            <div style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: gravando ? 'var(--sv-error)' : 'var(--sv-text)' }}>
+              {minutos}:{segs}
+            </div>
+
+            {!audioUrl && (
+              <button
+                type="button"
+                className={gravando ? 'btn btn-danger' : 'btn btn-primary'}
+                onClick={gravando ? pararGravacao : iniciarGravacao}
+                style={{ padding: '10px 20px', fontSize: 13 }}
+              >
+                {gravando ? '⏹️ Parar gravação' : '🎙️ Iniciar gravação'}
+              </button>
+            )}
+
+            {audioUrl && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', alignItems: 'center' }}>
+                <audio src={audioUrl} controls style={{ width: '100%' }} />
+                <span style={{ fontSize: 11, color: segundos < DURACAO_MINIMA_SEGUNDOS ? 'var(--sv-warning)' : 'var(--sv-success)' }}>
+                  {segundos < DURACAO_MINIMA_SEGUNDOS
+                    ? `Duração curta (mín. ${DURACAO_MINIMA_SEGUNDOS}s recomendado)`
+                    : 'Duração adequada'}
+                </span>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button type="button" className="btn btn-outline" onClick={regravar} style={{ padding: '6px 14px', fontSize: 12 }}>
+                    Regravar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <p style={{ margin: 0, fontSize: 10, color: 'var(--sv-text-dim)' }}>
+            Prefere enviar um arquivo já gravado? Feche este roteiro e use o upload de áudio na tela anterior.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 10, justifyContent: 'flex-end', flexWrap: 'wrap', padding: '0 20px 16px' }}>
+          <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={confirmarUso} disabled={!audioBlob}>
+            Usar esta gravação
+          </button>
         </div>
       </div>
     </div>

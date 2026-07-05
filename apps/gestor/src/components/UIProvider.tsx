@@ -86,7 +86,7 @@ export function UIProvider() {
 
       {/* Confirmation Dialog Overlay */}
       {confirmState?.isOpen && (
-        <div className="modal-overlay" onClick={() => closeConfirm(false)}>
+        <div className="modal-overlay sv-confirm-overlay" onClick={() => closeConfirm(false)}>
           <div className="glass-card sv-confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="sv-confirm-header">
               <h3>{confirmState.title}</h3>

@@ -1,10 +1,34 @@
 import { useEffect, useState } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { fetchEstoqueLoja, type SitePublicoResponse, type VeiculoB2C } from '../lib/api'
 import { SiteHeader, SiteFooter } from '../components/SiteHeader'
 
 function formatBRL(v?: number | null) {
   if (v == null) return null
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+function estoqueJsonLd(veiculos: VeiculoB2C[]) {
+  return {
+    '@context': 'https://schema.org/',
+    '@type': 'ItemList',
+    itemListElement: veiculos.map((v, i) => ({
+      '@type': 'Vehicle',
+      position: i + 1,
+      name: `${v.marca} ${v.modelo}${v.versao ? ' ' + v.versao : ''} ${v.ano_modelo}`,
+      image: v.midias?.[0]?.url || undefined,
+      brand: { '@type': 'Brand', name: v.marca },
+      model: v.modelo,
+      vehicleModelDate: String(v.ano_modelo),
+      mileageFromOdometer: v.km != null ? { '@type': 'QuantitativeValue', value: v.km, unitCode: 'KMT' } : undefined,
+      offers: {
+        '@type': 'Offer',
+        priceCurrency: 'BRL',
+        price: v.preco_venda ?? undefined,
+        availability: 'https://schema.org/InStock',
+      },
+    })),
+  }
 }
 
 export function Estoque({ dados }: { dados: SitePublicoResponse }) {
@@ -20,6 +44,11 @@ export function Estoque({ dados }: { dados: SitePublicoResponse }) {
 
   return (
     <>
+      {veiculos.length > 0 && (
+        <Helmet>
+          <script type="application/ld+json">{JSON.stringify(estoqueJsonLd(veiculos))}</script>
+        </Helmet>
+      )}
       <SiteHeader dados={dados} />
       <div className="site-container">
         <section className="site-section" style={{ borderTop: 'none' }}>
