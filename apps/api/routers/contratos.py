@@ -8,11 +8,13 @@ Melhoria 14 — Vender veículo → gerar contrato
 
 import math
 import io
+import json
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from jinja2 import Environment
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func, or_, desc
@@ -23,6 +25,7 @@ from models import (
     Contrato, Veiculo, ClientePF, StatusContrato, TipoContrato,
     StatusVeiculo, LancamentoFinanceiro, TipoLancamento,
     EsteiraPosVenda, OrigemLead, OrigemVeiculo, ComissaoVenda, MembroLoja,
+    TemplateContrato,
 )
 from pos_venda_template import montar_checklist
 from schemas import (
@@ -32,6 +35,10 @@ from schemas import (
     ContratoListResponse,
     VenderVeiculoRequest,
     VenderVeiculoResponse,
+    TemplateContratoCreateRequest,
+    TemplateContratoUpdateRequest,
+    TemplateContratoResponse,
+    TemplateContratoListResponse,
 )
 
 router = APIRouter(prefix="/v1", tags=["Contratos"])
@@ -177,6 +184,8 @@ async def criar_contrato(
         parcelas=body.parcelas,
         observacoes=body.observacoes,
         dados_ocr=body.dados_ocr,
+        template_id=body.template_id,
+        dados_extras=json.dumps(body.dados_extras) if body.dados_extras else None,
     )
     db.add(contrato)
     await db.commit()
@@ -278,14 +287,18 @@ async def gerar_pdf_contrato(
     ).options(
         selectinload(Contrato.veiculo),
         selectinload(Contrato.cliente),
+        selectinload(Contrato.template),
     )
     result = await db.execute(stmt)
     contrato = result.scalar_one_or_none()
     if not contrato:
         raise HTTPException(status_code=404, detail="Contrato não encontrado")
 
-    # Gera HTML do contrato
-    html_content = _gerar_html_contrato(contrato, ctx.loja)
+    # Gera HTML do contrato: template editável (se houver) ou gerador legado
+    if contrato.template_id and contrato.template:
+        html_content = _render_template_contrato(contrato.template, contrato, ctx.loja)
+    else:
+        html_content = _gerar_html_contrato(contrato, ctx.loja)
 
     # Retorna como HTML para impressão (PDF real requer wkhtmltopdf/weasyprint)
     return StreamingResponse(
@@ -295,6 +308,135 @@ async def gerar_pdf_contrato(
             "Content-Disposition": f'inline; filename="contrato-{contrato.numero}.html"',
         },
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# ── CRUD DE MODELOS DE CONTRATO (TEMPLATES)
+# ═══════════════════════════════════════════════════════════════
+
+def _template_to_response(t: TemplateContrato) -> TemplateContratoResponse:
+    campos = json.loads(t.campos_extras) if t.campos_extras else []
+    return TemplateContratoResponse(
+        id=t.id,
+        loja_id=t.loja_id,
+        nome=t.nome,
+        conteudo_html=t.conteudo_html,
+        campos_extras=campos,
+        ativo=t.ativo,
+        created_at=t.created_at,
+        updated_at=t.updated_at,
+    )
+
+
+@router.get("/templates-contrato", response_model=TemplateContratoListResponse)
+async def listar_templates_contrato(
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lista modelos de contrato ativos da loja."""
+    stmt = select(TemplateContrato).where(
+        TemplateContrato.loja_id == ctx.loja.id,
+        TemplateContrato.ativo == True,  # noqa: E712
+    ).order_by(TemplateContrato.nome)
+    result = await db.execute(stmt)
+    templates = result.scalars().all()
+    return TemplateContratoListResponse(items=[_template_to_response(t) for t in templates])
+
+
+@router.post("/templates-contrato", response_model=TemplateContratoResponse, status_code=201)
+async def criar_template_contrato(
+    body: TemplateContratoCreateRequest,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cria um novo modelo de contrato editável."""
+    campos_json = json.dumps([c.model_dump() for c in body.campos_extras]) if body.campos_extras else None
+    template = TemplateContrato(
+        loja_id=ctx.loja.id,
+        nome=body.nome,
+        conteudo_html=body.conteudo_html,
+        campos_extras=campos_json,
+        ativo=True,
+    )
+    db.add(template)
+    await db.commit()
+    await db.refresh(template)
+    return _template_to_response(template)
+
+
+async def _obter_template_ou_404(template_id: str, loja_id: str, db: AsyncSession) -> TemplateContrato:
+    stmt = select(TemplateContrato).where(
+        TemplateContrato.id == template_id,
+        TemplateContrato.loja_id == loja_id,
+    )
+    result = await db.execute(stmt)
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(status_code=404, detail="Modelo de contrato não encontrado")
+    return template
+
+
+@router.get("/templates-contrato/{template_id}", response_model=TemplateContratoResponse)
+async def obter_template_contrato(
+    template_id: str,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    template = await _obter_template_ou_404(template_id, ctx.loja.id, db)
+    return _template_to_response(template)
+
+
+@router.patch("/templates-contrato/{template_id}", response_model=TemplateContratoResponse)
+async def atualizar_template_contrato(
+    template_id: str,
+    body: TemplateContratoUpdateRequest,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    template = await _obter_template_ou_404(template_id, ctx.loja.id, db)
+    update_data = body.model_dump(exclude_unset=True)
+    if "campos_extras" in update_data:
+        campos = update_data.pop("campos_extras")
+        template.campos_extras = json.dumps(campos) if campos else None
+    for key, value in update_data.items():
+        setattr(template, key, value)
+    template.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(template)
+    return _template_to_response(template)
+
+
+@router.delete("/templates-contrato/{template_id}", status_code=204)
+async def excluir_template_contrato(
+    template_id: str,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft delete — marca como inativo."""
+    template = await _obter_template_ou_404(template_id, ctx.loja.id, db)
+    template.ativo = False
+    template.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+
+@router.post("/templates-contrato/{template_id}/duplicar", response_model=TemplateContratoResponse, status_code=201)
+async def duplicar_template_contrato(
+    template_id: str,
+    ctx: B2BContext = Depends(get_current_b2b_user),
+    db: AsyncSession = Depends(get_db),
+):
+    original = await _obter_template_ou_404(template_id, ctx.loja.id, db)
+    copia = TemplateContrato(
+        loja_id=ctx.loja.id,
+        nome=f"{original.nome} (cópia)",
+        conteudo_html=original.conteudo_html,
+        campos_extras=original.campos_extras,
+        ativo=True,
+    )
+    db.add(copia)
+    await db.commit()
+    await db.refresh(copia)
+    return _template_to_response(copia)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -534,6 +676,68 @@ async def vender_veiculo(
         trocas_veiculo_ids=[v.id for v in trocas_criadas],
         comissao_excedente=excedente if excedente > 0 else None,
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# ── RENDER DE MODELOS DE CONTRATO (Jinja2)
+# ═══════════════════════════════════════════════════════════════
+
+_jinja_env = Environment(autoescape=True)
+
+
+def _fmt_brl(v):
+    if v is None:
+        return "R$ ___________"
+    return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _render_template_contrato(template: TemplateContrato, contrato: Contrato, loja) -> str:
+    """Renderiza um TemplateContrato com Jinja2 usando os dados do contrato."""
+    veiculo = contrato.veiculo
+    cliente = contrato.cliente
+    dados_extras = json.loads(contrato.dados_extras) if contrato.dados_extras else {}
+
+    contexto = {
+        "cliente": {
+            "nome": cliente.nome if cliente else "___________",
+            "cpf": (cliente.cpf if cliente else None) or "___.___.___-__",
+            "rg": (cliente.rg if cliente else None) or "___________",
+            "telefone": (cliente.telefone if cliente else None) or "___________",
+            "endereco": (cliente.endereco if cliente else None) or "___________",
+            "cidade": (cliente.cidade if cliente else None) or "___________",
+            "estado": (cliente.estado if cliente else None) or "__",
+        },
+        "veiculo": {
+            "marca": (veiculo.marca if veiculo else None) or "___________",
+            "modelo": (veiculo.modelo if veiculo else None) or "___________",
+            "versao": (veiculo.versao if veiculo else None) or "",
+            "ano_fabricacao": veiculo.ano_fabricacao if veiculo else "____",
+            "ano_modelo": veiculo.ano_modelo if veiculo else "____",
+            "placa": (veiculo.placa if veiculo else None) or "___________",
+            "cor": (veiculo.cor if veiculo else None) or "___________",
+            "km": veiculo.km if veiculo else 0,
+            "combustivel": (veiculo.combustivel if veiculo else None) or "___________",
+        },
+        "loja": {
+            "nome": loja.nome,
+            "cnpj": loja.cnpj or "___.___.___/____-__",
+            "endereco": loja.endereco or "___________",
+            "cidade": loja.cidade or "___________",
+            "estado": loja.estado or "__",
+            "telefone": loja.telefone or loja.whatsapp or "___________",
+        },
+        "contrato": {
+            "numero": contrato.numero,
+            "valor_venda": _fmt_brl(contrato.valor_venda),
+            "valor_entrada": _fmt_brl(contrato.valor_entrada),
+            "parcelas": contrato.parcelas or "___",
+            "observacoes": contrato.observacoes or "",
+            "data": contrato.created_at.strftime("%d/%m/%Y") if contrato.created_at else "___/___/______",
+        },
+        **dados_extras,
+    }
+
+    return _jinja_env.from_string(template.conteudo_html).render(**contexto)
 
 
 # ═══════════════════════════════════════════════════════════════
