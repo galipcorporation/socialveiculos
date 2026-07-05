@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, extractErrorDetails } from '../../lib/api'
 import { useUIStore } from '../../stores/uiStore'
 import { useAuthStore } from '../../stores/authStore'
@@ -55,6 +55,22 @@ interface VeiculoItem {
   preco_venda?: number
 }
 
+interface CampoExtra {
+  chave: string
+  label: string
+}
+
+interface TemplateItem {
+  id: string
+  loja_id: string
+  nome: string
+  conteudo_html: string
+  campos_extras: CampoExtra[]
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
 /* ── Helpers ──────────────────────────────────────────────────── */
 
 const formatBRL = (v?: number | null) => {
@@ -92,6 +108,57 @@ const STATUS_CLASSES: Record<string, string> = {
   assinado: 'status-assinado',
   cancelado: 'status-cancelado',
 }
+
+const CATALOGO_VARIAVEIS: { grupo: string; itens: { chave: string; label: string }[] }[] = [
+  {
+    grupo: 'Cliente',
+    itens: [
+      { chave: 'cliente.nome', label: 'Nome' },
+      { chave: 'cliente.cpf', label: 'CPF' },
+      { chave: 'cliente.rg', label: 'RG' },
+      { chave: 'cliente.telefone', label: 'Telefone' },
+      { chave: 'cliente.endereco', label: 'Endereço' },
+      { chave: 'cliente.cidade', label: 'Cidade' },
+      { chave: 'cliente.estado', label: 'Estado' },
+    ],
+  },
+  {
+    grupo: 'Veículo',
+    itens: [
+      { chave: 'veiculo.marca', label: 'Marca' },
+      { chave: 'veiculo.modelo', label: 'Modelo' },
+      { chave: 'veiculo.versao', label: 'Versão' },
+      { chave: 'veiculo.ano_fabricacao', label: 'Ano fabricação' },
+      { chave: 'veiculo.ano_modelo', label: 'Ano modelo' },
+      { chave: 'veiculo.placa', label: 'Placa' },
+      { chave: 'veiculo.cor', label: 'Cor' },
+      { chave: 'veiculo.km', label: 'KM' },
+      { chave: 'veiculo.combustivel', label: 'Combustível' },
+    ],
+  },
+  {
+    grupo: 'Loja',
+    itens: [
+      { chave: 'loja.nome', label: 'Razão social' },
+      { chave: 'loja.cnpj', label: 'CNPJ' },
+      { chave: 'loja.endereco', label: 'Endereço' },
+      { chave: 'loja.cidade', label: 'Cidade' },
+      { chave: 'loja.estado', label: 'Estado' },
+      { chave: 'loja.telefone', label: 'Telefone' },
+    ],
+  },
+  {
+    grupo: 'Contrato / Valores',
+    itens: [
+      { chave: 'contrato.numero', label: 'Número' },
+      { chave: 'contrato.data', label: 'Data' },
+      { chave: 'contrato.valor_venda', label: 'Valor da venda' },
+      { chave: 'contrato.valor_entrada', label: 'Entrada' },
+      { chave: 'contrato.parcelas', label: 'Parcelas' },
+      { chave: 'contrato.observacoes', label: 'Observações' },
+    ],
+  },
+]
 
 /* ── Icons ───────────────────────────────────────────────────── */
 
@@ -163,6 +230,7 @@ export function ContratosPage() {
 
   // Modal novo contrato
   const [showModal, setShowModal] = useState(false)
+  const [aba, setAba] = useState<'contratos' | 'modelos'>('contratos')
 
   const toast = (type: 'success' | 'error' | 'info', message: string) => useUIStore.getState().showToast(message, type)
 
@@ -239,11 +307,86 @@ export function ContratosPage() {
           <h2>Gestão de Contratos</h2>
           <p>Crie, gerencie e compartilhe contratos de compra e venda, consignação e garantia.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-          <PlusIcon /> Novo Contrato
+        {aba === 'contratos' && (
+          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+            <PlusIcon /> Novo Contrato
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <button
+          className={`btn ${aba === 'contratos' ? 'btn-primary' : 'btn-outline'}`}
+          style={{ padding: '6px 16px', fontSize: 13 }}
+          onClick={() => setAba('contratos')}
+        >
+          Contratos
+        </button>
+        <button
+          className={`btn ${aba === 'modelos' ? 'btn-primary' : 'btn-outline'}`}
+          style={{ padding: '6px 16px', fontSize: 13 }}
+          onClick={() => setAba('modelos')}
+        >
+          Modelos
         </button>
       </div>
 
+      {aba === 'modelos' ? <ModelosTab /> : (
+        <ContratosTabContent
+          contratos={contratos}
+          total={total}
+          loading={loading}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          setPage={setPage}
+          search={search}
+          setSearch={setSearch}
+          handleDownloadPdf={handleDownloadPdf}
+          handleShareWhatsApp={handleShareWhatsApp}
+          handleStatusChange={handleStatusChange}
+          navigate={navigate}
+        />
+      )}
+
+      {/* ── Modal Novo Contrato ── */}
+      {showModal && (
+        <NovoContratoModal
+          onClose={() => setShowModal(false)}
+          onSaved={() => {
+            setShowModal(false)
+            toast('success', 'Contrato criado com sucesso!')
+            fetchContratos()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   TAB — Conteúdo da aba Contratos (KPIs, filtros, tabela)
+   ══════════════════════════════════════════════════════════════ */
+
+function ContratosTabContent({
+  contratos, total, loading, statusFilter, setStatusFilter, setPage,
+  search, setSearch, handleDownloadPdf, handleShareWhatsApp, handleStatusChange, navigate,
+}: {
+  contratos: ContratoItem[]
+  total: number
+  loading: boolean
+  statusFilter: string
+  setStatusFilter: (v: string) => void
+  setPage: (v: number) => void
+  search: string
+  setSearch: (v: string) => void
+  handleDownloadPdf: (c: ContratoItem) => void
+  handleShareWhatsApp: (c: ContratoItem) => void
+  handleStatusChange: (c: ContratoItem, status: string) => void
+  navigate: (path: string) => void
+}) {
+  return (
+    <>
       {/* ── KPIs ── */}
       <div className="kpi-grid" style={{ marginBottom: 24 }}>
         <div className="kpi-card">
@@ -396,18 +539,273 @@ export function ContratosPage() {
           </tbody>
         </table>
       )}
+    </>
+  )
+}
 
-      {/* ── Modal Novo Contrato ── */}
-      {showModal && (
-        <NovoContratoModal
-          onClose={() => setShowModal(false)}
+
+/* ══════════════════════════════════════════════════════════════
+   TAB — Modelos de Contrato
+   ══════════════════════════════════════════════════════════════ */
+
+function ModelosTab() {
+  const [templates, setTemplates] = useState<TemplateItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState<TemplateItem | null>(null)
+  const [creating, setCreating] = useState(false)
+
+  const toast = (type: 'success' | 'error' | 'info', message: string) => useUIStore.getState().showToast(message, type)
+
+  const fetchTemplates = useCallback(async () => {
+    setLoading(true)
+    try {
+      const data = await api.get<{ items: TemplateItem[] }>('/templates-contrato')
+      setTemplates(data.items)
+    } catch (err) {
+      const { message, details } = extractErrorDetails(err)
+      useUIStore.getState().showError(message || 'Erro ao carregar modelos', details)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchTemplates() }, [fetchTemplates])
+
+  const handleDuplicar = async (t: TemplateItem) => {
+    try {
+      await api.post(`/templates-contrato/${t.id}/duplicar`)
+      toast('success', 'Modelo duplicado')
+      fetchTemplates()
+    } catch (err) {
+      const { message, details } = extractErrorDetails(err)
+      useUIStore.getState().showError(message || 'Erro ao duplicar modelo', details)
+    }
+  }
+
+  const handleExcluir = async (t: TemplateItem) => {
+    try {
+      await api.delete(`/templates-contrato/${t.id}`)
+      toast('success', 'Modelo excluído')
+      fetchTemplates()
+    } catch (err) {
+      const { message, details } = extractErrorDetails(err)
+      useUIStore.getState().showError(message || 'Erro ao excluir modelo', details)
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+        <button className="btn btn-primary" onClick={() => setCreating(true)}>
+          <PlusIcon /> Novo Modelo
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="empty-state">
+          <div className="spinner" />
+          <p style={{ marginTop: 16 }}>Carregando modelos...</p>
+        </div>
+      ) : templates.length === 0 ? (
+        <div className="empty-state">
+          <DocIcon />
+          <h3>Nenhum modelo criado</h3>
+          <p>Crie seu primeiro modelo de contrato clicando em "Novo Modelo".</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+          {templates.map(t => (
+            <div key={t.id} className="kpi-card" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ fontWeight: 600 }}>{t.nome}</div>
+              <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>
+                {t.campos_extras.length > 0 ? `${t.campos_extras.length} campo(s) personalizado(s)` : 'Sem campos personalizados'}
+              </div>
+              <div className="actions-cell">
+                <button className="action-btn" title="Editar" onClick={() => setEditing(t)}>
+                  <DocIcon />
+                </button>
+                <button className="action-btn" title="Duplicar" onClick={() => handleDuplicar(t)}>
+                  <PlusIcon />
+                </button>
+                <button className="action-btn" title="Excluir" onClick={() => handleExcluir(t)}>
+                  <XIcon />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(creating || editing) && (
+        <EditorTemplateModal
+          template={editing}
+          onClose={() => { setCreating(false); setEditing(null) }}
           onSaved={() => {
-            setShowModal(false)
-            toast('success', 'Contrato criado com sucesso!')
-            fetchContratos()
+            setCreating(false)
+            setEditing(null)
+            toast('success', 'Modelo salvo com sucesso!')
+            fetchTemplates()
           }}
         />
       )}
+    </div>
+  )
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   MODAL — Editor de Modelo de Contrato
+   ══════════════════════════════════════════════════════════════ */
+
+function EditorTemplateModal({ template, onClose, onSaved }: {
+  template: TemplateItem | null
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [nome, setNome] = useState(template?.nome || '')
+  const [campos, setCampos] = useState<CampoExtra[]>(template?.campos_extras || [])
+  const [novoCampoChave, setNovoCampoChave] = useState('')
+  const [novoCampoLabel, setNovoCampoLabel] = useState('')
+  const [saving, setSaving] = useState(false)
+  const editorRef = useRef<HTMLDivElement>(null)
+
+  const toast = (type: 'success' | 'error' | 'info', message: string) => useUIStore.getState().showToast(message, type)
+
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.innerHTML = template?.conteudo_html || '<p>Digite o texto do contrato aqui...</p>'
+    }
+  }, [template])
+
+  const inserirVariavel = (chave: string) => {
+    const placeholder = `{{${chave}}}`
+    editorRef.current?.focus()
+    document.execCommand('insertText', false, placeholder)
+  }
+
+  const adicionarCampoExtra = () => {
+    if (!novoCampoChave.trim() || !novoCampoLabel.trim()) return
+    setCampos(prev => [...prev, { chave: novoCampoChave.trim(), label: novoCampoLabel.trim() }])
+    setNovoCampoChave('')
+    setNovoCampoLabel('')
+  }
+
+  const removerCampoExtra = (chave: string) => {
+    setCampos(prev => prev.filter(c => c.chave !== chave))
+  }
+
+  const handleSubmit = async () => {
+    if (!nome.trim()) {
+      toast('error', 'Informe o nome do modelo')
+      return
+    }
+    setSaving(true)
+    try {
+      const conteudo_html = editorRef.current?.innerHTML || ''
+      const payload = { nome, conteudo_html, campos_extras: campos }
+      if (template) {
+        await api.patch(`/templates-contrato/${template.id}`, payload)
+      } else {
+        await api.post('/templates-contrato', payload)
+      }
+      onSaved()
+    } catch (err) {
+      const { message, details } = extractErrorDetails(err)
+      useUIStore.getState().showError(message || 'Erro ao salvar modelo', details)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
+        <div className="modal-header">
+          <h3>{template ? 'Editar Modelo' : 'Novo Modelo'}</h3>
+          <button className="modal-close" onClick={onClose}><XIcon /></button>
+        </div>
+
+        <div className="modal-body">
+          <div className="form-group" style={{ marginBottom: 16 }}>
+            <label>Nome do modelo</label>
+            <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Compra e Venda — Sedans" />
+          </div>
+
+          <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', marginBottom: 6 }}>Texto do contrato</label>
+              <div
+                ref={editorRef}
+                contentEditable
+                suppressContentEditableWarning
+                style={{
+                  minHeight: 320,
+                  border: '1px solid var(--sv-border)',
+                  borderRadius: 8,
+                  padding: 12,
+                  background: 'var(--sv-input-bg)',
+                  overflowY: 'auto',
+                }}
+              />
+
+              <div style={{ marginTop: 16 }}>
+                <label style={{ display: 'block', marginBottom: 6 }}>Campos personalizados</label>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <input
+                    type="text"
+                    placeholder="chave (ex: garantia_meses)"
+                    value={novoCampoChave}
+                    onChange={e => setNovoCampoChave(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="rótulo (ex: Meses de garantia)"
+                    value={novoCampoLabel}
+                    onChange={e => setNovoCampoLabel(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <button className="btn btn-outline" onClick={adicionarCampoExtra}>Adicionar</button>
+                </div>
+                {campos.map(c => (
+                  <div key={c.chave} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                    <span>{c.label} (<code>{`{{${c.chave}}}`}</code>)</span>
+                    <button className="action-btn" onClick={() => removerCampoExtra(c.chave)}><XIcon /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ width: 260 }}>
+              <label style={{ display: 'block', marginBottom: 6 }}>Variáveis do sistema</label>
+              <div style={{ maxHeight: 460, overflowY: 'auto', border: '1px solid var(--sv-border)', borderRadius: 8, padding: 8 }}>
+                {CATALOGO_VARIAVEIS.map(grupo => (
+                  <div key={grupo.grupo} style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--sv-text-muted)', marginBottom: 4 }}>{grupo.grupo}</div>
+                    {grupo.itens.map(item => (
+                      <button
+                        key={item.chave}
+                        className="btn btn-outline"
+                        style={{ display: 'block', width: '100%', textAlign: 'left', fontSize: 12, padding: '4px 8px', marginBottom: 4 }}
+                        onClick={() => inserirVariavel(item.chave)}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar Modelo'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -428,6 +826,17 @@ function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const [parcelas, setParcelas] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [templates, setTemplates] = useState<TemplateItem[]>([])
+  const [templateId, setTemplateId] = useState('')
+  const [valoresExtras, setValoresExtras] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    api.get<{ items: TemplateItem[] }>('/templates-contrato')
+      .then(data => setTemplates(data.items))
+      .catch(() => { /* ignore */ })
+  }, [])
+
+  const templateSelecionado = templates.find(t => t.id === templateId)
 
   // Busca de clientes e veículos
   const [clientes, setClientes] = useState<ClienteItem[]>([])
@@ -474,6 +883,8 @@ function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         valor_entrada: parseMoeda(entradaStr) || null,
         parcelas: parcelas ? parseInt(parcelas) : null,
         observacoes: observacoes || null,
+        template_id: templateId || null,
+        dados_extras: Object.keys(valoresExtras).length > 0 ? valoresExtras : null,
       })
       onSaved()
     } catch (err) {
@@ -503,6 +914,33 @@ function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                 <option value="garantia">Garantia</option>
               </select>
             </div>
+
+            {/* Modelo */}
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label>Modelo de Contrato</label>
+              <select value={templateId} onChange={e => { setTemplateId(e.target.value); setValoresExtras({}) }}>
+                <option value="">Nenhum (usar layout padrão do sistema)</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            {templateSelecionado && templateSelecionado.campos_extras.length > 0 && (
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Campos do modelo "{templateSelecionado.nome}"</label>
+                {templateSelecionado.campos_extras.map(campo => (
+                  <input
+                    key={campo.chave}
+                    type="text"
+                    placeholder={campo.label}
+                    value={valoresExtras[campo.chave] || ''}
+                    onChange={e => setValoresExtras(prev => ({ ...prev, [campo.chave]: e.target.value }))}
+                    style={{ marginBottom: 8 }}
+                  />
+                ))}
+              </div>
+            )}
 
             {/* Cliente */}
             <SearchSelect
