@@ -1093,6 +1093,41 @@ class SimulacaoResponse(BaseModel):
 # CONTRATOS
 # ═══════════════════════════════════════════════════════════════
 
+class CampoExtraTemplate(BaseModel):
+    chave: str = Field(..., min_length=1, max_length=60)
+    label: str = Field(..., min_length=1, max_length=120)
+
+
+class TemplateContratoCreateRequest(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=200)
+    conteudo_html: str = Field(..., min_length=1)
+    campos_extras: Optional[List[CampoExtraTemplate]] = None
+
+
+class TemplateContratoUpdateRequest(BaseModel):
+    nome: Optional[str] = Field(None, min_length=1, max_length=200)
+    conteudo_html: Optional[str] = None
+    campos_extras: Optional[List[CampoExtraTemplate]] = None
+    ativo: Optional[bool] = None
+
+
+class TemplateContratoResponse(BaseModel):
+    id: str
+    loja_id: str
+    nome: str
+    conteudo_html: str
+    campos_extras: List[CampoExtraTemplate] = []
+    ativo: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TemplateContratoListResponse(BaseModel):
+    items: List[TemplateContratoResponse]
+
+
 class ContratoCreateRequest(BaseModel):
     tipo: TipoContrato = TipoContrato.COMPRA_VENDA
     veiculo_id: Optional[str] = None
@@ -1102,6 +1137,8 @@ class ContratoCreateRequest(BaseModel):
     parcelas: Optional[int] = None
     observacoes: Optional[str] = None
     dados_ocr: Optional[str] = None
+    template_id: Optional[str] = None
+    dados_extras: Optional[dict] = None
 
 
 class ContratoUpdateRequest(BaseModel):
@@ -1129,6 +1166,8 @@ class ContratoResponse(BaseModel):
     parcelas: Optional[int] = None
     observacoes: Optional[str] = None
     dados_ocr: Optional[str] = None
+    template_id: Optional[str] = None
+    dados_extras: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
 
