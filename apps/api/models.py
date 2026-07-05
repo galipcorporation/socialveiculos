@@ -1269,6 +1269,9 @@ class Contrato(Base):
     # Dados OCR extraídos (JSON) — preenchidos se veio de escaneamento
     dados_ocr = Column(Text, nullable=True)
 
+    template_id = Column(String(36), ForeignKey("template_contrato.id", ondelete="SET NULL"), nullable=True)
+    dados_extras = Column(Text, nullable=True)  # JSON com valores dos campos personalizados do template
+
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
@@ -1277,6 +1280,7 @@ class Contrato(Base):
     # foreign_keys explícito: veiculo.contrato_origem_id criou um 2º caminho contrato↔veiculo
     veiculo = relationship("Veiculo", foreign_keys=[veiculo_id])
     cliente = relationship("ClientePF")
+    template = relationship("TemplateContrato")
 
     __table_args__ = (
         Index("ix_contrato_loja", "loja_id"),
@@ -1284,6 +1288,24 @@ class Contrato(Base):
         Index("ix_contrato_cliente", "cliente_id"),
         Index("ix_contrato_status", "status"),
     )
+
+
+class TemplateContrato(Base):
+    """Modelo de contrato editável pela loja — texto fixo + placeholders Jinja2."""
+    __tablename__ = "template_contrato"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
+
+    nome = Column(String(200), nullable=False)
+    conteudo_html = Column(Text, nullable=False)
+    campos_extras = Column(Text, nullable=True)  # JSON: [{"chave": "...", "label": "..."}]
+    ativo = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+    loja = relationship("Loja")
 
 
 # ═══════════════════════════════════════════════════════════════
