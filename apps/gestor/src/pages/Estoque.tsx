@@ -457,6 +457,7 @@ export function Estoque() {
         </div>
       ) : (
         <>
+          <div className="table-scroll">
           <table className="stock-table">
             <thead>
               <tr>
@@ -479,9 +480,9 @@ export function Estoque() {
                 >
                   Preço {sortBy === 'preco_venda' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </th>
-                <th>Margem</th>
+                <th className="col-secondary">Margem</th>
                 <th>Status</th>
-                <th>
+                <th className="col-secondary">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     Vitrine
                     {(() => {
@@ -527,7 +528,7 @@ export function Estoque() {
                   <td className="vehicle-year">{v.ano_fabricacao}/{v.ano_modelo}</td>
                   <td className="vehicle-km">{formatKm(v.km ?? 0)}</td>
                   <td className="vehicle-price">{formatCurrency(v.preco_venda)}</td>
-                  <td>
+                  <td className="col-secondary">
                     {v.preco_venda && v.preco_custo ? (() => {
                       const lucro = v.preco_venda - v.preco_custo
                       const margem = (lucro / v.preco_venda) * 100
@@ -544,7 +545,7 @@ export function Estoque() {
                       onChange={newStatus => handleStatusChange(v, newStatus)}
                     />
                   </td>
-                  <td>
+                  <td className="col-secondary">
                     <label className={`toggle-publish ${v.publicado_marketplace ? 'is-on' : 'is-off'}`}>
                       <input
                         type="checkbox"
@@ -619,6 +620,7 @@ export function Estoque() {
               ))}
             </tbody>
           </table>
+          </div>
 
           {/* ── Paginação ── */}
           <div className="pagination">
@@ -1389,7 +1391,7 @@ export function VeiculoModal({
                   />
                 </div>
                 <div className="form-group veic-c6">
-                  <label>Valor de repasse (B2B)</label>
+                  <label>Valor de repasse (Parceiro)</label>
                   <input
                     type="text"
                     placeholder="R$ 0,00"
@@ -2039,7 +2041,7 @@ export function VenderModal({
               <input
                 type="text"
                 value={valorStr}
-                onChange={e => setValorStr(mascararMoeda(parseMoeda(e.target.value)))}
+                onChange={e => setValorStr(mascararMoeda(e.target.value))}
               />
             </div>
           </div>
@@ -2203,7 +2205,7 @@ export function VenderModal({
                     </div>
                     <div className="fv-field">
                       <label>Valor de avaliação *</label>
-                      <input type="text" placeholder="R$ 0,00" value={tValorStr} onChange={e => setTValorStr(mascararMoeda(parseMoeda(e.target.value)))} />
+                      <input type="text" placeholder="R$ 0,00" value={tValorStr} onChange={e => setTValorStr(mascararMoeda(e.target.value))} />
                     </div>
                   </div>
                   <div className="fv-form-actions">
@@ -2218,7 +2220,7 @@ export function VenderModal({
                   <div className="fv-form-title">💵 Dinheiro / PIX</div>
                   <div className="fv-field">
                     <label>Valor *</label>
-                    <input type="text" placeholder="R$ 0,00" value={dValorStr} onChange={e => setDValorStr(mascararMoeda(parseMoeda(e.target.value)))} autoFocus />
+                    <input type="text" placeholder="R$ 0,00" value={dValorStr} onChange={e => setDValorStr(mascararMoeda(e.target.value))} autoFocus />
                   </div>
                   <div className="fv-form-actions">
                     <button type="button" className="btn btn-outline btn-sm" onClick={fecharForm}>Cancelar</button>
@@ -2233,7 +2235,7 @@ export function VenderModal({
                   <div className="fv-row">
                     <div className="fv-field">
                       <label>Valor financiado *</label>
-                      <input type="text" placeholder="R$ 0,00" value={fValorStr} onChange={e => setFValorStr(mascararMoeda(parseMoeda(e.target.value)))} autoFocus />
+                      <input type="text" placeholder="R$ 0,00" value={fValorStr} onChange={e => setFValorStr(mascararMoeda(e.target.value))} autoFocus />
                     </div>
                     <div className="fv-field">
                       <label>Parcelas</label>

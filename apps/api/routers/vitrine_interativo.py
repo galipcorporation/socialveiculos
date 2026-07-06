@@ -295,7 +295,7 @@ async def iniciar_conversa_b2c(
     )
     db.add(nova_msg)
     conversa.updated_at = datetime.utcnow()
-    await db.commit()
+    await db.flush()
 
     # 4. Criar Lead e ClientePF automaticamente se for nova conversa
     if nova_conversa_criada:
@@ -328,7 +328,7 @@ async def iniciar_conversa_b2c(
             observacoes=f"Lead gerado via Chat Vitrine B2C. Mensagem inicial: {data.mensagem}"
         )
         db.add(lead)
-        await db.commit()
+        await db.flush()
 
     # Buscar informações da loja
     loja_stmt = select(Loja).where(Loja.id == conversa.loja_id)
@@ -365,7 +365,8 @@ async def iniciar_conversa_b2c(
     # Broadcast para todos os membros da loja e o próprio cliente
     await manager.broadcast_to_conversation(conversa.id, msg_dict, db)
 
-    return ConversaB2CResponse(
+    # Construir a resposta ANTES de commitar para evitar expiração dos objetos (MissingGreenlet)
+    response = ConversaB2CResponse(
         id=conversa.id,
         tipo=conversa.tipo,
         loja_id=conversa.loja_id,
@@ -381,6 +382,9 @@ async def iniciar_conversa_b2c(
         ultima_mensagem=nova_msg.conteudo,
         ultima_mensagem_data=nova_msg.created_at
     )
+
+    await db.commit()
+    return response
 
 
 @router.get("/conversas/{id}/mensagens", response_model=List[MensagemB2CResponse])

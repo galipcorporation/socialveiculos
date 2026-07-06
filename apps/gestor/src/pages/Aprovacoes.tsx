@@ -32,6 +32,7 @@ export function Aprovacoes() {
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoAprovacao[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [mostrarHistorico, setMostrarHistorico] = useState(false)
   
   // Controle de rejeição individual
   const [rejeitandoId, setRejeitandoId] = useState<string | null>(null)
@@ -45,7 +46,8 @@ export function Aprovacoes() {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.get<SolicitacaoAprovacao[]>('/aprovacoes/pendentes')
+      const endpoint = mostrarHistorico ? '/aprovacoes/historico' : '/aprovacoes/pendentes'
+      const data = await api.get<SolicitacaoAprovacao[]>(endpoint)
       setSolicitacoes(data)
     } catch (err: unknown) {
       console.error(err)
@@ -57,7 +59,7 @@ export function Aprovacoes() {
 
   useEffect(() => {
     carregarSolicitacoes()
-  }, [])
+  }, [mostrarHistorico])
 
   const handleAprovar = async (id: string) => {
     const ok = await confirm({
@@ -119,9 +121,22 @@ export function Aprovacoes() {
   return (
     <div className="page-content">
       {/* Header */}
-      <div className="page-header">
-        <h2>Fila de Aprovações</h2>
-        <p>Revisão de ações críticas e reajustes de preços solicitados pelos vendedores da loja.</p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <h2>{mostrarHistorico ? 'Histórico de Aprovações' : 'Fila de Aprovações'}</h2>
+          <p>
+            {mostrarHistorico
+              ? 'Histórico de ações críticas aprovadas ou rejeitadas pelos gestores da loja.'
+              : 'Revisão de ações críticas e reajustes de preços solicitados pelos vendedores da loja.'}
+          </p>
+        </div>
+        <button
+          className={mostrarHistorico ? 'btn btn-outline' : 'btn btn-primary'}
+          onClick={() => setMostrarHistorico(!mostrarHistorico)}
+          style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+        >
+          {mostrarHistorico ? 'Ver pendentes' : 'Ver histórico'}
+        </button>
       </div>
 
       {error && (
@@ -144,8 +159,12 @@ export function Aprovacoes() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <h3>Nenhuma solicitação pendente</h3>
-          <p>Tudo em ordem! Não há reajustes de preço ou exclusões aguardando aprovação.</p>
+          <h3>{mostrarHistorico ? 'Histórico vazio' : 'Nenhuma solicitação pendente'}</h3>
+          <p>
+            {mostrarHistorico
+              ? 'Nenhuma solicitação foi aprovada ou rejeitada até o momento.'
+              : 'Tudo em ordem! Não há reajustes de preço ou exclusões aguardando aprovação.'}
+          </p>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '24px' }}>
@@ -154,6 +173,18 @@ export function Aprovacoes() {
             const isExcluir = item.tipo_acao === 'excluir_veiculo'
             const isProcessando = processandoId === item.id
             const isRejeitando = rejeitandoId === item.id
+
+            const badgeBg = item.status === 'aprovado'
+              ? 'rgba(16, 185, 129, 0.15)'
+              : item.status === 'rejeitado'
+              ? 'rgba(244, 63, 94, 0.15)'
+              : 'rgba(245, 158, 11, 0.15)'
+
+            const badgeColor = item.status === 'aprovado'
+              ? '#10b981'
+              : item.status === 'rejeitado'
+              ? 'var(--sv-error)'
+              : 'var(--sv-warning)'
 
             return (
               <div key={item.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -199,11 +230,11 @@ export function Aprovacoes() {
                     </div>
                   </div>
                   <span className="alerts-badge" style={{
-                    background: isExcluir ? 'rgba(244, 63, 94, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-                    color: isExcluir ? 'var(--sv-error)' : 'var(--sv-warning)',
+                    background: badgeBg,
+                    color: badgeColor,
                     fontSize: '11px'
                   }}>
-                    PENDENTE
+                    {item.status.toUpperCase()}
                   </span>
                 </div>
 
@@ -243,80 +274,92 @@ export function Aprovacoes() {
                         </span>
                       )}
                     </div>
+                    {item.status === 'rejeitado' && item.justificativa_rejeicao && (
+                      <div style={{ marginTop: '10px', padding: '10px', borderRadius: '6px', background: 'rgba(244, 63, 94, 0.05)', border: '1px solid rgba(244, 63, 94, 0.15)' }}>
+                        <strong style={{ color: 'var(--sv-error)' }}>Justificativa da Rejeição:</strong>
+                        <p style={{ color: 'var(--sv-text)', fontSize: '13px', marginTop: '4px', marginBlockEnd: 0 }}>
+                          {item.justificativa_rejeicao}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {isRejeitando ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase' }}>
-                      Justificativa da Rejeição:
-                    </label>
-                    <textarea
-                      value={justificativa}
-                      onChange={(e) => setJustificativa(e.target.value)}
-                      placeholder="Ex: Preço de venda abaixo da margem mínima."
-                      disabled={isProcessando}
-                      style={{
-                        width: '100%',
-                        height: '70px',
-                        background: 'var(--sv-surface-dim)',
-                        border: '1px solid var(--sv-border)',
-                        borderRadius: '6px',
-                        color: 'var(--sv-text)',
-                        padding: '10px',
-                        fontSize: '13px',
-                        outline: 'none',
-                        resize: 'none'
-                      }}
-                    />
-                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                      <button
-                        className="btn btn-glass"
-                        onClick={() => {
-                          setRejeitandoId(null)
-                          setJustificativa('')
-                        }}
-                        disabled={isProcessando}
-                        style={{ padding: '8px 16px', fontSize: '13px' }}
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        className="btn"
-                        onClick={() => handleRejeitarConfirmada(item.id)}
-                        disabled={isProcessando}
-                        style={{ padding: '8px 16px', fontSize: '13px', background: 'var(--sv-error)', color: 'white' }}
-                      >
-                        {isProcessando ? 'Rejeitando...' : 'Confirmar'}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '12px' }}>
-                    <button
-                      className="btn btn-glass"
-                      onClick={() => setRejeitandoId(item.id)}
-                      disabled={isProcessando}
-                      style={{ padding: '8px 16px', fontSize: '13px', color: 'var(--sv-error)' }}
-                    >
-                      Rejeitar
-                    </button>
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => handleAprovar(item.id)}
-                      disabled={isProcessando}
-                      style={{ padding: '8px 16px', fontSize: '13px' }}
-                    >
-                      {isProcessando ? (
-                        <>
-                          <span className="spinner" style={{ width: '12px', height: '12px', borderTopColor: 'white' }} />
-                          Processando...
-                        </>
-                      ) : (
-                        'Aprovar'
-                      )}
-                    </button>
-                  </div>
+                {item.status === 'pendente' && (
+                  <>
+                    {isRejeitando ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+                        <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase' }}>
+                          Justificativa da Rejeição:
+                        </label>
+                        <textarea
+                          value={justificativa}
+                          onChange={(e) => setJustificativa(e.target.value)}
+                          placeholder="Ex: Preço de venda abaixo da margem mínima."
+                          disabled={isProcessando}
+                          style={{
+                            width: '100%',
+                            height: '70px',
+                            background: 'var(--sv-surface-dim)',
+                            border: '1px solid var(--sv-border)',
+                            borderRadius: '6px',
+                            color: 'var(--sv-text)',
+                            padding: '10px',
+                            fontSize: '13px',
+                            outline: 'none',
+                            resize: 'none'
+                          }}
+                        />
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                          <button
+                            className="btn btn-glass"
+                            onClick={() => {
+                              setRejeitandoId(null)
+                              setJustificativa('')
+                            }}
+                            disabled={isProcessando}
+                            style={{ padding: '8px 16px', fontSize: '13px' }}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            className="btn"
+                            onClick={() => handleRejeitarConfirmada(item.id)}
+                            disabled={isProcessando}
+                            style={{ padding: '8px 16px', fontSize: '13px', background: 'var(--sv-error)', color: 'white' }}
+                          >
+                            {isProcessando ? 'Rejeitando...' : 'Confirmar'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '12px' }}>
+                        <button
+                          className="btn btn-glass"
+                          onClick={() => setRejeitandoId(item.id)}
+                          disabled={isProcessando}
+                          style={{ padding: '8px 16px', fontSize: '13px', color: 'var(--sv-error)' }}
+                        >
+                          Rejeitar
+                        </button>
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => handleAprovar(item.id)}
+                          disabled={isProcessando}
+                          style={{ padding: '8px 16px', fontSize: '13px' }}
+                        >
+                          {isProcessando ? (
+                            <>
+                              <span className="spinner" style={{ width: '12px', height: '12px', borderTopColor: 'white' }} />
+                              Processando...
+                            </>
+                          ) : (
+                            'Aprovar'
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )

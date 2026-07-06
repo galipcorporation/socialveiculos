@@ -61,6 +61,32 @@ async def get_solicitacoes_pendentes(
     return [await _build_solicitacao_response(db, s) for s in solicitacoes]
 
 
+@router.get(
+    "/historico",
+    response_model=List[SolicitacaoAprovacaoResponse],
+    dependencies=[Depends(exige_permissao(Acao.VER, Recurso.APROVACOES))]
+)
+async def get_historico_solicitacoes(
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user)
+):
+    """
+    Lista o histórico de solicitações processadas (aprovadas/rejeitadas) no tenant da loja.
+    """
+    stmt = (
+        select(SolicitacaoAprovacao)
+        .options(selectinload(SolicitacaoAprovacao.requinitante if hasattr(SolicitacaoAprovacao, "requinitante") else SolicitacaoAprovacao.requisitante))
+        .where(
+            SolicitacaoAprovacao.loja_id == context.loja_id,
+            SolicitacaoAprovacao.status != StatusAprovacao.PENDENTE
+        )
+        .order_by(SolicitacaoAprovacao.updated_at.desc())
+    )
+    result = await db.execute(stmt)
+    solicitacoes = result.scalars().all()
+    return [await _build_solicitacao_response(db, s) for s in solicitacoes]
+
+
 @router.post(
     "/{id}/processar",
     response_model=SolicitacaoAprovacaoResponse,

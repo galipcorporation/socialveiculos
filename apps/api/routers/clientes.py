@@ -31,6 +31,8 @@ async def listar_clientes(
     q: Optional[str] = None,
     cpf: Optional[str] = None,
     telefone: Optional[str] = None,
+    per_page: int = 50,
+    page: int = 1,
     db: AsyncSession = Depends(get_db),
     context: B2BContext = Depends(get_current_b2b_user)
 ):
@@ -41,13 +43,20 @@ async def listar_clientes(
     stmt = select(ClientePF).where(ClientePF.loja_id == context.loja_id)
 
     if q:
-        stmt = stmt.where(ClientePF.nome.ilike(f"%{q}%"))
+        from sqlalchemy import or_
+        stmt = stmt.where(
+            or_(
+                ClientePF.nome.ilike(f"%{q}%"),
+                ClientePF.cpf.ilike(f"%{q}%"),
+                ClientePF.telefone.ilike(f"%{q}%"),
+            )
+        )
     if cpf:
         stmt = stmt.where(ClientePF.cpf.ilike(f"%{cpf}%"))
     if telefone:
         stmt = stmt.where(ClientePF.telefone.ilike(f"%{telefone}%"))
 
-    stmt = stmt.order_by(ClientePF.created_at.desc())
+    stmt = stmt.order_by(ClientePF.created_at.desc()).offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(stmt)
     return result.scalars().all()
 

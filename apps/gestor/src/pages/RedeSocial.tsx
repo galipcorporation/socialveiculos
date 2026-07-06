@@ -243,7 +243,7 @@ export function RedeSocial() {
 
       <div style={{ flex: 1, minHeight: 0 }}>
         {activeTab === 'feed' && <FeedTab addToast={addToast} onStartChat={(id) => { setInitialConversaId(id); setActiveTab('chat') }} />}
-        {activeTab === 'propostas' && <PropostasTab addToast={addToast} />}
+        {activeTab === 'propostas' && <PropostasTab addToast={addToast} onStartChat={(id) => { setInitialConversaId(id); setActiveTab('chat') }} />}
         {activeTab === 'parceiros' && <ParceirosTab addToast={addToast} onStartChat={(id) => { setInitialConversaId(id); setActiveTab('chat') }} />}
         {activeTab === 'chat' && <ChatTab token={token} user={user} addToast={addToast} initialConversaId={initialConversaId} />}
         {activeTab === 'clientes' && <ChatClientesTab token={token} user={user} addToast={addToast} />}
@@ -313,7 +313,7 @@ function FeedTab({ addToast, onStartChat }: { addToast: (t: ToastType, m: string
     try {
       const conv = await api.post<{ id: string }>('/b2b/chat/conversas', { outra_loja_id: pub.loja_id })
       await api.post(`/b2b/chat/conversas/${conv.id}/mensagens`, { conteudo: content })
-      addToast('success', 'Mensagem enviada com sucesso no Chat B2B!')
+      addToast('success', 'Mensagem enviada com sucesso no Chat de Parceiros!')
       setNewMessage(prev => ({ ...prev, [pub.id]: '' }))
       onStartChat(conv.id)
     } catch (err) {
@@ -454,7 +454,7 @@ function FeedTab({ addToast, onStartChat }: { addToast: (t: ToastType, m: string
             <div style={{ display: 'flex', gap: 8 }}>
               <input
                 type="text"
-                placeholder="Enviar mensagem no Chat B2B..."
+                placeholder="Enviar mensagem no Chat de Parceiros..."
                 className="topbar-search"
                 style={{ flex: 1, height: 32, padding: '0 10px', fontSize: 12, border: '1px solid var(--sv-border)', borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', color: 'var(--sv-text)' }}
                 value={newMessage[pub.id] || ''}
@@ -528,7 +528,7 @@ function FeedTab({ addToast, onStartChat }: { addToast: (t: ToastType, m: string
    TAB 2: PROPOSTAS
    ─────────────────────────────────────────────────────────────── */
 
-function PropostasTab({ addToast }: { addToast: (t: ToastType, m: string, details?: any) => void }) {
+function PropostasTab({ addToast, onStartChat }: { addToast: (t: ToastType, m: string, details?: any) => void, onStartChat: (conversaId: string) => void }) {
   const [subTab, setSubTab] = useState<'recebidas' | 'enviadas'>('recebidas')
   const [propostas, setPropostas] = useState<PropostaRepasse[]>([])
   const [loading, setLoading] = useState(true)
@@ -566,6 +566,15 @@ function PropostasTab({ addToast }: { addToast: (t: ToastType, m: string, detail
     } catch (err) {
       const { message, details } = extractErrorDetails(err)
       addToast('error', message || 'Erro ao processar proposta', details)
+    }
+  }
+
+  const handleStartConversation = async (lojaId: string) => {
+    try {
+      const res = await api.post<{ id: string }>('/b2b/chat/conversas', { outra_loja_id: lojaId })
+      onStartChat(res.id)
+    } catch (err: any) {
+      addToast('error', err.message || 'Erro ao iniciar conversa')
     }
   }
 
@@ -697,6 +706,17 @@ function PropostasTab({ addToast }: { addToast: (t: ToastType, m: string, detail
                       Cancelar Proposta
                     </button>
                   )}
+                </div>
+              )}
+              {p.status === 'aceita' && (
+                <div style={{ display: 'flex', gap: 10, borderTop: '1px solid var(--sv-border)', paddingTop: 10, marginTop: 4 }}>
+                  <button
+                    className="btn btn-primary"
+                    style={{ flex: 1, padding: '6px 12px', fontSize: 13, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6 }}
+                    onClick={() => handleStartConversation(subTab === 'recebidas' ? p.loja_proponente_id : p.loja_destino_id)}
+                  >
+                    <span>💬</span> Iniciar Chat Parceiro
+                  </button>
                 </div>
               )}
             </div>
@@ -871,7 +891,7 @@ function ParceirosTab({ addToast, onStartChat }: { addToast: (t: ToastType, m: s
                   Ver Vitrine
                 </a>
                 <button className="btn btn-primary" style={{ fontSize: 13, padding: '10px 20px' }} onClick={() => handleStartConversation(p.id)}>
-                  Abrir Chat B2B
+                  Abrir Chat Parceiro
                 </button>
               </div>
             </div>

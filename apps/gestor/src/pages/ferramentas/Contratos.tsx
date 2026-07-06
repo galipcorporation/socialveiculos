@@ -3,7 +3,7 @@ import { api, extractErrorDetails } from '../../lib/api'
 import { useUIStore } from '../../stores/uiStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useLojaAtivaStore } from '../../stores/lojaAtivaStore'
-import { mascararMoeda, parseMoeda } from '../../lib/mascaras'
+import { mascararMoeda, parseMoeda, mascararCPF } from '../../lib/mascaras'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { SearchSelect } from '../../components/SearchSelect'
 import { FileSignature } from 'lucide-react'
@@ -169,6 +169,13 @@ const DocIcon = () => (
     <line x1="16" y1="13" x2="8" y2="13" />
     <line x1="16" y1="17" x2="8" y2="17" />
     <polyline points="10 9 9 9 8 9" />
+  </svg>
+)
+
+const EditIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 18, height: 18 }}>
+    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" />
   </svg>
 )
 
@@ -455,14 +462,15 @@ function ContratosTabContent({
           <p>Crie seu primeiro contrato clicando em "Novo Contrato" ou vendendo um veículo no Estoque.</p>
         </div>
       ) : (
+        <div className="table-scroll">
         <table className="stock-table">
           <thead>
             <tr>
               <th>Documento</th>
               <th>Cliente</th>
-              <th>Data</th>
+              <th className="col-secondary">Data</th>
               <th>Valor</th>
-              <th>Status</th>
+              <th className="col-secondary">Status</th>
               <th>Ações</th>
             </tr>
           </thead>
@@ -492,9 +500,9 @@ function ContratosTabContent({
                   </div>
                 </td>
                 <td>{c.cliente_nome || '—'}</td>
-                <td style={{ color: 'var(--sv-text-muted)' }}>{formatData(c.created_at)}</td>
+                <td className="col-secondary" style={{ color: 'var(--sv-text-muted)' }}>{formatData(c.created_at)}</td>
                 <td style={{ fontWeight: 600 }}>{formatBRL(c.valor_venda)}</td>
-                <td>
+                <td className="col-secondary">
                   <select
                     className={`status-select ${STATUS_CLASSES[c.status] || ''}`}
                     value={c.status}
@@ -538,6 +546,7 @@ function ContratosTabContent({
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </>
   )
@@ -553,8 +562,15 @@ function ModelosTab() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<TemplateItem | null>(null)
   const [creating, setCreating] = useState(false)
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
 
   const toast = (type: 'success' | 'error' | 'info', message: string) => useUIStore.getState().showToast(message, type)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   const fetchTemplates = useCallback(async () => {
     setLoading(true)
@@ -593,60 +609,113 @@ function ModelosTab() {
     }
   }
 
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-        <button className="btn btn-primary" onClick={() => setCreating(true)}>
-          <PlusIcon /> Novo Modelo
+  const closeEditor = () => { setCreating(false); setEditing(null) }
+  const isEditingOrCreating = creating || !!editing
+
+  // No mobile, quando editando/criando mostra só o editor
+  if (isMobile && isEditingOrCreating) {
+    return (
+      <div>
+        <button
+          className="btn btn-outline"
+          onClick={closeEditor}
+          style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}
+        >
+          ← Voltar para modelos
         </button>
+        <div className="glass-card" style={{ padding: 16 }}>
+          <h3 style={{ marginBottom: 16 }}>{editing ? 'Editar Modelo' : 'Novo Modelo'}</h3>
+          <EditorTemplateContent
+            template={editing}
+            onClose={closeEditor}
+            onSaved={() => {
+              closeEditor()
+              toast('success', 'Modelo salvo com sucesso!')
+              fetchTemplates()
+            }}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+      <div style={{ flex: isEditingOrCreating && !isMobile ? '1 1 40%' : '1 1 100%', transition: 'all 0.3s ease', minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+          <button className="btn btn-primary" onClick={() => { setEditing(null); setCreating(true) }}>
+            <PlusIcon /> Novo Modelo
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="empty-state">
+            <div className="spinner" />
+            <p style={{ marginTop: 16 }}>Carregando modelos...</p>
+          </div>
+        ) : templates.length === 0 ? (
+          <div className="empty-state">
+            <DocIcon />
+            <h3>Nenhum modelo criado</h3>
+            <p>Crie seu primeiro modelo de contrato clicando em "Novo Modelo".</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: isEditingOrCreating && !isMobile ? '1fr' : 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
+            {templates.map(t => {
+              const isSelected = editing?.id === t.id
+              return (
+                <div
+                  key={t.id}
+                  className="kpi-card"
+                  style={{
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    gap: 12,
+                    border: isSelected ? '2px solid var(--sv-primary)' : '1px solid var(--sv-border)',
+                    background: isSelected ? 'var(--sv-overlay-soft)' : 'var(--sv-surface)',
+                    transform: isSelected && !isMobile ? 'scale(1.02)' : 'none',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>{t.nome}</div>
+                  <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>
+                    {t.campos_extras.length > 0 ? `${t.campos_extras.length} campo(s) personalizado(s)` : 'Sem campos personalizados'}
+                  </div>
+                  <div className="actions-cell">
+                    <button className="action-btn" title="Editar" onClick={() => { setCreating(false); setEditing(t) }}>
+                      <EditIcon />
+                    </button>
+                    <button className="action-btn" title="Duplicar" onClick={() => handleDuplicar(t)}>
+                      <PlusIcon />
+                    </button>
+                    <button className="action-btn" title="Excluir" onClick={() => handleExcluir(t)}>
+                      <XIcon />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
-      {loading ? (
-        <div className="empty-state">
-          <div className="spinner" />
-          <p style={{ marginTop: 16 }}>Carregando modelos...</p>
+      {isEditingOrCreating && !isMobile && (
+        <div className="glass-card" style={{ flex: '1 1 60%', padding: 20, minWidth: 0, position: 'sticky', top: 20 }}>
+          <div className="modal-header" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0 }}>{editing ? 'Editar Modelo' : 'Novo Modelo'}</h3>
+            <button className="modal-close" onClick={closeEditor} style={{ background: 'none', border: 'none', color: 'var(--sv-text-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
+          </div>
+          <EditorTemplateContent
+            template={editing}
+            onClose={() => { setCreating(false); setEditing(null) }}
+            onSaved={() => {
+              setCreating(false)
+              setEditing(null)
+              toast('success', 'Modelo salvo com sucesso!')
+              fetchTemplates()
+            }}
+          />
         </div>
-      ) : templates.length === 0 ? (
-        <div className="empty-state">
-          <DocIcon />
-          <h3>Nenhum modelo criado</h3>
-          <p>Crie seu primeiro modelo de contrato clicando em "Novo Modelo".</p>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-          {templates.map(t => (
-            <div key={t.id} className="kpi-card" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
-              <div style={{ fontWeight: 600 }}>{t.nome}</div>
-              <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>
-                {t.campos_extras.length > 0 ? `${t.campos_extras.length} campo(s) personalizado(s)` : 'Sem campos personalizados'}
-              </div>
-              <div className="actions-cell">
-                <button className="action-btn" title="Editar" onClick={() => setEditing(t)}>
-                  <DocIcon />
-                </button>
-                <button className="action-btn" title="Duplicar" onClick={() => handleDuplicar(t)}>
-                  <PlusIcon />
-                </button>
-                <button className="action-btn" title="Excluir" onClick={() => handleExcluir(t)}>
-                  <XIcon />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {(creating || editing) && (
-        <EditorTemplateModal
-          template={editing}
-          onClose={() => { setCreating(false); setEditing(null) }}
-          onSaved={() => {
-            setCreating(false)
-            setEditing(null)
-            toast('success', 'Modelo salvo com sucesso!')
-            fetchTemplates()
-          }}
-        />
       )}
     </div>
   )
@@ -654,10 +723,10 @@ function ModelosTab() {
 
 
 /* ══════════════════════════════════════════════════════════════
-   MODAL — Editor de Modelo de Contrato
+   EDITOR — Conteúdo do Editor de Modelo de Contrato
    ══════════════════════════════════════════════════════════════ */
 
-function EditorTemplateModal({ template, onClose, onSaved }: {
+function EditorTemplateContent({ template, onClose, onSaved }: {
   template: TemplateItem | null
   onClose: () => void
   onSaved: () => void
@@ -672,13 +741,17 @@ function EditorTemplateModal({ template, onClose, onSaved }: {
   const toast = (type: 'success' | 'error' | 'info', message: string) => useUIStore.getState().showToast(message, type)
 
   useEffect(() => {
+    setNome(template?.nome || '')
+    setCampos(template?.campos_extras || [])
     if (editorRef.current) {
-      editorRef.current.innerHTML = template?.conteudo_html || '<p>Digite o texto do contrato aqui...</p>'
+      const rawHtml = template?.conteudo_html || '<p>Digite o texto do contrato aqui...</p>'
+      const displayHtml = rawHtml.replace(/\{\{([a-zA-Z0-9_\.]+)\}\}/g, '&lt;$1&gt;')
+      editorRef.current.innerHTML = displayHtml
     }
   }, [template])
 
   const inserirVariavel = (chave: string) => {
-    const placeholder = `{{${chave}}}`
+    const placeholder = `<${chave}>`
     editorRef.current?.focus()
     document.execCommand('insertText', false, placeholder)
   }
@@ -701,8 +774,12 @@ function EditorTemplateModal({ template, onClose, onSaved }: {
     }
     setSaving(true)
     try {
-      const conteudo_html = editorRef.current?.innerHTML || ''
-      const payload = { nome, conteudo_html, campos_extras: campos }
+      const editorHtml = editorRef.current?.innerHTML || ''
+      const saveHtml = editorHtml
+        .replace(/&lt;([a-zA-Z0-9_\.]+)&gt;/g, '{{$1}}')
+        .replace(/&lt;([a-zA-Z0-9_\.]+)\>/g, '{{$1}}')
+        .replace(/<([a-zA-Z0-9_\.]+)>/g, '{{$1}}')
+      const payload = { nome, conteudo_html: saveHtml, campos_extras: campos }
       if (template) {
         await api.patch(`/templates-contrato/${template.id}`, payload)
       } else {
@@ -718,93 +795,103 @@ function EditorTemplateModal({ template, onClose, onSaved }: {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
-        <div className="modal-header">
-          <h3>{template ? 'Editar Modelo' : 'Novo Modelo'}</h3>
-          <button className="modal-close" onClick={onClose}><XIcon /></button>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="form-group">
+        <label>Nome do modelo</label>
+        <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Compra e Venda — Sedans" style={{ width: '100%' }} />
+      </div>
 
-        <div className="modal-body">
-          <div className="form-group" style={{ marginBottom: 16 }}>
-            <label>Nome do modelo</label>
-            <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Compra e Venda — Sedans" />
-          </div>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 300 }}>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--sv-text-dim)' }}>Texto do contrato</label>
+          <div
+            ref={editorRef}
+            contentEditable
+            suppressContentEditableWarning
+            style={{
+              minHeight: 320,
+              border: '1px solid var(--sv-border)',
+              borderRadius: 8,
+              padding: 12,
+              background: 'var(--sv-input-bg)',
+              overflowY: 'auto',
+            }}
+          />
 
-          <div style={{ display: 'flex', gap: 16 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: 6 }}>Texto do contrato</label>
-              <div
-                ref={editorRef}
-                contentEditable
-                suppressContentEditableWarning
-                style={{
-                  minHeight: 320,
-                  border: '1px solid var(--sv-border)',
-                  borderRadius: 8,
-                  padding: 12,
-                  background: 'var(--sv-input-bg)',
-                  overflowY: 'auto',
-                }}
+          <div style={{ marginTop: 16 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--sv-text-dim)' }}>Campos personalizados</label>
+            <div className="form-group" style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="chave (ex: garantia_meses)"
+                value={novoCampoChave}
+                onChange={e => setNovoCampoChave(e.target.value)}
+                style={{ flex: 1 }}
               />
-
-              <div style={{ marginTop: 16 }}>
-                <label style={{ display: 'block', marginBottom: 6 }}>Campos personalizados</label>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <input
-                    type="text"
-                    placeholder="chave (ex: garantia_meses)"
-                    value={novoCampoChave}
-                    onChange={e => setNovoCampoChave(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                  <input
-                    type="text"
-                    placeholder="rótulo (ex: Meses de garantia)"
-                    value={novoCampoLabel}
-                    onChange={e => setNovoCampoLabel(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                  <button className="btn btn-outline" onClick={adicionarCampoExtra}>Adicionar</button>
-                </div>
-                {campos.map(c => (
-                  <div key={c.chave} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                    <span>{c.label} (<code>{`{{${c.chave}}}`}</code>)</span>
-                    <button className="action-btn" onClick={() => removerCampoExtra(c.chave)}><XIcon /></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ width: 260 }}>
-              <label style={{ display: 'block', marginBottom: 6 }}>Variáveis do sistema</label>
-              <div style={{ maxHeight: 460, overflowY: 'auto', border: '1px solid var(--sv-border)', borderRadius: 8, padding: 8 }}>
-                {CATALOGO_VARIAVEIS.map(grupo => (
-                  <div key={grupo.grupo} style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--sv-text-muted)', marginBottom: 4 }}>{grupo.grupo}</div>
-                    {grupo.itens.map(item => (
-                      <button
-                        key={item.chave}
-                        className="btn btn-outline"
-                        style={{ display: 'block', width: '100%', textAlign: 'left', fontSize: 12, padding: '4px 8px', marginBottom: 4 }}
-                        onClick={() => inserirVariavel(item.chave)}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </div>
+              <input
+                type="text"
+                placeholder="rótulo (ex: Meses de garantia)"
+                value={novoCampoLabel}
+                onChange={e => setNovoCampoLabel(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button className="btn btn-primary" onClick={adicionarCampoExtra} style={{ height: 42, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Adicionar</button>
             </div>
           </div>
         </div>
 
-        <div className="modal-footer">
-          <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {saving ? 'Salvando...' : 'Salvar Modelo'}
-          </button>
+        <div style={{ width: 220 }}>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--sv-text-dim)' }}>Variáveis do sistema</label>
+          <div style={{ maxHeight: 420, overflowY: 'auto', border: '1px solid var(--sv-border)', borderRadius: 8, padding: 8, background: 'var(--sv-surface-dim)' }}>
+            {CATALOGO_VARIAVEIS.map(grupo => (
+              <div key={grupo.grupo} style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--sv-text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{grupo.grupo}</div>
+                {grupo.itens.map(item => (
+                  <button
+                    key={item.chave}
+                    className="btn btn-outline"
+                    style={{ display: 'block', width: '100%', textAlign: 'left', fontSize: 12, padding: '6px 8px', marginBottom: 4 }}
+                    onClick={() => inserirVariavel(item.chave)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ))}
+
+            {campos.length > 0 && (
+              <div style={{ marginTop: 4 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--sv-primary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Personalizados</div>
+                {campos.map(c => (
+                  <div key={c.chave} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                    <button
+                      className="btn btn-outline"
+                      style={{ flex: 1, textAlign: 'left', fontSize: 12, padding: '6px 8px', borderColor: 'var(--sv-primary)', color: 'var(--sv-primary)' }}
+                      onClick={() => inserirVariavel(c.chave)}
+                    >
+                      {c.label}
+                    </button>
+                    <button
+                      className="action-btn"
+                      title="Remover campo"
+                      onClick={() => removerCampoExtra(c.chave)}
+                      style={{ color: 'var(--sv-error)', flexShrink: 0 }}
+                    >
+                      <XIcon />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 16, borderTop: '1px solid var(--sv-border)', paddingTop: 16 }}>
+        <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
+        <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
+          {saving ? 'Salvando...' : 'Salvar Modelo'}
+        </button>
       </div>
     </div>
   )
@@ -846,12 +933,12 @@ function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved:
 
   const toast = (type: 'success' | 'error' | 'info', message: string) => useUIStore.getState().showToast(message, type)
 
-  // Fetch clientes
+  // Fetch clientes — busca também por CPF (remove máscara antes de enviar)
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
         const params: Record<string, string> = { per_page: '10' }
-        if (clienteSearch) params.q = clienteSearch
+        if (clienteSearch) params.q = clienteSearch.replace(/\D/g, '') || clienteSearch
         const res = await api.get<{ items: ClienteItem[] }>('/clientes', params)
         setClientes(res.items || [])
       } catch { /* ignore */ }
@@ -945,10 +1032,14 @@ function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             {/* Cliente */}
             <SearchSelect
               label="Cliente"
-              placeholder="Buscar por nome ou CPF..."
+              placeholder="Buscar por nome, CPF ou telefone..."
               value={clienteId}
               displayValue={clienteDisplay}
-              options={clientes.map(c => ({ id: c.id, label: c.nome, sub: c.cpf || undefined }))}
+              options={clientes.map(c => ({
+                id: c.id,
+                label: c.nome,
+                sub: c.cpf ? mascararCPF(c.cpf) : undefined,
+              }))}
               onSearch={setClienteSearch}
               onSelect={(id, label) => { setClienteId(id); setClienteDisplay(label) }}
             />
@@ -975,7 +1066,7 @@ function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                 type="text"
                 placeholder="R$ 0,00"
                 value={valorStr}
-                onChange={e => setValorStr(mascararMoeda(parseMoeda(e.target.value)))}
+                onChange={e => setValorStr(mascararMoeda(e.target.value))}
               />
             </div>
             <div className="form-group">
@@ -984,7 +1075,7 @@ function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                 type="text"
                 placeholder="R$ 0,00"
                 value={entradaStr}
-                onChange={e => setEntradaStr(mascararMoeda(parseMoeda(e.target.value)))}
+                onChange={e => setEntradaStr(mascararMoeda(e.target.value))}
               />
             </div>
             <div className="form-group">

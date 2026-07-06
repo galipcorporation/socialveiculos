@@ -921,7 +921,8 @@ async def enviar_mensagem_b2b(
         conversa_id=id,
         autor_id=context.usuario.id,
         conteudo=data.conteudo,
-        lida=False
+        lida=False,
+        created_at=datetime.utcnow()
     )
     db.add(nova_msg)
 
@@ -950,7 +951,7 @@ async def enviar_mensagem_b2b(
             link="/rede-social",
         )
         db.add(notif)
-        await db.commit()
+        await db.flush()
     except Exception as e:
         print(f"[ERRO Notificacao] Falha ao criar notificacao: {e}")
 
@@ -966,7 +967,8 @@ async def enviar_mensagem_b2b(
     }
     await manager.broadcast_to_conversation(conversa.id, msg_dict, db)
 
-    return MensagemB2BResponse(
+    # Construir resposta antes de commitar para não expirar nova_msg
+    response = MensagemB2BResponse(
         id=nova_msg.id,
         conversa_id=nova_msg.conversa_id,
         autor_id=nova_msg.autor_id,
@@ -975,6 +977,9 @@ async def enviar_mensagem_b2b(
         lida=nova_msg.lida,
         created_at=nova_msg.created_at
     )
+    
+    await db.commit()
+    return response
 
 
 @router.websocket("/chat/ws")
@@ -1031,12 +1036,12 @@ async def chat_websocket_endpoint(websocket: WebSocket, token: Optional[str] = N
                             conversa_id=conversa_id,
                             autor_id=usuario_id,
                             conteudo=conteudo,
-                            lida=False
+                            lida=False,
+                            created_at=datetime.utcnow()
                         )
                         db.add(nova_msg)
                         conversa.updated_at = datetime.utcnow()
-                        await db.commit()
-                        await db.refresh(nova_msg)
+                        await db.flush()
 
                         # Criar Notificação correspondente
                         try:
@@ -1066,7 +1071,7 @@ async def chat_websocket_endpoint(websocket: WebSocket, token: Optional[str] = N
                                         link="/rede-social",
                                     )
                                     db.add(notif)
-                                    await db.commit()
+                                    await db.flush()
                             elif conversa.tipo == "b2c":
                                 # Se o remetente for o cliente, notifica a loja
                                 if conversa.cliente_id == usuario_id:
@@ -1079,7 +1084,7 @@ async def chat_websocket_endpoint(websocket: WebSocket, token: Optional[str] = N
                                         link="/rede-social",
                                     )
                                     db.add(notif)
-                                    await db.commit()
+                                    await db.flush()
                         except Exception as e:
                             print(f"[ERRO Notificacao WS] {e}")
 
@@ -1093,6 +1098,7 @@ async def chat_websocket_endpoint(websocket: WebSocket, token: Optional[str] = N
                             "created_at": nova_msg.created_at.isoformat() if nova_msg.created_at else None
                         }
                         await manager.broadcast_to_conversation(conversa_id, msg_dict, db)
+                        await db.commit()
 
     except WebSocketDisconnect:
         manager.disconnect(usuario_id, websocket)

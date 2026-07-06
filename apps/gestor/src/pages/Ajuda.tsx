@@ -23,6 +23,7 @@ interface Topico {
 interface FaqItem {
   pergunta: string
   resposta: string
+  gestorOnly?: boolean
 }
 
 const TOPICOS: Topico[] = [
@@ -273,10 +274,11 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     pergunta: 'Como convidar um vendedor para o sistema?',
     resposta: 'Acesse "Equipe" no menu lateral, clique em "Convidar" e informe o e-mail do vendedor. Ele receberá um convite por e-mail com link para criar a conta. Após o cadastro, defina quais módulos ele terá acesso.',
+    gestorOnly: true,
   },
   {
     pergunta: 'Os dados da minha loja ficam seguros?',
-    resposta: 'Sim. O SocialVeículos utiliza isolamento completo de dados por loja (multitenancy), autenticação JWT com tokens rotativos, criptografia em trânsito e conformidade com a LGPD. Nenhuma loja consegue acessar dados de outra.',
+    resposta: 'Sim. O SocialVeículos utiliza tecnologias avançadas de segurança e criptografia para garantir o isolamento completo de dados entre as lojas, em conformidade com as diretrizes da LGPD. Suas informações são protegidas com total sigilo e privacidade.',
   },
   {
     pergunta: 'Posso alterar o tema para claro?',
@@ -314,11 +316,13 @@ export function Ajuda() {
       t.passos.some((p) => p.texto.toLowerCase().includes(buscaLower))
   )
 
-  const faqFiltrado = FAQ_ITEMS.filter(
-    (f) =>
+  const faqFiltrado = FAQ_ITEMS.filter((f) => {
+    if (f.gestorOnly && !isGestor) return false
+    return (
       f.pergunta.toLowerCase().includes(buscaLower) ||
       f.resposta.toLowerCase().includes(buscaLower)
-  )
+    )
+  })
 
   const scrollParaTopico = (id: string) => {
     setTopicoAtivo(id)
