@@ -1402,8 +1402,16 @@ a:hover {
   .filter-bar { flex-direction: column; align-items: stretch; }
   .search-wrapper { min-width: unset; width: 100% !important; max-width: unset !important; }
 
-  /* Stock table: hide, show mobile cards */
-  .table-scroll { display: none; }
+  /* Equipe Form Grid */
+  .equipe-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .full-width-mobile {
+    grid-column: unset !important;
+  }
+
+  /* Stock table: hide (only when it has mobile cards to replace it), show mobile cards */
+  .table-scroll:has(.stock-table) { display: none; }
   .mobile-vehicle-cards { display: flex; }
 
   /* Pagination compact */
@@ -3174,34 +3182,37 @@ a:hover {
 .kanban-scroll-hint {
   display: none;
   position: absolute;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
-  width: 36px;
-  height: 36px;
+  bottom: 24px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: var(--sv-primary);
   color: white;
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 12px var(--sv-primary-glow), 0 0 8px var(--sv-primary);
-  pointer-events: none;
   z-index: 10;
   animation: kanban-arrow-pulse 1.4s infinite ease-in-out;
+  transition: background-color var(--sv-transition);
+}
+
+.kanban-scroll-hint:hover {
+  background: var(--sv-primary-hover);
 }
 
 .kanban-scroll-hint svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 @keyframes kanban-arrow-pulse {
   0%, 100% {
-    transform: translateY(-50%) translateX(0);
+    transform: translateX(0);
     opacity: 0.8;
   }
   50% {
-    transform: translateY(-50%) translateX(6px);
+    transform: translateX(6px);
     opacity: 1;
     box-shadow: 0 4px 16px var(--sv-primary-glow), 0 0 14px var(--sv-primary);
   }

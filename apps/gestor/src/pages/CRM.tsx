@@ -277,6 +277,15 @@ function KanbanTab({ addToast }: { addToast: (type: ToastType, message: string, 
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
 
+  // Board ref for scroll control
+  const boardRef = useRef<HTMLDivElement>(null)
+
+  const handleScrollRight = () => {
+    if (boardRef.current) {
+      boardRef.current.scrollBy({ left: 300, behavior: 'smooth' })
+    }
+  }
+
   const fetchKanban = useCallback(async () => {
     setLoading(true)
     try {
@@ -367,7 +376,7 @@ function KanbanTab({ addToast }: { addToast: (type: ToastType, message: string, 
         </div>
       ) : (
         <div className="kanban-container">
-          <div className="kanban-board">
+          <div className="kanban-board" ref={boardRef}>
             {columns.map(col => (
               <div
                 key={col.etapa}
@@ -424,7 +433,12 @@ function KanbanTab({ addToast }: { addToast: (type: ToastType, message: string, 
               </div>
             ))}
           </div>
-          <div className="kanban-scroll-hint" title="Arraste para o lado para ver mais etapas">
+          <div 
+            className="kanban-scroll-hint" 
+            title="Arraste para o lado para ver mais etapas"
+            onClick={handleScrollRight}
+            style={{ cursor: 'pointer' }}
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
               <polyline points="9 18 15 12 9 6" />
             </svg>

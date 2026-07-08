@@ -27,6 +27,13 @@ const PAPEL_LABEL: Record<string, string> = {
   cliente: 'Cliente',
 }
 
+const XIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 18, height: 18 }}>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+)
+
 export function Equipe() {
   const [membros, setMembros] = useState<Membro[]>([])
   const [loading, setLoading] = useState(true)
@@ -147,60 +154,91 @@ export function Equipe() {
       )}
 
       {mostrarForm && (
-        <form className="glass-card" onSubmit={handleConvidar} style={{ marginBottom: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <input
-            value={form.nome}
-            onChange={(e) => setForm({ ...form, nome: capitalizarNome(e.target.value) })}
-            placeholder="Nome completo"
-            style={inputStyle}
-          />
-          <input
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value.replace(/\s+/g, '') })}
-            onKeyDown={(e) => {
-              if (e.key === ' ') {
-                e.preventDefault();
-              }
-            }}
-            placeholder="E-mail"
-            type="email"
-            style={inputStyle}
-          />
-          <input
-            value={form.telefone}
-            onChange={(e) => setForm({ ...form, telefone: mascararTelefone(e.target.value) })}
-            placeholder="Telefone (opcional)"
-            style={inputStyle}
-          />
-          <select
-            value={form.papel}
-            onChange={(e) => handlePapelChange(e.target.value as Papel)}
-            style={inputStyle}
-          >
-            <option value="vendedor">Vendedor</option>
-            <option value="gestor">Gestor</option>
-          </select>
-          <input
-            value={form.senha}
-            onChange={(e) => setForm({ ...form, senha: e.target.value })}
-            placeholder="Senha provisória (mín. 6)"
-            type="password"
-            style={inputStyle}
-          />
+        <div className="modal-overlay" onClick={() => setMostrarForm(false)}>
+          <div className="modal-glass" style={{ maxWidth: 600, width: '100%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Convidar Membro</h3>
+              <button className="modal-close" onClick={() => setMostrarForm(false)}><XIcon /></button>
+            </div>
+            
+            <form onSubmit={handleConvidar}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }} className="equipe-form-grid">
+                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600 }}>Nome Completo *</label>
+                    <input
+                      value={form.nome}
+                      onChange={(e) => setForm({ ...form, nome: capitalizarNome(e.target.value) })}
+                      placeholder="Ex: João Silva"
+                      style={inputStyle}
+                      required
+                    />
+                  </div>
+                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600 }}>E-mail *</label>
+                    <input
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value.replace(/\s+/g, '') })}
+                      onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
+                      placeholder="Ex: joao@loja.com"
+                      type="email"
+                      style={inputStyle}
+                      required
+                    />
+                  </div>
+                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600 }}>Telefone (opcional)</label>
+                    <input
+                      value={form.telefone}
+                      onChange={(e) => setForm({ ...form, telefone: mascararTelefone(e.target.value) })}
+                      placeholder="(11) 99999-9999"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600 }}>Papel *</label>
+                    <select
+                      value={form.papel}
+                      onChange={(e) => handlePapelChange(e.target.value as Papel)}
+                      style={inputStyle}
+                      required
+                    >
+                      <option value="vendedor">Vendedor</option>
+                      <option value="gestor">Gestor</option>
+                    </select>
+                  </div>
+                  <div className="form-group full-width-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / 3' }}>
+                    <label style={{ fontSize: 12, fontWeight: 600 }}>Senha provisória *</label>
+                    <input
+                      value={form.senha}
+                      onChange={(e) => setForm({ ...form, senha: e.target.value })}
+                      placeholder="Senha temporária (mín. 6 caracteres)"
+                      type="password"
+                      style={inputStyle}
+                      required
+                    />
+                  </div>
+                </div>
 
-          <div style={{ gridColumn: '1 / 3' }}>
-            <ModulosChecklist
-              modulos={form.papel === 'gestor' ? TODOS_MODULOS : form.modulos}
-              onToggle={toggleModulo}
-              disabled={form.papel === 'gestor'}
-              hint={form.papel === 'gestor' ? 'Gestor — acesso total a todos os módulos.' : 'Vendedor — selecione os módulos liberados.'}
-            />
+                <ModulosChecklist
+                  modulos={form.papel === 'gestor' ? TODOS_MODULOS : form.modulos}
+                  onToggle={toggleModulo}
+                  disabled={form.papel === 'gestor'}
+                  hint={form.papel === 'gestor' ? 'Gestor — acesso total.' : 'Vendedor — selecione os acessos.'}
+                />
+              </div>
+
+              <div className="modal-footer" style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16, padding: '16px 24px', borderTop: '1px solid var(--sv-border)' }}>
+                <button className="btn btn-outline" type="button" onClick={() => setMostrarForm(false)} disabled={salvando}>
+                  Cancelar
+                </button>
+                <button className="btn btn-primary" type="submit" disabled={salvando}>
+                  {salvando ? 'Convidando...' : 'Convidar'}
+                </button>
+              </div>
+            </form>
           </div>
-
-          <button className="btn btn-primary" type="submit" disabled={salvando} style={{ gridColumn: '2', justifySelf: 'end' }}>
-            {salvando ? 'Convidando...' : 'Convidar'}
-          </button>
-        </form>
+        </div>
       )}
 
       {loading ? (

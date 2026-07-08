@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     sentry_dsn: Optional[str] = Field(default=None)
 
     # CORS
-    cors_origins: str = Field(default="http://localhost:5173,http://localhost:5174")
+    cors_origins: str = Field(default="http://localhost:5173,http://localhost:5174,http://localhost:8081")
 
     # Vitrine pública — URL base usada no sitemap.xml e canonical/OG
     vitrine_base_url: str = Field(default="http://localhost:5174")
