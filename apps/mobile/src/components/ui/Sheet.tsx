@@ -1,0 +1,184 @@
+import React, { useEffect, useRef } from 'react'
+import {
+  Animated, Dimensions, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View,
+} from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useTheme } from '../../theme/ThemeContext'
+import { radius, spacing } from '../../theme/tokens'
+import { Txt } from './Txt'
+
+interface SheetProps {
+  visible: boolean
+  onClose: () => void
+  title?: string
+  children: React.ReactNode
+  /** Altura máxima em fração da tela (0-1). */
+  maxHeight?: number
+  scrollable?: boolean
+}
+
+/** Bottom sheet base — backdrop com fade, painel com slide. */
+export function Sheet({ visible, onClose, title, children, maxHeight = 0.85, scrollable = true }: SheetProps) {
+  const { colors } = useTheme()
+  const insets = useSafeAreaInsets()
+  const slide = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    if (visible) {
+      slide.setValue(0)
+      Animated.spring(slide, { toValue: 1, useNativeDriver: true, speed: 18, bounciness: 4 }).start()
+    }
+  }, [visible, slide])
+
+  const translateY = slide.interpolate({
+    inputRange: [0, 1],
+    outputRange: [Dimensions.get('window').height * 0.3, 0],
+  })
+
+  const Body = scrollable ? ScrollView : View
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+      <Pressable style={[styles.backdrop, { backgroundColor: colors.backdrop }]} onPress={onClose}>
+        <Pressable onPress={(e) => e.stopPropagation()} style={{ width: '100%' }}>
+          <Animated.View
+            style={[
+              styles.panel,
+              {
+                backgroundColor: colors.surfaceElevated,
+                paddingBottom: insets.bottom + spacing.md,
+                maxHeight: Dimensions.get('window').height * maxHeight,
+                transform: [{ translateY }],
+              },
+            ]}
+          >
+            <View style={[styles.handle, { backgroundColor: colors.overlayStrong }]} />
+            {title ? (
+              <View style={styles.titleRow}>
+                <Txt variant="title">{title}</Txt>
+                <Pressable onPress={onClose} hitSlop={10} style={[styles.closeBtn, { backgroundColor: colors.overlaySoft }]}>
+                  <Ionicons name="close" size={18} color={colors.textDim} />
+                </Pressable>
+              </View>
+            ) : null}
+            <Body
+              {...(scrollable ? { keyboardShouldPersistTaps: 'handled' as const, showsVerticalScrollIndicator: false } : {})}
+              style={{ paddingHorizontal: spacing.md }}
+            >
+              {children}
+            </Body>
+          </Animated.View>
+        </Pressable>
+      </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
+  )
+}
+
+export interface SheetOption<T extends string = string> {
+  value: T
+  label: string
+  sublabel?: string
+  icon?: keyof typeof Ionicons.glyphMap
+  tone?: string
+}
+
+interface OptionSheetProps<T extends string> {
+  visible: boolean
+  onClose: () => void
+  title: string
+  options: SheetOption<T>[]
+  selected?: T
+  onSelect: (value: T) => void
+}
+
+/** Seletor de opções em bottom sheet — substituto mobile do <select>. */
+export function OptionSheet<T extends string>({
+  visible, onClose, title, options, selected, onSelect,
+}: OptionSheetProps<T>) {
+  const { colors } = useTheme()
+  return (
+    <Sheet visible={visible} onClose={onClose} title={title}>
+      <View style={{ gap: 4, paddingBottom: spacing.xs }}>
+        {options.map((opt) => {
+          const ativo = opt.value === selected
+          return (
+            <Pressable
+              key={opt.value}
+              onPress={() => {
+                onSelect(opt.value)
+                onClose()
+              }}
+              style={({ pressed }) => [
+                styles.option,
+                {
+                  backgroundColor: ativo
+                    ? colors.primary + '1c'
+                    : pressed
+                      ? colors.overlaySoft
+                      : 'transparent',
+                },
+              ]}
+            >
+              {opt.icon ? (
+                <Ionicons name={opt.icon} size={19} color={ativo ? colors.primary : colors.textDim} />
+              ) : null}
+              <View style={{ flex: 1 }}>
+                <Txt variant="bodyMedium" color={ativo ? 'primaryText' : 'text'}>
+                  {opt.label}
+                </Txt>
+                {opt.sublabel ? (
+                  <Txt variant="caption" color="textDim">{opt.sublabel}</Txt>
+                ) : null}
+              </View>
+              {ativo ? <Ionicons name="checkmark" size={19} color={colors.primary} /> : null}
+            </Pressable>
+          )
+        })}
+      </View>
+    </Sheet>
+  )
+}
+
+const styles = StyleSheet.create({
+  backdrop: { flex: 1, justifyContent: 'flex-end' },
+  panel: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingTop: spacing.xs,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: spacing.xs,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  closeBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    minHeight: 50,
+  },
+})

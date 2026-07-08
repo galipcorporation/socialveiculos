@@ -1,0 +1,229 @@
+import React, { useState } from 'react'
+import { FlatList, StyleSheet, Switch, View } from 'react-native'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTheme } from '../../theme/ThemeContext'
+import { spacing } from '../../theme/tokens'
+import {
+  AppHeader, Avatar, Badge, Button, Card, EmptyState, ErrorState, Fab, Input,
+  SegmentedControl, Sheet, SkeletonCard, Txt, useToast,
+} from '../../components/ui'
+import { equipeService } from '../../services'
+import type { Membro, Papel } from '../../services/types'
+import { formatTelefone } from '../../lib/format'
+
+export default function EquipeScreen() {
+  const queryClient = useQueryClient()
+  const [formAberto, setFormAberto] = useState(false)
+  const [editando, setEditando] = useState<Membro | null>(null)
+
+  const q = useQuery({ queryKey: ['equipe'], queryFn: () => equipeService.listar() })
+  const membros = q.data ?? []
+
+  return (
+    <View style={{ flex: 1 }}>
+      <AppHeader
+        title="Equipe"
+        subtitle={q.isSuccess ? `${membros.filter((m) => m.ativo).length} membros ativos` : undefined}
+        back
+      />
+      {q.isLoading ? (
+        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+          {[0, 1, 2].map((i) => <SkeletonCard key={i} withImage={false} />)}
+        </View>
+      ) : q.isError ? (
+        <ErrorState onRetry={() => q.refetch()} />
+      ) : (
+        <FlatList
+          data={membros}
+          keyExtractor={(m) => m.id}
+          renderItem={({ item }) => (
+            <MembroCard
+              membro={item}
+              onPress={() => {
+                setEditando(item)
+                setFormAberto(true)
+              }}
+            />
+          )}
+          contentContainerStyle={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: 110 }}
+          showsVerticalScrollIndicator={false}
+          refreshing={q.isRefetching}
+          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['equipe'] })}
+          ListEmptyComponent={
+            <EmptyState
+              icon="people-outline"
+              title="Equipe vazia"
+              subtitle="Adicione vendedores para distribuir as vendas e comissões."
+              actionLabel="Adicionar membro"
+              onAction={() => setFormAberto(true)}
+            />
+          }
+        />
+      )}
+
+      <Fab
+        icon="person-add"
+        label="Membro"
+        onPress={() => {
+          setEditando(null)
+          setFormAberto(true)
+        }}
+      />
+      <MembroFormSheet
+        visible={formAberto}
+        membro={editando}
+        onClose={() => {
+          setFormAberto(false)
+          setEditando(null)
+        }}
+      />
+    </View>
+  )
+}
+
+function MembroCard({ membro, onPress }: { membro: Membro; onPress: () => void }) {
+  const queryClient = useQueryClient()
+  const { colors } = useTheme()
+  const toast = useToast()
+
+  const ativoMut = useMutation({
+    mutationFn: () => equipeService.alternarAtivo(membro.id),
+    onSuccess: (m) => {
+      queryClient.invalidateQueries({ queryKey: ['equipe'] })
+      toast.show('info', m.ativo ? `${m.nome} reativado.` : `${m.nome} desativado.`)
+    },
+  })
+
+  return (
+    <Card onPress={onPress} style={{ marginBottom: spacing.sm, opacity: membro.ativo ? 1 : 0.6 }}>
+      <View style={styles.row}>
+        <Avatar nome={membro.nome} size={46} />
+        <View style={{ flex: 1 }}>
+          <Txt variant="bodySemibold" numberOfLines={1}>{membro.nome}</Txt>
+          <Txt variant="caption" color="textDim" numberOfLines={1}>
+            {membro.email} · {formatTelefone(membro.telefone)}
+          </Txt>
+          <View style={{ flexDirection: 'row', gap: 6, marginTop: 5 }}>
+            <Badge
+              label={membro.papel === 'gestor' ? 'Gestor' : 'Vendedor'}
+              tone={membro.papel === 'gestor' ? 'primary' : 'info'}
+              size="sm"
+            />
+            {membro.papel === 'vendedor' && (
+              <Badge label={`Comissão ${membro.percentual_comissao ?? 0}%`} tone="warning" size="sm" />
+            )}
+            {!membro.ativo && <Badge label="Inativo" tone="neutral" size="sm" />}
+          </View>
+        </View>
+        <Switch
+          value={membro.ativo}
+          onValueChange={() => ativoMut.mutate()}
+          disabled={ativoMut.isPending || membro.papel === 'gestor'}
+          trackColor={{ false: colors.overlayStrong, true: colors.primary }}
+          thumbColor="#fff"
+        />
+      </View>
+    </Card>
+  )
+}
+
+function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membro: Membro | null; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const editando = !!membro
+
+  const [nome, setNome] = useState('')
+  const [email, setEmail] = useState('')
+  const [telefone, setTelefone] = useState('')
+  const [papel, setPapel] = useState<Papel>('vendedor')
+  const [comissao, setComissao] = useState('2')
+
+  React.useEffect(() => {
+    if (visible) {
+      setNome(membro?.nome ?? '')
+      setEmail(membro?.email ?? '')
+      setTelefone(membro?.telefone ?? '')
+      setPapel(membro?.papel ?? 'vendedor')
+      setComissao(membro?.percentual_comissao != null ? String(membro.percentual_comissao) : '2')
+    }
+  }, [visible, membro])
+
+  const mut = useMutation({
+    mutationFn: () => {
+      const input = {
+        nome: nome.trim(),
+        email: email.trim().toLowerCase(),
+        telefone: telefone.replace(/\D/g, '') || undefined,
+        papel,
+        percentual_comissao: papel === 'vendedor' ? parseFloat(comissao.replace(',', '.')) || 0 : null,
+      }
+      return editando ? equipeService.atualizar(membro!.id, input) : equipeService.criar(input)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['equipe'] })
+      onClose()
+      toast.show('success', editando ? 'Membro atualizado.' : 'Membro adicionado à equipe.')
+    },
+    onError: (e) =>
+      toast.show('error', e instanceof Error ? e.message : 'Não foi possível salvar.'),
+  })
+
+  const valido = nome.trim().length >= 3 && /\S+@\S+\.\S+/.test(email)
+
+  return (
+    <Sheet visible={visible} onClose={onClose} title={editando ? 'Editar membro' : 'Novo membro'}>
+      <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
+        <Input label="Nome *" placeholder="Nome completo" icon="person-outline" value={nome} onChangeText={setNome} />
+        <Input
+          label="E-mail *"
+          placeholder="email@loja.com.br"
+          icon="mail-outline"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <Input
+          label="Telefone"
+          placeholder="(51) 99999-9999"
+          icon="call-outline"
+          keyboardType="phone-pad"
+          value={telefone}
+          onChangeText={setTelefone}
+        />
+        <View style={{ gap: 6 }}>
+          <Txt variant="captionMedium" color="textDim">Papel</Txt>
+          <SegmentedControl
+            options={[
+              { value: 'vendedor', label: 'Vendedor' },
+              { value: 'gestor', label: 'Gestor' },
+            ]}
+            selected={papel}
+            onSelect={setPapel}
+          />
+        </View>
+        {papel === 'vendedor' && (
+          <Input
+            label="Percentual de comissão (%)"
+            placeholder="2"
+            keyboardType="decimal-pad"
+            icon="ribbon-outline"
+            value={comissao}
+            onChangeText={setComissao}
+            hint="Aplicado automaticamente ao registrar vendas deste vendedor"
+          />
+        )}
+        <Button
+          title={editando ? 'Salvar alterações' : 'Adicionar membro'}
+          loading={mut.isPending}
+          disabled={!valido}
+          onPress={() => mut.mutate()}
+        />
+      </View>
+    </Sheet>
+  )
+}
+
+const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+})

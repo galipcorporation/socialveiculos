@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "SocialVeículos",
+    "name": "Social Veículos",
     "slug": "socialveiculos-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
     },
@@ -20,6 +20,22 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-image",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#f1f5f9",
+          "dark": {
+            "backgroundColor": "#121315"
+          }
+        }
+      ]
+    ]
   }
 }
