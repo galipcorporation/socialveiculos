@@ -115,8 +115,9 @@ export function MinhasComissoes() {
           <p>Quando você registrar uma venda, a comissão aparece automaticamente nesta lista.</p>
         </div>
       ) : (
-        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+        <div className="glass-card" style={{ padding: 0 }}>
+          <div className="table-scroll">
+          <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr style={{ textAlign: 'left', color: 'var(--sv-text-dim)', fontSize: 12, textTransform: 'uppercase' }}>
                 <th style={{ padding: '12px 16px' }}>Veículo</th>
@@ -140,6 +141,7 @@ export function MinhasComissoes() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

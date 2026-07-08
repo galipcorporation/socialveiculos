@@ -154,6 +154,18 @@ async def listar_conversas_cliente(
 
         ultima_msg = c.mensagens[-1] if c.mensagens else None
 
+        # Obter contagem de mensagens não lidas para o cliente
+        stmt_unread = (
+            select(func.count(Mensagem.id))
+            .where(
+                Mensagem.conversa_id == c.id,
+                Mensagem.autor_id != current_user.id,
+                Mensagem.lida == False
+            )
+        )
+        res_unread = await db.execute(stmt_unread)
+        unread_count = res_unread.scalar() or 0
+
         response_data.append(
             ConversaB2CResponse(
                 id=c.id,
@@ -169,7 +181,8 @@ async def listar_conversas_cliente(
                 created_at=c.created_at,
                 updated_at=c.updated_at,
                 ultima_mensagem=ultima_msg.conteudo if ultima_msg else None,
-                ultima_mensagem_data=ultima_msg.created_at if ultima_msg else None
+                ultima_mensagem_data=ultima_msg.created_at if ultima_msg else None,
+                mensagens_nao_lidas=unread_count
             )
         )
 
@@ -205,6 +218,18 @@ async def listar_conversas_b2c_loja(
             v_res = await db.execute(select(Veiculo).where(Veiculo.id == c.veiculo_id))
             veiculo = v_res.scalar_one_or_none()
         ultima_msg = c.mensagens[-1] if c.mensagens else None
+        # Obter contagem de mensagens não lidas para o lojista (mensagens do cliente)
+        stmt_unread = (
+            select(func.count(Mensagem.id))
+            .where(
+                Mensagem.conversa_id == c.id,
+                Mensagem.autor_id == c.cliente_id,
+                Mensagem.lida == False
+            )
+        )
+        res_unread = await db.execute(stmt_unread)
+        unread_count = res_unread.scalar() or 0
+
         response_data.append(ConversaB2CResponse(
             id=c.id, tipo=c.tipo,
             loja_id=c.loja_id, loja_nome=ctx.loja.nome if ctx.loja else "",
@@ -215,6 +240,7 @@ async def listar_conversas_b2c_loja(
             ativa=c.ativa, created_at=c.created_at, updated_at=c.updated_at,
             ultima_mensagem=ultima_msg.conteudo if ultima_msg else None,
             ultima_mensagem_data=ultima_msg.created_at if ultima_msg else None,
+            mensagens_nao_lidas=unread_count
         ))
     return response_data
 
@@ -239,14 +265,86 @@ async def listar_mensagens_b2c_loja(
     msgs_res = await db.execute(
         select(Mensagem).where(Mensagem.conversa_id == conversa_id).order_by(Mensagem.created_at)
     )
+    mensagens = msgs_res.scalars().all()
+    
+    # Marcar mensagens recebidas do cliente como lidas
+    mensagens_alteradas = False
+    for m in mensagens:
+        if m.autor_id == conv.cliente_id and not m.lida:
+            m.lida = True
+            mensagens_alteradas = True
+            
+    if mensagens_alteradas:
+        await db.commit()
+
     return [
         MensagemB2CResponse(
             id=m.id, conversa_id=m.conversa_id,
             autor_id=m.autor_id, conteudo=m.conteudo,
             lida=m.lida, created_at=m.created_at,
         )
-        for m in msgs_res.scalars().all()
+        for m in mensagens
     ]
+
+
+@router.post("/chat/conversas/{conversa_id}/mensagens", response_model=MensagemB2CResponse)
+async def enviar_mensagem_b2c_loja(
+    conversa_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Envia uma mensagem na conversa B2C como lojista."""
+    from deps import get_current_b2b_user, B2BContext
+    ctx: B2BContext = await get_current_b2b_user(current_user=current_user, db=db)
+    
+    # Validar conversa
+    conv_res = await db.execute(
+        select(Conversa).where(Conversa.id == conversa_id, Conversa.loja_id == ctx.loja_id)
+    )
+    conversa = conv_res.scalar_one_or_none()
+    if not conversa:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada ou sem acesso.")
+
+    conteudo = payload.get("conteudo")
+    if not conteudo:
+        raise HTTPException(status_code=400, detail="Conteúdo da mensagem é obrigatório.")
+
+    # Criar mensagem
+    nova_msg = Mensagem(
+        conversa_id=conversa_id,
+        autor_id=current_user.id,
+        conteudo=conteudo
+    )
+    db.add(nova_msg)
+    conversa.updated_at = datetime.utcnow()
+    
+    # Commit e refresh
+    await db.commit()
+    await db.refresh(nova_msg)
+
+    # Broadcast via websocket
+    msg_dict = {
+        "id": nova_msg.id,
+        "conversa_id": conversa_id,
+        "autor_id": current_user.id,
+        "autor_nome": current_user.nome,
+        "conteudo": nova_msg.conteudo,
+        "lida": False,
+        "created_at": nova_msg.created_at.isoformat() if nova_msg.created_at else None
+    }
+    await manager.broadcast_to_conversation(conversa_id, msg_dict, db)
+
+    return MensagemB2CResponse(
+        id=nova_msg.id,
+        conversa_id=nova_msg.conversa_id,
+        autor_id=nova_msg.autor_id,
+        autor_nome=current_user.nome,
+        conteudo=nova_msg.conteudo,
+        lida=nova_msg.lida,
+        created_at=nova_msg.created_at
+    )
+
 
 
 @router.post("/conversas", response_model=ConversaB2CResponse, status_code=status.HTTP_201_CREATED)
@@ -409,6 +507,16 @@ async def listar_mensagens_conversa(
     )
     m_res = await db.execute(m_stmt)
     mensagens = m_res.scalars().all()
+
+    # Marcar mensagens recebidas da loja como lidas para o cliente
+    mensagens_alteradas = False
+    for m in mensagens:
+        if m.autor_id != current_user.id and not m.lida:
+            m.lida = True
+            mensagens_alteradas = True
+
+    if mensagens_alteradas:
+        await db.commit()
 
     response_data = []
     for m in mensagens:

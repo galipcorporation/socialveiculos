@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useUIStore } from '../stores/uiStore'
 import { mascararMoeda, parseMoeda } from '../lib/mascaras'
 import { createReconnectingSocket, type ReconnectingSocket } from '../lib/ws'
+import { useChatStore } from '../stores/chatStore'
 
 /* ── Types ───────────────────────────────────────────────────── */
 
@@ -97,6 +98,7 @@ interface Conversa {
   updated_at: string
   ultima_mensagem?: string
   ultima_mensagem_data?: string
+  mensagens_nao_lidas?: number
 }
 
 interface Mensagem {
@@ -175,9 +177,45 @@ function formatCurrency(value?: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+function parseUTC(dateStr?: string | null) {
+  if (!dateStr) return new Date(NaN)
+  if (!dateStr.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(dateStr)) {
+    return new Date(`${dateStr}Z`)
+  }
+  return new Date(dateStr)
+}
+
+function formatDate(dateStr?: string | null) {
+  if (!dateStr) return ''
+  const d = parseUTC(dateStr)
+  if (isNaN(d.getTime())) return ''
+  const hoje = new Date()
+  if (d.toDateString() === hoje.toDateString()) {
+    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  }
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+}
+
+function UnifiedChatTab({ token, user, addToast, initialConversaId }: { token: string | null, user: any, addToast: (t: ToastType, m: string, details?: any) => void, initialConversaId?: string }) {
+  const [subTab, setSubTab] = useState<'parceiros' | 'clientes'>(initialConversaId ? 'parceiros' : 'parceiros')
+
+  useEffect(() => {
+    if (initialConversaId) {
+      setSubTab('parceiros')
+    }
+  }, [initialConversaId])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {subTab === 'parceiros' ? (
+          <ChatTab token={token} user={user} addToast={addToast} initialConversaId={initialConversaId} subTab={subTab} setSubTab={setSubTab} />
+        ) : (
+          <ChatClientesTab token={token} user={user} addToast={addToast} subTab={subTab} setSubTab={setSubTab} />
+        )}
+      </div>
+    </div>
+  )
 }
 
 export function RedeSocial() {
@@ -187,6 +225,11 @@ export function RedeSocial() {
   
   const token = useAuthStore((state) => state.token)
   const user = useAuthStore((state) => state.user)
+  const { unreadB2B, unreadB2C, fetchUnreadCounts } = useChatStore()
+
+  useEffect(() => {
+    fetchUnreadCounts()
+  }, [activeTab, fetchUnreadCounts])
 
   const addToast = useCallback((type: ToastType, message: string, details?: ApiErrorDetails) => {
     const id = ++toastId
@@ -203,41 +246,41 @@ export function RedeSocial() {
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       <div className="page-header" style={{ marginBottom: 20 }}>
-        <h2>Rede de Repasses</h2>
-        <p>Negocie veículos de repasse e conecte-se com garagens parceiras.</p>
+        <h2>Rede Social</h2>
+        <p>Conecte-se com garagens parceiras e negocie veículos.</p>
       </div>
 
       {/* Tabs */}
-      <div className="filter-bar" style={{ marginBottom: 20, display: 'flex', gap: 10 }}>
+      <div className="filter-bar" style={{ marginBottom: 20, display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            className={`btn ${activeTab === 'feed' ? 'btn-primary' : 'quick-action-btn'}`}
+            onClick={() => setActiveTab('feed')}
+          >
+            Feed
+          </button>
+          <button
+            className={`btn ${activeTab === 'propostas' ? 'btn-primary' : 'quick-action-btn'}`}
+            onClick={() => setActiveTab('propostas')}
+          >
+            Propostas
+          </button>
+          <button
+            className={`btn ${activeTab === 'chat' ? 'btn-primary' : 'quick-action-btn'}`}
+            onClick={() => setActiveTab('chat')}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            Chats
+            {(unreadB2B + unreadB2C) > 0 && <span className="sidebar-nav-badge" style={{ padding: '2px 6px', fontSize: '10px', marginLeft: 0 }}>{unreadB2B + unreadB2C}</span>}
+          </button>
+        </div>
+
         <button
-          className={`btn ${activeTab === 'feed' ? 'btn-primary' : 'quick-action-btn'}`}
-          onClick={() => setActiveTab('feed')}
-        >
-          Feed de Repasses
-        </button>
-        <button
-          className={`btn ${activeTab === 'propostas' ? 'btn-primary' : 'quick-action-btn'}`}
-          onClick={() => setActiveTab('propostas')}
-        >
-          Propostas de Repasse
-        </button>
-        <button
-          className={`btn ${activeTab === 'parceiros' ? 'btn-primary' : 'quick-action-btn'}`}
+          className="btn btn-primary"
           onClick={() => setActiveTab('parceiros')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
-          Diretório de Parceiros
-        </button>
-        <button
-          className={`btn ${activeTab === 'chat' ? 'btn-primary' : 'quick-action-btn'}`}
-          onClick={() => setActiveTab('chat')}
-        >
-          Chat de Parceiros
-        </button>
-        <button
-          className={`btn ${activeTab === 'clientes' ? 'btn-primary' : 'quick-action-btn'}`}
-          onClick={() => setActiveTab('clientes')}
-        >
-          Chat Clientes
+          Ver Parceiros
         </button>
       </div>
 
@@ -245,8 +288,7 @@ export function RedeSocial() {
         {activeTab === 'feed' && <FeedTab addToast={addToast} onStartChat={(id) => { setInitialConversaId(id); setActiveTab('chat') }} />}
         {activeTab === 'propostas' && <PropostasTab addToast={addToast} onStartChat={(id) => { setInitialConversaId(id); setActiveTab('chat') }} />}
         {activeTab === 'parceiros' && <ParceirosTab addToast={addToast} onStartChat={(id) => { setInitialConversaId(id); setActiveTab('chat') }} />}
-        {activeTab === 'chat' && <ChatTab token={token} user={user} addToast={addToast} initialConversaId={initialConversaId} />}
-        {activeTab === 'clientes' && <ChatClientesTab token={token} user={user} addToast={addToast} />}
+        {activeTab === 'chat' && <UnifiedChatTab token={token} user={user} addToast={addToast} initialConversaId={initialConversaId} />}
       </div>
     </div>
   )
@@ -906,7 +948,8 @@ function ParceirosTab({ addToast, onStartChat }: { addToast: (t: ToastType, m: s
    TAB 4: CHAT B2B (REALTIME WEBSOCKET)
    ─────────────────────────────────────────────────────────────── */
 
-function ChatTab({ token, user, addToast, initialConversaId }: { token: string | null, user: any, addToast: (t: ToastType, m: string, details?: any) => void, initialConversaId?: string }) {
+function ChatTab({ token, user, addToast, initialConversaId, subTab, setSubTab }: { token: string | null, user: any, addToast: (t: ToastType, m: string, details?: any) => void, initialConversaId?: string, subTab: 'parceiros' | 'clientes', setSubTab: (t: 'parceiros' | 'clientes') => void }) {
+  const { unreadB2B, unreadB2C } = useChatStore()
   const [conversas, setConversas] = useState<Conversa[]>([])
   const [filtered, setFiltered] = useState<Conversa[]>([])
   const [search, setSearch] = useState('')
@@ -919,6 +962,11 @@ function ChatTab({ token, user, addToast, initialConversaId }: { token: string |
   const wsRef = useRef<ReconnectingSocket | null>(null)
   const messageEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const activeConversaRef = useRef<Conversa | null>(null)
+
+  useEffect(() => {
+    activeConversaRef.current = activeConversa
+  }, [activeConversa])
 
   const fetchConversas = useCallback(async () => {
     setLoadingConversas(true)
@@ -942,6 +990,9 @@ function ChatTab({ token, user, addToast, initialConversaId }: { token: string |
     try {
       const data = await api.get<Mensagem[]>(`/b2b/chat/conversas/${convId}/mensagens`)
       setMensagens(data)
+      useChatStore.getState().fetchUnreadCounts()
+      setConversas(prev => prev.map(c => c.id === convId ? { ...c, mensagens_nao_lidas: 0 } : c))
+      setFiltered(prev => prev.map(c => c.id === convId ? { ...c, mensagens_nao_lidas: 0 } : c))
     } catch (err: any) {
       addToast('error', err.message || 'Erro ao carregar mensagens')
     } finally {
@@ -959,20 +1010,32 @@ function ChatTab({ token, user, addToast, initialConversaId }: { token: string |
       onMessage: (event) => {
         try {
           const msg = JSON.parse(event.data) as Mensagem
-          if (activeConversa && msg.conversa_id === activeConversa.id) {
+          const currentActive = activeConversaRef.current
+          const isFromActive = currentActive && msg.conversa_id === currentActive.id
+          if (isFromActive) {
             setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
           }
-          setConversas(prev => prev.map(conv =>
-            conv.id === msg.conversa_id
-              ? { ...conv, ultima_mensagem: msg.conteudo, ultima_mensagem_data: msg.created_at }
-              : conv
-          ))
+          setConversas(prev => prev.map(conv => {
+            if (conv.id === msg.conversa_id) {
+              const currentUnread = conv.mensagens_nao_lidas || 0
+              return { 
+                ...conv, 
+                ultima_mensagem: msg.conteudo, 
+                ultima_mensagem_data: msg.created_at,
+                mensagens_nao_lidas: isFromActive ? 0 : currentUnread + 1
+              }
+            }
+            return conv
+          }))
+          if (!isFromActive) {
+            useChatStore.getState().fetchUnreadCounts()
+          }
         } catch {}
       },
     })
     wsRef.current = sock
     return () => { sock.close(); wsRef.current = null }
-  }, [token, activeConversa])
+  }, [token])
 
   useEffect(() => { messageEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens])
 
@@ -1002,15 +1065,21 @@ function ChatTab({ token, user, addToast, initialConversaId }: { token: string |
     const content = newMessage.trim()
     setNewMessage('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ conversa_id: activeConversa.id, conteudo: content }))
-    } else {
-      try {
-        const res = await api.post<Mensagem>(`/b2b/chat/conversas/${activeConversa.id}/mensagens`, { conteudo: content })
-        setMensagens(prev => [...prev, res])
-      } catch (err: any) {
-        addToast('error', err.message || 'Erro ao enviar mensagem')
-      }
+
+    // Envia por POST REST para garantir o envio e feedback imediato.
+    // O WebSocket fará o broadcast para o outro participante em tempo real.
+    try {
+      const res = await api.post<Mensagem>(`/b2b/chat/conversas/${activeConversa.id}/mensagens`, { conteudo: content })
+      setMensagens(prev => prev.some(m => m.id === res.id) ? prev : [...prev, res])
+      setConversas(prev => prev.map(conv =>
+        conv.id === res.conversa_id
+          ? { ...conv, ultima_mensagem: res.conteudo, ultima_mensagem_data: res.created_at }
+          : conv
+      ))
+      // Opcional: envia sinal leve de digitação ou notificação pelo WebSocket se conectado
+      wsRef.current?.send({ conversa_id: activeConversa.id, conteudo: content, silently: true })
+    } catch (err: any) {
+      addToast('error', err.message || 'Erro ao enviar mensagem')
     }
   }
 
@@ -1027,7 +1096,42 @@ function ChatTab({ token, user, addToast, initialConversaId }: { token: string |
       {/* Sidebar */}
       <div className="gc-chat-sidebar">
         <div className="gc-chat-sidebar-head">
-          <h2>Parceiros</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}>
+            <h2 
+              style={{ 
+                cursor: 'pointer', 
+                opacity: subTab === 'parceiros' ? 1 : 0.4, 
+                borderBottom: subTab === 'parceiros' ? '2px solid var(--sv-primary)' : 'none',
+                paddingBottom: 4,
+                marginBottom: 0,
+                fontSize: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }} 
+              onClick={() => setSubTab('parceiros')}
+            >
+              Parceiros
+              {unreadB2B > 0 && <span className="sidebar-nav-badge" style={{ padding: '2px 6px', fontSize: '10px', marginLeft: 0 }}>{unreadB2B}</span>}
+            </h2>
+            <h2 
+              style={{ 
+                cursor: 'pointer', 
+                opacity: subTab === 'clientes' ? 1 : 0.4, 
+                borderBottom: subTab === 'clientes' ? '2px solid var(--sv-primary)' : 'none',
+                paddingBottom: 4,
+                marginBottom: 0,
+                fontSize: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }} 
+              onClick={() => setSubTab('clientes')}
+            >
+              Clientes
+              {unreadB2C > 0 && <span className="sidebar-nav-badge" style={{ padding: '2px 6px', fontSize: '10px', marginLeft: 0 }}>{unreadB2C}</span>}
+            </h2>
+          </div>
           <div className="gc-chat-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -1055,6 +1159,9 @@ function ChatTab({ token, user, addToast, initialConversaId }: { token: string |
               </div>
               <div className="gc-conv-meta">
                 <span className="gc-conv-time">{formatDate(conv.ultima_mensagem_data ?? '')}</span>
+                {conv.mensagens_nao_lidas !== undefined && conv.mensagens_nao_lidas > 0 ? (
+                  <span className="gc-conv-badge">{conv.mensagens_nao_lidas}</span>
+                ) : null}
               </div>
             </div>
           ))}
@@ -1080,19 +1187,19 @@ function ChatTab({ token, user, addToast, initialConversaId }: { token: string |
                 <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}><div className="spinner" /></div>
               ) : mensagens.map((msg, i) => {
                 const mine = msg.autor_id === user?.id
-                const showDate = i === 0 || new Date(msg.created_at).toDateString() !== new Date(mensagens[i - 1].created_at).toDateString()
+                const showDate = i === 0 || parseUTC(msg.created_at).toDateString() !== parseUTC(mensagens[i - 1].created_at).toDateString()
                 return (
                   <Fragment key={msg.id}>
                     {showDate && (
                       <div className="gc-msg-date">
-                        {new Date(msg.created_at).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                        {parseUTC(msg.created_at).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
                       </div>
                     )}
                     <div className={`gc-msg-row${mine ? ' me' : ' other'}`}>
                       {!mine && <div className="gc-msg-avatar">{gcInitials(msg.autor_nome)}</div>}
                       <div>
                         <div className="gc-msg-bubble">{msg.conteudo}</div>
-                        <div className="gc-msg-time">{new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                        <div className="gc-msg-time">{parseUTC(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
                       </div>
                     </div>
                   </Fragment>
@@ -1143,7 +1250,8 @@ interface LeadTriagem {
   justificativa?: string
 }
 
-function ChatClientesTab({ token, user, addToast }: { token: string | null, user: any, addToast: (t: ToastType, m: string, details?: any) => void }) {
+function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: string | null, user: any, addToast: (t: ToastType, m: string, details?: any) => void, subTab: 'parceiros' | 'clientes', setSubTab: (t: 'parceiros' | 'clientes') => void }) {
+  const { unreadB2B, unreadB2C } = useChatStore()
   const [conversas, setConversas] = useState<Conversa[]>([])
   const [triagens, setTriagens] = useState<Record<string, LeadTriagem>>({})
   const [filtered, setFiltered] = useState<Conversa[]>([])
@@ -1181,6 +1289,9 @@ function ChatClientesTab({ token, user, addToast }: { token: string | null, user
     try {
       const data = await api.get<Mensagem[]>(`/vitrine/chat/conversas/${convId}/mensagens`)
       setMensagens(data)
+      useChatStore.getState().fetchUnreadCounts()
+      setConversas(prev => prev.map(c => c.id === convId ? { ...c, mensagens_nao_lidas: 0 } : c))
+      setFiltered(prev => prev.map(c => c.id === convId ? { ...c, mensagens_nao_lidas: 0 } : c))
     } catch (err: any) {
       addToast('error', err.message || 'Erro ao carregar mensagens')
     } finally {
@@ -1191,20 +1302,44 @@ function ChatClientesTab({ token, user, addToast }: { token: string | null, user
   useEffect(() => { fetchConversas() }, [fetchConversas])
   useEffect(() => { messageEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens])
 
+  const activeConversaRef = useRef<Conversa | null>(null)
+
+  useEffect(() => {
+    activeConversaRef.current = activeConversa
+  }, [activeConversa])
+
   useEffect(() => {
     if (!token) return
     const sock = createReconnectingSocket(`/v1/vitrine/chat/ws?token=${token}`, {
       onMessage: (event) => {
         try {
           const msg = JSON.parse(event.data) as Mensagem
-          if (activeConversa && msg.conversa_id === activeConversa.id)
+          const currentActive = activeConversaRef.current
+          const isFromActive = currentActive && msg.conversa_id === currentActive.id
+          if (isFromActive) {
             setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          }
+          setConversas(prev => prev.map(conv => {
+            if (conv.id === msg.conversa_id) {
+              const currentUnread = conv.mensagens_nao_lidas || 0
+              return { 
+                ...conv, 
+                ultima_mensagem: msg.conteudo, 
+                ultima_mensagem_data: msg.created_at,
+                mensagens_nao_lidas: isFromActive ? 0 : currentUnread + 1
+              }
+            }
+            return conv
+          }))
+          if (!isFromActive) {
+            useChatStore.getState().fetchUnreadCounts()
+          }
         } catch {}
       },
     })
     wsRef.current = sock
     return () => { sock.close(); wsRef.current = null }
-  }, [token, activeConversa])
+  }, [token])
 
   const applyFilter = (list: Conversa[], ruido: boolean, q: string) => {
     let r = ruido ? list.filter(c => triagens[c.id]?.classificacao === 'ruido') : list
@@ -1259,15 +1394,18 @@ function ChatClientesTab({ token, user, addToast }: { token: string | null, user
     const content = newMessage.trim()
     setNewMessage('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ conversa_id: activeConversa.id, conteudo: content }))
-    } else {
-      try {
-        const res = await api.post<Mensagem>(`/vitrine/chat/conversas/${activeConversa.id}/mensagens`, { conteudo: content })
-        setMensagens(prev => [...prev, res])
-      } catch (err: any) {
-        addToast('error', err.message || 'Erro ao enviar mensagem')
-      }
+
+    try {
+      const res = await api.post<Mensagem>(`/vitrine/chat/conversas/${activeConversa.id}/mensagens`, { conteudo: content })
+      setMensagens(prev => prev.some(m => m.id === res.id) ? prev : [...prev, res])
+      setConversas(prev => prev.map(conv =>
+        conv.id === res.conversa_id
+          ? { ...conv, ultima_mensagem: res.conteudo, ultima_mensagem_data: res.created_at }
+          : conv
+      ))
+      wsRef.current?.send({ conversa_id: activeConversa.id, conteudo: content, silently: true })
+    } catch (err: any) {
+      addToast('error', err.message || 'Erro ao enviar mensagem')
     }
   }
 
@@ -1284,8 +1422,43 @@ function ChatClientesTab({ token, user, addToast }: { token: string | null, user
       {/* Sidebar */}
       <div className="gc-chat-sidebar">
         <div className="gc-chat-sidebar-head">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h2>Clientes</h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <h2 
+                style={{ 
+                  cursor: 'pointer', 
+                  opacity: subTab === 'parceiros' ? 1 : 0.4, 
+                  borderBottom: subTab === 'parceiros' ? '2px solid var(--sv-primary)' : 'none',
+                  paddingBottom: 4,
+                  marginBottom: 0,
+                  fontSize: '18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }} 
+                onClick={() => setSubTab('parceiros')}
+              >
+                Parceiros
+                {unreadB2B > 0 && <span className="sidebar-nav-badge" style={{ padding: '2px 6px', fontSize: '10px', marginLeft: 0 }}>{unreadB2B}</span>}
+              </h2>
+              <h2 
+                style={{ 
+                  cursor: 'pointer', 
+                  opacity: subTab === 'clientes' ? 1 : 0.4, 
+                  borderBottom: subTab === 'clientes' ? '2px solid var(--sv-primary)' : 'none',
+                  paddingBottom: 4,
+                  marginBottom: 0,
+                  fontSize: '18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }} 
+                onClick={() => setSubTab('clientes')}
+              >
+                Clientes
+                {unreadB2C > 0 && <span className="sidebar-nav-badge" style={{ padding: '2px 6px', fontSize: '10px', marginLeft: 0 }}>{unreadB2C}</span>}
+              </h2>
+            </div>
             <button
               className={`btn${filtroRuido ? ' btn-primary' : ' quick-action-btn'}`}
               style={{ fontSize: 11, padding: '4px 10px' }}
@@ -1323,10 +1496,13 @@ function ChatClientesTab({ token, user, addToast }: { token: string | null, user
                 </div>
                 <div className="gc-conv-meta">
                   {triagem && (
-                    <span className={triagem.classificacao === 'quente' ? 'gc-conv-lead-hot' : 'gc-conv-lead-cold'}>
+                    <span className={triagem.classificacao === 'quente' ? 'gc-conv-lead-hot' : 'gc-conv-lead-cold'} style={{ marginBottom: 4 }}>
                       {triagem.classificacao === 'quente' ? '🔥' : '❄️'} {triagem.score}
                     </span>
                   )}
+                  {conv.mensagens_nao_lidas !== undefined && conv.mensagens_nao_lidas > 0 ? (
+                    <span className="gc-conv-badge">{conv.mensagens_nao_lidas}</span>
+                  ) : null}
                 </div>
               </div>
             )
@@ -1368,19 +1544,19 @@ function ChatClientesTab({ token, user, addToast }: { token: string | null, user
                 <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}><div className="spinner" /></div>
               ) : mensagens.map((msg, i) => {
                 const mine = msg.autor_id === user?.id
-                const showDate = i === 0 || new Date(msg.created_at).toDateString() !== new Date(mensagens[i - 1].created_at).toDateString()
+                const showDate = i === 0 || parseUTC(msg.created_at).toDateString() !== parseUTC(mensagens[i - 1].created_at).toDateString()
                 return (
                   <Fragment key={msg.id}>
                     {showDate && (
                       <div className="gc-msg-date">
-                        {new Date(msg.created_at).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                        {parseUTC(msg.created_at).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
                       </div>
                     )}
                     <div className={`gc-msg-row${mine ? ' me' : ' other'}`}>
                       {!mine && <div className="gc-msg-avatar">{gcInitials(msg.autor_nome)}</div>}
                       <div>
                         <div className="gc-msg-bubble">{msg.conteudo}</div>
-                        <div className="gc-msg-time">{new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                        <div className="gc-msg-time">{parseUTC(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
                       </div>
                     </div>
                   </Fragment>

@@ -36,7 +36,11 @@ function getInitialTheme(): Theme {
   return stored === 'light' || stored === 'dark' ? stored : 'dark'
 }
 
-export function Topbar() {
+interface TopbarProps {
+  onMenuToggle?: () => void
+}
+
+export function Topbar({ onMenuToggle }: TopbarProps) {
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
   const refreshToken = useAuthStore((state) => state.refreshToken)
@@ -179,6 +183,15 @@ export function Topbar() {
 
   return (
     <header className="topbar" style={{ position: 'relative', zIndex: 999 }}>
+      {/* Hamburger button (visible on mobile) */}
+      <button className="hamburger-btn" onClick={onMenuToggle} aria-label="Abrir menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <line x1="4" y1="12" x2="20" y2="12" />
+          <line x1="4" y1="6" x2="20" y2="6" />
+          <line x1="4" y1="18" x2="20" y2="18" />
+        </svg>
+      </button>
+
       {/* Search */}
       <div className="topbar-search" ref={searchRef} style={{ position: 'relative' }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

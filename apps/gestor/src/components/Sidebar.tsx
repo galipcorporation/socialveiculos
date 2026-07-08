@@ -3,7 +3,12 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { parseModulos, podeAcessarModulo, PATH_TO_MODULO } from '../lib/modulos'
 import { api } from '../lib/api'
+import { useChatStore } from '../stores/chatStore'
 
+interface SidebarProps {
+  isOpen?: boolean
+  onClose?: () => void
+}
 
 const FerramentasIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -138,11 +143,13 @@ const NAV_ITEMS = [
   },
 ]
 
-export function Sidebar() {
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
   const [lojaNome, setLojaNome] = useState<string>('')
+  const { unreadB2B, unreadB2C, fetchUnreadCounts } = useChatStore()
+  const totalUnread = unreadB2B + unreadB2C
 
   useEffect(() => {
     const fetchLoja = async () => {
@@ -160,6 +167,16 @@ export function Sidebar() {
     }
   }, [user])
 
+  const isAdmin = user?.papel === 'admin_plataforma'
+
+  useEffect(() => {
+    if (user && !isAdmin) {
+      fetchUnreadCounts()
+      const interval = setInterval(fetchUnreadCounts, 20000)
+      return () => clearInterval(interval)
+    }
+  }, [user, isAdmin])
+
   const modulos = parseModulos(user?.modulos)
   const podeVer = (path: string) => {
     if (path === '/' || path === '/dashboard') return true
@@ -171,8 +188,6 @@ export function Sidebar() {
   const visibleFerramentasChildren = FERRAMENTAS_CHILDREN.filter((c) => podeVer(c.path))
   const ferramentasAtiva = visibleFerramentasChildren.some((c) => location.pathname === c.path)
   const [ferramentasAberto, setFerramentasAberto] = useState(ferramentasAtiva)
-
-  const isAdmin = user?.papel === 'admin_plataforma'
 
   const visibleNavItems = isAdmin
     ? ADMIN_NAV_ITEMS
@@ -189,8 +204,19 @@ export function Sidebar() {
         return podeVer(item.path)
       })
 
+  // Navigate and close drawer on mobile
+  const handleNav = (path: string) => {
+    navigate(path)
+    onClose?.()
+  }
+
   return (
-    <nav className="sidebar">
+    <nav className={`sidebar ${isOpen ? 'mobile-open' : ''}`}>
+      {/* Close button (mobile drawer) */}
+      <button className="sidebar-close-btn" onClick={onClose} aria-label="Fechar menu">
+        ✕
+      </button>
+
       {/* Brand */}
       <div className="sidebar-brand">
         <div className="sidebar-brand-icon">SV</div>
@@ -206,13 +232,16 @@ export function Sidebar() {
           <div
             key={item.path}
             className={`sidebar-nav-item ${(location.pathname === item.path || (item.path === '/' && location.pathname === '/dashboard')) ? 'active' : ''}`}
-            onClick={() => navigate(item.path)}
+            onClick={() => handleNav(item.path)}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => e.key === 'Enter' && navigate(item.path)}
+            onKeyDown={(e) => e.key === 'Enter' && handleNav(item.path)}
           >
             {item.icon}
             <span>{item.label}</span>
+            {item.path === '/rede-social' && totalUnread > 0 && (
+              <span className="sidebar-nav-badge">{totalUnread}</span>
+            )}
           </div>
         ))}
 
@@ -247,10 +276,10 @@ export function Sidebar() {
               <div
                 key={child.path}
                 className={`sidebar-nav-item sidebar-subitem ${location.pathname === child.path ? 'active' : ''}`}
-                onClick={() => navigate(child.path)}
+                onClick={() => handleNav(child.path)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && navigate(child.path)}
+                onKeyDown={(e) => e.key === 'Enter' && handleNav(child.path)}
               >
                 <span>{child.label}</span>
               </div>
@@ -266,10 +295,10 @@ export function Sidebar() {
         <div className="sidebar-footer-divider" />
         <div
           className={`sidebar-nav-item ${location.pathname === '/ajuda' ? 'active' : ''}`}
-          onClick={() => navigate('/ajuda')}
+          onClick={() => handleNav('/ajuda')}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && navigate('/ajuda')}
+          onKeyDown={(e) => e.key === 'Enter' && handleNav('/ajuda')}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10" />

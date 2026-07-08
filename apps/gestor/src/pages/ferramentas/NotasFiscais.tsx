@@ -228,14 +228,15 @@ export function NotasFiscaisPage() {
         ) : notas.length === 0 ? (
           <div className="empty-state">Nenhuma NF-e emitida ainda.</div>
         ) : (
+          <div className="table-scroll">
           <table className="stock-table">
             <thead>
               <tr>
                 <th>Número</th>
                 <th>Status</th>
                 <th>Valor</th>
-                <th>Chave de acesso</th>
-                <th>Documentos</th>
+                <th className="col-secondary">Chave de acesso</th>
+                <th className="col-secondary">Documentos</th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -255,8 +256,8 @@ export function NotasFiscaisPage() {
                     )}
                   </td>
                   <td>{formatBRL(n.valor_total)}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{n.chave_acesso || '—'}</td>
-                  <td>
+                  <td className="col-secondary" style={{ fontFamily: 'monospace', fontSize: 12 }}>{n.chave_acesso || '—'}</td>
+                  <td className="col-secondary">
                     <div style={{ display: 'flex', gap: 8 }}>
                       {n.danfe_pdf_url && (
                         <a href={n.danfe_pdf_url} target="_blank" rel="noreferrer" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
@@ -296,6 +297,7 @@ export function NotasFiscaisPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

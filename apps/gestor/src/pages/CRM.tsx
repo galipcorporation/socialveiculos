@@ -1144,13 +1144,14 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
           <p>Cadastre seu primeiro cliente clicando em "Novo Cliente".</p>
         </div>
       ) : (
+        <div className="table-scroll">
         <table className="stock-table">
           <thead>
             <tr>
               <th>Nome</th>
               <th>Contato</th>
-              <th>CPF / CNPJ</th>
-              <th>Cidade / Estado</th>
+              <th className="col-secondary">CPF / CNPJ</th>
+              <th className="col-secondary">Cidade / Estado</th>
               <th>Ações</th>
             </tr>
           </thead>
@@ -1162,8 +1163,8 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
                   {c.email && <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>{c.email}</div>}
                 </td>
                 <td>{c.telefone || '—'}</td>
-                <td>{c.cpf || c.cnpj || '—'}</td>
-                <td>{c.cidade ? `${c.cidade} / ${c.estado || ''}` : '—'}</td>
+                <td className="col-secondary">{c.cpf || c.cnpj || '—'}</td>
+                <td className="col-secondary">{c.cidade ? `${c.cidade} / ${c.estado || ''}` : '—'}</td>
                 <td>
                   <div className="actions-cell">
                     <button
@@ -1186,6 +1187,7 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {/* Cliente Modal */}

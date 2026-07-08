@@ -105,5 +105,62 @@ class StorageProvider:
             if os.path.exists(file_path):
                 os.remove(file_path)
 
+    async def upload_json(self, json_content: bytes, filename: str) -> str:
+        """
+        Faz upload de um arquivo JSON (backup de conversa) e retorna a URL ou caminho.
+        """
+        if self.use_s3:
+            try:
+                key = f"chats/{filename}"
+                self.s3_client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=key,
+                    Body=json_content,
+                    ContentType="application/json"
+                )
+                if settings.s3_public_url:
+                    return f"{settings.s3_public_url.rstrip('/')}/{key}"
+                else:
+                    endpoint = settings.s3_endpoint_url or f"https://s3.{settings.s3_region}.amazonaws.com"
+                    return f"{endpoint.rstrip('/')}/{self.bucket_name}/{key}"
+            except ClientError as e:
+                print(f"[Storage] Erro ao fazer upload do JSON para S3: {e}")
+                raise e
+        else:
+            # Salvar localmente em static/uploads/chats/
+            chats_dir = os.path.join(self.local_dir, "chats")
+            os.makedirs(chats_dir, exist_ok=True)
+            file_path = os.path.join(chats_dir, filename)
+            with open(file_path, "wb") as f:
+                f.write(json_content)
+            return f"/static/uploads/chats/{filename}"
+
+    async def download_json(self, file_url: str) -> bytes:
+        """
+        Baixa um arquivo JSON do R2/S3 ou lê do filesystem local.
+        """
+        if self.use_s3:
+            try:
+                parts = file_url.split("/")
+                try:
+                    idx = parts.index("chats")
+                    key = "/".join(parts[idx:])
+                except ValueError:
+                    key = parts[-1]
+
+                response = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
+                return response["Body"].read()
+            except ClientError as e:
+                print(f"[Storage] Erro ao baixar JSON do S3: {e}")
+                raise e
+        else:
+            # Ler localmente
+            filename = file_url.split("/")[-1]
+            file_path = os.path.join(self.local_dir, "chats", filename)
+            if os.path.exists(file_path):
+                with open(file_path, "rb") as f:
+                    return f.read()
+            raise FileNotFoundError(f"Arquivo local não encontrado: {file_path}")
+
 
 storage_provider = StorageProvider()

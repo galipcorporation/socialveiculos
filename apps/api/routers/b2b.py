@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, WebSocket, WebSocketDisconnect
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -716,6 +716,18 @@ async def listar_conversas_b2b(
         msg_res = await db.execute(msg_stmt)
         last_msg = msg_res.scalar_one_or_none()
 
+        # Obter contagem de mensagens não lidas
+        stmt_unread = (
+            select(func.count(Mensagem.id))
+            .where(
+                Mensagem.conversa_id == conv.id,
+                Mensagem.autor_id != context.usuario.id,
+                Mensagem.lida == False
+            )
+        )
+        res_unread = await db.execute(stmt_unread)
+        unread_count = res_unread.scalar() or 0
+
         result.append(
             ConversaB2BResponse(
                 id=conv.id,
@@ -728,7 +740,8 @@ async def listar_conversas_b2b(
                 created_at=conv.created_at,
                 updated_at=conv.updated_at,
                 ultima_mensagem=last_msg.conteudo if last_msg else None,
-                ultima_mensagem_data=last_msg.created_at if last_msg else None
+                ultima_mensagem_data=last_msg.created_at if last_msg else None,
+                mensagens_nao_lidas=unread_count
             )
         )
 
@@ -804,6 +817,18 @@ async def iniciar_conversa_b2b(
     res_loja_b = await db.execute(stmt_loja_b)
     loja_b = res_loja_b.scalar_one_or_none()
 
+    # Obter contagem de mensagens não lidas (será 0 para uma nova conversa, mas calculamos por segurança se for existente)
+    stmt_unread = (
+        select(func.count(Mensagem.id))
+        .where(
+            Mensagem.conversa_id == conversa.id,
+            Mensagem.autor_id != context.usuario.id,
+            Mensagem.lida == False
+        )
+    )
+    res_unread = await db.execute(stmt_unread)
+    unread_count = res_unread.scalar() or 0
+
     return ConversaB2BResponse(
         id=conversa.id,
         tipo=conversa.tipo,
@@ -813,7 +838,8 @@ async def iniciar_conversa_b2b(
         loja_b_nome=loja_b.nome if loja_b else "Loja Parceira",
         ativa=conversa.ativa,
         created_at=conversa.created_at,
-        updated_at=conversa.updated_at
+        updated_at=conversa.updated_at,
+        mensagens_nao_lidas=unread_count
     )
 
 
@@ -843,6 +869,32 @@ async def listar_mensagens_b2b(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversa não encontrada."
         )
+
+    # Se a conversa estiver arquivada no R2/S3/local
+    if conversa.backup_url:
+        try:
+            from storage import storage_provider
+            import json
+            raw_data = await storage_provider.download_json(conversa.backup_url)
+            data = json.loads(raw_data)
+            messages_list = data.get("historico_mensagens", [])
+            
+            result = []
+            for m in messages_list:
+                result.append(
+                    MensagemB2BResponse(
+                        id=m.get("id"),
+                        conversa_id=m.get("conversa_id"),
+                        autor_id=m.get("autor_id"),
+                        autor_nome=m.get("autor_nome", "Lojista"),
+                        conteudo=m.get("conteudo"),
+                        lida=m.get("lida", True),
+                        created_at=datetime.fromisoformat(m.get("created_at")) if m.get("created_at") else datetime.utcnow()
+                    )
+                )
+            return result
+        except Exception as e:
+            print(f"[ERRO Backup R2] Falha ao baixar mensagens arquivadas: {e}")
 
     # Obter mensagens
     stmt_msg = (
@@ -887,6 +939,117 @@ async def listar_mensagens_b2b(
         )
 
     return result
+
+
+@router.post("/chat/conversas/{id}/arquivar")
+async def arquivar_conversa_b2b(
+    id: str,
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user)
+):
+    """
+    Exporta todas as mensagens de uma conversa B2B para um arquivo JSON,
+    faz o upload para o Cloudflare R2 (ou local) e limpa as mensagens do banco relacional.
+    """
+    stmt_conv = select(Conversa).where(
+        Conversa.id == id,
+        Conversa.tipo == TipoConversa.B2B,
+        or_(
+            Conversa.loja_a_id == context.loja_id,
+            Conversa.loja_b_id == context.loja_id
+        )
+    )
+    res_conv = await db.execute(stmt_conv)
+    conversa = res_conv.scalar_one_or_none()
+
+    if not conversa:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversa não encontrada."
+        )
+
+    if conversa.backup_url:
+        return {"status": "success", "message": "Conversa já arquivada anteriormente.", "backup_url": conversa.backup_url}
+
+    # Obter mensagens ativas do banco
+    stmt_msg = select(Mensagem).where(Mensagem.conversa_id == id).order_by(Mensagem.created_at.asc())
+    res_msg = await db.execute(stmt_msg)
+    mensagens = res_msg.scalars().all()
+
+    # Preencher informações para serialização
+    stmt_loja_a = select(Loja).where(Loja.id == conversa.loja_a_id)
+    res_loja_a = await db.execute(stmt_loja_a)
+    loja_a = res_loja_a.scalar_one_or_none()
+
+    stmt_loja_b = select(Loja).where(Loja.id == conversa.loja_b_id)
+    res_loja_b = await db.execute(stmt_loja_b)
+    loja_b = res_loja_b.scalar_one_or_none()
+
+    messages_json = []
+    for msg in mensagens:
+        autor_name = "Lojista"
+        if msg.autor_id:
+            autor_stmt = select(Usuario).where(Usuario.id == msg.autor_id)
+            autor_res = await db.execute(autor_stmt)
+            autor_obj = autor_res.scalar_one_or_none()
+            if autor_obj:
+                autor_name = autor_obj.nome
+
+        messages_json.append({
+            "id": msg.id,
+            "conversa_id": msg.conversa_id,
+            "autor_id": msg.autor_id,
+            "autor_nome": autor_name,
+            "conteudo": msg.conteudo,
+            "lida": msg.lida,
+            "created_at": msg.created_at.isoformat() if msg.created_at else None
+        })
+
+    conversa_data = {
+        "id": conversa.id,
+        "tipo": conversa.tipo,
+        "loja_a": {
+            "id": conversa.loja_a_id,
+            "nome": loja_a.nome if loja_a else "Loja Parceira"
+        },
+        "loja_b": {
+            "id": conversa.loja_b_id,
+            "nome": loja_b.nome if loja_b else "Loja Parceira"
+        },
+        "ativa": conversa.ativa,
+        "created_at": conversa.created_at.isoformat() if conversa.created_at else None,
+        "updated_at": conversa.updated_at.isoformat() if conversa.updated_at else None,
+        "historico_mensagens": messages_json
+    }
+
+    from storage import storage_provider
+    import json
+    
+    json_bytes = json.dumps(conversa_data, ensure_ascii=False, indent=2).encode("utf-8")
+    filename = f"{conversa.id}.json"
+    
+    try:
+        backup_url = await storage_provider.upload_json(json_bytes, filename)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao subir arquivo JSON para o Storage/R2: {str(e)}"
+        )
+
+    # Deletar mensagens do banco de dados relacional
+    from sqlalchemy import delete
+    stmt_del = delete(Mensagem).where(Mensagem.conversa_id == id)
+    await db.execute(stmt_del)
+
+    # Registrar URL de backup na conversa
+    conversa.backup_url = backup_url
+    await db.commit()
+
+    return {
+        "status": "success",
+        "message": "Conversa arquivada com sucesso e mensagens migradas para o Storage.",
+        "backup_url": backup_url
+    }
 
 
 @router.post("/chat/conversas/{id}/mensagens", response_model=MensagemB2BResponse, status_code=status.HTTP_201_CREATED)

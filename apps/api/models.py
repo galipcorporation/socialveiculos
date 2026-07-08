@@ -639,6 +639,7 @@ class Conversa(Base):
     loja_b_id = Column(String(36), ForeignKey("loja.id", ondelete="SET NULL"), nullable=True)
 
     ativa = Column(Boolean, default=True)
+    backup_url = Column(String(512), nullable=True)
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 

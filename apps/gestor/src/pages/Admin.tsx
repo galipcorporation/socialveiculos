@@ -249,7 +249,7 @@ function AbaLojas() {
         <EmptyState msg={busca ? 'Nenhuma loja encontrada para essa busca.' : 'Nenhuma loja cadastrada.'} />
       ) : (
         <div className="glass-card" style={{ overflow: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
+          <table style={{ width: '100%', minWidth: 680, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--sv-border)' }}>
                 {['Nome', 'Cidade / UF', 'WhatsApp', 'Status', 'Criado em', 'Ações'].map((h) => (
@@ -447,7 +447,7 @@ function AbaAuditoria() {
       ) : (
         <>
           <div className="glass-card" style={{ overflow: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
+            <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--sv-border)' }}>
                   {['Ação', 'Entidade', 'Usuário', 'Data'].map((h) => (
@@ -531,7 +531,7 @@ function AbaErros() {
       ) : (
         <>
           <div className="glass-card" style={{ overflow: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
+            <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--sv-border)' }}>
                   {['Origem', 'Rota', 'Status', 'Request ID', 'Data'].map((h) => (

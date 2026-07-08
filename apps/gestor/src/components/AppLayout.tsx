@@ -1,4 +1,5 @@
-import { Outlet, useNavigate } from 'react-router-dom'
+import { useState, useCallback, useEffect } from 'react'
+import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { CommandPalette } from './CommandPalette'
@@ -53,6 +54,7 @@ export function AppLayout() {
   useTrackPageVisit()
 
   const impersonando = typeof window !== 'undefined' && !!sessionStorage.getItem('sv_impersonar_loja')
+  const location = useLocation()
 
   // Admin de plataforma (suporte) precisa escolher uma loja antes de operar o gestor.
   // Sem loja escolhida o backend responde 409 em toda rota B2B; aqui abrimos o seletor.
@@ -62,19 +64,59 @@ export function AppLayout() {
     return <SeletorLojaGate />
   }
 
+  // Mobile drawer state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  const openMobileMenu = useCallback(() => setMobileMenuOpen(true), [])
+  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), [])
+
+  // Close drawer on navigation
+  useEffect(() => {
+    setMobileMenuOpen(false)
+  }, [location.pathname])
+
+  // Close drawer on Escape
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && mobileMenuOpen) {
+        setMobileMenuOpen(false)
+      }
+    }
+    document.addEventListener('keydown', handleEsc)
+    return () => document.removeEventListener('keydown', handleEsc)
+  }, [mobileMenuOpen])
+
+  // Prevent body scroll when drawer is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [mobileMenuOpen])
+
   return (
     <div className="app-layout" style={impersonando ? { paddingTop: 34 } : undefined}>
       {/* Aurora glow background effect */}
       <div className="aurora-glow" />
 
       <ImpersonarBanner />
-      <Sidebar />
+
+      {/* Mobile overlay */}
+      <div
+        className={`mobile-sidebar-overlay ${mobileMenuOpen ? 'visible' : ''}`}
+        onClick={closeMobileMenu}
+      />
+
+      <Sidebar isOpen={mobileMenuOpen} onClose={closeMobileMenu} />
       <CommandPalette />
 
       <div className="main-area">
-        <Topbar />
+        <Topbar onMenuToggle={openMobileMenu} />
         <Outlet />
       </div>
     </div>
   )
 }
+

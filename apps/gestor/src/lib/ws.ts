@@ -14,8 +14,7 @@ export function wsUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`
   if (base) return `${base.replace(/\/$/, '')}${p}`
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host
-  return `${protocol}//${host}${p}`
+  return `${protocol}//${window.location.host}${p}`
 }
 
 /**

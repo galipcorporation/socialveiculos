@@ -217,8 +217,9 @@ export function Equipe() {
           <p>Convide gestores e vendedores para colaborar na sua loja.</p>
         </div>
       ) : (
-        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+        <div className="glass-card" style={{ padding: 0 }}>
+          <div className="table-scroll">
+          <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: '14px' }}>
             <thead>
               <tr style={{ textAlign: 'left', color: 'var(--sv-text-dim)', fontSize: '12px', textTransform: 'uppercase' }}>
                 <th style={{ padding: '12px 16px' }}>Nome</th>
@@ -274,6 +275,7 @@ export function Equipe() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

@@ -363,8 +363,9 @@ export function Financeiro() {
           <p>Não há dados para o período ou filtros selecionados.</p>
         </div>
       ) : (
-        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+        <div className="glass-card" style={{ padding: 0 }}>
+          <div className="table-scroll">
+          <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontSize: '14px' }}>
             <thead>
               <tr style={{ textAlign: 'left', color: 'var(--sv-text-dim)', fontSize: '12px', textTransform: 'uppercase' }}>
                 <th style={{ padding: '12px 16px' }}>Status</th>
@@ -424,6 +425,7 @@ export function Financeiro() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

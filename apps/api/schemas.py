@@ -886,6 +886,7 @@ class ConversaB2BResponse(BaseModel):
     updated_at: datetime
     ultima_mensagem: Optional[str] = None
     ultima_mensagem_data: Optional[datetime] = None
+    mensagens_nao_lidas: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -990,6 +991,7 @@ class ConversaB2CResponse(BaseModel):
     updated_at: datetime
     ultima_mensagem: Optional[str] = None
     ultima_mensagem_data: Optional[datetime] = None
+    mensagens_nao_lidas: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 

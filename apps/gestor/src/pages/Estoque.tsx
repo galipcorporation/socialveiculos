@@ -622,6 +622,109 @@ export function Estoque() {
           </table>
           </div>
 
+          {/* View de cards para mobile */}
+          <div className="mobile-vehicle-cards">
+            {veiculos.map(v => (
+              <div key={v.id} className="mobile-vehicle-card">
+                <div className="mobile-vehicle-card-header">
+                  {v.midias && v.midias.length > 0 ? (
+                    <div className="vehicle-thumb">
+                      <img src={v.midias[0].url} alt={`${v.marca} ${v.modelo}`} />
+                    </div>
+                  ) : (
+                    <div className="vehicle-thumb-placeholder">
+                      <CarIcon />
+                    </div>
+                  )}
+                  <div className="mobile-vehicle-card-info">
+                    <h4>{v.marca} {v.modelo}</h4>
+                    <p>{v.placa || 'Sem placa'} · {v.cor || '—'} · {v.combustivel || '—'}</p>
+                  </div>
+                </div>
+
+                <div className="mobile-vehicle-card-stats">
+                  <div className="mobile-vehicle-card-stat">
+                    <span className="mobile-vehicle-card-stat-label">Ano</span>
+                    <span className="mobile-vehicle-card-stat-value">{v.ano_fabricacao}/{v.ano_modelo}</span>
+                  </div>
+                  <div className="mobile-vehicle-card-stat">
+                    <span className="mobile-vehicle-card-stat-label">KM</span>
+                    <span className="mobile-vehicle-card-stat-value">{formatKm(v.km ?? 0)}</span>
+                  </div>
+                  <div className="mobile-vehicle-card-stat">
+                    <span className="mobile-vehicle-card-stat-label">Preço</span>
+                    <span className="mobile-vehicle-card-stat-value price">{formatCurrency(v.preco_venda)}</span>
+                  </div>
+                </div>
+
+                <div className="mobile-vehicle-card-footer">
+                  <StatusSelect
+                    value={v.status || 'disponivel'}
+                    onChange={newStatus => handleStatusChange(v, newStatus)}
+                  />
+                  <div className="actions-cell">
+                    {v.status === 'disponivel' && (
+                      <button
+                        className="action-btn"
+                        title="Fechar Venda"
+                        onClick={() => setVendendoVeiculo(v)}
+                        style={{ color: 'var(--sv-success)' }}
+                      >
+                        <DollarIcon />
+                      </button>
+                    )}
+                    <button
+                      className="action-btn"
+                      title="Simular Crédito"
+                      onClick={() => setSimulandoVeiculo(v)}
+                      style={{ color: 'var(--sv-primary)' }}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect width="16" height="20" x="4" y="2" rx="2" />
+                        <line x1="8" x2="16" y1="6" y2="6" />
+                        <line x1="16" x2="16" y1="14" y2="18" />
+                        <path d="M16 10h.01" />
+                        <path d="M12 10h.01" />
+                        <path d="M8 10h.01" />
+                        <path d="M12 14h.01" />
+                        <path d="M8 14h.01" />
+                        <path d="M12 18h.01" />
+                        <path d="M8 18h.01" />
+                      </svg>
+                    </button>
+                    {(v.status === 'disponivel' || v.status === 'repasse') && (
+                      <button
+                        className="action-btn"
+                        title={v.status === 'repasse' ? 'Remover do Feed de Repasses' : 'Postar no Feed de Repasses'}
+                        onClick={() => handleToggleFeed(v)}
+                        style={{ color: v.status === 'repasse' ? 'var(--sv-success)' : 'var(--sv-text-dim)' }}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+                          <line x1="5" y1="12" x2="19" y2="12" />
+                          <polyline points="12 5 19 12 12 19" />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      className="action-btn"
+                      title="Editar"
+                      onClick={() => { setEditingVeiculo(v); setShowModal(true) }}
+                    >
+                      <EditIcon />
+                    </button>
+                    <button
+                      className="action-btn danger"
+                      title="Excluir"
+                      onClick={() => handleDelete(v)}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
           {/* ── Paginação ── */}
           <div className="pagination">
             <div className="pagination-info">
