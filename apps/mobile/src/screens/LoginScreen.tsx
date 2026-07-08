@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import {
-  View,
   Text,
   TextInput,
   Pressable,
@@ -9,22 +8,14 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
+import type { User } from '../stores/authStore'
 import { useAuthStore } from '../stores/authStore'
 import { api, extractErrorDetails } from '../lib/api'
 
 interface LoginResponse {
   access_token: string
   refresh_token: string
-  user: {
-    id: string
-    nome: string
-    email: string
-    papel: 'admin_plataforma' | 'gestor' | 'vendedor' | 'cliente'
-    ativo: boolean
-    mfa_ativo: boolean
-    modulos?: string | null
-    loja_id?: string | null
-  }
+  user: User
 }
 
 export default function LoginScreen() {
