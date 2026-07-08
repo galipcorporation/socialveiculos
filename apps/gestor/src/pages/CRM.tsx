@@ -366,62 +366,69 @@ function KanbanTab({ addToast }: { addToast: (type: ToastType, message: string, 
           <p style={{ marginTop: 16 }}>Carregando funil Kanban...</p>
         </div>
       ) : (
-        <div className="kanban-board">
-          {columns.map(col => (
-            <div
-              key={col.etapa}
-              className={`kanban-column ${draggedOverColumn === col.etapa ? 'drag-over' : ''}`}
-              onDragOver={e => handleDragOver(e, col.etapa)}
-              onDragLeave={() => setDraggedOverColumn(null)}
-              onDrop={() => handleDrop(col.etapa)}
-            >
-              <div className="kanban-column-header">
-                <h4>{ETAPA_LABELS[col.etapa]}</h4>
-                <span className="kanban-column-count">{col.total}</span>
-              </div>
+        <div className="kanban-container">
+          <div className="kanban-board">
+            {columns.map(col => (
+              <div
+                key={col.etapa}
+                className={`kanban-column ${draggedOverColumn === col.etapa ? 'drag-over' : ''}`}
+                onDragOver={e => handleDragOver(e, col.etapa)}
+                onDragLeave={() => setDraggedOverColumn(null)}
+                onDrop={() => handleDrop(col.etapa)}
+              >
+                <div className="kanban-column-header">
+                  <h4>{ETAPA_LABELS[col.etapa]}</h4>
+                  <span className="kanban-column-count">{col.total}</span>
+                </div>
 
-              <div className="kanban-cards-container">
-                {col.leads.map(lead => (
-                  <div
-                    key={lead.id}
-                    className={`lead-card ${draggedLeadId === lead.id ? 'dragging' : ''}`}
-                    draggable
-                    onDragStart={() => handleDragStart(lead.id)}
-                    onDragEnd={handleDragEnd}
-                    onClick={() => {
-                      setSelectedLeadId(lead.id)
-                      setShowDetailModal(true)
-                    }}
-                  >
-                    <div className="lead-card-header">
-                      <h5>{lead.cliente?.nome || 'Cliente Sem Nome'}</h5>
-                      <span className={`lead-origin-badge ${lead.origem}`}>
-                        {ORIGEM_LABELS[lead.origem]}
-                      </span>
-                    </div>
+                <div className="kanban-cards-container">
+                  {col.leads.map(lead => (
+                    <div
+                      key={lead.id}
+                      className={`lead-card ${draggedLeadId === lead.id ? 'dragging' : ''}`}
+                      draggable
+                      onDragStart={() => handleDragStart(lead.id)}
+                      onDragEnd={handleDragEnd}
+                      onClick={() => {
+                        setSelectedLeadId(lead.id)
+                        setShowDetailModal(true)
+                      }}
+                    >
+                      <div className="lead-card-header">
+                        <h5>{lead.cliente?.nome || 'Cliente Sem Nome'}</h5>
+                        <span className={`lead-origin-badge ${lead.origem}`}>
+                          {ORIGEM_LABELS[lead.origem]}
+                        </span>
+                      </div>
 
-                    <div className="lead-card-body">
-                      {lead.veiculo_id ? (
-                        <div className="lead-card-vehicle">Interesse: Carregando...</div>
-                      ) : (
-                        <div className="lead-card-vehicle" style={{ color: 'var(--sv-text-muted)' }}>Sem veículo vinculado</div>
-                      )}
-                      <div className="lead-card-price">
-                        {lead.valor_proposta ? formatCurrency(lead.valor_proposta) : 'Sem proposta'}
+                      <div className="lead-card-body">
+                        {lead.veiculo_id ? (
+                          <div className="lead-card-vehicle">Interesse: Carregando...</div>
+                        ) : (
+                          <div className="lead-card-vehicle" style={{ color: 'var(--sv-text-muted)' }}>Sem veículo vinculado</div>
+                        )}
+                        <div className="lead-card-price">
+                          {lead.valor_proposta ? formatCurrency(lead.valor_proposta) : 'Sem proposta'}
+                        </div>
+                      </div>
+
+                      <div className="lead-card-footer">
+                        <div className="lead-card-date">
+                          <CalendarIcon />
+                          <span>{formatDate(lead.updated_at)}</span>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="lead-card-footer">
-                      <div className="lead-card-date">
-                        <CalendarIcon />
-                        <span>{formatDate(lead.updated_at)}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          <div className="kanban-scroll-hint" title="Arraste para o lado para ver mais etapas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
         </div>
       )}
 
