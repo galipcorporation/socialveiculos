@@ -17,6 +17,20 @@ import type { RootScreenProps } from '../../navigation/types'
 
 const CAMBIOS = ['Manual', 'Automático', 'Automático CVT', 'Automatizado']
 const COMBUSTIVEIS = ['Flex', 'Gasolina', 'Diesel', 'Etanol', 'Híbrido', 'Elétrico']
+const OPCIONAIS_SUGERIDOS = [
+  'Ar condicionado',
+  'Direção hidráulica',
+  'Vidros elétricos',
+  'Travas elétricas',
+  'Alarme',
+  'Freio ABS',
+  'Airbag',
+  'Kit multimídia',
+  'Rodas de liga leve',
+  'Sensor de ré',
+  'Câmera de ré',
+  'Teto solar',
+]
 
 interface FormState {
   tipo: TipoVeiculo
@@ -56,6 +70,31 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
   const [form, setForm] = useState<FormState>(VAZIO)
   const [erros, setErros] = useState<Partial<Record<keyof FormState, string>>>({})
   const [sheet, setSheet] = useState<'ano' | 'cambio' | 'combustivel' | null>(null)
+  const [txtOpcional, setTxtOpcional] = useState('')
+
+  const opcionaisList = useMemo(() => {
+    return form.opcionais
+      ? form.opcionais.split(',').map((o) => o.trim()).filter(Boolean)
+      : []
+  }, [form.opcionais])
+
+  const adicionarOpcional = (nome: string) => {
+    const limpo = nome.trim()
+    if (!limpo) return
+    const atuais = form.opcionais
+      ? form.opcionais.split(',').map((o) => o.trim()).filter(Boolean)
+      : []
+    if (!atuais.includes(limpo)) {
+      set('opcionais', [...atuais, limpo].join(', '))
+    }
+  }
+
+  const removerOpcional = (nome: string) => {
+    const atuais = form.opcionais
+      ? form.opcionais.split(',').map((o) => o.trim()).filter(Boolean)
+      : []
+    set('opcionais', atuais.filter((o) => o !== nome).join(', '))
+  }
 
   const existenteQ = useQuery({
     queryKey: ['veiculos', id],
@@ -373,13 +412,96 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
           {/* Extras */}
           <Card style={{ gap: spacing.md }}>
             <Txt variant="title">Informações adicionais</Txt>
-            <Input
-              label="Opcionais"
-              placeholder="Separados por vírgula: teto solar, multimídia…"
-              value={form.opcionais}
-              onChangeText={(t) => set('opcionais', t)}
-              multiline
-            />
+            {/* Opcionais (Tags) */}
+            <View style={{ gap: spacing.xs }}>
+              <Txt variant="captionMedium" color="textDim">Opcionais</Txt>
+              
+              {/* Tags Ativas */}
+              {opcionaisList.length > 0 && (
+                <View style={styles.tagsContainer}>
+                  {opcionaisList.map((opc) => (
+                    <View key={opc} style={[styles.tag, { backgroundColor: '#0099ad' }]}>
+                      <Txt style={styles.tagText}>{opc}</Txt>
+                      <Pressable onPress={() => removerOpcional(opc)} style={styles.tagCloseBtn} hitSlop={6}>
+                        <Ionicons name="close" size={12} color="#fff" />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Input para adicionar novos */}
+              <Input
+                placeholder="Digitar opcional (ex: Alarme)..."
+                value={txtOpcional}
+                onChangeText={(text) => {
+                  if (text.includes(',')) {
+                    const partes = text.split(',')
+                    partes.slice(0, -1).forEach(adicionarOpcional)
+                    setTxtOpcional(partes[partes.length - 1])
+                  } else {
+                    setTxtOpcional(text)
+                  }
+                }}
+                onSubmitEditing={() => {
+                  adicionarOpcional(txtOpcional)
+                  setTxtOpcional('')
+                }}
+                right={
+                  txtOpcional.trim().length > 0 ? (
+                    <Pressable
+                      onPress={() => {
+                        adicionarOpcional(txtOpcional)
+                        setTxtOpcional('')
+                      }}
+                      style={{ padding: 4, justifyContent: 'center' }}
+                      hitSlop={8}
+                    >
+                      <Ionicons name="add-circle" size={24} color={colors.primary} />
+                    </Pressable>
+                  ) : null
+                }
+              />
+
+              {/* Lista de Sugestões pré-definidas */}
+              <Txt variant="caption" color="textMuted" style={{ marginTop: 2 }}>
+                Sugestões comuns (toque para adicionar/remover):
+              </Txt>
+              <View style={styles.sugestoesContainer}>
+                {OPCIONAIS_SUGERIDOS.map((sug) => {
+                  const jaSelecionado = opcionaisList.includes(sug)
+                  return (
+                    <Pressable
+                      key={sug}
+                      onPress={() => {
+                        if (jaSelecionado) {
+                          removerOpcional(sug)
+                        } else {
+                          adicionarOpcional(sug)
+                        }
+                      }}
+                      style={[
+                        styles.sugestaoChip,
+                        {
+                          backgroundColor: jaSelecionado ? colors.primary + '20' : colors.overlaySoft,
+                          borderColor: jaSelecionado ? colors.primary : colors.border,
+                        }
+                      ]}
+                    >
+                      <Txt
+                        style={{
+                          fontSize: 12,
+                          fontFamily: jaSelecionado ? fonts.semibold : fonts.regular,
+                          color: jaSelecionado ? colors.primaryText : colors.textDim,
+                        }}
+                      >
+                        {sug} {jaSelecionado ? '✓' : '+'}
+                      </Txt>
+                    </Pressable>
+                  )
+                })}
+              </View>
+            </View>
             <Input
               label="Descrição"
               placeholder="Detalhes do veículo, histórico, condição…"
@@ -470,6 +592,48 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.xxs,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 10,
+    paddingRight: 6,
+    height: 28,
+    borderRadius: 14,
+    gap: 4,
+  },
+  tagText: {
+    color: '#fff',
+    fontSize: 13,
+    fontFamily: fonts.medium,
+  },
+  tagCloseBtn: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  sugestoesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: 4,
+  },
+  sugestaoChip: {
+    paddingHorizontal: 10,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

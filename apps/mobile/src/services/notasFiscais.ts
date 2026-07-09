@@ -10,9 +10,13 @@ const diasAtras = (d: number) => new Date(now - d * 86_400_000).toISOString()
 const chaveFake = () =>
   Array.from({ length: 44 }, () => Math.floor(Math.random() * 10)).join('')
 
+// Mock: documentos que o backend real preenche via webhook do Focus NFe ao autorizar.
+const DANFE_MOCK = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+const xmlMock = (id: string) => `https://exemplo.socialveiculos.com.br/nfe/${id}.xml`
+
 let notas: NotaFiscal[] = [
-  { id: 'nf-001', numero: '128', serie: '1', tipo: 'saida', status: 'autorizada', chave_acesso: chaveFake(), valor_total: 68500, veiculo_nome: 'Hyundai HB20 Comfort Plus', cliente_nome: 'Luiz Henrique Ramos', contrato_numero: 'CV-2026-0042', ambiente: 'homologacao', emitida_em: diasAtras(3), created_at: diasAtras(3) },
-  { id: 'nf-002', numero: '127', serie: '1', tipo: 'saida', status: 'autorizada', chave_acesso: chaveFake(), valor_total: 108500, veiculo_nome: 'VW Nivus Highline', cliente_nome: 'André Oliveira', contrato_numero: 'CV-2026-0040', ambiente: 'homologacao', emitida_em: diasAtras(15), created_at: diasAtras(15) },
+  { id: 'nf-001', numero: '128', serie: '1', tipo: 'saida', status: 'autorizada', chave_acesso: chaveFake(), valor_total: 68500, veiculo_nome: 'Hyundai HB20 Comfort Plus', cliente_nome: 'Luiz Henrique Ramos', contrato_numero: 'CV-2026-0042', ambiente: 'homologacao', danfe_pdf_url: DANFE_MOCK, xml_url: xmlMock('nf-001'), emitida_em: diasAtras(3), created_at: diasAtras(3) },
+  { id: 'nf-002', numero: '127', serie: '1', tipo: 'saida', status: 'autorizada', chave_acesso: chaveFake(), valor_total: 108500, veiculo_nome: 'VW Nivus Highline', cliente_nome: 'André Oliveira', contrato_numero: 'CV-2026-0040', ambiente: 'homologacao', danfe_pdf_url: DANFE_MOCK, xml_url: xmlMock('nf-002'), emitida_em: diasAtras(15), created_at: diasAtras(15) },
   { id: 'nf-003', numero: '126', serie: '1', tipo: 'saida', status: 'cancelada', chave_acesso: chaveFake(), valor_total: 81200, veiculo_nome: 'Chevrolet Onix Premier', cliente_nome: 'Vanessa Pereira', contrato_numero: 'CV-2026-0038', ambiente: 'homologacao', justificativa_cancelamento: 'Cliente desistiu da compra após a emissão.', emitida_em: diasAtras(30), created_at: diasAtras(30) },
 ]
 
@@ -45,6 +49,8 @@ export const notasFiscaisService = {
         n.chave_acesso = chaveFake()
         n.numero = String(129 + Math.floor(Math.random() * 50))
         n.serie = '1'
+        n.danfe_pdf_url = DANFE_MOCK
+        n.xml_url = xmlMock(n.id)
         n.emitida_em = new Date().toISOString()
       }
     }, 2500)

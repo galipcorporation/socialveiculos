@@ -3,7 +3,7 @@
 // mantendo as mesmas assinaturas — as telas não mudam.
 
 export { authService } from './auth'
-export { veiculosService } from './veiculos'
+export { veiculosService, CATEGORIAS_CUSTO } from './veiculos'
 export type { VeiculoInput, VeiculosFiltro, RegistrarVendaInput } from './veiculos'
 export { leadsService } from './leads'
 export type { LeadInput } from './leads'
@@ -28,6 +28,8 @@ export { marketingService, TONS_MARKETING } from './marketing'
 export type { TomMarketing } from './marketing'
 export { vitrineService, FILTROS_FEED } from './vitrine'
 export type { FiltroFeed } from './vitrine'
+export { simuladorService, BANCOS_SIM } from './simulador'
+export type { BancoSim, ResultadoBanco, SimulacaoInput } from './simulador'
 export { resetDb } from './db'
 export * from './types'
 export { LOJA_NOME } from './seed'

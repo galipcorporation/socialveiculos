@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { FlatList, StyleSheet, Switch, View } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing } from '../../theme/tokens'
@@ -10,6 +11,7 @@ import {
 import { equipeService } from '../../services'
 import type { Membro, Papel } from '../../services/types'
 import { formatTelefone } from '../../lib/format'
+import { MODULOS, TODOS_MODULOS, parseModulos, type ModuloKey } from '../../lib/modulos'
 
 export default function EquipeScreen() {
   const queryClient = useQueryClient()
@@ -130,6 +132,7 @@ function MembroCard({ membro, onPress }: { membro: Membro; onPress: () => void }
 function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membro: Membro | null; onClose: () => void }) {
   const queryClient = useQueryClient()
   const toast = useToast()
+  const { colors } = useTheme()
   const editando = !!membro
 
   const [nome, setNome] = useState('')
@@ -137,6 +140,7 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
   const [telefone, setTelefone] = useState('')
   const [papel, setPapel] = useState<Papel>('vendedor')
   const [comissao, setComissao] = useState('2')
+  const [modulos, setModulos] = useState<ModuloKey[]>([])
 
   React.useEffect(() => {
     if (visible) {
@@ -145,8 +149,12 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
       setTelefone(membro?.telefone ?? '')
       setPapel(membro?.papel ?? 'vendedor')
       setComissao(membro?.percentual_comissao != null ? String(membro.percentual_comissao) : '2')
+      setModulos(parseModulos(membro?.modulos))
     }
   }, [visible, membro])
+
+  const toggleModulo = (key: ModuloKey) =>
+    setModulos((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
 
   const mut = useMutation({
     mutationFn: () => {
@@ -156,6 +164,7 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
         telefone: telefone.replace(/\D/g, '') || undefined,
         papel,
         percentual_comissao: papel === 'vendedor' ? parseFloat(comissao.replace(',', '.')) || 0 : null,
+        modulos: papel === 'gestor' ? JSON.stringify(TODOS_MODULOS) : JSON.stringify(modulos),
       }
       return editando ? equipeService.atualizar(membro!.id, input) : equipeService.criar(input)
     },
@@ -213,6 +222,44 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
             hint="Aplicado automaticamente ao registrar vendas deste vendedor"
           />
         )}
+
+        <View style={{ gap: 6 }}>
+          <Txt variant="captionMedium" color="textDim">Acessos</Txt>
+          {papel === 'gestor' ? (
+            <Card style={{ padding: spacing.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="shield-checkmark" size={18} color={colors.primary} />
+                <Txt variant="caption" color="textDim" style={{ flex: 1 }}>
+                  Gestor tem acesso total a todos os módulos.
+                </Txt>
+              </View>
+            </Card>
+          ) : (
+            <Card style={{ padding: 0, overflow: 'hidden' }}>
+              {MODULOS.map((m, i) => (
+                <View
+                  key={m.key}
+                  style={[
+                    styles.moduloRow,
+                    i < MODULOS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                  ]}
+                >
+                  <Txt variant="body" style={{ flex: 1 }}>{m.label}</Txt>
+                  <Switch
+                    value={modulos.includes(m.key)}
+                    onValueChange={() => toggleModulo(m.key)}
+                    trackColor={{ false: colors.overlayStrong, true: colors.primary }}
+                    thumbColor="#fff"
+                  />
+                </View>
+              ))}
+            </Card>
+          )}
+          {papel === 'vendedor' && (
+            <Txt variant="caption" color="textDim">Selecione a que o vendedor terá acesso no app.</Txt>
+          )}
+        </View>
+
         <Button
           title={editando ? 'Salvar alterações' : 'Adicionar membro'}
           loading={mut.isPending}
@@ -226,4 +273,11 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  moduloRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
 })

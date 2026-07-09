@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { FlatList, View } from 'react-native'
+import { FlatList, Linking, View } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { spacing } from '../../theme/tokens'
 import {
@@ -49,6 +49,13 @@ export default function NotasFiscaisScreen() {
     } finally {
       setEmitindo(false)
     }
+  }
+
+  const abrirUrl = async (url?: string) => {
+    if (!url) return
+    const ok = await Linking.canOpenURL(url)
+    if (ok) Linking.openURL(url)
+    else toast.show('error', 'Não foi possível abrir o documento.')
   }
 
   const confirmarCancelamento = async () => {
@@ -128,11 +135,19 @@ export default function NotasFiscaisScreen() {
               </View>
               <View style={{ alignItems: 'flex-end', gap: 4 }}>
                 <Txt variant="bodyMedium">{formatBRL(item.valor_total)}</Txt>
-                {item.status === 'autorizada' && (
-                  <Button title="Cancelar" variant="outline" size="sm" onPress={() => setCancelar(item)} />
-                )}
               </View>
             </View>
+            {item.status === 'autorizada' && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm }}>
+                {item.danfe_pdf_url && (
+                  <Button title="DANFE" icon="document-text-outline" variant="outline" size="sm" onPress={() => abrirUrl(item.danfe_pdf_url)} />
+                )}
+                {item.xml_url && (
+                  <Button title="XML" icon="download-outline" variant="outline" size="sm" onPress={() => abrirUrl(item.xml_url)} />
+                )}
+                <Button title="Cancelar" variant="outline" size="sm" onPress={() => setCancelar(item)} />
+              </View>
+            )}
           </Card>
         )}
       />

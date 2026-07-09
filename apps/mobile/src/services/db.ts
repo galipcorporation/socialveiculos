@@ -11,11 +11,12 @@ import {
 } from './seed'
 import type {
   Cliente, ConfiguracaoFiscal, Conversa, CredencialBanco, CredencialDetran, CredencialIA,
-  Esteira, Lancamento, Lead, Membro, Mensagem, Notificacao, PerfilLoja, RedeSocialStatus, Veiculo,
+  CustoVeiculo, Esteira, Lancamento, Lead, Membro, Mensagem, Negociacao, Notificacao, PerfilLoja,
+  RedeSocialStatus, Veiculo,
 } from './types'
 
 const STORAGE_KEY = 'sv-mock-db'
-const SEED_VERSION = 2
+const SEED_VERSION = 3
 
 export interface Database {
   version: number
@@ -36,6 +37,9 @@ export interface Database {
   redesSociais: RedeSocialStatus[]
   detran: CredencialDetran
   configFiscal: ConfiguracaoFiscal
+  // Paridade recurso-a-recurso (M058/M059)
+  custos: CustoVeiculo[]
+  negociacoes: Negociacao[]
 }
 
 let cache: Database | null = null
@@ -65,6 +69,8 @@ function buildSeed(): Database {
     redesSociais: buildRedesSociais(),
     detran: buildCredencialDetran(),
     configFiscal: buildConfigFiscal(),
+    custos: [],
+    negociacoes: [],
   }
 }
 

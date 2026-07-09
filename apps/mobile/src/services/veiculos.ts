@@ -1,6 +1,6 @@
 import { delay, getDb, mutate, novoId } from './db'
 import { LOJA_ID } from './seed'
-import type { Esteira, Midia, Veiculo, VeiculoStatus } from './types'
+import type { CategoriaCusto, CustoVeiculo, Esteira, Midia, Veiculo, VeiculoStatus } from './types'
 
 export interface VeiculosFiltro {
   busca?: string
@@ -32,7 +32,21 @@ export interface RegistrarVendaInput {
   comprador_nome: string
   valor_venda: number
   vendedor_nome?: string
+  // Pagamento composto (M058) — soma deve fechar com valor_venda.
+  valor_dinheiro?: number
+  valor_financiado?: number
+  valor_troca?: number
+  troca_descricao?: string
 }
+
+export const CATEGORIAS_CUSTO: { value: CategoriaCusto; label: string }[] = [
+  { value: 'mecanica', label: 'Mecânica' },
+  { value: 'pintura', label: 'Pintura / funilaria' },
+  { value: 'pneus', label: 'Pneus' },
+  { value: 'documentacao', label: 'Documentação' },
+  { value: 'estetica', label: 'Estética / limpeza' },
+  { value: 'outro', label: 'Outro' },
+]
 
 function aplicarInput(v: Veiculo, input: VeiculoInput) {
   Object.assign(v, {
@@ -229,7 +243,74 @@ export const veiculosService = {
           created_at: agora,
         })
       }
+
+      // Pagamento composto (M058): veículo de troca entra no estoque como rascunho.
+      if (input.valor_troca && input.valor_troca > 0 && input.troca_descricao?.trim()) {
+        db.veiculos.unshift({
+          id: novoId('vei'),
+          loja_id: LOJA_ID,
+          marca: input.troca_descricao.trim().split(' ')[0] || 'Troca',
+          modelo: input.troca_descricao.trim().split(' ').slice(1).join(' ') || 'a avaliar',
+          tipo: 'carro',
+          ano_modelo: new Date().getFullYear(),
+          preco_custo: input.valor_troca,
+          preco_venda: undefined,
+          status: 'inativo',
+          publicado_marketplace: false,
+          descricao: `Entrou como troca na venda de ${nome}. Avaliação/preparação pendente.`,
+          created_at: agora,
+          updated_at: agora,
+          midias: [],
+        })
+      }
       return esteira
+    })
+  },
+
+  // ── Custos de preparação (M058) ──────────────────────────
+  async custos(idVeiculo: string): Promise<CustoVeiculo[]> {
+    await delay(120, 260)
+    const db = await getDb()
+    return db.custos
+      .filter((c) => c.veiculo_id === idVeiculo)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+  },
+
+  async adicionarCusto(idVeiculo: string, input: { categoria: CategoriaCusto; descricao: string; valor: number }): Promise<CustoVeiculo> {
+    await delay(150, 300)
+    return mutate((db) => {
+      const agora = new Date().toISOString()
+      const custo: CustoVeiculo = {
+        id: novoId('custo'),
+        veiculo_id: idVeiculo,
+        categoria: input.categoria,
+        descricao: input.descricao.trim(),
+        valor: input.valor,
+        created_at: agora,
+      }
+      db.custos.unshift(custo)
+      // Custo de preparação vira despesa no Financeiro (paridade com o gestor).
+      const v = db.veiculos.find((x) => x.id === idVeiculo)
+      const nome = v ? `${v.marca} ${v.modelo}` : undefined
+      db.lancamentos.unshift({
+        id: novoId('lan'),
+        loja_id: LOJA_ID,
+        tipo: 'despesa',
+        descricao: `Preparação — ${input.descricao.trim()}${nome ? ` (${nome})` : ''}`,
+        valor: input.valor,
+        data: agora,
+        veiculo_nome: nome,
+        status_pagamento: 'pago',
+        created_at: agora,
+      })
+      return custo
+    })
+  },
+
+  async removerCusto(idCusto: string): Promise<void> {
+    await delay(120, 240)
+    return mutate((db) => {
+      db.custos = db.custos.filter((c) => c.id !== idCusto)
     })
   },
 }

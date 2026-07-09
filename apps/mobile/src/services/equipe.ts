@@ -1,5 +1,6 @@
 import { delay, getDb, mutate, novoId } from './db'
 import type { Membro, Papel } from './types'
+import { TODOS_MODULOS } from '../lib/modulos'
 
 export interface MembroInput {
   nome: string
@@ -7,6 +8,8 @@ export interface MembroInput {
   telefone?: string
   papel: Papel
   percentual_comissao?: number | null
+  /** JSON array das keys de módulos liberados. Ignorado p/ gestor (acesso total). */
+  modulos?: string
 }
 
 export const equipeService = {
@@ -34,6 +37,9 @@ export const equipeService = {
         papel: input.papel,
         ativo: true,
         percentual_comissao: input.papel === 'vendedor' ? input.percentual_comissao ?? 0 : null,
+        modulos: input.papel === 'gestor'
+          ? JSON.stringify(TODOS_MODULOS)
+          : input.modulos ?? JSON.stringify([]),
         vendas_mes: 0,
         created_at: new Date().toISOString(),
       }

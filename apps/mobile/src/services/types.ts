@@ -142,6 +142,29 @@ export const ORIGEM_LEAD_LABEL: Record<OrigemLead, string> = {
   whatsapp: 'WhatsApp',
 }
 
+// ── Custos de preparação do veículo — M058 ─────────────────
+export type CategoriaCusto = 'mecanica' | 'pintura' | 'pneus' | 'documentacao' | 'estetica' | 'outro'
+
+export interface CustoVeiculo {
+  id: string
+  veiculo_id: string
+  categoria: CategoriaCusto
+  descricao: string
+  valor: number
+  created_at: string
+}
+
+// ── Negociações (propostas por lead) — M059 ────────────────
+export interface Negociacao {
+  id: string
+  lead_id: string
+  valor_proposta: number
+  valor_entrada?: number
+  parcelas?: number
+  observacoes?: string
+  created_at: string
+}
+
 // ── Chat ───────────────────────────────────────────────────
 export interface Mensagem {
   id: string
@@ -250,6 +273,8 @@ export interface Membro {
   papel: Papel
   ativo: boolean
   percentual_comissao?: number | null
+  /** JSON array das keys de módulos liberados (vendedor). Gestor = acesso total. */
+  modulos?: string
   vendas_mes?: number
   created_at: string
 }
@@ -474,6 +499,8 @@ export interface NotaFiscal {
   ambiente: AmbienteFiscal
   motivo_rejeicao?: string
   justificativa_cancelamento?: string
+  danfe_pdf_url?: string
+  xml_url?: string
   emitida_em?: string
   created_at: string
 }

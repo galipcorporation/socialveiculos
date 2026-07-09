@@ -11,9 +11,9 @@ import {
   TONE_STATUS_VEICULO, Txt, useToast,
 } from '../../components/ui'
 import { VehiclePhoto } from '../../components/VehiclePhoto'
-import { equipeService, veiculosService } from '../../services'
+import { CATEGORIAS_CUSTO, equipeService, veiculosService } from '../../services'
 import {
-  STATUS_VEICULO_LABEL, type Veiculo, type VeiculoStatus,
+  STATUS_VEICULO_LABEL, type CategoriaCusto, type Veiculo, type VeiculoStatus,
 } from '../../services/types'
 import { formatBRL, formatKm, formatPlaca, maskMoedaInput, parseMoedaInput } from '../../lib/format'
 import { useAuthStore } from '../../stores/authStore'
@@ -170,6 +170,9 @@ export default function VeiculoDetalheScreen({ route }: RootScreenProps<'Veiculo
             </Card>
           )}
 
+          {/* Custos de preparação (só gestor) */}
+          {v && gestor && v.status !== 'vendido' && <CustosCard veiculo={v} />}
+
           {/* Opcionais / descrição */}
           {v?.opcionais ? (
             <Card>
@@ -294,7 +297,89 @@ function Linha({ label, valor, cor }: { label: string; valor: string; cor?: stri
   )
 }
 
+function CustosCard({ veiculo }: { veiculo: Veiculo }) {
+  const { colors } = useTheme()
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const [aberto, setAberto] = useState(false)
+  const [categoria, setCategoria] = useState<CategoriaCusto>('mecanica')
+  const [catSheet, setCatSheet] = useState(false)
+  const [descricao, setDescricao] = useState('')
+  const [valor, setValor] = useState('')
+
+  const q = useQuery({ queryKey: ['veiculos', veiculo.id, 'custos'], queryFn: () => veiculosService.custos(veiculo.id) })
+  const custos = q.data ?? []
+  const totalCustos = custos.reduce((a, c) => a + c.valor, 0)
+  const custoTotal = (veiculo.preco_custo ?? 0) + totalCustos
+  const lucroProj = veiculo.preco_venda != null ? veiculo.preco_venda - custoTotal : null
+
+  const addMut = useMutation({
+    mutationFn: () => veiculosService.adicionarCusto(veiculo.id, { categoria, descricao: descricao.trim(), valor: parseMoedaInput(valor) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['veiculos', veiculo.id, 'custos'] })
+      queryClient.invalidateQueries({ queryKey: ['financeiro'] })
+      toast.show('success', 'Custo adicionado (lançado no Financeiro).')
+      setDescricao(''); setValor(''); setAberto(false)
+    },
+  })
+  const remMut = useMutation({
+    mutationFn: (id: string) => veiculosService.removerCusto(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['veiculos', veiculo.id, 'custos'] }),
+  })
+
+  return (
+    <Card>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+        <Txt variant="title">Custos de preparação</Txt>
+        <Pressable onPress={() => setAberto(true)} hitSlop={8}>
+          <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+        </Pressable>
+      </View>
+      {custos.length === 0 ? (
+        <Txt variant="caption" color="textDim">Nenhum custo lançado. Adicione mecânica, pintura, pneus…</Txt>
+      ) : (
+        custos.map((c) => (
+          <View key={c.id} style={styles.linha}>
+            <View style={{ flex: 1 }}>
+              <Txt variant="captionMedium" numberOfLines={1}>{c.descricao}</Txt>
+              <Txt variant="caption" color="textMuted">{CATEGORIAS_CUSTO.find((x) => x.value === c.categoria)?.label}</Txt>
+            </View>
+            <Txt variant="captionMedium">{formatBRL(c.valor)}</Txt>
+            <Pressable onPress={() => remMut.mutate(c.id)} hitSlop={8} style={{ marginLeft: spacing.sm }}>
+              <Ionicons name="trash-outline" size={16} color={colors.error} />
+            </Pressable>
+          </View>
+        ))
+      )}
+      {(totalCustos > 0 || veiculo.preco_custo != null) && (
+        <View style={{ marginTop: spacing.xs, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: colors.border, gap: 4 }}>
+          <Linha label="Custo total (compra + preparação)" valor={formatBRL(custoTotal)} />
+          {lucroProj != null && <Linha label="Lucro projetado" valor={formatBRL(lucroProj)} cor={lucroProj >= 0 ? colors.success : colors.error} />}
+        </View>
+      )}
+
+      <Sheet visible={aberto} onClose={() => setAberto(false)} title="Adicionar custo">
+        <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+          <SelectField label="Categoria" value={CATEGORIAS_CUSTO.find((x) => x.value === categoria)?.label} onPress={() => setCatSheet(true)} />
+          <Input label="Descrição" placeholder="Ex.: Troca de pastilhas de freio" value={descricao} onChangeText={setDescricao} />
+          <Input label="Valor" placeholder="0,00" keyboardType="numeric" value={valor} onChangeText={(t) => setValor(maskMoedaInput(t))} icon="cash-outline" />
+          <Button title="Adicionar custo" loading={addMut.isPending} disabled={descricao.trim().length < 2 || parseMoedaInput(valor) <= 0} onPress={() => addMut.mutate()} />
+        </View>
+        <OptionSheet
+          visible={catSheet}
+          onClose={() => setCatSheet(false)}
+          title="Categoria do custo"
+          selected={categoria}
+          options={CATEGORIAS_CUSTO.map((c) => ({ value: c.value, label: c.label }))}
+          onSelect={(v) => setCategoria(v as CategoriaCusto)}
+        />
+      </Sheet>
+    </Card>
+  )
+}
+
 function RegistrarVendaSheet({ veiculo, visible, onClose }: { veiculo: Veiculo; visible: boolean; onClose: () => void }) {
+  const { colors } = useTheme()
   const queryClient = useQueryClient()
   const toast = useToast()
   const navigation = useNavigation()
@@ -305,18 +390,29 @@ function RegistrarVendaSheet({ veiculo, visible, onClose }: { veiculo: Veiculo; 
   const [vendedor, setVendedor] = useState(user?.nome ?? '')
   const [vendedorAberto, setVendedorAberto] = useState(false)
 
-  const equipeQ = useQuery({
-    queryKey: ['equipe'],
-    queryFn: () => equipeService.listar(),
-    enabled: visible,
-  })
+  // Pagamento composto (M058)
+  const [dinheiro, setDinheiro] = useState('')
+  const [financiado, setFinanciado] = useState('')
+  const [troca, setTroca] = useState('')
+  const [trocaDesc, setTrocaDesc] = useState('')
+
+  const equipeQ = useQuery({ queryKey: ['equipe'], queryFn: () => equipeService.listar(), enabled: visible })
+
+  const vTotal = parseMoedaInput(valor)
+  const composto = parseMoedaInput(dinheiro) + parseMoedaInput(financiado) + parseMoedaInput(troca)
+  const falta = vTotal - composto
+  const fecha = vTotal > 0 && Math.abs(falta) < 1
 
   const vendaMut = useMutation({
     mutationFn: () =>
       veiculosService.registrarVenda(veiculo.id, {
         comprador_nome: comprador.trim(),
-        valor_venda: parseMoedaInput(valor),
+        valor_venda: vTotal,
         vendedor_nome: vendedor || undefined,
+        valor_dinheiro: parseMoedaInput(dinheiro) || undefined,
+        valor_financiado: parseMoedaInput(financiado) || undefined,
+        valor_troca: parseMoedaInput(troca) || undefined,
+        troca_descricao: trocaDesc.trim() || undefined,
       }),
     onSuccess: (esteira) => {
       queryClient.invalidateQueries()
@@ -327,51 +423,54 @@ function RegistrarVendaSheet({ veiculo, visible, onClose }: { veiculo: Veiculo; 
     onError: () => toast.show('error', 'Não foi possível registrar a venda.'),
   })
 
-  const valido = comprador.trim().length >= 3 && parseMoedaInput(valor) > 0
+  // Comissão prevista (para transparência ao vendedor)
+  const membro = (equipeQ.data ?? []).find((m) => m.nome === vendedor)
+  const comissaoPct = membro?.percentual_comissao ?? null
+  const comissaoPrev = comissaoPct ? (vTotal * comissaoPct) / 100 : null
+
+  const valido = comprador.trim().length >= 3 && vTotal > 0
 
   return (
     <Sheet visible={visible} onClose={onClose} title="Registrar venda">
       <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
-      <Txt variant="caption" color="textDim">
-        {veiculo.marca} {veiculo.modelo} · a venda abre automaticamente a esteira de pós-venda.
-      </Txt>
-      <Input
-        label="Nome do comprador"
-        placeholder="Ex.: Maria da Silva"
-        value={comprador}
-        onChangeText={setComprador}
-        icon="person-outline"
-      />
-      <Input
-        label="Valor da venda"
-        placeholder="0,00"
-        keyboardType="numeric"
-        value={valor}
-        onChangeText={(t) => setValor(maskMoedaInput(t))}
-        icon="cash-outline"
-      />
-      <SelectField
-        label="Vendedor responsável"
-        value={vendedor}
-        onPress={() => setVendedorAberto(true)}
-        icon="people-outline"
-      />
-      <Button
-        title="Confirmar venda"
-        size="lg"
-        loading={vendaMut.isPending}
-        disabled={!valido}
-        onPress={() => vendaMut.mutate()}
-      />
+        <Txt variant="caption" color="textDim">
+          {veiculo.marca} {veiculo.modelo} · a venda abre a esteira de pós-venda.
+        </Txt>
+        <Input label="Nome do comprador" placeholder="Ex.: Maria da Silva" value={comprador} onChangeText={setComprador} icon="person-outline" />
+        <Input label="Valor da venda" placeholder="0,00" keyboardType="numeric" value={valor} onChangeText={(t) => setValor(maskMoedaInput(t))} icon="cash-outline" />
+
+        {/* Composição do pagamento */}
+        <View style={{ gap: spacing.sm }}>
+          <Txt variant="captionMedium" color="textDim">Composição do pagamento (opcional)</Txt>
+          <Input label="Dinheiro / à vista" placeholder="0,00" keyboardType="numeric" value={dinheiro} onChangeText={(t) => setDinheiro(maskMoedaInput(t))} icon="wallet-outline" />
+          <Input label="Financiamento" placeholder="0,00" keyboardType="numeric" value={financiado} onChangeText={(t) => setFinanciado(maskMoedaInput(t))} icon="card-outline" />
+          <Input label="Troca (valor avaliado)" placeholder="0,00" keyboardType="numeric" value={troca} onChangeText={(t) => setTroca(maskMoedaInput(t))} icon="swap-horizontal-outline" />
+          {parseMoedaInput(troca) > 0 && (
+            <Input label="Veículo da troca" placeholder="Ex.: Chevrolet Onix 2019" value={trocaDesc} onChangeText={setTrocaDesc} icon="car-outline" hint="Entra no estoque como rascunho (inativo) para avaliação." />
+          )}
+          {composto > 0 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: spacing.sm, borderRadius: radius.md, backgroundColor: fecha ? colors.success + '14' : colors.warning + '14' }}>
+              <Txt variant="caption" color={fecha ? 'success' : 'warning'}>
+                {fecha ? '✓ Pagamento fecha com o valor' : falta > 0 ? `Falta ${formatBRL(falta)}` : `Excede ${formatBRL(-falta)}`}
+              </Txt>
+              <Txt variant="captionMedium" color={fecha ? 'success' : 'warning'}>{formatBRL(composto)}</Txt>
+            </View>
+          )}
+        </View>
+
+        <SelectField label="Vendedor responsável" value={vendedor} onPress={() => setVendedorAberto(true)} icon="people-outline" />
+        {comissaoPrev != null && vTotal > 0 && (
+          <Txt variant="caption" color="textMuted">Comissão prevista: {formatBRL(comissaoPrev)} ({comissaoPct}%).</Txt>
+        )}
+
+        <Button title="Confirmar venda" size="lg" loading={vendaMut.isPending} disabled={!valido} onPress={() => vendaMut.mutate()} />
       </View>
       <OptionSheet
         visible={vendedorAberto}
         onClose={() => setVendedorAberto(false)}
         title="Vendedor responsável"
         selected={vendedor}
-        options={(equipeQ.data ?? [])
-          .filter((m) => m.ativo)
-          .map((m) => ({ value: m.nome, label: m.nome, sublabel: m.papel === 'gestor' ? 'Gestor' : 'Vendedor' }))}
+        options={(equipeQ.data ?? []).filter((m) => m.ativo).map((m) => ({ value: m.nome, label: m.nome, sublabel: m.papel === 'gestor' ? 'Gestor' : 'Vendedor' }))}
         onSelect={setVendedor}
       />
     </Sheet>

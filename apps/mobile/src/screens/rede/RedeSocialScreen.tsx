@@ -27,7 +27,7 @@ export default function RedeSocialScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <AppHeader title="Rede Social" subtitle="Repasses entre lojas parceiras" />
+      <AppHeader title="Rede Social" subtitle="Repasses entre lojas parceiras" back />
       <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.xs }}>
         <FilterChips
           options={[
