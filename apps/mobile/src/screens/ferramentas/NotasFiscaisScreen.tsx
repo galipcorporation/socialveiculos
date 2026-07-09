@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
-import { FlatList, Linking, View } from 'react-native'
+import { FlatList, Linking, Pressable, View } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { spacing } from '../../theme/tokens'
 import {
-  AppHeader, Badge, Button, Card, EmptyState, Input, Paywall, Screen, Sheet,
+  AppHeader, Badge, Button, Card, EmptyState, Input, OptionSheet, Paywall, Screen, Sheet,
   SkeletonCard, Txt, useToast,
 } from '../../components/ui'
+import { useTheme } from '../../theme/ThemeContext'
 import { contratosService, modulosService, notasFiscaisService } from '../../services'
 import type { Contrato, NotaFiscal, StatusNota } from '../../services/types'
 import { STATUS_NOTA_LABEL } from '../../services/types'
@@ -23,6 +25,7 @@ const TONE: Record<StatusNota, 'success' | 'warning' | 'neutral' | 'error' | 'in
 export default function NotasFiscaisScreen() {
   const queryClient = useQueryClient()
   const toast = useToast()
+  const { colors } = useTheme()
 
   const gateQ = useQuery({ queryKey: ['modulo', 'fiscal'], queryFn: () => modulosService.liberado('fiscal') })
   const notasQ = useQuery({ queryKey: ['notas-fiscais'], queryFn: () => notasFiscaisService.lista(), enabled: gateQ.data === true })
@@ -31,6 +34,7 @@ export default function NotasFiscaisScreen() {
   const [emitirAberto, setEmitirAberto] = useState(false)
   const [emitindo, setEmitindo] = useState(false)
   const [cancelar, setCancelar] = useState<NotaFiscal | null>(null)
+  const [menuNota, setMenuNota] = useState<NotaFiscal | null>(null)
   const [justificativa, setJustificativa] = useState('')
   const [cancelando, setCancelando] = useState(false)
 
@@ -138,14 +142,26 @@ export default function NotasFiscaisScreen() {
               </View>
             </View>
             {item.status === 'autorizada' && (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm }}>
                 {item.danfe_pdf_url && (
                   <Button title="DANFE" icon="document-text-outline" variant="outline" size="sm" onPress={() => abrirUrl(item.danfe_pdf_url)} />
                 )}
                 {item.xml_url && (
                   <Button title="XML" icon="download-outline" variant="outline" size="sm" onPress={() => abrirUrl(item.xml_url)} />
                 )}
-                <Button title="Cancelar" variant="outline" size="sm" onPress={() => setCancelar(item)} />
+                <View style={{ flex: 1 }} />
+                <Pressable
+                  onPress={() => setMenuNota(item)}
+                  hitSlop={8}
+                  accessibilityLabel="Mais ações da nota"
+                  style={({ pressed }) => ({
+                    padding: 6,
+                    borderRadius: 8,
+                    backgroundColor: pressed ? colors.overlaySoft : 'transparent',
+                  })}
+                >
+                  <Ionicons name="ellipsis-vertical" size={20} color={colors.textDim} />
+                </Pressable>
               </View>
             )}
           </Card>
@@ -175,6 +191,19 @@ export default function NotasFiscaisScreen() {
           )}
         </View>
       </Sheet>
+
+      {/* Menu de ações da nota */}
+      <OptionSheet
+        visible={menuNota !== null}
+        onClose={() => setMenuNota(null)}
+        title={menuNota ? `NF-e ${menuNota.numero ?? ''}` : 'Nota fiscal'}
+        options={[{ value: 'cancelar', label: 'Cancelar NF-e', sublabel: 'Cancela a nota na SEFAZ. Ação definitiva.', icon: 'close-circle-outline', tone: colors.error }]}
+        onSelect={() => {
+          const n = menuNota
+          setMenuNota(null)
+          if (n) setCancelar(n)
+        }}
+      />
 
       {/* Cancelamento */}
       <Sheet visible={cancelar !== null} onClose={() => setCancelar(null)} title="Cancelar NF-e">

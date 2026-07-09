@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { FlatList, StyleSheet, View } from 'react-native'
+import { FlatList, Pressable, StyleSheet, View } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
@@ -15,7 +16,8 @@ import { formatBRL, formatRelativo } from '../../lib/format'
 type Filtro = EtapaLead | 'ativos'
 
 export default function CrmScreen() {
-  const navigation = useNavigation()
+  const { colors } = useTheme()
+  const navigation = useNavigation<any>()
   const queryClient = useQueryClient()
   const [filtro, setFiltro] = useState<Filtro>('ativos')
 
@@ -46,6 +48,12 @@ export default function CrmScreen() {
       <AppHeader
         title="CRM"
         subtitle={leadsQ.isSuccess ? `${ativos.length} leads no funil` : undefined}
+        right={
+          <Pressable onPress={() => navigation.navigate('Clientes')} hitSlop={8} style={[styles.headerBtn, { backgroundColor: colors.overlaySoft, borderColor: colors.border }]}>
+            <Ionicons name="people-outline" size={18} color={colors.text} />
+            <Txt variant="captionMedium">Clientes</Txt>
+          </Pressable>
+        }
         bottom={<FilterChips options={chips} selected={filtro} onSelect={setFiltro} />}
       />
 
@@ -116,6 +124,7 @@ function LeadCard({ lead, onPress }: { lead: Lead; onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
+  headerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, height: 36, borderRadius: 18, borderWidth: 1 },
   topo: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rodape: {
     flexDirection: 'row',

@@ -12,7 +12,7 @@ import {
 import { VehiclePhoto } from '../../components/VehiclePhoto'
 import { leadsService } from '../../services'
 import { ETAPAS_LEAD, ORIGEM_LEAD_LABEL, type EtapaLead, type Interacao } from '../../services/types'
-import { formatBRL, formatDataHora, formatTelefone, maskMoedaInput, parseMoedaInput } from '../../lib/format'
+import { formatBRL, formatDataHora, formatRelativo, formatTelefone, maskMoedaInput, parseMoedaInput } from '../../lib/format'
 import type { RootScreenProps } from '../../navigation/types'
 
 const ICONE_INTERACAO: Record<Interacao['tipo'], keyof typeof Ionicons.glyphMap> = {
@@ -33,7 +33,6 @@ export default function LeadDetalheScreen({ route }: RootScreenProps<'LeadDetalh
 
   const [etapaAberta, setEtapaAberta] = useState(false)
   const [interacaoAberta, setInteracaoAberta] = useState(false)
-  const [propostaAberta, setPropostaAberta] = useState(false)
 
   const q = useQuery({ queryKey: ['leads', id], queryFn: () => leadsService.obter(id) })
   const lead = q.data
@@ -134,38 +133,8 @@ export default function LeadDetalheScreen({ route }: RootScreenProps<'LeadDetalh
           </Card>
         )}
 
-        {/* Proposta */}
-        {lead && (
-          <Card>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View>
-                <Txt variant="title">Proposta</Txt>
-                <Txt
-                  style={{
-                    fontFamily: fonts.displayBold,
-                    fontSize: 22,
-                    color: lead.valor_proposta ? colors.text : colors.textMuted,
-                    marginTop: 4,
-                  }}
-                >
-                  {lead.valor_proposta ? formatBRL(lead.valor_proposta) : 'Sem valor'}
-                </Txt>
-              </View>
-              <Button
-                title={lead.valor_proposta ? 'Editar' : 'Definir'}
-                variant="tonal"
-                size="sm"
-                icon="pencil"
-                onPress={() => setPropostaAberta(true)}
-              />
-            </View>
-            {lead.observacoes ? (
-              <Txt variant="caption" color="textDim" style={{ marginTop: spacing.xs }}>
-                {lead.observacoes}
-              </Txt>
-            ) : null}
-          </Card>
-        )}
+        {/* Negociações (histórico de propostas) */}
+        {lead && <NegociacoesCard leadId={lead.id} />}
 
         {/* Timeline */}
         {lead && (
@@ -224,13 +193,6 @@ export default function LeadDetalheScreen({ route }: RootScreenProps<'LeadDetalh
         leadId={id}
         visible={interacaoAberta}
         onClose={() => setInteracaoAberta(false)}
-      />
-      <PropostaSheet
-        leadId={id}
-        valorAtual={lead?.valor_proposta}
-        obsAtual={lead?.observacoes}
-        visible={propostaAberta}
-        onClose={() => setPropostaAberta(false)}
       />
     </Screen>
   )
@@ -339,59 +301,74 @@ function NovaInteracaoSheet({ leadId, visible, onClose }: { leadId: string; visi
   )
 }
 
-function PropostaSheet({
-  leadId, valorAtual, obsAtual, visible, onClose,
-}: {
-  leadId: string
-  valorAtual?: number
-  obsAtual?: string
-  visible: boolean
-  onClose: () => void
-}) {
+function NegociacoesCard({ leadId }: { leadId: string }) {
+  const { colors } = useTheme()
   const queryClient = useQueryClient()
   const toast = useToast()
+  const [aberto, setAberto] = useState(false)
   const [valor, setValor] = useState('')
+  const [entrada, setEntrada] = useState('')
+  const [parcelas, setParcelas] = useState('')
   const [obs, setObs] = useState('')
 
-  React.useEffect(() => {
-    if (visible) {
-      setValor(valorAtual ? maskMoedaInput(String(Math.round(valorAtual * 100))) : '')
-      setObs(obsAtual ?? '')
-    }
-  }, [visible, valorAtual, obsAtual])
+  const q = useQuery({ queryKey: ['leads', leadId, 'negociacoes'], queryFn: () => leadsService.negociacoes(leadId) })
+  const negs = q.data ?? []
 
-  const mut = useMutation({
-    mutationFn: () =>
-      leadsService.atualizarProposta(leadId, valor ? parseMoedaInput(valor) : undefined, obs),
+  const addMut = useMutation({
+    mutationFn: () => leadsService.adicionarNegociacao(leadId, {
+      valor_proposta: parseMoedaInput(valor),
+      valor_entrada: parseMoedaInput(entrada) || undefined,
+      parcelas: parseInt(parcelas.replace(/\D/g, ''), 10) || undefined,
+      observacoes: obs.trim() || undefined,
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
-      onClose()
-      toast.show('success', 'Proposta atualizada.')
+      toast.show('success', 'Proposta registrada.')
+      setValor(''); setEntrada(''); setParcelas(''); setObs(''); setAberto(false)
     },
+  })
+  const remMut = useMutation({
+    mutationFn: (id: string) => leadsService.removerNegociacao(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads', leadId, 'negociacoes'] }),
   })
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Proposta">
-      <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
-        <Input
-          label="Valor da proposta"
-          placeholder="0,00"
-          keyboardType="numeric"
-          icon="cash-outline"
-          value={valor}
-          onChangeText={(t) => setValor(maskMoedaInput(t))}
-        />
-        <Input
-          label="Observações"
-          placeholder="Condições, troca, prazo…"
-          value={obs}
-          onChangeText={setObs}
-          multiline
-          style={{ minHeight: 60, textAlignVertical: 'top' }}
-        />
-        <Button title="Salvar" loading={mut.isPending} onPress={() => mut.mutate()} />
+    <Card>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+        <Txt variant="title">Negociações</Txt>
+        <Button title="Nova proposta" variant="tonal" size="sm" icon="add" onPress={() => setAberto(true)} />
       </View>
-    </Sheet>
+      {negs.length === 0 ? (
+        <Txt variant="caption" color="textDim">Nenhuma proposta registrada ainda.</Txt>
+      ) : (
+        negs.map((n, i) => (
+          <View key={n.id} style={{ paddingVertical: spacing.xs, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: colors.border, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <Txt style={{ fontFamily: fonts.displayBold, fontSize: 17, color: colors.text }}>{formatBRL(n.valor_proposta)}</Txt>
+              <Txt variant="caption" color="textDim">
+                {[n.valor_entrada ? `entrada ${formatBRL(n.valor_entrada)}` : null, n.parcelas ? `${n.parcelas}x` : null, formatRelativo(n.created_at)].filter(Boolean).join(' · ')}
+              </Txt>
+              {n.observacoes ? <Txt variant="caption" color="textMuted">{n.observacoes}</Txt> : null}
+            </View>
+            <Pressable onPress={() => remMut.mutate(n.id)} hitSlop={8}>
+              <Ionicons name="trash-outline" size={16} color={colors.error} />
+            </Pressable>
+          </View>
+        ))
+      )}
+
+      <Sheet visible={aberto} onClose={() => setAberto(false)} title="Nova proposta">
+        <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+          <Input label="Valor da proposta" placeholder="0,00" keyboardType="numeric" icon="cash-outline" value={valor} onChangeText={(t) => setValor(maskMoedaInput(t))} />
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <Input label="Entrada" placeholder="0,00" keyboardType="numeric" value={entrada} onChangeText={(t) => setEntrada(maskMoedaInput(t))} containerStyle={{ flex: 1 }} />
+            <Input label="Parcelas" placeholder="48" keyboardType="number-pad" value={parcelas} onChangeText={(t) => setParcelas(t.replace(/\D/g, ''))} containerStyle={{ width: 90 }} />
+          </View>
+          <Input label="Observações" placeholder="Condições, troca, prazo…" value={obs} onChangeText={setObs} multiline style={{ minHeight: 56, textAlignVertical: 'top' }} />
+          <Button title="Registrar proposta" loading={addMut.isPending} disabled={parseMoedaInput(valor) <= 0} onPress={() => addMut.mutate()} />
+        </View>
+      </Sheet>
+    </Card>
   )
 }
 

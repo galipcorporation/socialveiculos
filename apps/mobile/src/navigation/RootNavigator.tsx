@@ -15,6 +15,7 @@ import VeiculoDetalheScreen from '../screens/estoque/VeiculoDetalheScreen'
 import VeiculoFormScreen from '../screens/estoque/VeiculoFormScreen'
 import LeadDetalheScreen from '../screens/crm/LeadDetalheScreen'
 import LeadFormScreen from '../screens/crm/LeadFormScreen'
+import ClientesScreen from '../screens/crm/ClientesScreen'
 import ConversaScreen from '../screens/chat/ConversaScreen'
 import PosVendaScreen from '../screens/posvenda/PosVendaScreen'
 import EsteiraDetalheScreen from '../screens/posvenda/EsteiraDetalheScreen'
@@ -91,6 +92,7 @@ export default function RootNavigator() {
               options={{ animation: 'slide_from_bottom', gestureEnabled: false }}
             />
             <Stack.Screen name="LeadDetalhe" component={LeadDetalheScreen} />
+            <Stack.Screen name="Clientes" component={ClientesScreen} />
             <Stack.Screen
               name="LeadForm"
               component={LeadFormScreen}

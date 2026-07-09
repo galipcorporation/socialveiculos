@@ -98,7 +98,15 @@ export interface Cliente {
   telefone?: string
   email?: string
   cpf?: string
+  rg?: string
+  data_nascimento?: string
+  renda_mensal?: number
+  cep?: string
+  endereco?: string
+  bairro?: string
   cidade?: string
+  estado?: string
+  observacoes?: string
   created_at: string
 }
 

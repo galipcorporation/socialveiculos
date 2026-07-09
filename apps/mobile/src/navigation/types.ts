@@ -9,6 +9,7 @@ export type RootStackParamList = {
   VeiculoForm: { id?: string } | undefined
   LeadDetalhe: { id: string }
   LeadForm: { veiculoId?: string } | undefined
+  Clientes: undefined
   Conversa: { id: string; nome: string }
   PosVenda: undefined
   EsteiraDetalhe: { id: string }

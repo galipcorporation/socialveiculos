@@ -1,6 +1,13 @@
 import { delay, getDb, mutate, novoId } from './db'
 import { LOJA_ID } from './seed'
-import type { Cliente, EtapaLead, Interacao, Lead, OrigemLead } from './types'
+import type { Cliente, EtapaLead, Interacao, Lead, Negociacao, OrigemLead } from './types'
+
+export interface NegociacaoInput {
+  valor_proposta: number
+  valor_entrada?: number
+  parcelas?: number
+  observacoes?: string
+}
 
 export interface LeadInput {
   cliente_nome: string
@@ -129,6 +136,54 @@ export const leadsService = {
       if (observacoes !== undefined) lead.observacoes = observacoes
       lead.updated_at = new Date().toISOString()
       return enriquecer(db, lead)
+    })
+  },
+
+  // ── Negociações (histórico de propostas do lead) — M059 ──
+  async negociacoes(idLead: string): Promise<Negociacao[]> {
+    await delay(120, 260)
+    const db = await getDb()
+    return db.negociacoes
+      .filter((n) => n.lead_id === idLead)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+  },
+
+  async adicionarNegociacao(idLead: string, input: NegociacaoInput): Promise<Negociacao> {
+    await delay(200, 400)
+    return mutate((db) => {
+      const lead = db.leads.find((l) => l.id === idLead)
+      if (!lead) throw new Error('Lead não encontrado.')
+      const agora = new Date().toISOString()
+      const neg: Negociacao = {
+        id: novoId('neg'),
+        lead_id: idLead,
+        valor_proposta: input.valor_proposta,
+        valor_entrada: input.valor_entrada,
+        parcelas: input.parcelas,
+        observacoes: input.observacoes?.trim() || undefined,
+        created_at: agora,
+      }
+      db.negociacoes.unshift(neg)
+      // Reflete a última proposta no lead + registra na timeline.
+      lead.valor_proposta = input.valor_proposta
+      lead.updated_at = agora
+      lead.interacoes = lead.interacoes ?? []
+      lead.interacoes.push({
+        id: novoId('int'),
+        lead_id: idLead,
+        tipo: 'proposta',
+        texto: `Proposta: ${input.valor_proposta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}${input.parcelas ? ` em ${input.parcelas}x` : ''}`,
+        autor: 'Você',
+        created_at: agora,
+      })
+      return neg
+    })
+  },
+
+  async removerNegociacao(idNeg: string): Promise<void> {
+    await delay(120, 240)
+    return mutate((db) => {
+      db.negociacoes = db.negociacoes.filter((n) => n.id !== idNeg)
     })
   },
 }
