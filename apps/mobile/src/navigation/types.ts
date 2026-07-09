@@ -1,6 +1,8 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 
 export type RootStackParamList = {
+  EscolhaExperiencia: undefined
+  Vitrine: undefined
   Login: undefined
   MainTabs: undefined
   VeiculoDetalhe: { id: string }
@@ -15,6 +17,19 @@ export type RootStackParamList = {
   Equipe: undefined
   Simulador: { precoInicial?: number } | undefined
   Configuracoes: undefined
+  PerfilLoja: undefined
+  CredenciaisBanco: undefined
+  CredenciaisIA: undefined
+  RedesSociais: undefined
+  Detran: undefined
+  Fiscal: undefined
+  Fipe: undefined
+  Contratos: undefined
+  NotasFiscais: undefined
+  MeuSite: undefined
+  RedeSocial: undefined
+  Marketing: undefined
+  AssistenteIA: undefined
 }
 
 export type MainTabsParamList = {
@@ -24,6 +39,26 @@ export type MainTabsParamList = {
   Chat: undefined
   Mais: undefined
 }
+
+// ── Vitrine B2C (comprador) ──
+export type VitrineStackParamList = {
+  VitrineTabs: undefined
+  CarroDetalhe: { id: string }
+  PerfilLoja: { id: string }
+  ConversaVitrine: { id: string; nome: string }
+}
+
+export type VitrineTabsParamList = {
+  Feed: undefined
+  Buscar: undefined
+  Mensagens: undefined
+  Perfil: undefined
+}
+
+export type VitrineScreenProps<T extends keyof VitrineStackParamList> = NativeStackScreenProps<
+  VitrineStackParamList,
+  T
+>
 
 export type RootScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<
   RootStackParamList,

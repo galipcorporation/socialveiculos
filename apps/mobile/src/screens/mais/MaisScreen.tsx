@@ -8,6 +8,7 @@ import {
 } from '../../components/ui'
 import { useAuthStore } from '../../stores/authStore'
 import { useLojaAtivaStore } from '../../stores/lojaAtivaStore'
+import { useExperienciaStore } from '../../stores/experienciaStore'
 
 export default function MaisScreen() {
   const { colors } = useTheme()
@@ -15,9 +16,11 @@ export default function MaisScreen() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const lojaNome = useLojaAtivaStore((s) => s.lojaNome)
+  const trocarExperiencia = useExperienciaStore((s) => s.trocar)
   const [sairAberto, setSairAberto] = useState(false)
 
   const gestor = user?.papel !== 'vendedor'
+  const sep = { borderTopWidth: 1, borderTopColor: colors.border }
 
   return (
     <Screen scroll={false} padded={false}>
@@ -79,6 +82,14 @@ export default function MaisScreen() {
               onPress={() => navigation.navigate('Equipe')}
             />
           )}
+          <ListRow
+            icon="git-network-outline"
+            iconColor={colors.primary}
+            title="Rede Social"
+            subtitle="Feed de repasses, propostas e parceiros"
+            chevron
+            onPress={() => navigation.navigate('RedeSocial')}
+          />
         </Card>
 
         {/* Ferramentas */}
@@ -93,7 +104,64 @@ export default function MaisScreen() {
             subtitle="Calcule parcelas para o cliente na hora"
             chevron
             onPress={() => navigation.navigate('Simulador')}
+            style={{ borderTopWidth: 0 }}
           />
+          <ListRow
+            icon="pricetags-outline"
+            iconColor={colors.info}
+            title="Consulta FIPE"
+            subtitle="Valor de referência por marca/modelo/ano"
+            chevron
+            onPress={() => navigation.navigate('Fipe')}
+            style={sep}
+          />
+          <ListRow
+            icon="document-text-outline"
+            iconColor={colors.success}
+            title="Contratos"
+            subtitle="Contratos de compra e venda + PDF"
+            chevron
+            onPress={() => navigation.navigate('Contratos')}
+            style={sep}
+          />
+          <ListRow
+            icon="receipt-outline"
+            iconColor={colors.warning}
+            title="Notas Fiscais"
+            subtitle="Emitir e acompanhar NF-e de venda"
+            chevron
+            onPress={() => navigation.navigate('NotasFiscais')}
+            style={sep}
+          />
+          <ListRow
+            icon="sparkles-outline"
+            iconColor={colors.primary}
+            title="Marketing IA"
+            subtitle="Gere legendas para redes sociais"
+            chevron
+            onPress={() => navigation.navigate('Marketing')}
+            style={sep}
+          />
+          <ListRow
+            icon="chatbubble-ellipses-outline"
+            iconColor={colors.info}
+            title="Assistente do Vendedor"
+            subtitle="Copiloto de IA para abordagem e objeções"
+            chevron
+            onPress={() => navigation.navigate('AssistenteIA')}
+            style={sep}
+          />
+          {gestor && (
+            <ListRow
+              icon="globe-outline"
+              iconColor={colors.success}
+              title="Meu Site"
+              subtitle="Construtor do site white-label da loja"
+              chevron
+              onPress={() => navigation.navigate('MeuSite')}
+              style={sep}
+            />
+          )}
         </Card>
 
         {/* Conta */}
@@ -109,10 +177,20 @@ export default function MaisScreen() {
             onPress={() => navigation.navigate('Configuracoes')}
           />
           <ListRow
+            icon="storefront-outline"
+            iconColor={colors.primary}
+            title="Ver como comprador"
+            subtitle="Abrir a vitrine pública (B2C)"
+            chevron
+            onPress={trocarExperiencia}
+            style={sep}
+          />
+          <ListRow
             icon="log-out-outline"
             iconColor={colors.error}
             title="Sair da conta"
             onPress={() => setSairAberto(true)}
+            style={sep}
           />
         </Card>
 

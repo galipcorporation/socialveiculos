@@ -155,6 +155,28 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
     salvarMut.mutate()
   }
 
+  const getPlaceholders = () => {
+    switch (form.tipo) {
+      case 'moto':
+        return { marca: 'Ex.: Honda', modelo: 'Ex.: CG 160' }
+      case 'caminhao':
+        return { marca: 'Ex.: Volvo', modelo: 'Ex.: FH 540' }
+      case 'barco':
+        return { marca: 'Ex.: Schaefer', modelo: 'Ex.: Phantom 300' }
+      case 'jet':
+        return { marca: 'Ex.: Sea-Doo', modelo: 'Ex.: GTI 130' }
+      case 'aeronave':
+        return { marca: 'Ex.: Cessna', modelo: 'Ex.: 172 Skyhawk' }
+      case 'reboque':
+        return { marca: 'Ex.: Randon', modelo: 'Ex.: Semirreboque' }
+      case 'outro':
+        return { marca: 'Ex.: Marca', modelo: 'Ex.: Modelo' }
+      case 'carro':
+      default:
+        return { marca: 'Ex.: Toyota', modelo: 'Ex.: Corolla' }
+    }
+  }
+  const placeholders = getPlaceholders()
   const usoLabel = regra.uso === 'horas' ? 'Horas de uso' : 'Quilometragem'
 
   return (
@@ -216,7 +238,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
             <View style={styles.row2}>
               <Input
                 label="Marca *"
-                placeholder="Ex.: Toyota"
+                placeholder={placeholders.marca}
                 value={form.marca}
                 onChangeText={(t) => set('marca', t)}
                 error={erros.marca}
@@ -224,7 +246,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
               />
               <Input
                 label="Modelo *"
-                placeholder="Ex.: Corolla"
+                placeholder={placeholders.modelo}
                 value={form.modelo}
                 onChangeText={(t) => set('modelo', t)}
                 error={erros.modelo}

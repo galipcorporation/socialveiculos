@@ -4,15 +4,18 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
-  buildClientes, buildConversas, buildEquipe, buildEsteiras, buildLancamentos,
-  buildLeads, buildNotificacoes, buildVeiculos,
+  buildClientes, buildConfigFiscal, buildConversas, buildConversasB2B,
+  buildCredenciaisBanco, buildCredenciaisIA, buildCredencialDetran, buildEquipe, buildEsteiras,
+  buildLancamentos, buildLeads, buildNotificacoes, buildPerfilLoja, buildRedesSociais,
+  buildVeiculos, BANCOS_SUPORTADOS,
 } from './seed'
 import type {
-  Cliente, Conversa, Esteira, Lancamento, Lead, Membro, Mensagem, Notificacao, Veiculo,
+  Cliente, ConfiguracaoFiscal, Conversa, CredencialBanco, CredencialDetran, CredencialIA,
+  Esteira, Lancamento, Lead, Membro, Mensagem, Notificacao, PerfilLoja, RedeSocialStatus, Veiculo,
 } from './types'
 
 const STORAGE_KEY = 'sv-mock-db'
-const SEED_VERSION = 1
+const SEED_VERSION = 2
 
 export interface Database {
   version: number
@@ -25,6 +28,14 @@ export interface Database {
   lancamentos: Lancamento[]
   equipe: Membro[]
   notificacoes: Notificacao[]
+  // Configurações da loja (M048)
+  perfilLoja: PerfilLoja
+  credenciaisBanco: CredencialBanco[]
+  bancosSuportados: { codigo: string; nome: string }[]
+  credenciaisIA: CredencialIA[]
+  redesSociais: RedeSocialStatus[]
+  detran: CredencialDetran
+  configFiscal: ConfiguracaoFiscal
 }
 
 let cache: Database | null = null
@@ -34,18 +45,26 @@ function buildSeed(): Database {
   const veiculos = buildVeiculos()
   const clientes = buildClientes()
   const leads = buildLeads(clientes, veiculos)
-  const { conversas, mensagens } = buildConversas()
+  const clientesChat = buildConversas()
+  const b2b = buildConversasB2B()
   return {
     version: SEED_VERSION,
     veiculos,
     clientes,
     leads,
-    conversas,
-    mensagens,
+    conversas: [...clientesChat.conversas, ...b2b.conversas],
+    mensagens: [...clientesChat.mensagens, ...b2b.mensagens],
     esteiras: buildEsteiras(),
     lancamentos: buildLancamentos(),
     equipe: buildEquipe(),
     notificacoes: buildNotificacoes(),
+    perfilLoja: buildPerfilLoja(),
+    credenciaisBanco: buildCredenciaisBanco(),
+    bancosSuportados: BANCOS_SUPORTADOS,
+    credenciaisIA: buildCredenciaisIA(),
+    redesSociais: buildRedesSociais(),
+    detran: buildCredencialDetran(),
+    configFiscal: buildConfigFiscal(),
   }
 }
 

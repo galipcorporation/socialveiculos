@@ -1,11 +1,14 @@
 import React, { useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useNavigation } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTheme, type ThemeMode } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
-import { AppHeader, Button, Card, Screen, Sheet, Txt, useToast } from '../../components/ui'
+import { AppHeader, Button, Card, ListRow, Screen, Sheet, Txt, useToast } from '../../components/ui'
 import { resetDb } from '../../services'
+import { useAuthStore } from '../../stores/authStore'
+import type { RootStackParamList } from '../../navigation/types'
 
 const MODOS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: 'system', label: 'Sistema', icon: 'phone-portrait-outline' },
@@ -13,10 +16,29 @@ const MODOS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyp
   { value: 'dark', label: 'Escuro', icon: 'moon-outline' },
 ]
 
+type ItemConfigLoja = {
+  screen: keyof RootStackParamList
+  icon: keyof typeof Ionicons.glyphMap
+  title: string
+  subtitle: string
+}
+
+const CONFIG_LOJA: ItemConfigLoja[] = [
+  { screen: 'PerfilLoja', icon: 'storefront-outline', title: 'Perfil da Loja', subtitle: 'Dados cadastrais e comissão padrão' },
+  { screen: 'CredenciaisBanco', icon: 'card-outline', title: 'Credenciais Bancárias', subtitle: 'Bancos e financeiras do Simulador' },
+  { screen: 'CredenciaisIA', icon: 'sparkles-outline', title: 'Inteligência Artificial', subtitle: 'Sua chave de IA (BYOK)' },
+  { screen: 'RedesSociais', icon: 'share-social-outline', title: 'Redes Sociais', subtitle: 'Instagram e Facebook para marketing' },
+  { screen: 'Detran', icon: 'document-text-outline', title: 'Consulta DETRAN', subtitle: 'Fornecedor de consultas veiculares' },
+  { screen: 'Fiscal', icon: 'receipt-outline', title: 'Fiscal / NF-e', subtitle: 'Dados fiscais e certificado A1' },
+]
+
 export default function ConfiguracoesScreen() {
   const { colors, mode, setMode } = useTheme()
+  const navigation = useNavigation()
   const queryClient = useQueryClient()
   const toast = useToast()
+  const user = useAuthStore((s) => s.user)
+  const gestor = user?.papel !== 'vendedor'
   const [resetAberto, setResetAberto] = useState(false)
   const [resetando, setResetando] = useState(false)
 
@@ -37,6 +59,25 @@ export default function ConfiguracoesScreen() {
     <Screen scroll={false} padded={false}>
       <AppHeader title="Configurações" large={false} back />
       <Screen padded style={{ gap: spacing.md }}>
+        {/* Configurações da loja (M048) */}
+        <Card padded={false}>
+          <Txt variant="label" color="textMuted" style={{ padding: spacing.md, paddingBottom: spacing.xs, textTransform: 'uppercase' }}>
+            {gestor ? 'Loja' : 'Minhas credenciais'}
+          </Txt>
+          {(gestor ? CONFIG_LOJA : CONFIG_LOJA.filter((i) => i.screen === 'CredenciaisBanco')).map((item, i) => (
+            <ListRow
+              key={item.screen}
+              icon={item.icon}
+              iconColor={colors.primary}
+              title={item.title}
+              subtitle={item.subtitle}
+              chevron
+              onPress={() => navigation.navigate(item.screen as never)}
+              style={i > 0 ? { borderTopWidth: 1, borderTopColor: colors.border } : undefined}
+            />
+          ))}
+        </Card>
+
         {/* Tema */}
         <Card>
           <Txt variant="title" style={{ marginBottom: 4 }}>Aparência</Txt>

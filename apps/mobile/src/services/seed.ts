@@ -2,7 +2,9 @@
 // Datas relativas a "agora" para o app parecer sempre vivo.
 
 import type {
-  Cliente, Conversa, Esteira, Interacao, Lancamento, Lead, Membro, Mensagem, Notificacao, Veiculo,
+  Cliente, ConfiguracaoFiscal, Conversa, CredencialBanco, CredencialDetran, CredencialIA,
+  Esteira, Interacao, Lancamento, Lead, Membro, Mensagem, Notificacao, PerfilLoja,
+  RedeSocialStatus, Veiculo,
 } from './types'
 
 export const LOJA_ID = 'loja-demo-001'
@@ -257,10 +259,71 @@ export function buildConversas(): { conversas: Conversa[]; mensagens: Mensagem[]
     const ultima = d.msgs[d.msgs.length - 1]
     conversas.push({
       id: cid,
+      tipo: 'cliente',
       cliente_nome: d.nome,
       cliente_telefone: d.tel,
       veiculo_interesse: d.veiculo,
       canal: d.canal,
+      ultima_mensagem: ultima.texto,
+      ultima_mensagem_em: minAtras(ultima.min),
+      nao_lidas: d.naoLidas,
+    })
+  }
+  return { conversas, mensagens }
+}
+
+// ── Chat B2B (parceiros / repasses) — M049 ─────────────────
+export function buildConversasB2B(): { conversas: Conversa[]; mensagens: Mensagem[] } {
+  const defs = [
+    {
+      loja: 'Garagem RS Motors', contato: 'Fábio (Garagem RS)', veiculo: 'Repasse — VW Nivus Highline', naoLidas: 1,
+      msgs: [
+        { autor: 'cliente' as const, texto: 'E aí! Tenho interesse no Nivus que você anunciou no feed de repasses.', min: 180 },
+        { autor: 'loja' as const, texto: 'Opa Fábio! Está R$ 97 mil no repasse. Quer o laudo?', min: 170 },
+        { autor: 'cliente' as const, texto: 'Manda sim. Consigo buscar aí em POA na sexta.', min: 20 },
+      ],
+    },
+    {
+      loja: 'AutoCenter Canoas', contato: 'Renata (AutoCenter)', veiculo: 'Repasse — Fiat Mobi Like', naoLidas: 0,
+      msgs: [
+        { autor: 'loja' as const, texto: 'Renata, fechou o Mobi? Posso segurar até amanhã.', min: 1400 },
+        { autor: 'cliente' as const, texto: 'Fechado! Faço o PIX do sinal ainda hoje.', min: 1380 },
+        { autor: 'loja' as const, texto: 'Combinado 👍 Já preparo a documentação do repasse.', min: 1370 },
+      ],
+    },
+    {
+      loja: 'Premium Motors Gravataí', contato: 'Jonas (Premium Motors)', veiculo: 'Parceria — troca de estoque', naoLidas: 2,
+      msgs: [
+        { autor: 'cliente' as const, texto: 'Bom dia! Vocês têm SUV compacto pra repasse essa semana?', min: 300 },
+        { autor: 'loja' as const, texto: 'Bom dia Jonas! Tenho um T-Cross e um Kicks. Te mando as fotos.', min: 290 },
+        { autor: 'cliente' as const, texto: 'Show. Qual o valor do T-Cross no repasse?', min: 15 },
+        { autor: 'cliente' as const, texto: 'E aceita troca por um Onix 2021?', min: 14 },
+      ],
+    },
+  ]
+
+  const conversas: Conversa[] = []
+  const mensagens: Mensagem[] = []
+  for (const d of defs) {
+    const cid = id('conv')
+    d.msgs.forEach((m, i) => {
+      mensagens.push({
+        id: id('msg'),
+        conversa_id: cid,
+        autor: m.autor,
+        texto: m.texto,
+        created_at: minAtras(m.min),
+        lida: i < d.msgs.length - d.naoLidas,
+      })
+    })
+    const ultima = d.msgs[d.msgs.length - 1]
+    conversas.push({
+      id: cid,
+      tipo: 'parceiro',
+      cliente_nome: d.contato,
+      loja_parceira_nome: d.loja,
+      veiculo_interesse: d.veiculo,
+      canal: 'chat',
       ultima_mensagem: ultima.texto,
       ultima_mensagem_em: minAtras(ultima.min),
       nao_lidas: d.naoLidas,
@@ -365,6 +428,73 @@ export function buildEquipe(): Membro[] {
     { id: id('mem'), nome: 'Ana Beatriz Silva', email: 'ana@autopremium.com.br', telefone: '51997223344', papel: 'vendedor', ativo: true, percentual_comissao: 2, vendas_mes: 1, created_at: diasAtras(220) },
     { id: id('mem'), nome: 'Diego Fontoura', email: 'diego@autopremium.com.br', telefone: '51996334455', papel: 'vendedor', ativo: false, percentual_comissao: 1.5, vendas_mes: 0, created_at: diasAtras(150) },
   ]
+}
+
+// ── Configurações da loja ──────────────────────────────────
+export function buildPerfilLoja(): PerfilLoja {
+  return {
+    id: LOJA_ID,
+    nome: LOJA_NOME,
+    slug: 'auto-premium-veiculos',
+    cnpj: '12345678000190',
+    telefone: '5132001010',
+    whatsapp: '51999887766',
+    email: 'contato@autopremium.com.br',
+    endereco: 'Av. Assis Brasil, 3200',
+    cidade: 'Porto Alegre',
+    estado: 'RS',
+    cep: '91010000',
+    percentual_comissao_padrao: 2,
+    verificada: true,
+    ativa: true,
+  }
+}
+
+export const BANCOS_SUPORTADOS = [
+  { codigo: 'bv', nome: 'BV Financeira' },
+  { codigo: 'santander', nome: 'Santander' },
+  { codigo: 'itau', nome: 'Itaú' },
+  { codigo: 'bradesco', nome: 'Bradesco Financiamentos' },
+  { codigo: 'panamericano', nome: 'BRB / PAN' },
+  { codigo: 'omni', nome: 'Omni' },
+]
+
+export function buildCredenciaisBanco(): CredencialBanco[] {
+  return [
+    { id: id('cred'), banco: 'bv', escopo: 'loja', usuario_configurado: 'autopremium.bv', ativo: true, created_at: diasAtras(120) },
+    { id: id('cred'), banco: 'santander', escopo: 'loja', usuario_configurado: 'ap_santander', ativo: true, created_at: diasAtras(90) },
+  ]
+}
+
+export function buildCredenciaisIA(): CredencialIA[] {
+  return [
+    { id: id('cia'), provedor: 'anthropic', modelo_padrao: 'claude-haiku-4-5-20251001', configurada: true, ativo: true },
+  ]
+}
+
+export function buildRedesSociais(): RedeSocialStatus[] {
+  return [
+    { rede: 'facebook', page_id: '102938475610293', token_expira_em: diasAtras(-45), conectada: true },
+    { rede: 'instagram', instagram_account_id: '17841400000000000', token_expira_em: diasAtras(-45), conectada: true },
+  ]
+}
+
+export function buildCredencialDetran(): CredencialDetran {
+  return { configurada: true, api_url: 'https://api.consultaveicular.com.br/v2', ativo: true }
+}
+
+export function buildConfigFiscal(): ConfiguracaoFiscal {
+  return {
+    liberado: true,
+    configurada: true,
+    inscricao_estadual: '0961234567',
+    regime_tributario: 'simples',
+    cnae: '4511-1/02',
+    ambiente: 'homologacao',
+    certificado_configurado: true,
+    certificado_validade: diasAtras(-240),
+    ativo: true,
+  }
 }
 
 // ── Notificações ───────────────────────────────────────────

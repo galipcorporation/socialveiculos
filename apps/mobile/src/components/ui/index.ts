@@ -11,3 +11,4 @@ export { Skeleton, SkeletonCard, EmptyState, ErrorState, ProgressBar } from './F
 export { FilterChips, SegmentedControl, type ChipOption } from './Chips'
 export { Avatar, Fab, KpiCard } from './Misc'
 export { ToastProvider, useToast } from './Toast'
+export { Paywall } from './Paywall'

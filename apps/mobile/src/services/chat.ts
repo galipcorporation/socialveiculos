@@ -52,4 +52,16 @@ export const chatService = {
     const db = await getDb()
     return db.conversas.reduce((acc, c) => acc + c.nao_lidas, 0)
   },
+
+  /** Não lidas por tipo — para os badges das abas Clientes / Parceiros (M049). */
+  async naoLidasPorTipo(): Promise<{ cliente: number; parceiro: number }> {
+    const db = await getDb()
+    return db.conversas.reduce(
+      (acc, c) => {
+        acc[c.tipo] += c.nao_lidas
+        return acc
+      },
+      { cliente: 0, parceiro: 0 },
+    )
+  },
 }

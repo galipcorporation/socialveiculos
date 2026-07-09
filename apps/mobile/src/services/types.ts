@@ -152,11 +152,16 @@ export interface Mensagem {
   lida: boolean
 }
 
+export type TipoConversa = 'cliente' | 'parceiro'
+
 export interface Conversa {
   id: string
+  tipo: TipoConversa
   cliente_nome: string
   cliente_telefone?: string
   veiculo_interesse?: string
+  /** Para tipo 'parceiro': nome da loja parceira (B2B). */
+  loja_parceira_nome?: string
   canal: 'chat' | 'whatsapp'
   ultima_mensagem: string
   ultima_mensagem_em: string
@@ -268,6 +273,292 @@ export interface Notificacao {
   conteudo: string
   lida: boolean
   created_at: string
+}
+
+// ── Configurações da loja ──────────────────────────────────
+export interface PerfilLoja {
+  id: string
+  nome: string
+  slug: string
+  cnpj?: string
+  telefone?: string
+  whatsapp?: string
+  email?: string
+  endereco?: string
+  cidade?: string
+  estado?: string
+  cep?: string
+  percentual_comissao_padrao: number
+  verificada: boolean
+  ativa: boolean
+}
+
+export type EscopoCredencial = 'loja' | 'vendedor'
+
+export interface BancoSuportado {
+  codigo: string
+  nome: string
+}
+
+export interface CredencialBanco {
+  id: string
+  banco: string
+  escopo: EscopoCredencial
+  usuario_configurado: string | null
+  ativo: boolean
+  created_at: string
+}
+
+export type ProvedorIA = 'anthropic' | 'openai' | 'gemini'
+
+export interface CredencialIA {
+  id: string
+  provedor: ProvedorIA
+  modelo_padrao: string | null
+  configurada: boolean
+  ativo: boolean
+}
+
+export const PROVEDORES_IA: { value: ProvedorIA; label: string; placeholder: string }[] = [
+  { value: 'anthropic', label: 'Anthropic (Claude)', placeholder: 'sk-ant-...' },
+  { value: 'openai', label: 'OpenAI (GPT)', placeholder: 'sk-...' },
+  { value: 'gemini', label: 'Google Gemini', placeholder: 'AIza...' },
+]
+
+export interface RedeSocialStatus {
+  rede: 'facebook' | 'instagram'
+  page_id?: string | null
+  instagram_account_id?: string | null
+  token_expira_em?: string | null
+  conectada: boolean
+}
+
+export interface CredencialDetran {
+  configurada: boolean
+  api_url: string | null
+  ativo: boolean
+}
+
+export type RegimeTributario = 'simples' | 'presumido' | 'real'
+export type AmbienteFiscal = 'homologacao' | 'producao'
+
+export const REGIMES_FISCAIS: { value: RegimeTributario; label: string }[] = [
+  { value: 'simples', label: 'Simples Nacional' },
+  { value: 'presumido', label: 'Lucro Presumido' },
+  { value: 'real', label: 'Lucro Real' },
+]
+
+export interface ConfiguracaoFiscal {
+  liberado: boolean
+  configurada: boolean
+  inscricao_estadual?: string | null
+  regime_tributario?: RegimeTributario | null
+  cnae?: string | null
+  ambiente?: AmbienteFiscal | null
+  certificado_configurado?: boolean
+  certificado_validade?: string | null
+  ativo?: boolean
+}
+
+// ── Vitrine B2C (comprador) ────────────────────────────────
+export interface LojaVitrine {
+  id: string
+  nome: string
+  cidade?: string
+  estado?: string
+  whatsapp?: string
+  verificada: boolean
+  total_veiculos: number
+  seguindo?: boolean
+}
+
+export interface AnuncioVitrine {
+  id: string
+  loja_id: string
+  loja_nome: string
+  loja_cidade?: string
+  loja_estado?: string
+  loja_whatsapp?: string
+  loja_verificada: boolean
+  marca: string
+  modelo: string
+  versao?: string
+  tipo: TipoVeiculo
+  ano_fabricacao?: number
+  ano_modelo: number
+  km?: number
+  cor?: string
+  cambio?: string
+  combustivel?: string
+  portas?: number
+  preco_venda?: number
+  descricao?: string
+  opcionais?: string
+  midias: Midia[]
+  oferta?: boolean
+  novidade?: boolean
+  total_favoritos: number
+  favoritado_por_mim: boolean
+  created_at: string
+}
+
+export interface ConversaVitrine {
+  id: string
+  loja_id: string
+  loja_nome: string
+  loja_verificada: boolean
+  veiculo_interesse?: string
+  ultima_mensagem: string
+  ultima_mensagem_em: string
+  nao_lidas: number
+}
+
+// ── Módulos pagos (gate) ───────────────────────────────────
+export type Modulo = 'contratos' | 'simulador' | 'marketing' | 'assistente' | 'fiscal' | 'site'
+
+export interface ModuloStatus {
+  modulo: Modulo
+  liberado: boolean
+}
+
+// ── FIPE ───────────────────────────────────────────────────
+export interface FipeItem {
+  codigo: string
+  nome: string
+}
+
+export interface FipeResultado {
+  fipe: number | null
+  fipe_disponivel: boolean
+}
+
+// ── Contratos ──────────────────────────────────────────────
+export type StatusContrato = 'rascunho' | 'aguardando' | 'assinado' | 'cancelado'
+
+export interface Contrato {
+  id: string
+  numero: string
+  tipo: 'compra_venda' | 'compra'
+  status: StatusContrato
+  veiculo_nome?: string
+  cliente_nome?: string
+  valor_venda?: number
+  valor_entrada?: number
+  parcelas?: number
+  observacoes?: string
+  created_at: string
+}
+
+export const STATUS_CONTRATO_LABEL: Record<StatusContrato, string> = {
+  rascunho: 'Rascunho',
+  aguardando: 'Aguardando assinatura',
+  assinado: 'Assinado',
+  cancelado: 'Cancelado',
+}
+
+// ── Notas Fiscais (NF-e) ───────────────────────────────────
+export type StatusNota =
+  | 'processando' | 'autorizada' | 'rejeitada' | 'erro' | 'cancelada' | 'processando_cancelamento'
+
+export interface NotaFiscal {
+  id: string
+  numero?: string
+  serie?: string
+  tipo: 'saida' | 'entrada'
+  status: StatusNota
+  chave_acesso?: string
+  valor_total: number
+  veiculo_nome?: string
+  cliente_nome?: string
+  contrato_numero?: string
+  ambiente: AmbienteFiscal
+  motivo_rejeicao?: string
+  justificativa_cancelamento?: string
+  emitida_em?: string
+  created_at: string
+}
+
+export const STATUS_NOTA_LABEL: Record<StatusNota, string> = {
+  processando: 'Processando',
+  autorizada: 'Autorizada',
+  rejeitada: 'Rejeitada',
+  erro: 'Erro',
+  cancelada: 'Cancelada',
+  processando_cancelamento: 'Cancelando…',
+}
+
+// ── Meu Site (white-label) ─────────────────────────────────
+export type TemplateSite = 'clean' | 'premium' | 'compacto'
+
+export interface SiteLoja {
+  publicado: boolean
+  subdominio: string
+  template: TemplateSite
+  cor_primaria: string
+  cor_secundaria: string
+  logo_url?: string
+  banner_url?: string
+  hero_titulo: string
+  hero_subtitulo: string
+  hero_cta: string
+  sobre_texto: string
+  ga4_id?: string
+  meta_pixel_id?: string
+}
+
+export const TEMPLATES_SITE: { value: TemplateSite; label: string; descricao: string }[] = [
+  { value: 'clean', label: 'Clean', descricao: 'Hero centralizado, fundo claro' },
+  { value: 'premium', label: 'Premium', descricao: 'Hero em tela cheia com banner' },
+  { value: 'compacto', label: 'Compacto', descricao: 'Faixa estreita à esquerda' },
+]
+
+// ── Rede Social / Repasses B2B ─────────────────────────────
+export interface PublicacaoRepasse {
+  id: string
+  loja_nome: string
+  autor_nome: string
+  veiculo_nome: string
+  veiculo_ano?: number
+  veiculo_km?: number
+  foto_url?: string
+  conteudo?: string
+  valor_repasse?: number
+  curtidas: number
+  comentarios: number
+  curtido_por_mim: boolean
+  created_at: string
+}
+
+export type StatusProposta = 'pendente' | 'aceita' | 'rejeitada' | 'cancelada'
+
+export interface PropostaRepasse {
+  id: string
+  direcao: 'enviada' | 'recebida'
+  loja_parceira_nome: string
+  veiculo_nome: string
+  valor_proposta: number
+  status: StatusProposta
+  observacoes?: string
+  created_at: string
+}
+
+export const STATUS_PROPOSTA_LABEL: Record<StatusProposta, string> = {
+  pendente: 'Pendente',
+  aceita: 'Aceita',
+  rejeitada: 'Rejeitada',
+  cancelada: 'Cancelada',
+}
+
+export interface LojaParceira {
+  id: string
+  nome: string
+  cidade?: string
+  estado?: string
+  telefone?: string
+  whatsapp?: string
+  verificada: boolean
+  total_veiculos: number
+  conversa_id?: string
 }
 
 // ── Comissões ──────────────────────────────────────────────
