@@ -10,7 +10,7 @@ import {
 } from '../../components/ui'
 import { equipeService } from '../../services'
 import type { Membro, Papel } from '../../services/types'
-import { formatTelefone } from '../../lib/format'
+import { formatTelefone, maskTelefoneInput } from '../../lib/format'
 import { MODULOS, TODOS_MODULOS, parseModulos, type ModuloKey } from '../../lib/modulos'
 
 export default function EquipeScreen() {
@@ -212,7 +212,7 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
           icon="call-outline"
           keyboardType="phone-pad"
           value={telefone}
-          onChangeText={setTelefone}
+          onChangeText={(t) => setTelefone(maskTelefoneInput(t))}
         />
         {!editando && (
           <Input

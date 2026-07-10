@@ -14,7 +14,7 @@ import type {
   ComentarioRepasse, LojaParceira, PropostaRepasse, PublicacaoRepasse, StatusProposta,
 } from '../../services/types'
 import { STATUS_PROPOSTA_LABEL } from '../../services/types'
-import { formatBRL, formatRelativo, formatKm, formatTelefone } from '../../lib/format'
+import { formatBRL, formatRelativo, formatKm, formatTelefone, maskMoedaInput, parseMoedaInput } from '../../lib/format'
 
 type Aba = 'feed' | 'propostas' | 'parceiros'
 
@@ -82,7 +82,7 @@ function FeedTab() {
 
   const enviarProposta = async () => {
     if (!proposta) return
-    const v = parseInt(valor.replace(/\D/g, ''), 10) || 0
+    const v = parseMoedaInput(valor)
     if (v <= 0) { toast.show('error', 'Informe o valor da proposta.'); return }
     setEnviando(true)
     try {
@@ -156,7 +156,7 @@ function FeedTab() {
         {proposta && (
           <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
             <Txt variant="caption" color="textDim">{proposta.loja_nome} · {proposta.veiculo_nome}</Txt>
-            <Input label="Valor da proposta (R$)" value={valor} onChangeText={(v) => setValor(v.replace(/\D/g, ''))} keyboardType="number-pad" placeholder="0" />
+            <Input label="Valor da proposta (R$)" value={valor} onChangeText={(v) => setValor(maskMoedaInput(v))} keyboardType="numeric" placeholder="0,00" />
             <Input label="Observações (opcional)" value={obs} onChangeText={setObs} multiline style={{ minHeight: 56, textAlignVertical: 'top' }} placeholder="Ex.: consigo buscar na sexta" />
             <Button title="Enviar proposta" icon="send" loading={enviando} onPress={enviarProposta} full />
           </View>

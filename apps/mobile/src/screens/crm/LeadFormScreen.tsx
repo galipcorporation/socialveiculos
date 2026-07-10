@@ -8,7 +8,7 @@ import {
 } from '../../components/ui'
 import { leadsService, veiculosService } from '../../services'
 import { ORIGEM_LEAD_LABEL, type OrigemLead } from '../../services/types'
-import { formatBRL, maskMoedaInput, parseMoedaInput } from '../../lib/format'
+import { formatBRL, maskMoedaInput, maskTelefoneInput, parseMoedaInput } from '../../lib/format'
 import type { RootScreenProps } from '../../navigation/types'
 
 export default function LeadFormScreen({ route }: RootScreenProps<'LeadForm'>) {
@@ -85,7 +85,7 @@ export default function LeadFormScreen({ route }: RootScreenProps<'LeadForm'>) {
             keyboardType="phone-pad"
             icon="call-outline"
             value={telefone}
-            onChangeText={setTelefone}
+            onChangeText={(t) => setTelefone(maskTelefoneInput(t))}
           />
         </Card>
 

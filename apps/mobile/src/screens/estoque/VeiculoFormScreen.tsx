@@ -12,7 +12,7 @@ import {
 } from '../../components/ui'
 import { veiculosService, type VeiculoInput } from '../../services'
 import { ANOS, REGRAS_TIPO, TIPOS_VEICULO, type TipoVeiculo } from '../../services/types'
-import { formatNumber, maskMoedaInput, parseMoedaInput } from '../../lib/format'
+import { formatNumber, maskMoedaInput, maskPlaca, parseMoedaInput } from '../../lib/format'
 import type { RootScreenProps } from '../../navigation/types'
 
 const CAMBIOS = ['Manual', 'Automático', 'Automático CVT', 'Automatizado']
@@ -288,7 +288,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
                 autoCapitalize="characters"
                 maxLength={8}
                 value={form.placa}
-                onChangeText={(t) => set('placa', t)}
+                onChangeText={(t) => set('placa', maskPlaca(t))}
                 hint="Consulte a placa para preencher marca/modelo/ano automaticamente"
                 right={
                   <Pressable onPress={consultarPlaca} hitSlop={8} disabled={consultandoPlaca} style={{ paddingHorizontal: 4 }}>

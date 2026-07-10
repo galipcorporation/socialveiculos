@@ -12,8 +12,8 @@ import { clientesService, type ClienteInput } from '../../services'
 import type { Cliente } from '../../services/types'
 import { buscarCep } from '../../lib/cep'
 import {
-  capitalizarNome, formatBRL, formatTelefone, maskCEP, maskCNPJ, maskTelefoneInput,
-  maskMoedaInput, parseMoedaInput,
+  capitalizarNome, formatBRL, formatTelefone, maskCEP, maskCPFouCNPJ, maskData, maskRG,
+  maskTelefoneInput, maskMoedaInput, parseMoedaInput,
 } from '../../lib/format'
 
 export default function ClientesScreen() {
@@ -139,12 +139,12 @@ function ClienteForm({ cliente, onClose }: { cliente: Cliente | null; onClose: (
         <Input label="Nome completo" value={f.nome} onChangeText={(v) => set({ nome: capitalizarNome(v) })} />
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           <Input label="Telefone" value={f.telMask} onChangeText={(v) => set({ telMask: maskTelefoneInput(v) })} keyboardType="phone-pad" containerStyle={{ flex: 1 }} />
-          <Input label="Nascimento" value={f.data_nascimento} onChangeText={(v) => set({ data_nascimento: v })} placeholder="DD/MM/AAAA" containerStyle={{ flex: 1 }} />
+          <Input label="Nascimento" value={f.data_nascimento} onChangeText={(v) => set({ data_nascimento: maskData(v) })} placeholder="DD/MM/AAAA" keyboardType="number-pad" containerStyle={{ flex: 1 }} />
         </View>
         <Input label="E-mail" value={f.email} onChangeText={(v) => set({ email: v })} keyboardType="email-address" autoCapitalize="none" />
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <Input label="CPF / CNPJ" value={f.cpf} onChangeText={(v) => set({ cpf: maskCNPJ(v) })} keyboardType="number-pad" containerStyle={{ flex: 1 }} />
-          <Input label="RG" value={f.rg} onChangeText={(v) => set({ rg: v })} containerStyle={{ flex: 1 }} />
+          <Input label="CPF / CNPJ" value={f.cpf} onChangeText={(v) => set({ cpf: maskCPFouCNPJ(v) })} keyboardType="number-pad" containerStyle={{ flex: 1 }} />
+          <Input label="RG" value={f.rg} onChangeText={(v) => set({ rg: maskRG(v) })} keyboardType="number-pad" containerStyle={{ flex: 1 }} />
         </View>
         <Input label="Renda mensal" value={f.rendaMask} onChangeText={(v) => set({ rendaMask: maskMoedaInput(v) })} keyboardType="numeric" placeholder="0,00" hint={f.rendaMask ? formatBRL(parseMoedaInput(f.rendaMask)) : undefined} />
 

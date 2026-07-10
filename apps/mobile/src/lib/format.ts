@@ -123,6 +123,42 @@ export function maskCEP(v: string): string {
   return d.replace(/^(\d{5})(\d)/, '$1-$2')
 }
 
+export function maskCPF(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 11)
+  return d
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+}
+
+/** Máscara de CPF ou CNPJ conforme o comprimento digitado. */
+export function maskCPFouCNPJ(v: string): string {
+  const d = v.replace(/\D/g, '')
+  return d.length > 11 ? maskCNPJ(v) : maskCPF(v)
+}
+
+export function maskData(v: string): string {
+  return v
+    .replace(/\D/g, '')
+    .slice(0, 8)
+    .replace(/(\d{2})(\d)/, '$1/$2')
+    .replace(/(\d{2})(\d)/, '$1/$2')
+}
+
+export function maskRG(v: string): string {
+  if (!v) return ''
+  const d = v.replace(/[^0-9Xx]/g, '').slice(0, 9)
+  return d
+    .replace(/^(\d{2})(\d)/, '$1.$2')
+    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/^(\d{2})\.(\d{3})\.(\d{3})([\dXx])/, '$1.$2.$3-$4')
+}
+
+/** Máscara de placa (Mercosul ABC1D23 ou antiga ABC1234) — só normaliza. */
+export function maskPlaca(v: string): string {
+  return v.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 7)
+}
+
 export function capitalizarNome(v: string): string {
   return v.replace(/\b\w/g, (c) => c.toUpperCase())
 }
