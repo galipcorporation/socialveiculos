@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { View } from 'react-native'
+import { Pressable, View } from 'react-native'
+import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
+import * as ImagePicker from 'expo-image-picker'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
@@ -11,8 +13,6 @@ import { OptionSheet } from '../../components/ui'
 import { modulosService, siteService } from '../../services'
 import type { SiteLoja, TemplateSite } from '../../services/types'
 import { TEMPLATES_SITE } from '../../services/types'
-
-const CORES: string[] = ['#2563eb', '#0ea5e9', '#16a34a', '#dc2626', '#ea580c', '#7c3aed', '#0f172a']
 
 export default function MeuSiteScreen() {
   const { colors } = useTheme()
@@ -111,20 +111,10 @@ export default function MeuSiteScreen() {
             <Card style={{ gap: spacing.sm }}>
               <Txt variant="label" color="textMuted" style={{ textTransform: 'uppercase' }}>Aparência</Txt>
               <SelectField label="Template" value={TEMPLATES_SITE.find((t) => t.value === form.template)?.label} onPress={() => setTemplateSheet(true)} />
-              <Txt variant="captionMedium" color="textDim">Cor primária</Txt>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                {CORES.map((c) => (
-                  <View
-                    key={c}
-                    onTouchEnd={() => set('cor_primaria')(c)}
-                    style={{
-                      width: 34, height: 34, borderRadius: 17, backgroundColor: c,
-                      borderWidth: form.cor_primaria === c ? 3 : 1,
-                      borderColor: form.cor_primaria === c ? colors.text : colors.border,
-                    }}
-                  />
-                ))}
-              </View>
+              <Swatches label="Cor primária" atual={form.cor_primaria} onSelect={set('cor_primaria')} />
+              <Swatches label="Cor secundária" atual={form.cor_secundaria} onSelect={set('cor_secundaria')} />
+              <ImagemPicker label="Logo" uri={form.logo_url} onPick={(u) => set('logo_url')(u)} />
+              <ImagemPicker label="Banner (hero)" uri={form.banner_url} onPick={(u) => set('banner_url')(u)} />
             </Card>
 
             {/* Conteúdo */}
@@ -134,6 +124,13 @@ export default function MeuSiteScreen() {
               <Input label="Subtítulo" value={form.hero_subtitulo} onChangeText={set('hero_subtitulo')} multiline style={{ minHeight: 56, textAlignVertical: 'top' }} />
               <Input label="Texto do botão (CTA)" value={form.hero_cta} onChangeText={set('hero_cta')} />
               <Input label="Sobre a loja" value={form.sobre_texto} onChangeText={set('sobre_texto')} multiline style={{ minHeight: 72, textAlignVertical: 'top' }} />
+            </Card>
+
+            {/* SEO */}
+            <Card style={{ gap: spacing.sm }}>
+              <Txt variant="label" color="textMuted" style={{ textTransform: 'uppercase' }}>SEO — como aparece no Google</Txt>
+              <Input label="Título (SEO)" value={form.seo_title ?? ''} onChangeText={set('seo_title')} placeholder="Ex.: Auto Premium — Seminovos em Porto Alegre" />
+              <Input label="Descrição (SEO)" value={form.seo_description ?? ''} onChangeText={set('seo_description')} multiline style={{ minHeight: 56, textAlignVertical: 'top' }} placeholder="Resumo que aparece nos resultados de busca" />
             </Card>
 
             {/* Analytics */}
@@ -186,9 +183,53 @@ function Preview({ form }: { form: SiteLoja }) {
           {form.hero_subtitulo || 'Subtítulo do hero'}
         </Txt>
         <View style={{ marginTop: spacing.sm, backgroundColor: '#fff', borderRadius: radius.sm, paddingVertical: 6, paddingHorizontal: 14 }}>
-          <Txt style={{ color: form.cor_primaria, fontFamily: fonts.semibold, fontSize: 12 }}>{form.hero_cta || 'Ver estoque'}</Txt>
+          <Txt style={{ color: form.cor_secundaria || form.cor_primaria, fontFamily: fonts.semibold, fontSize: 12 }}>{form.hero_cta || 'Ver estoque'}</Txt>
         </View>
       </View>
     </Card>
+  )
+}
+
+const CORES: string[] = ['#2563eb', '#0ea5e9', '#16a34a', '#dc2626', '#ea580c', '#7c3aed', '#0f172a', '#f59e0b']
+
+function Swatches({ label, atual, onSelect }: { label: string; atual: string; onSelect: (c: string) => void }) {
+  const { colors } = useTheme()
+  return (
+    <View style={{ gap: 6 }}>
+      <Txt variant="captionMedium" color="textDim">{label}</Txt>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+        {CORES.map((c) => (
+          <Pressable
+            key={c}
+            onPress={() => onSelect(c)}
+            style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: c, borderWidth: atual === c ? 3 : 1, borderColor: atual === c ? colors.text : colors.border }}
+          />
+        ))}
+      </View>
+    </View>
+  )
+}
+
+function ImagemPicker({ label, uri, onPick }: { label: string; uri?: string; onPick: (uri: string) => void }) {
+  const { colors } = useTheme()
+  const escolher = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 })
+    if (!res.canceled && res.assets[0]) onPick(res.assets[0].uri)
+  }
+  return (
+    <View style={{ gap: 6 }}>
+      <Txt variant="captionMedium" color="textDim">{label}</Txt>
+      <Pressable onPress={escolher} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, backgroundColor: colors.inputBg }}>
+        {uri ? (
+          <Image source={{ uri }} style={{ width: 44, height: 44, borderRadius: radius.sm }} contentFit="cover" />
+        ) : (
+          <View style={{ width: 44, height: 44, borderRadius: radius.sm, backgroundColor: colors.overlaySoft, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="image-outline" size={20} color={colors.textMuted} />
+          </View>
+        )}
+        <Txt variant="caption" color={uri ? 'text' : 'textMuted'} style={{ flex: 1 }}>{uri ? 'Trocar imagem' : 'Escolher da galeria'}</Txt>
+        <Ionicons name="cloud-upload-outline" size={18} color={colors.textMuted} />
+      </Pressable>
+    </View>
   )
 }

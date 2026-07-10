@@ -71,6 +71,24 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
   const [erros, setErros] = useState<Partial<Record<keyof FormState, string>>>({})
   const [sheet, setSheet] = useState<'ano' | 'cambio' | 'combustivel' | null>(null)
   const [txtOpcional, setTxtOpcional] = useState('')
+  const [consultandoPlaca, setConsultandoPlaca] = useState(false)
+
+  const consultarPlaca = async () => {
+    const p = form.placa.replace(/[^A-Za-z0-9]/g, '')
+    if (p.length !== 7) { toast.show('error', 'Informe uma placa válida (7 caracteres).'); return }
+    setConsultandoPlaca(true)
+    try {
+      const r = await veiculosService.consultarPlaca(p)
+      if (r) {
+        setForm((f) => ({ ...f, marca: r.marca, modelo: r.modelo, anoModelo: r.ano_modelo, cor: r.cor ?? f.cor }))
+        toast.show('success', 'Dados preenchidos pela placa.')
+      } else {
+        toast.show('info', 'Placa não encontrada. Preencha manualmente.')
+      }
+    } finally {
+      setConsultandoPlaca(false)
+    }
+  }
 
   const opcionaisList = useMemo(() => {
     return form.opcionais
@@ -271,7 +289,12 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
                 maxLength={8}
                 value={form.placa}
                 onChangeText={(t) => set('placa', t)}
-                hint="Opcional — usada para consultas e documentos"
+                hint="Consulte a placa para preencher marca/modelo/ano automaticamente"
+                right={
+                  <Pressable onPress={consultarPlaca} hitSlop={8} disabled={consultandoPlaca} style={{ paddingHorizontal: 4 }}>
+                    <Ionicons name={consultandoPlaca ? 'hourglass-outline' : 'search'} size={18} color={colors.primary} />
+                  </Pressable>
+                }
               />
             )}
             <View style={styles.row2}>

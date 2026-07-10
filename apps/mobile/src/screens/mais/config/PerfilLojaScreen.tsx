@@ -5,6 +5,7 @@ import { spacing } from '../../../theme/tokens'
 import { AppHeader, Badge, Button, Card, Input, Screen, SkeletonCard, Txt, useToast } from '../../../components/ui'
 import { configService, type PerfilInput } from '../../../services'
 import { capitalizarNome, maskCEP, maskCNPJ, maskTelefoneInput } from '../../../lib/format'
+import { buscarCep } from '../../../lib/cep'
 
 type FormState = {
   nome: string
@@ -29,6 +30,16 @@ export default function PerfilLojaScreen() {
   const toast = useToast()
   const [form, setForm] = useState<FormState>(VAZIO)
   const [salvando, setSalvando] = useState(false)
+  const [buscandoCep, setBuscandoCep] = useState(false)
+
+  const onCepBlur = async () => {
+    const cep = form.cep.replace(/\D/g, '')
+    if (cep.length !== 8) return
+    setBuscandoCep(true)
+    const r = await buscarCep(cep)
+    setBuscandoCep(false)
+    if (r) setForm((f) => ({ ...f, endereco: r.endereco, cidade: r.cidade, estado: r.estado }))
+  }
 
   const q = useQuery({ queryKey: ['config', 'perfil'], queryFn: () => configService.perfil() })
 
@@ -102,7 +113,7 @@ export default function PerfilLojaScreen() {
 
             <Card style={{ gap: spacing.sm }}>
               <Txt variant="label" color="textMuted" style={{ textTransform: 'uppercase' }}>Endereço</Txt>
-              <Input label="CEP" value={form.cep} onChangeText={(v) => set('cep')(maskCEP(v))} keyboardType="number-pad" />
+              <Input label="CEP" value={form.cep} onChangeText={(v) => set('cep')(maskCEP(v))} onBlur={onCepBlur} keyboardType="number-pad" hint={buscandoCep ? 'Buscando endereço…' : undefined} />
               <Input label="Endereço" value={form.endereco} onChangeText={(v) => set('endereco')(capitalizarNome(v))} />
               <View style={{ flexDirection: 'row', gap: spacing.sm }}>
                 <Input label="Cidade" value={form.cidade} onChangeText={(v) => set('cidade')(capitalizarNome(v))} containerStyle={{ flex: 3 }} />

@@ -549,6 +549,8 @@ export interface SiteLoja {
   hero_subtitulo: string
   hero_cta: string
   sobre_texto: string
+  seo_title?: string
+  seo_description?: string
   ga4_id?: string
   meta_pixel_id?: string
 }

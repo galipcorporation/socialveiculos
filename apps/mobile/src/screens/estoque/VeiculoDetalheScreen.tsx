@@ -170,6 +170,9 @@ export default function VeiculoDetalheScreen({ route }: RootScreenProps<'Veiculo
             </Card>
           )}
 
+          {/* FIPE / precificação (só gestor) */}
+          {v && gestor && v.preco_venda != null && <FipeCard veiculoId={v.id} />}
+
           {/* Custos de preparação (só gestor) */}
           {v && gestor && v.status !== 'vendido' && <CustosCard veiculo={v} />}
 
@@ -294,6 +297,33 @@ function Linha({ label, valor, cor }: { label: string; valor: string; cor?: stri
       <Txt variant="caption" color="textDim">{label}</Txt>
       <Txt variant="bodySemibold" style={cor ? { color: cor } : undefined}>{valor}</Txt>
     </View>
+  )
+}
+
+function FipeCard({ veiculoId }: { veiculoId: string }) {
+  const { colors } = useTheme()
+  const q = useQuery({ queryKey: ['veiculos', veiculoId, 'precificacao'], queryFn: () => veiculosService.precificacao(veiculoId) })
+  const p = q.data
+  if (!p) return null
+  return (
+    <Card>
+      <Txt variant="title" style={{ marginBottom: spacing.xs }}>Precificação (FIPE)</Txt>
+      <Linha label="Valor FIPE (referência)" valor={formatBRL(p.fipe)} />
+      {p.margem_sobre_fipe != null && (
+        <Linha
+          label="Margem sobre a FIPE"
+          valor={`${p.margem_sobre_fipe >= 0 ? '+' : ''}${p.margem_sobre_fipe.toFixed(1)}%`}
+          cor={p.margem_sobre_fipe >= 0 ? colors.success : colors.error}
+        />
+      )}
+      <Linha label="Dias em estoque" valor={`${p.dias_estoque} dia(s)`} cor={p.encalhado ? colors.warning : undefined} />
+      {p.encalhado && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.warning + '14' }}>
+          <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
+          <Txt variant="caption" style={{ flex: 1, color: colors.warning }}>Veículo encalhado (+60 dias). Considere revisar o preço.</Txt>
+        </View>
+      )}
+    </Card>
   )
 }
 

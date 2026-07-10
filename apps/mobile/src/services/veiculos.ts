@@ -103,6 +103,38 @@ export const veiculosService = {
     return v
   },
 
+  // KePlaca mock (M070): consulta de placa → marca/modelo/ano fictícios.
+  async consultarPlaca(placa: string): Promise<{ marca: string; modelo: string; ano_modelo: number; cor?: string } | null> {
+    await delay(500, 1000)
+    const p = placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+    if (p.length !== 7) return null
+    // Catálogo fictício por hash da placa (determinístico p/ demo).
+    const opcoes = [
+      { marca: 'Volkswagen', modelo: 'Gol', cor: 'Prata' },
+      { marca: 'Chevrolet', modelo: 'Onix', cor: 'Branco' },
+      { marca: 'Fiat', modelo: 'Argo', cor: 'Vermelho' },
+      { marca: 'Hyundai', modelo: 'HB20', cor: 'Cinza' },
+      { marca: 'Toyota', modelo: 'Corolla', cor: 'Preto' },
+    ]
+    const idx = [...p].reduce((a, c) => a + c.charCodeAt(0), 0) % opcoes.length
+    const ano = 2015 + ([...p].reduce((a, c) => a + c.charCodeAt(0), 0) % 9)
+    return { ...opcoes[idx], ano_modelo: ano }
+  },
+
+  // FIPE de referência mock (M070): valor + margem + dias em estoque.
+  async precificacao(idVeiculo: string): Promise<{ fipe: number; margem_sobre_fipe: number | null; dias_estoque: number; encalhado: boolean } | null> {
+    await delay(200, 400)
+    const db = await getDb()
+    const v = db.veiculos.find((x) => x.id === idVeiculo)
+    if (!v || v.preco_venda == null) return null
+    // FIPE fictícia ~ 96% do preço de venda com pequena variação por veículo.
+    const jitter = ([...v.id].reduce((a, c) => a + c.charCodeAt(0), 0) % 10) / 100 // 0–0.09
+    const fipe = Math.round((v.preco_venda * (0.92 + jitter)) / 100) * 100
+    const margem = fipe > 0 ? ((v.preco_venda - fipe) / fipe) * 100 : null
+    const diasEstoque = Math.floor((Date.now() - new Date(v.created_at).getTime()) / 86_400_000)
+    return { fipe, margem_sobre_fipe: margem, dias_estoque: diasEstoque, encalhado: diasEstoque > 60 }
+  },
+
   async criar(input: VeiculoInput): Promise<Veiculo> {
     await delay()
     return mutate((db) => {

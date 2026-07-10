@@ -1,26 +1,38 @@
 import React, { useMemo, useState } from 'react'
-import { FlatList, StyleSheet, View } from 'react-native'
+import { FlatList, Pressable, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
 import {
-  AppHeader, Badge, Card, EmptyState, ErrorState, Fab, FilterChips, SearchBar, SkeletonCard,
-  TONE_STATUS_VEICULO, Txt,
+  AppHeader, Badge, Card, EmptyState, ErrorState, Fab, FilterChips, KpiCard, OptionSheet,
+  SearchBar, SkeletonCard, TONE_STATUS_VEICULO, Txt,
 } from '../../components/ui'
 import { VehiclePhoto } from '../../components/VehiclePhoto'
 import { veiculosService } from '../../services'
 import { STATUS_VEICULO_LABEL, type Veiculo, type VeiculoStatus } from '../../services/types'
-import { formatBRL, formatKm } from '../../lib/format'
+import { formatBRL, formatKm, formatNumber } from '../../lib/format'
 
 type FiltroStatus = VeiculoStatus | 'todos'
+type Ordenacao = 'recentes' | 'preco_desc' | 'preco_asc' | 'km_asc' | 'ano_desc'
+
+const ORDENACOES: { value: Ordenacao; label: string }[] = [
+  { value: 'recentes', label: 'Mais recentes' },
+  { value: 'preco_desc', label: 'Maior preço' },
+  { value: 'preco_asc', label: 'Menor preço' },
+  { value: 'km_asc', label: 'Menor km' },
+  { value: 'ano_desc', label: 'Ano mais novo' },
+]
 
 export default function EstoqueScreen() {
+  const { colors } = useTheme()
   const navigation = useNavigation()
   const queryClient = useQueryClient()
   const [busca, setBusca] = useState('')
   const [status, setStatus] = useState<FiltroStatus>('todos')
+  const [ordem, setOrdem] = useState<Ordenacao>('recentes')
+  const [ordemSheet, setOrdemSheet] = useState(false)
 
   const listaQ = useQuery({
     queryKey: ['veiculos', 'lista'],
@@ -30,7 +42,7 @@ export default function EstoqueScreen() {
   const todos = listaQ.data ?? []
 
   const filtrados = useMemo(() => {
-    let lista = todos
+    let lista = [...todos]
     if (status !== 'todos') lista = lista.filter((v) => v.status === status)
     const q = busca.trim().toLowerCase()
     if (q) {
@@ -40,8 +52,15 @@ export default function EstoqueScreen() {
           .some((c) => String(c).toLowerCase().includes(q))
       )
     }
+    if (ordem === 'preco_desc') lista.sort((a, b) => (b.preco_venda ?? 0) - (a.preco_venda ?? 0))
+    else if (ordem === 'preco_asc') lista.sort((a, b) => (a.preco_venda ?? 0) - (b.preco_venda ?? 0))
+    else if (ordem === 'km_asc') lista.sort((a, b) => (a.km ?? 0) - (b.km ?? 0))
+    else if (ordem === 'ano_desc') lista.sort((a, b) => b.ano_modelo - a.ano_modelo)
     return lista
-  }, [todos, status, busca])
+  }, [todos, status, busca, ordem])
+
+  const disponiveis = todos.filter((v) => v.status === 'disponivel').length
+  const naVitrine = todos.filter((v) => v.publicado_marketplace).length
 
   const contagem = (s: FiltroStatus) =>
     s === 'todos' ? todos.length : todos.filter((v) => v.status === s).length
@@ -62,7 +81,12 @@ export default function EstoqueScreen() {
         subtitle={listaQ.isSuccess ? `${todos.length} veículos na loja` : undefined}
         bottom={
           <View style={{ gap: spacing.sm }}>
-            <SearchBar value={busca} onChangeText={setBusca} placeholder="Marca, modelo, placa…" />
+            <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+              <SearchBar value={busca} onChangeText={setBusca} placeholder="Marca, modelo, placa…" style={{ flex: 1 }} />
+              <Pressable onPress={() => setOrdemSheet(true)} style={{ width: 42, height: 42, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.inputBg, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="swap-vertical" size={18} color={colors.textDim} />
+              </Pressable>
+            </View>
             <FilterChips options={chips} selected={status} onSelect={setStatus} />
           </View>
         }
@@ -78,6 +102,13 @@ export default function EstoqueScreen() {
         <FlatList
           data={filtrados}
           keyExtractor={(v) => v.id}
+          ListHeaderComponent={
+            <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
+              <KpiCard label="Total" value={formatNumber(todos.length)} icon="car-sport" tone="primary" />
+              <KpiCard label="Disponíveis" value={formatNumber(disponiveis)} icon="checkmark-circle" tone="success" />
+              <KpiCard label="Na vitrine" value={formatNumber(naVitrine)} icon="globe" tone="primary" />
+            </View>
+          }
           renderItem={({ item }) => (
             <VeiculoCard veiculo={item} onPress={() => navigation.navigate('VeiculoDetalhe', { id: item.id })} />
           )}
@@ -106,6 +137,14 @@ export default function EstoqueScreen() {
       )}
 
       <Fab icon="add" label="Veículo" onPress={() => navigation.navigate('VeiculoForm')} />
+      <OptionSheet
+        visible={ordemSheet}
+        onClose={() => setOrdemSheet(false)}
+        title="Ordenar por"
+        selected={ordem}
+        options={ORDENACOES.map((o) => ({ value: o.value, label: o.label }))}
+        onSelect={(v) => setOrdem(v as Ordenacao)}
+      />
     </View>
   )
 }
