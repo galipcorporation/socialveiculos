@@ -1,8 +1,5 @@
-// Carteira de clientes (M059) — CRUD + busca sobre a tabela `clientes` do mock.
-// Espelha a aba Clientes / ClienteModal do gestor. Swap p/ API = reimplementar.
-
-import { delay, getDb, mutate, novoId } from './db'
-import { LOJA_ID } from './seed'
+// Carteira de clientes — CRUD + busca contra /v1/clientes.
+import { api } from '../lib/api'
 import type { Cliente } from './types'
 
 export interface ClienteInput {
@@ -21,57 +18,79 @@ export interface ClienteInput {
   observacoes?: string
 }
 
+interface ClienteDTO {
+  id: string
+  loja_id: string
+  nome: string
+  telefone?: string | null
+  email?: string | null
+  cpf?: string | null
+  rg?: string | null
+  data_nascimento?: string | null
+  renda_mensal?: number | null
+  cep?: string | null
+  endereco?: string | null
+  bairro?: string | null
+  cidade?: string | null
+  estado?: string | null
+  observacoes?: string | null
+  created_at: string
+}
+
+function mapCliente(c: ClienteDTO): Cliente {
+  return {
+    id: c.id,
+    loja_id: c.loja_id,
+    nome: c.nome,
+    telefone: c.telefone ?? undefined,
+    email: c.email ?? undefined,
+    cpf: c.cpf ?? undefined,
+    rg: c.rg ?? undefined,
+    data_nascimento: c.data_nascimento ?? undefined,
+    renda_mensal: c.renda_mensal ?? undefined,
+    cep: c.cep ?? undefined,
+    endereco: c.endereco ?? undefined,
+    bairro: c.bairro ?? undefined,
+    cidade: c.cidade ?? undefined,
+    estado: c.estado ?? undefined,
+    observacoes: c.observacoes ?? undefined,
+    created_at: c.created_at,
+  }
+}
+
+// A API pode responder com lista pura ou paginada { items }.
+function extrairLista(data: ClienteDTO[] | { items: ClienteDTO[] }): ClienteDTO[] {
+  return Array.isArray(data) ? data : data.items ?? []
+}
+
 export const clientesService = {
   async listar(busca = ''): Promise<Cliente[]> {
-    await delay()
-    const db = await getDb()
-    let lista = [...db.clientes]
-    const q = busca.trim().toLowerCase()
-    if (q) {
-      const qd = q.replace(/\D/g, '')
-      lista = lista.filter((c) =>
-        c.nome.toLowerCase().includes(q) ||
-        (!!qd && ((c.cpf ?? '').replace(/\D/g, '').includes(qd) || (c.telefone ?? '').replace(/\D/g, '').includes(qd))),
-      )
-    }
-    return lista.sort((a, b) => a.nome.localeCompare(b.nome))
+    const params: Record<string, string> = {}
+    if (busca.trim()) params.q = busca.trim()
+    const data = await api.get<ClienteDTO[] | { items: ClienteDTO[] }>('/clientes', params)
+    return extrairLista(data).map(mapCliente).sort((a, b) => a.nome.localeCompare(b.nome))
   },
 
   async obter(id: string): Promise<Cliente | undefined> {
-    await delay(120, 240)
-    const db = await getDb()
-    return db.clientes.find((c) => c.id === id)
+    try {
+      const c = await api.get<ClienteDTO>(`/clientes/${id}`)
+      return mapCliente(c)
+    } catch {
+      return undefined
+    }
   },
 
   async criar(input: ClienteInput): Promise<Cliente> {
-    await delay(200, 400)
-    return mutate((db) => {
-      const cliente: Cliente = {
-        id: novoId('cli'),
-        loja_id: LOJA_ID,
-        created_at: new Date().toISOString(),
-        ...input,
-        nome: input.nome.trim(),
-      }
-      db.clientes.unshift(cliente)
-      return cliente
-    })
+    const c = await api.post<ClienteDTO>('/clientes', { ...input, nome: input.nome.trim() })
+    return mapCliente(c)
   },
 
   async atualizar(id: string, input: ClienteInput): Promise<Cliente> {
-    await delay(200, 400)
-    return mutate((db) => {
-      const c = db.clientes.find((x) => x.id === id)
-      if (!c) throw new Error('Cliente não encontrado.')
-      Object.assign(c, input, { nome: input.nome.trim() })
-      return c
-    })
+    const c = await api.patch<ClienteDTO>(`/clientes/${id}`, { ...input, nome: input.nome.trim() })
+    return mapCliente(c)
   },
 
   async excluir(id: string): Promise<void> {
-    await delay(150, 300)
-    return mutate((db) => {
-      db.clientes = db.clientes.filter((c) => c.id !== id)
-    })
+    await api.delete(`/clientes/${id}`)
   },
 }

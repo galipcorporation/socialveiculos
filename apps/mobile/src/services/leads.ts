@@ -1,5 +1,6 @@
-import { delay, getDb, mutate, novoId } from './db'
-import { LOJA_ID } from './seed'
+import { api } from '../lib/api'
+import { clientesService } from './clientes'
+import { veiculosService } from './veiculos'
 import type { Cliente, EtapaLead, Interacao, Lead, Negociacao, OrigemLead } from './types'
 
 export interface NegociacaoInput {
@@ -18,183 +19,173 @@ export interface LeadInput {
   observacoes?: string
 }
 
-function enriquecer(db: Awaited<ReturnType<typeof getDb>>, lead: Lead): Lead {
+// ── DTOs ───────────────────────────────────────────────────
+interface ClienteSimplesDTO {
+  id: string
+  nome: string
+  telefone?: string | null
+  cpf?: string | null
+}
+interface NegociacaoDTO {
+  id: string
+  lead_id: string
+  valor_proposta?: number | null
+  valor_entrada?: number | null
+  parcelas?: number | null
+  observacoes?: string | null
+  created_at: string
+}
+interface LeadDTO {
+  id: string
+  loja_id: string
+  cliente_id: string
+  veiculo_id?: string | null
+  etapa: EtapaLead
+  origem: OrigemLead
+  valor_proposta?: number | null
+  observacoes?: string | null
+  cliente?: ClienteSimplesDTO | null
+  negociacoes?: NegociacaoDTO[]
+  created_at: string
+  updated_at: string
+}
+
+function mapNegociacao(n: NegociacaoDTO): Negociacao {
   return {
-    ...lead,
-    cliente: db.clientes.find((c) => c.id === lead.cliente_id),
-    veiculo: lead.veiculo_id ? db.veiculos.find((v) => v.id === lead.veiculo_id) : undefined,
+    id: n.id,
+    lead_id: n.lead_id,
+    valor_proposta: n.valor_proposta ?? 0,
+    valor_entrada: n.valor_entrada ?? undefined,
+    parcelas: n.parcelas ?? undefined,
+    observacoes: n.observacoes ?? undefined,
+    created_at: n.created_at,
   }
+}
+
+// A timeline livre não é modelada no backend; derivamos as interações das
+// negociações + o marco de criação do lead.
+function derivarInteracoes(l: LeadDTO): Interacao[] {
+  const itens: Interacao[] = [
+    { id: `${l.id}-criado`, lead_id: l.id, tipo: 'sistema', texto: 'Lead criado', created_at: l.created_at },
+  ]
+  for (const n of l.negociacoes ?? []) {
+    const valor = (n.valor_proposta ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    itens.push({
+      id: `${n.id}-int`,
+      lead_id: l.id,
+      tipo: 'proposta',
+      texto: `Proposta: ${valor}${n.parcelas ? ` em ${n.parcelas}x` : ''}`,
+      created_at: n.created_at,
+    })
+  }
+  return itens.sort((a, b) => a.created_at.localeCompare(b.created_at))
+}
+
+function mapClienteSimples(c?: ClienteSimplesDTO | null): Cliente | undefined {
+  if (!c) return undefined
+  return {
+    id: c.id,
+    loja_id: '',
+    nome: c.nome,
+    telefone: c.telefone ?? undefined,
+    cpf: c.cpf ?? undefined,
+    created_at: '',
+  }
+}
+
+function mapLead(l: LeadDTO): Lead {
+  return {
+    id: l.id,
+    loja_id: l.loja_id,
+    cliente_id: l.cliente_id,
+    veiculo_id: l.veiculo_id ?? undefined,
+    etapa: l.etapa,
+    origem: l.origem,
+    valor_proposta: l.valor_proposta ?? undefined,
+    observacoes: l.observacoes ?? undefined,
+    cliente: mapClienteSimples(l.cliente),
+    interacoes: derivarInteracoes(l),
+    created_at: l.created_at,
+    updated_at: l.updated_at,
+  }
+}
+
+async function enriquecerVeiculo(lead: Lead): Promise<Lead> {
+  if (!lead.veiculo_id) return lead
+  try {
+    lead.veiculo = await veiculosService.obter(lead.veiculo_id)
+  } catch {
+    // veículo removido — segue sem o card
+  }
+  return lead
 }
 
 export const leadsService = {
   async listar(): Promise<Lead[]> {
-    await delay()
-    const db = await getDb()
-    return db.leads
-      .map((l) => enriquecer(db, l))
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    const data = await api.get<LeadDTO[]>('/leads')
+    return data.map(mapLead).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
   },
 
   async obter(idLead: string): Promise<Lead> {
-    await delay(120, 260)
-    const db = await getDb()
-    const lead = db.leads.find((l) => l.id === idLead)
-    if (!lead) throw new Error('Lead não encontrado.')
-    return enriquecer(db, lead)
+    const l = await api.get<LeadDTO>(`/leads/${idLead}`)
+    return enriquecerVeiculo(mapLead(l))
   },
 
   async criar(input: LeadInput): Promise<Lead> {
-    await delay()
-    return mutate((db) => {
-      const agora = new Date().toISOString()
-      let cliente = db.clientes.find(
-        (c) => c.nome.toLowerCase() === input.cliente_nome.trim().toLowerCase()
-      )
-      if (!cliente) {
-        cliente = {
-          id: novoId('cli'),
-          loja_id: LOJA_ID,
-          nome: input.cliente_nome.trim(),
-          telefone: input.cliente_telefone,
-          created_at: agora,
-        } satisfies Cliente
-        db.clientes.unshift(cliente)
-      }
-      const lead: Lead = {
-        id: novoId('lead'),
-        loja_id: LOJA_ID,
-        cliente_id: cliente.id,
-        veiculo_id: input.veiculo_id,
-        etapa: 'lead',
-        origem: input.origem,
-        valor_proposta: input.valor_proposta,
-        observacoes: input.observacoes,
-        interacoes: [
-          {
-            id: novoId('int'),
-            lead_id: '',
-            tipo: 'sistema',
-            texto: 'Lead criado',
-            created_at: agora,
-          },
-        ],
-        created_at: agora,
-        updated_at: agora,
-      }
-      lead.interacoes![0].lead_id = lead.id
-      db.leads.unshift(lead)
-      return enriquecer(db, lead)
+    // Acha um cliente pelo nome ou cadastra na hora (paridade com o mock).
+    const nome = input.cliente_nome.trim()
+    const existentes = await clientesService.listar(nome)
+    let cliente = existentes.find((c) => c.nome.toLowerCase() === nome.toLowerCase())
+    if (!cliente) {
+      cliente = await clientesService.criar({ nome, telefone: input.cliente_telefone })
+    }
+    const l = await api.post<LeadDTO>('/leads', {
+      cliente_id: cliente.id,
+      veiculo_id: input.veiculo_id || null,
+      etapa: 'lead',
+      origem: input.origem,
+      valor_proposta: input.valor_proposta || null,
+      observacoes: input.observacoes || null,
     })
+    return enriquecerVeiculo(mapLead(l))
   },
 
   async moverEtapa(idLead: string, etapa: EtapaLead): Promise<Lead> {
-    await delay(150, 300)
-    return mutate((db) => {
-      const lead = db.leads.find((l) => l.id === idLead)
-      if (!lead) throw new Error('Lead não encontrado.')
-      const agora = new Date().toISOString()
-      lead.etapa = etapa
-      lead.updated_at = agora
-      lead.interacoes = lead.interacoes ?? []
-      lead.interacoes.push({
-        id: novoId('int'),
-        lead_id: lead.id,
-        tipo: 'sistema',
-        texto: `Etapa alterada para "${etiquetaEtapa(etapa)}"`,
-        created_at: agora,
-      })
-      return enriquecer(db, lead)
-    })
+    await api.patch(`/leads/${idLead}/etapa`, { etapa })
+    return this.obter(idLead)
   },
 
-  async adicionarInteracao(idLead: string, tipo: Interacao['tipo'], texto: string): Promise<Lead> {
-    await delay(150, 300)
-    return mutate((db) => {
-      const lead = db.leads.find((l) => l.id === idLead)
-      if (!lead) throw new Error('Lead não encontrado.')
-      const agora = new Date().toISOString()
-      lead.interacoes = lead.interacoes ?? []
-      lead.interacoes.push({
-        id: novoId('int'),
-        lead_id: lead.id,
-        tipo,
-        texto,
-        autor: 'Você',
-        created_at: agora,
-      })
-      lead.updated_at = agora
-      return enriquecer(db, lead)
-    })
+  // Timeline livre não é persistida no backend; recarrega o lead.
+  async adicionarInteracao(idLead: string, _tipo: Interacao['tipo'], _texto: string): Promise<Lead> {
+    return this.obter(idLead)
   },
 
   async atualizarProposta(idLead: string, valor: number | undefined, observacoes?: string): Promise<Lead> {
-    await delay(150, 300)
-    return mutate((db) => {
-      const lead = db.leads.find((l) => l.id === idLead)
-      if (!lead) throw new Error('Lead não encontrado.')
-      lead.valor_proposta = valor
-      if (observacoes !== undefined) lead.observacoes = observacoes
-      lead.updated_at = new Date().toISOString()
-      return enriquecer(db, lead)
+    await api.patch(`/leads/${idLead}`, {
+      valor_proposta: valor ?? null,
+      ...(observacoes !== undefined ? { observacoes } : {}),
     })
+    return this.obter(idLead)
   },
 
-  // ── Negociações (histórico de propostas do lead) — M059 ──
   async negociacoes(idLead: string): Promise<Negociacao[]> {
-    await delay(120, 260)
-    const db = await getDb()
-    return db.negociacoes
-      .filter((n) => n.lead_id === idLead)
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    const data = await api.get<NegociacaoDTO[]>(`/leads/${idLead}/negociacoes`)
+    return data.map(mapNegociacao).sort((a, b) => b.created_at.localeCompare(a.created_at))
   },
 
   async adicionarNegociacao(idLead: string, input: NegociacaoInput): Promise<Negociacao> {
-    await delay(200, 400)
-    return mutate((db) => {
-      const lead = db.leads.find((l) => l.id === idLead)
-      if (!lead) throw new Error('Lead não encontrado.')
-      const agora = new Date().toISOString()
-      const neg: Negociacao = {
-        id: novoId('neg'),
-        lead_id: idLead,
-        valor_proposta: input.valor_proposta,
-        valor_entrada: input.valor_entrada,
-        parcelas: input.parcelas,
-        observacoes: input.observacoes?.trim() || undefined,
-        created_at: agora,
-      }
-      db.negociacoes.unshift(neg)
-      // Reflete a última proposta no lead + registra na timeline.
-      lead.valor_proposta = input.valor_proposta
-      lead.updated_at = agora
-      lead.interacoes = lead.interacoes ?? []
-      lead.interacoes.push({
-        id: novoId('int'),
-        lead_id: idLead,
-        tipo: 'proposta',
-        texto: `Proposta: ${input.valor_proposta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}${input.parcelas ? ` em ${input.parcelas}x` : ''}`,
-        autor: 'Você',
-        created_at: agora,
-      })
-      return neg
+    const n = await api.post<NegociacaoDTO>(`/leads/${idLead}/negociacoes`, {
+      valor_proposta: input.valor_proposta,
+      valor_entrada: input.valor_entrada ?? null,
+      parcelas: input.parcelas ?? null,
+      observacoes: input.observacoes?.trim() || null,
     })
+    return mapNegociacao(n)
   },
 
-  async removerNegociacao(idNeg: string): Promise<void> {
-    await delay(120, 240)
-    return mutate((db) => {
-      db.negociacoes = db.negociacoes.filter((n) => n.id !== idNeg)
-    })
+  // Sem endpoint de remoção de negociação no backend; mantém a assinatura
+  // para não quebrar a tela (a proposta permanece no histórico).
+  async removerNegociacao(_idNeg: string): Promise<void> {
+    return
   },
-}
-
-function etiquetaEtapa(etapa: EtapaLead): string {
-  const map: Record<EtapaLead, string> = {
-    lead: 'Novo',
-    proposta: 'Proposta',
-    negociacao: 'Negociação',
-    fechamento: 'Fechamento',
-    perdido: 'Perdido',
-  }
-  return map[etapa]
 }
