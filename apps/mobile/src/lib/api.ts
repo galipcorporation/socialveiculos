@@ -89,7 +89,7 @@ class ApiClient {
               })
             }
 
-            return retryRes.json()
+            return retryRes.status === 204 ? (undefined as T) : retryRes.json()
           } else {
             isRefreshing = false
             logout()
@@ -119,7 +119,7 @@ class ApiClient {
       })
     }
 
-    return response.json()
+    return response.status === 204 ? (undefined as T) : response.json()
   }
 
   get<T>(path: string, params?: Record<string, string>): Promise<T> {

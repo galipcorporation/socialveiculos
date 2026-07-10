@@ -13,7 +13,8 @@ import {
 import { VehiclePhoto } from '../../components/VehiclePhoto'
 import { CATEGORIAS_CUSTO, equipeService, veiculosService } from '../../services'
 import {
-  STATUS_VEICULO_LABEL, type CategoriaCusto, type Veiculo, type VeiculoStatus,
+  STATUS_VEICULO_LABEL, TIPOS_DOC_VENDA, type CategoriaCusto, type TipoDocumentoVenda,
+  type TipoSolicitacao, type Veiculo, type VeiculoStatus,
 } from '../../services/types'
 import { formatBRL, formatKm, formatPlaca, maskMoedaInput, parseMoedaInput } from '../../lib/format'
 import { useAuthStore } from '../../stores/authStore'
@@ -175,6 +176,12 @@ export default function VeiculoDetalheScreen({ route }: RootScreenProps<'Veiculo
 
           {/* Custos de preparação (só gestor) */}
           {v && gestor && v.status !== 'vendido' && <CustosCard veiculo={v} />}
+
+          {/* Documentos de venda */}
+          {v && <DocumentosCard veiculo={v} />}
+
+          {/* Ações de gestão (excluir / alterar preço) */}
+          {v && <AcoesGestaoCard veiculo={v} gestor={gestor} />}
 
           {/* Opcionais / descrição */}
           {v?.opcionais ? (
@@ -353,7 +360,7 @@ function CustosCard({ veiculo }: { veiculo: Veiculo }) {
     },
   })
   const remMut = useMutation({
-    mutationFn: (id: string) => veiculosService.removerCusto(id),
+    mutationFn: (id: string) => veiculosService.removerCusto(veiculo.id, id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['veiculos', veiculo.id, 'custos'] }),
   })
 
@@ -403,6 +410,155 @@ function CustosCard({ veiculo }: { veiculo: Veiculo }) {
           options={CATEGORIAS_CUSTO.map((c) => ({ value: c.value, label: c.label }))}
           onSelect={(v) => setCategoria(v as CategoriaCusto)}
         />
+      </Sheet>
+    </Card>
+  )
+}
+
+function DocumentosCard({ veiculo }: { veiculo: Veiculo }) {
+  const { colors } = useTheme()
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const [aberto, setAberto] = useState(false)
+  const [tipo, setTipo] = useState<TipoDocumentoVenda>('contrato')
+  const [tipoSheet, setTipoSheet] = useState(false)
+  const [nome, setNome] = useState('')
+  const [visivel, setVisivel] = useState(true)
+
+  const q = useQuery({ queryKey: ['veiculos', veiculo.id, 'documentos'], queryFn: () => veiculosService.documentos(veiculo.id) })
+  const docs = q.data ?? []
+
+  const addMut = useMutation({
+    mutationFn: () => veiculosService.adicionarDocumento(veiculo.id, { tipo, nome_arquivo: nome.trim(), visivel_comprador: visivel }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['veiculos', veiculo.id, 'documentos'] }); toast.show('success', 'Documento anexado.'); setNome(''); setAberto(false) },
+  })
+  const remMut = useMutation({
+    mutationFn: (id: string) => veiculosService.removerDocumento(veiculo.id, id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['veiculos', veiculo.id, 'documentos'] }),
+  })
+
+  return (
+    <Card>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs }}>
+        <Txt variant="title">Documentos de venda</Txt>
+        <Pressable onPress={() => setAberto(true)} hitSlop={8}>
+          <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+        </Pressable>
+      </View>
+      {docs.length === 0 ? (
+        <Txt variant="caption" color="textDim">Nenhum documento. Anexe contrato, nota, garantia ou laudo.</Txt>
+      ) : (
+        docs.map((d) => (
+          <View key={d.id} style={styles.linha}>
+            <Ionicons name="document-text-outline" size={18} color={colors.textDim} />
+            <View style={{ flex: 1 }}>
+              <Txt variant="captionMedium" numberOfLines={1}>{d.nome_arquivo}</Txt>
+              <Txt variant="caption" color="textMuted">
+                {TIPOS_DOC_VENDA.find((t) => t.value === d.tipo)?.label}
+                {d.visivel_comprador ? ' · visível ao comprador' : ' · interno'}
+              </Txt>
+            </View>
+            <Pressable onPress={() => remMut.mutate(d.id)} hitSlop={8}>
+              <Ionicons name="trash-outline" size={16} color={colors.error} />
+            </Pressable>
+          </View>
+        ))
+      )}
+
+      <Sheet visible={aberto} onClose={() => setAberto(false)} title="Anexar documento">
+        <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+          <SelectField label="Tipo" value={TIPOS_DOC_VENDA.find((t) => t.value === tipo)?.label} onPress={() => setTipoSheet(true)} />
+          <Input label="Nome do arquivo" value={nome} onChangeText={setNome} placeholder="ex.: contrato-assinado.pdf" autoCapitalize="none" hint="No app real, aqui abre o seletor de arquivos." />
+          <Pressable onPress={() => setVisivel((v) => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: 4 }}>
+            <Ionicons name={visivel ? 'checkbox' : 'square-outline'} size={22} color={visivel ? colors.primary : colors.textMuted} />
+            <Txt variant="body">Visível ao comprador na Carteira</Txt>
+          </Pressable>
+          <Button title="Anexar documento" icon="document-attach-outline" loading={addMut.isPending} disabled={nome.trim().length < 3} onPress={() => addMut.mutate()} />
+        </View>
+        <OptionSheet
+          visible={tipoSheet}
+          onClose={() => setTipoSheet(false)}
+          title="Tipo de documento"
+          selected={tipo}
+          options={TIPOS_DOC_VENDA.map((t) => ({ value: t.value, label: t.label }))}
+          onSelect={(v) => setTipo(v as TipoDocumentoVenda)}
+        />
+      </Sheet>
+    </Card>
+  )
+}
+
+function AcoesGestaoCard({ veiculo, gestor }: { veiculo: Veiculo; gestor: boolean }) {
+  const { colors } = useTheme()
+  const navigation = useNavigation()
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const user = useAuthStore((s) => s.user)
+  const [modo, setModo] = useState<TipoSolicitacao | null>(null)
+  const [motivo, setMotivo] = useState('')
+  const [novoPreco, setNovoPreco] = useState('')
+
+  const excluirMut = useMutation({
+    mutationFn: () => veiculosService.excluir(veiculo.id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['veiculos'] }); toast.show('success', 'Veículo excluído.'); navigation.goBack() },
+  })
+  const precoMut = useMutation({
+    mutationFn: (preco: number) => veiculosService.atualizarPreco(veiculo.id, preco),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['veiculos'] }); toast.show('success', 'Preço atualizado.'); setModo(null) },
+  })
+  const solicitarMut = useMutation({
+    mutationFn: () => veiculosService.solicitarAprovacao(veiculo.id, {
+      tipo: modo!,
+      motivo: motivo.trim(),
+      solicitante_nome: user?.nome ?? 'Vendedor',
+      novo_preco: modo === 'alteracao_preco' ? parseMoedaInput(novoPreco) : undefined,
+    }),
+    onSuccess: () => { toast.show('success', 'Solicitação enviada ao gestor.'); setModo(null); setMotivo(''); setNovoPreco('') },
+  })
+
+  const confirmar = () => {
+    if (gestor) {
+      if (modo === 'exclusao') excluirMut.mutate()
+      else if (modo === 'alteracao_preco') { const p = parseMoedaInput(novoPreco); if (p > 0) precoMut.mutate(p) }
+    } else {
+      if (motivo.trim().length < 5) { toast.show('error', 'Descreva o motivo (mín. 5 caracteres).'); return }
+      if (modo === 'alteracao_preco' && parseMoedaInput(novoPreco) <= 0) { toast.show('error', 'Informe o novo preço.'); return }
+      solicitarMut.mutate()
+    }
+  }
+
+  return (
+    <Card>
+      <Txt variant="title" style={{ marginBottom: spacing.xs }}>Ações de gestão</Txt>
+      {!gestor && (
+        <Txt variant="caption" color="textDim" style={{ marginBottom: spacing.sm }}>
+          Como vendedor, exclusão e alteração de preço exigem aprovação do gestor.
+        </Txt>
+      )}
+      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+        <Button title="Alterar preço" variant="outline" icon="pricetag-outline" size="sm" onPress={() => { setModo('alteracao_preco'); setNovoPreco('') }} style={{ flex: 1 }} />
+        <Button title="Excluir" variant="outline" icon="trash-outline" size="sm" onPress={() => setModo('exclusao')} style={{ flex: 1, borderColor: colors.error }} />
+      </View>
+
+      <Sheet visible={modo !== null} onClose={() => setModo(null)} title={modo === 'exclusao' ? 'Excluir veículo' : 'Alterar preço'}>
+        <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+          {modo === 'alteracao_preco' && (
+            <Input label="Novo preço de venda" value={novoPreco} onChangeText={(t) => setNovoPreco(maskMoedaInput(t))} keyboardType="numeric" placeholder={veiculo.preco_venda ? maskMoedaInput(String(Math.round(veiculo.preco_venda * 100))) : '0,00'} icon="cash-outline" />
+          )}
+          {!gestor && (
+            <Input label="Motivo *" value={motivo} onChangeText={setMotivo} multiline style={{ minHeight: 56, textAlignVertical: 'top' }} placeholder={modo === 'exclusao' ? 'Por que excluir este veículo?' : 'Por que alterar o preço?'} />
+          )}
+          {gestor && modo === 'exclusao' && (
+            <Txt variant="caption" color="error">Esta ação é definitiva.</Txt>
+          )}
+          <Button
+            title={gestor ? (modo === 'exclusao' ? 'Excluir agora' : 'Salvar preço') : 'Solicitar aprovação'}
+            variant={gestor && modo === 'exclusao' ? 'danger' : 'primary'}
+            loading={excluirMut.isPending || precoMut.isPending || solicitarMut.isPending}
+            onPress={confirmar}
+          />
+          <Button title="Cancelar" variant="ghost" onPress={() => setModo(null)} />
+        </View>
       </Sheet>
     </Card>
   )

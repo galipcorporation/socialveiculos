@@ -1,6 +1,9 @@
-import { delay, getDb, mutate, novoId } from './db'
-import { LOJA_ID } from './seed'
-import type { CategoriaCusto, CustoVeiculo, Esteira, Midia, Veiculo, VeiculoStatus } from './types'
+import { api } from '../lib/api'
+import { esteiraService } from './esteira'
+import type {
+  CategoriaCusto, CustoVeiculo, DocumentoVenda, Esteira, Midia, SolicitacaoAprovacao,
+  TipoDocumentoVenda, TipoSolicitacao, Veiculo, VeiculoStatus,
+} from './types'
 
 export interface VeiculosFiltro {
   busca?: string
@@ -32,7 +35,6 @@ export interface RegistrarVendaInput {
   comprador_nome: string
   valor_venda: number
   vendedor_nome?: string
-  // Pagamento composto (M058) — soma deve fechar com valor_venda.
   valor_dinheiro?: number
   valor_financiado?: number
   valor_troca?: number
@@ -48,301 +50,349 @@ export const CATEGORIAS_CUSTO: { value: CategoriaCusto; label: string }[] = [
   { value: 'outro', label: 'Outro' },
 ]
 
-function aplicarInput(v: Veiculo, input: VeiculoInput) {
-  Object.assign(v, {
+// ── DTOs da API ────────────────────────────────────────────
+interface MidiaDTO { id: string; tipo: 'imagem' | 'video'; url: string; ordem: number }
+interface VeiculoDTO {
+  id: string
+  loja_id: string
+  placa?: string | null
+  marca: string
+  modelo: string
+  versao?: string | null
+  ano_fabricacao?: number | null
+  ano_modelo: number
+  km?: number | null
+  cor?: string | null
+  cambio?: string | null
+  combustivel?: string | null
+  tipo?: string | null
+  portas?: number | null
+  preco_venda?: number | null
+  preco_custo?: number | null
+  status: VeiculoStatus
+  publicado_marketplace?: boolean
+  descricao?: string | null
+  opcionais?: string | null
+  created_at: string
+  updated_at: string
+  midias?: MidiaDTO[]
+}
+interface DocumentoDTO {
+  id: string
+  tipo: string
+  nome: string
+  url: string
+  visivel_comprador: boolean
+  created_at: string
+}
+interface VendaDataDTO {
+  veiculo_id?: string
+  documentos?: DocumentoDTO[]
+}
+interface PrecificacaoDTO {
+  fipe?: number | null
+  preco_venda?: number | null
+  margem_sobre_fipe?: number | null
+  dias_no_estoque?: number
+  alerta_encalhe?: boolean
+  fipe_disponivel?: boolean
+}
+interface ConsultaPlacaDTO {
+  encontrado: boolean
+  marca?: string | null
+  modelo?: string | null
+  ano_modelo?: number | null
+  cor?: string | null
+}
+interface VenderRespDTO {
+  contrato_id: string
+  veiculo_id: string
+  esteira_id?: string | null
+  trocas_veiculo_ids?: string[]
+}
+interface SolicitacaoDTO {
+  id: string
+  entidade_id: string
+  tipo_acao: 'excluir_veiculo' | 'alterar_preco'
+  status: 'pendente' | 'aprovado' | 'rejeitado'
+  motivo?: string | null
+  justificativa_rejeicao?: string | null
+  veiculo_marca?: string | null
+  veiculo_modelo?: string | null
+  created_at: string
+  updated_at: string
+}
+
+const STATUS_SOL: Record<SolicitacaoDTO['status'], SolicitacaoAprovacao['status']> = {
+  pendente: 'pendente', aprovado: 'aprovada', rejeitado: 'rejeitada',
+}
+const TIPO_SOL: Record<SolicitacaoDTO['tipo_acao'], TipoSolicitacao> = {
+  excluir_veiculo: 'exclusao', alterar_preco: 'alteracao_preco',
+}
+
+function mapVeiculo(v: VeiculoDTO): Veiculo {
+  return {
+    id: v.id,
+    loja_id: v.loja_id,
+    placa: v.placa ?? undefined,
+    marca: v.marca,
+    modelo: v.modelo,
+    versao: v.versao ?? undefined,
+    ano_fabricacao: v.ano_fabricacao ?? undefined,
+    ano_modelo: v.ano_modelo,
+    km: v.km ?? undefined,
+    cor: v.cor ?? undefined,
+    cambio: v.cambio ?? undefined,
+    combustivel: v.combustivel ?? undefined,
+    tipo: (v.tipo as Veiculo['tipo']) ?? 'carro',
+    portas: v.portas ?? undefined,
+    preco_venda: v.preco_venda ?? undefined,
+    preco_custo: v.preco_custo ?? undefined,
+    status: v.status,
+    publicado_marketplace: v.publicado_marketplace ?? false,
+    descricao: v.descricao ?? undefined,
+    opcionais: v.opcionais ?? undefined,
+    created_at: v.created_at,
+    updated_at: v.updated_at,
+    midias: (v.midias ?? []).map((m): Midia => ({ id: m.id, tipo: m.tipo, url: m.url, ordem: m.ordem })),
+  }
+}
+
+function mapDoc(d: DocumentoDTO): DocumentoVenda {
+  return {
+    id: d.id,
+    veiculo_id: '',
+    tipo: (d.tipo as TipoDocumentoVenda) ?? 'outro',
+    nome_arquivo: d.nome,
+    visivel_comprador: d.visivel_comprador,
+    created_at: d.created_at,
+  }
+}
+
+function bodyVeiculo(input: VeiculoInput) {
+  return {
     marca: input.marca,
     modelo: input.modelo,
-    versao: input.versao,
+    versao: input.versao || null,
     tipo: input.tipo,
-    placa: input.placa,
+    placa: input.placa || null,
     ano_modelo: input.ano_modelo,
     ano_fabricacao: input.ano_fabricacao ?? input.ano_modelo,
-    km: input.km,
-    cor: input.cor,
-    cambio: input.cambio,
-    combustivel: input.combustivel,
-    portas: input.portas,
-    preco_venda: input.preco_venda,
-    preco_custo: input.preco_custo,
-    descricao: input.descricao,
-    opcionais: input.opcionais,
+    km: input.km ?? 0,
+    cor: input.cor || null,
+    cambio: input.cambio || null,
+    combustivel: input.combustivel || null,
+    portas: input.portas ?? null,
+    preco_venda: input.preco_venda ?? null,
+    preco_custo: input.preco_custo ?? null,
+    descricao: input.descricao || null,
+    opcionais: input.opcionais || null,
     publicado_marketplace: input.publicado_marketplace ?? false,
-    updated_at: new Date().toISOString(),
-  })
-  if (input.fotos) {
-    v.midias = input.fotos.map((url, i): Midia => ({ id: novoId('mid'), tipo: 'imagem', url, ordem: i }))
+    fotos: input.fotos ?? undefined,
   }
 }
 
 export const veiculosService = {
   async listar(filtro: VeiculosFiltro = {}): Promise<Veiculo[]> {
-    await delay()
-    const db = await getDb()
-    let lista = [...db.veiculos]
-    if (filtro.status && filtro.status !== 'todos') {
-      lista = lista.filter((v) => v.status === filtro.status)
-    }
-    if (filtro.busca?.trim()) {
-      const q = filtro.busca.trim().toLowerCase()
-      lista = lista.filter((v) =>
-        [v.marca, v.modelo, v.versao, v.placa, v.cor, String(v.ano_modelo)]
-          .filter(Boolean)
-          .some((campo) => String(campo).toLowerCase().includes(q))
-      )
-    }
-    // Disponíveis primeiro, depois mais recentes
-    const peso: Record<VeiculoStatus, number> = { disponivel: 0, reservado: 1, repasse: 2, vendido: 3, inativo: 4 }
-    return lista.sort((a, b) => peso[a.status] - peso[b.status] || b.created_at.localeCompare(a.created_at))
+    const params: Record<string, string> = {}
+    if (filtro.busca?.trim()) params.q = filtro.busca.trim()
+    if (filtro.status && filtro.status !== 'todos') params.status = filtro.status
+    const data = await api.get<{ items: VeiculoDTO[] }>('/veiculos', params)
+    return (data.items ?? []).map(mapVeiculo)
   },
 
   async obter(idVeiculo: string): Promise<Veiculo> {
-    await delay(120, 260)
-    const db = await getDb()
-    const v = db.veiculos.find((x) => x.id === idVeiculo)
-    if (!v) throw new Error('Veículo não encontrado.')
-    return v
+    const v = await api.get<VeiculoDTO>(`/veiculos/${idVeiculo}`)
+    return mapVeiculo(v)
   },
 
-  // KePlaca mock (M070): consulta de placa → marca/modelo/ano fictícios.
   async consultarPlaca(placa: string): Promise<{ marca: string; modelo: string; ano_modelo: number; cor?: string } | null> {
-    await delay(500, 1000)
     const p = placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
     if (p.length !== 7) return null
-    // Catálogo fictício por hash da placa (determinístico p/ demo).
-    const opcoes = [
-      { marca: 'Volkswagen', modelo: 'Gol', cor: 'Prata' },
-      { marca: 'Chevrolet', modelo: 'Onix', cor: 'Branco' },
-      { marca: 'Fiat', modelo: 'Argo', cor: 'Vermelho' },
-      { marca: 'Hyundai', modelo: 'HB20', cor: 'Cinza' },
-      { marca: 'Toyota', modelo: 'Corolla', cor: 'Preto' },
-    ]
-    const idx = [...p].reduce((a, c) => a + c.charCodeAt(0), 0) % opcoes.length
-    const ano = 2015 + ([...p].reduce((a, c) => a + c.charCodeAt(0), 0) % 9)
-    return { ...opcoes[idx], ano_modelo: ano }
+    try {
+      const r = await api.get<ConsultaPlacaDTO>(`/veiculos/consulta-placa/${p}`)
+      if (!r.encontrado || !r.marca || !r.modelo) return null
+      return {
+        marca: r.marca,
+        modelo: r.modelo,
+        ano_modelo: r.ano_modelo ?? new Date().getFullYear(),
+        cor: r.cor ?? undefined,
+      }
+    } catch {
+      return null
+    }
   },
 
-  // FIPE de referência mock (M070): valor + margem + dias em estoque.
   async precificacao(idVeiculo: string): Promise<{ fipe: number; margem_sobre_fipe: number | null; dias_estoque: number; encalhado: boolean } | null> {
-    await delay(200, 400)
-    const db = await getDb()
-    const v = db.veiculos.find((x) => x.id === idVeiculo)
-    if (!v || v.preco_venda == null) return null
-    // FIPE fictícia ~ 96% do preço de venda com pequena variação por veículo.
-    const jitter = ([...v.id].reduce((a, c) => a + c.charCodeAt(0), 0) % 10) / 100 // 0–0.09
-    const fipe = Math.round((v.preco_venda * (0.92 + jitter)) / 100) * 100
-    const margem = fipe > 0 ? ((v.preco_venda - fipe) / fipe) * 100 : null
-    const diasEstoque = Math.floor((Date.now() - new Date(v.created_at).getTime()) / 86_400_000)
-    return { fipe, margem_sobre_fipe: margem, dias_estoque: diasEstoque, encalhado: diasEstoque > 60 }
+    const r = await api.get<PrecificacaoDTO>(`/veiculos/${idVeiculo}/precificacao`)
+    if (!r.fipe_disponivel || r.fipe == null) return null
+    return {
+      fipe: r.fipe,
+      margem_sobre_fipe: r.margem_sobre_fipe ?? null,
+      dias_estoque: r.dias_no_estoque ?? 0,
+      encalhado: r.alerta_encalhe ?? false,
+    }
   },
 
   async criar(input: VeiculoInput): Promise<Veiculo> {
-    await delay()
-    return mutate((db) => {
-      const agora = new Date().toISOString()
-      const novo: Veiculo = {
-        id: novoId('vei'),
-        loja_id: LOJA_ID,
-        status: 'disponivel',
-        created_at: agora,
-        updated_at: agora,
-        midias: [],
-        marca: input.marca,
-        modelo: input.modelo,
-        tipo: input.tipo,
-        ano_modelo: input.ano_modelo,
-      }
-      aplicarInput(novo, input)
-      db.veiculos.unshift(novo)
-      return novo
-    })
+    const v = await api.post<VeiculoDTO>('/veiculos', bodyVeiculo(input))
+    return mapVeiculo(v)
   },
 
   async atualizar(idVeiculo: string, input: VeiculoInput): Promise<Veiculo> {
-    await delay()
-    return mutate((db) => {
-      const v = db.veiculos.find((x) => x.id === idVeiculo)
-      if (!v) throw new Error('Veículo não encontrado.')
-      aplicarInput(v, input)
-      return v
-    })
+    const v = await api.patch<VeiculoDTO>(`/veiculos/${idVeiculo}`, bodyVeiculo(input))
+    return mapVeiculo(v)
   },
 
   async alterarStatus(idVeiculo: string, status: VeiculoStatus): Promise<Veiculo> {
-    await delay(150, 300)
-    return mutate((db) => {
-      const v = db.veiculos.find((x) => x.id === idVeiculo)
-      if (!v) throw new Error('Veículo não encontrado.')
-      v.status = status
-      v.updated_at = new Date().toISOString()
-      return v
-    })
+    const v = await api.patch<VeiculoDTO>(`/veiculos/${idVeiculo}/status`, { status })
+    return mapVeiculo(v)
+  },
+
+  async atualizarPreco(idVeiculo: string, preco: number): Promise<Veiculo> {
+    const v = await api.patch<VeiculoDTO>(`/veiculos/${idVeiculo}`, { preco_venda: preco })
+    return mapVeiculo(v)
   },
 
   async alterarPublicacao(idVeiculo: string, publicado: boolean): Promise<Veiculo> {
-    await delay(150, 300)
-    return mutate((db) => {
-      const v = db.veiculos.find((x) => x.id === idVeiculo)
-      if (!v) throw new Error('Veículo não encontrado.')
-      v.publicado_marketplace = publicado
-      v.updated_at = new Date().toISOString()
-      return v
-    })
+    const v = await api.patch<VeiculoDTO>(`/veiculos/${idVeiculo}/publicar`, { publicado })
+    return mapVeiculo(v)
   },
 
   async excluir(idVeiculo: string): Promise<void> {
-    await delay()
-    return mutate((db) => {
-      db.veiculos = db.veiculos.filter((x) => x.id !== idVeiculo)
-    })
+    await api.delete(`/veiculos/${idVeiculo}`)
   },
 
-  /** Venda: marca vendido, abre esteira de pós-venda e lança receita. */
+  /** Venda: cria contrato + esteira no backend e retorna a esteira criada. */
   async registrarVenda(idVeiculo: string, input: RegistrarVendaInput): Promise<Esteira> {
-    await delay(350, 600)
-    return mutate((db) => {
-      const v = db.veiculos.find((x) => x.id === idVeiculo)
-      if (!v) throw new Error('Veículo não encontrado.')
-      v.status = 'vendido'
-      v.publicado_marketplace = false
-      v.updated_at = new Date().toISOString()
-
-      const agora = new Date().toISOString()
-      const nome = `${v.marca} ${v.modelo}${v.versao ? ' ' + v.versao : ''}`
-
-      const vendedor = db.equipe.find((m) => m.nome === input.vendedor_nome)
-      const percentual = vendedor?.percentual_comissao ?? null
-      const comissao = percentual ? Math.round(input.valor_venda * percentual) / 100 : undefined
-
-      const modelos: { chave: string; titulo: string; categoria: 'contrato' | 'financeiro' | 'documento' | 'transferencia'; responsavel: 'loja' | 'comprador' }[] = [
-        { chave: 'contrato_gerado', titulo: 'Gerar contrato de compra e venda', categoria: 'contrato', responsavel: 'loja' },
-        { chave: 'contrato_assinado', titulo: 'Colher assinaturas do contrato', categoria: 'contrato', responsavel: 'loja' },
-        { chave: 'pagamento_confirmado', titulo: 'Confirmar pagamento integral', categoria: 'financeiro', responsavel: 'loja' },
-        { chave: 'recibo_emitido', titulo: 'Emitir recibo de quitação', categoria: 'financeiro', responsavel: 'loja' },
-        { chave: 'crlv_entregue', titulo: 'Receber CRLV assinado', categoria: 'documento', responsavel: 'comprador' },
-        { chave: 'vistoria', titulo: 'Vistoria de transferência', categoria: 'documento', responsavel: 'loja' },
-        { chave: 'comunicacao_venda', titulo: 'Comunicar venda ao DETRAN', categoria: 'transferencia', responsavel: 'loja' },
-        { chave: 'transferencia_concluida', titulo: 'Confirmar transferência de propriedade', categoria: 'transferencia', responsavel: 'comprador' },
-      ]
-
-      const esteira: Esteira = {
-        id: novoId('est'),
-        estagio: 'contrato',
-        veiculo_nome: nome,
-        veiculo_id: v.id,
-        comprador_nome: input.comprador_nome,
-        vendedor_nome: input.vendedor_nome,
-        valor_venda: input.valor_venda,
-        comissao_valor: comissao,
-        comissao_paga: comissao != null ? false : null,
-        itens: modelos.map((m, i) => ({
-          id: novoId('item'),
-          chave: m.chave,
-          titulo: m.titulo,
-          categoria: m.categoria,
-          responsavel: m.responsavel,
-          status: i === 0 ? 'em_andamento' : 'pendente',
-          obrigatorio: true,
-          prazo_em: new Date(Date.now() + (i + 2) * 86_400_000).toISOString(),
-          vencido: false,
-          concluido_em: null,
-        })),
-        aberta_em: agora,
-        concluida_em: null,
-      }
-      db.esteiras.unshift(esteira)
-
-      db.lancamentos.unshift({
-        id: novoId('lan'),
-        loja_id: LOJA_ID,
-        tipo: 'receita',
-        descricao: `Venda — ${nome}`,
-        valor: input.valor_venda,
-        data: agora,
-        veiculo_nome: nome,
-        status_pagamento: 'pendente',
-        created_at: agora,
-      })
-      if (comissao && input.vendedor_nome) {
-        db.lancamentos.unshift({
-          id: novoId('lan'),
-          loja_id: LOJA_ID,
-          tipo: 'comissao',
-          descricao: `Comissão — ${input.vendedor_nome} (${v.modelo})`,
-          valor: comissao,
-          data: agora,
-          veiculo_nome: nome,
-          status_pagamento: 'pendente',
-          created_at: agora,
-        })
-      }
-
-      // Pagamento composto (M058): veículo de troca entra no estoque como rascunho.
-      if (input.valor_troca && input.valor_troca > 0 && input.troca_descricao?.trim()) {
-        db.veiculos.unshift({
-          id: novoId('vei'),
-          loja_id: LOJA_ID,
-          marca: input.troca_descricao.trim().split(' ')[0] || 'Troca',
-          modelo: input.troca_descricao.trim().split(' ').slice(1).join(' ') || 'a avaliar',
-          tipo: 'carro',
-          ano_modelo: new Date().getFullYear(),
-          preco_custo: input.valor_troca,
-          preco_venda: undefined,
-          status: 'inativo',
-          publicado_marketplace: false,
-          descricao: `Entrou como troca na venda de ${nome}. Avaliação/preparação pendente.`,
-          created_at: agora,
-          updated_at: agora,
-          midias: [],
-        })
-      }
-      return esteira
+    const trocas =
+      input.valor_troca && input.valor_troca > 0 && input.troca_descricao?.trim()
+        ? [{
+            marca: input.troca_descricao.trim().split(' ')[0] || 'Troca',
+            modelo: input.troca_descricao.trim().split(' ').slice(1).join(' ') || 'a avaliar',
+            valor_avaliacao: input.valor_troca,
+            km: 0,
+          }]
+        : []
+    const resp = await api.post<VenderRespDTO>(`/veiculos/${idVeiculo}/vender`, {
+      cliente_id: null,
+      cliente_novo: { nome: input.comprador_nome.trim(), cpf: null, telefone: null },
+      valor_venda: input.valor_venda || null,
+      pagamento_dinheiro: input.valor_dinheiro || null,
+      financiamento: input.valor_financiado ? { valor: input.valor_financiado, parcelas: null } : null,
+      trocas,
     })
+    if (resp.esteira_id) {
+      return esteiraService.obter(resp.esteira_id)
+    }
+    throw new Error('Venda registrada, mas a esteira não pôde ser carregada.')
   },
 
-  // ── Custos de preparação (M058) ──────────────────────────
+  // ── Custos de preparação ─────────────────────────────────
   async custos(idVeiculo: string): Promise<CustoVeiculo[]> {
-    await delay(120, 260)
-    const db = await getDb()
-    return db.custos
-      .filter((c) => c.veiculo_id === idVeiculo)
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    const r = await api.get<{ custos: CustoVeiculoDTO[] }>(`/financeiro/veiculos/${idVeiculo}/custos`)
+    return (r.custos ?? []).map((c) => ({
+      id: c.id,
+      veiculo_id: idVeiculo,
+      categoria: (c.categoria as CategoriaCusto) ?? 'outro',
+      descricao: c.descricao,
+      valor: c.valor,
+      created_at: c.created_at,
+    }))
   },
 
   async adicionarCusto(idVeiculo: string, input: { categoria: CategoriaCusto; descricao: string; valor: number }): Promise<CustoVeiculo> {
-    await delay(150, 300)
-    return mutate((db) => {
-      const agora = new Date().toISOString()
-      const custo: CustoVeiculo = {
-        id: novoId('custo'),
-        veiculo_id: idVeiculo,
-        categoria: input.categoria,
-        descricao: input.descricao.trim(),
-        valor: input.valor,
-        created_at: agora,
-      }
-      db.custos.unshift(custo)
-      // Custo de preparação vira despesa no Financeiro (paridade com o gestor).
-      const v = db.veiculos.find((x) => x.id === idVeiculo)
-      const nome = v ? `${v.marca} ${v.modelo}` : undefined
-      db.lancamentos.unshift({
-        id: novoId('lan'),
-        loja_id: LOJA_ID,
-        tipo: 'despesa',
-        descricao: `Preparação — ${input.descricao.trim()}${nome ? ` (${nome})` : ''}`,
-        valor: input.valor,
-        data: agora,
-        veiculo_nome: nome,
-        status_pagamento: 'pago',
-        created_at: agora,
-      })
-      return custo
+    const r = await api.post<{ custos: CustoVeiculoDTO[] }>(`/financeiro/veiculos/${idVeiculo}/custos`, {
+      descricao: input.descricao.trim(),
+      valor: input.valor,
+      categoria: input.categoria || null,
     })
+    const novo = (r.custos ?? [])[0]
+    return {
+      id: novo?.id ?? '',
+      veiculo_id: idVeiculo,
+      categoria: input.categoria,
+      descricao: input.descricao.trim(),
+      valor: input.valor,
+      created_at: novo?.created_at ?? new Date().toISOString(),
+    }
   },
 
-  async removerCusto(idCusto: string): Promise<void> {
-    await delay(120, 240)
-    return mutate((db) => {
-      db.custos = db.custos.filter((c) => c.id !== idCusto)
+  async removerCusto(idVeiculo: string, idCusto: string): Promise<void> {
+    await api.delete(`/financeiro/veiculos/${idVeiculo}/custos/${idCusto}`)
+  },
+
+  // ── Documentos de venda ──────────────────────────────────
+  async documentos(idVeiculo: string): Promise<DocumentoVenda[]> {
+    const r = await api.get<VendaDataDTO>(`/veiculos/${idVeiculo}/venda`)
+    return (r.documentos ?? []).map((d) => ({ ...mapDoc(d), veiculo_id: idVeiculo }))
+  },
+
+  async adicionarDocumento(idVeiculo: string, input: { tipo: TipoDocumentoVenda; nome_arquivo: string; visivel_comprador: boolean }): Promise<DocumentoVenda> {
+    const d = await api.post<DocumentoDTO>(`/veiculos/${idVeiculo}/documentos`, {
+      tipo: input.tipo,
+      nome: input.nome_arquivo.trim(),
+      url: '',
+      visivel_comprador: input.visivel_comprador,
+    })
+    return { ...mapDoc(d), veiculo_id: idVeiculo }
+  },
+
+  async removerDocumento(idVeiculo: string, idDoc: string): Promise<void> {
+    await api.delete(`/veiculos/${idVeiculo}/documentos/${idDoc}`)
+  },
+
+  // ── Aprovação do vendedor ────────────────────────────────
+  // O backend cria a solicitação automaticamente quando um vendedor tenta
+  // excluir/alterar preço. Aqui disparamos a ação real e sintetizamos o retorno.
+  async solicitarAprovacao(idVeiculo: string, input: { tipo: TipoSolicitacao; motivo: string; solicitante_nome: string; novo_preco?: number }): Promise<SolicitacaoAprovacao> {
+    if (input.tipo === 'exclusao') {
+      await api.delete(`/veiculos/${idVeiculo}?motivo=${encodeURIComponent(input.motivo.trim())}`)
+    } else if (input.novo_preco != null) {
+      await api.patch(`/veiculos/${idVeiculo}`, { preco_venda: input.novo_preco })
+    }
+    return {
+      id: 'pendente',
+      veiculo_id: idVeiculo,
+      veiculo_nome: 'Veículo',
+      tipo: input.tipo,
+      motivo: input.motivo.trim(),
+      solicitante_nome: input.solicitante_nome,
+      novo_preco: input.novo_preco,
+      status: 'pendente',
+      created_at: new Date().toISOString(),
+    }
+  },
+
+  async solicitacoes(status?: 'pendente' | 'aprovada' | 'rejeitada'): Promise<SolicitacaoAprovacao[]> {
+    const path = status && status !== 'pendente' ? '/aprovacoes/historico' : '/aprovacoes/pendentes'
+    const data = await api.get<SolicitacaoDTO[]>(path)
+    let lista = data.map((s): SolicitacaoAprovacao => ({
+      id: s.id,
+      veiculo_id: s.entidade_id,
+      veiculo_nome: [s.veiculo_marca, s.veiculo_modelo].filter(Boolean).join(' ') || 'Veículo',
+      tipo: TIPO_SOL[s.tipo_acao],
+      motivo: s.motivo ?? '',
+      solicitante_nome: '',
+      status: STATUS_SOL[s.status],
+      created_at: s.created_at,
+      resolvida_em: s.status !== 'pendente' ? s.updated_at : undefined,
+    }))
+    if (status) lista = lista.filter((s) => s.status === status)
+    return lista
+  },
+
+  async resolverSolicitacao(idSol: string, aprovar: boolean): Promise<void> {
+    await api.post(`/aprovacoes/${idSol}/processar`, {
+      status: aprovar ? 'aprovado' : 'rejeitado',
     })
   },
+}
+
+interface CustoVeiculoDTO {
+  id: string
+  descricao: string
+  valor: number
+  categoria?: string | null
+  created_at: string
 }

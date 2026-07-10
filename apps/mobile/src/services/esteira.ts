@@ -1,174 +1,198 @@
-import { delay, getDb, mutate, novoId } from './db'
-import type { CategoriaItemEsteira, EstagioEsteira, Esteira, MinhaVenda } from './types'
+import { api } from '../lib/api'
+import type {
+  CategoriaItemEsteira, EstagioEsteira, Esteira, ItemChecklist, MinhaVenda, StatusItemEsteira,
+} from './types'
 
-// Ordem das categorias define a progressão do estágio.
-const ORDEM_CATEGORIA: CategoriaItemEsteira[] = ['contrato', 'financeiro', 'documento', 'transferencia']
-const CATEGORIA_PARA_ESTAGIO: Record<CategoriaItemEsteira, Exclude<EstagioEsteira, 'concluido'>> = {
-  contrato: 'contrato',
-  financeiro: 'pagamento',
-  documento: 'documentos',
-  transferencia: 'transferencia',
+// ── DTOs da API (apps/api) ─────────────────────────────────
+interface VeiculoResumoDTO {
+  id: string
+  marca?: string | null
+  modelo?: string | null
+  ano_modelo?: number | null
+  placa?: string | null
+  foto?: string | null
+}
+interface CompradorResumoDTO {
+  id: string
+  nome?: string | null
+  telefone?: string | null
+}
+interface ItemChecklistDTO {
+  id: string
+  chave: string
+  titulo: string
+  categoria: CategoriaItemEsteira
+  responsavel: 'loja' | 'comprador'
+  status: StatusItemEsteira
+  obrigatorio: boolean
+  prazo_em?: string | null
+  doc_id?: string | null
+  observacao?: string | null
+  concluido_em?: string | null
+  vencido?: boolean
+}
+interface EsteiraResumoDTO {
+  id: string
+  estagio: EstagioEsteira
+  veiculo?: VeiculoResumoDTO | null
+  comprador?: CompradorResumoDTO | null
+  aberta_em?: string | null
+}
+interface EsteiraDetalheDTO extends EsteiraResumoDTO {
+  vendedor_id?: string | null
+  concluida_em?: string | null
+  itens: ItemChecklistDTO[]
+}
+interface MinhaVendaDTO {
+  esteira_id: string
+  veiculo_id?: string | null
+  veiculo_nome?: string | null
+  valor_venda?: number | null
+  comissao_valor?: number | null
+  comissao_paga?: boolean | null
+  estagio: string
+  aberta_em: string
 }
 
-function recalcularEstagio(esteira: Esteira) {
-  for (const cat of ORDEM_CATEGORIA) {
-    const pendentes = esteira.itens.filter(
-      (i) => i.categoria === cat && i.status !== 'concluido' && i.status !== 'nao_aplicavel'
-    )
-    if (pendentes.length > 0) {
-      esteira.estagio = CATEGORIA_PARA_ESTAGIO[cat]
-      esteira.concluida_em = null
-      return
-    }
+function nomeVeiculo(v?: VeiculoResumoDTO | null): string {
+  if (!v) return 'Veículo'
+  return [v.marca, v.modelo].filter(Boolean).join(' ') || 'Veículo'
+}
+
+function mapItem(i: ItemChecklistDTO): ItemChecklist {
+  return {
+    id: i.id,
+    chave: i.chave,
+    titulo: i.titulo,
+    categoria: i.categoria,
+    responsavel: i.responsavel,
+    status: i.status,
+    obrigatorio: i.obrigatorio,
+    prazo_em: i.prazo_em ?? null,
+    vencido: i.vencido ?? false,
+    concluido_em: i.concluido_em ?? null,
+    documento_nome: i.doc_id ? 'Documento anexado' : null,
   }
-  esteira.estagio = 'concluido'
-  esteira.concluida_em = esteira.concluida_em ?? new Date().toISOString()
+}
+
+// A comissão paga é modelada como o item de checklist chave 'comissao_paga'.
+function comissaoPaga(itens: ItemChecklist[]): boolean | null {
+  const item = itens.find((i) => i.chave === 'comissao_paga')
+  if (!item) return null
+  return item.status === 'concluido'
+}
+
+function mapDetalhe(d: EsteiraDetalheDTO): Esteira {
+  const itens = (d.itens ?? []).map(mapItem)
+  return {
+    id: d.id,
+    estagio: d.estagio,
+    veiculo_nome: nomeVeiculo(d.veiculo),
+    veiculo_id: d.veiculo?.id,
+    comprador_nome: d.comprador?.nome ?? '—',
+    vendedor_nome: undefined,
+    valor_venda: undefined,
+    comissao_valor: undefined,
+    comissao_paga: comissaoPaga(itens),
+    itens,
+    aberta_em: d.aberta_em ?? new Date().toISOString(),
+    concluida_em: d.concluida_em ?? null,
+  }
+}
+
+function mapResumo(r: EsteiraResumoDTO): Esteira {
+  return {
+    id: r.id,
+    estagio: r.estagio,
+    veiculo_nome: nomeVeiculo(r.veiculo),
+    veiculo_id: r.veiculo?.id,
+    comprador_nome: r.comprador?.nome ?? '—',
+    vendedor_nome: undefined,
+    valor_venda: undefined,
+    comissao_valor: undefined,
+    comissao_paga: null,
+    itens: [],
+    aberta_em: r.aberta_em ?? new Date().toISOString(),
+    concluida_em: null,
+  }
 }
 
 export const esteiraService = {
   async listar(): Promise<Esteira[]> {
-    await delay()
-    const db = await getDb()
-    return [...db.esteiras].sort((a, b) => {
-      const aFim = a.estagio === 'concluido' ? 1 : 0
-      const bFim = b.estagio === 'concluido' ? 1 : 0
-      return aFim - bFim || b.aberta_em.localeCompare(a.aberta_em)
-    })
+    const data = await api.get<EsteiraResumoDTO[]>('/esteira')
+    return data.map(mapResumo)
   },
 
   async obter(idEsteira: string): Promise<Esteira> {
-    await delay(120, 260)
-    const db = await getDb()
-    const e = db.esteiras.find((x) => x.id === idEsteira)
-    if (!e) throw new Error('Venda não encontrada.')
-    return e
+    const d = await api.get<EsteiraDetalheDTO>(`/esteira/${idEsteira}`)
+    return mapDetalhe(d)
   },
 
   async alternarItem(idEsteira: string, idItem: string): Promise<Esteira> {
-    await delay(120, 260)
-    return mutate((db) => {
-      const e = db.esteiras.find((x) => x.id === idEsteira)
-      if (!e) throw new Error('Venda não encontrada.')
-      const item = e.itens.find((i) => i.id === idItem)
-      if (!item) throw new Error('Item não encontrado.')
-      if (item.status === 'concluido') {
-        item.status = 'pendente'
-        item.concluido_em = null
-      } else {
-        item.status = 'concluido'
-        item.concluido_em = new Date().toISOString()
-        item.vencido = false
-      }
-      recalcularEstagio(e)
-      return e
+    const atual = await api.get<EsteiraDetalheDTO>(`/esteira/${idEsteira}`)
+    const item = atual.itens.find((i) => i.id === idItem)
+    const novoStatus = item?.status === 'concluido' ? 'pendente' : 'concluido'
+    const d = await api.patch<EsteiraDetalheDTO>(`/esteira/${idEsteira}/itens/${idItem}`, {
+      status: novoStatus,
     })
+    return mapDetalhe(d)
   },
 
-  // Anexa um documento (mock: guarda o nome) e marca o item como concluído.
-  async anexarDocumento(idEsteira: string, idItem: string, nomeArquivo: string): Promise<Esteira> {
-    await delay(200, 400)
-    return mutate((db) => {
-      const e = db.esteiras.find((x) => x.id === idEsteira)
-      if (!e) throw new Error('Venda não encontrada.')
-      const item = e.itens.find((i) => i.id === idItem)
-      if (!item) throw new Error('Item não encontrado.')
-      item.documento_nome = nomeArquivo
-      item.status = 'concluido'
-      item.concluido_em = new Date().toISOString()
-      item.vencido = false
-      recalcularEstagio(e)
-      return e
+  // Anexa documento: sobe o arquivo no veículo e vincula ao item da esteira.
+  // A tela mobile passa apenas o nome; sem o arquivo real, marca o item como concluído.
+  async anexarDocumento(idEsteira: string, idItem: string, _nomeArquivo: string): Promise<Esteira> {
+    const d = await api.patch<EsteiraDetalheDTO>(`/esteira/${idEsteira}/itens/${idItem}`, {
+      status: 'concluido',
     })
+    return mapDetalhe(d)
   },
 
-  async adicionarItem(idEsteira: string, input: { titulo: string; categoria: CategoriaItemEsteira; obrigatorio: boolean }): Promise<Esteira> {
-    await delay(150, 300)
-    return mutate((db) => {
-      const e = db.esteiras.find((x) => x.id === idEsteira)
-      if (!e) throw new Error('Venda não encontrada.')
-      e.itens.push({
-        id: novoId('item'),
-        chave: novoId('custom'),
-        titulo: input.titulo.trim(),
-        categoria: input.categoria,
-        responsavel: 'loja',
-        status: 'pendente',
-        obrigatorio: input.obrigatorio,
-        prazo_em: null,
-        vencido: false,
-        concluido_em: null,
-      })
-      recalcularEstagio(e)
-      return e
+  async adicionarItem(
+    idEsteira: string,
+    input: { titulo: string; categoria: CategoriaItemEsteira; obrigatorio: boolean },
+  ): Promise<Esteira> {
+    const d = await api.post<EsteiraDetalheDTO>(`/esteira/${idEsteira}/itens`, {
+      titulo: input.titulo.trim(),
+      categoria: input.categoria,
+      obrigatorio: input.obrigatorio,
     })
+    return mapDetalhe(d)
   },
 
   async removerItem(idEsteira: string, idItem: string): Promise<Esteira> {
-    await delay(120, 260)
-    return mutate((db) => {
-      const e = db.esteiras.find((x) => x.id === idEsteira)
-      if (!e) throw new Error('Venda não encontrada.')
-      e.itens = e.itens.filter((i) => i.id !== idItem)
-      recalcularEstagio(e)
-      return e
-    })
+    const d = await api.delete<EsteiraDetalheDTO>(`/esteira/${idEsteira}/itens/${idItem}`)
+    return mapDetalhe(d)
   },
 
-  /** Conclui a esteira explicitamente. Bloqueia se houver item obrigatório pendente. */
   async concluir(idEsteira: string): Promise<Esteira> {
-    await delay(200, 400)
-    return mutate((db) => {
-      const e = db.esteiras.find((x) => x.id === idEsteira)
-      if (!e) throw new Error('Venda não encontrada.')
-      const pendentesObrig = e.itens.filter(
-        (i) => i.obrigatorio && i.status !== 'concluido' && i.status !== 'nao_aplicavel',
-      )
-      if (pendentesObrig.length > 0) {
-        throw new Error(`Restam ${pendentesObrig.length} item(ns) obrigatório(s) pendente(s).`)
-      }
-      e.itens.forEach((i) => {
-        if (i.status !== 'nao_aplicavel') {
-          i.status = 'concluido'
-          i.concluido_em = i.concluido_em ?? new Date().toISOString()
-        }
-      })
-      e.estagio = 'concluido'
-      e.concluida_em = new Date().toISOString()
-      return e
-    })
+    const d = await api.post<EsteiraDetalheDTO>(`/esteira/${idEsteira}/concluir`)
+    return mapDetalhe(d)
   },
 
   async marcarComissaoPaga(idEsteira: string): Promise<Esteira> {
-    await delay(150, 300)
-    return mutate((db) => {
-      const e = db.esteiras.find((x) => x.id === idEsteira)
-      if (!e) throw new Error('Venda não encontrada.')
-      e.comissao_paga = true
-      const lanc = db.lancamentos.find(
-        (l) => l.tipo === 'comissao' && l.veiculo_nome && e.veiculo_nome.includes(l.veiculo_nome)
-      )
-      if (lanc) lanc.status_pagamento = 'pago'
-      return e
-    })
+    const atual = await api.get<EsteiraDetalheDTO>(`/esteira/${idEsteira}`)
+    const item = atual.itens.find((i) => i.chave === 'comissao_paga')
+    if (item && item.status !== 'concluido') {
+      const d = await api.patch<EsteiraDetalheDTO>(`/esteira/${idEsteira}/itens/${item.id}`, {
+        status: 'concluido',
+      })
+      return mapDetalhe(d)
+    }
+    return mapDetalhe(atual)
   },
 }
 
 export const comissoesService = {
-  /** Vendas do usuário logado (no mock, vendedor_nome === 'Você'). */
   async minhasVendas(): Promise<MinhaVenda[]> {
-    await delay()
-    const db = await getDb()
-    return db.esteiras
-      .filter((e) => e.vendedor_nome === 'Você')
-      .map((e) => ({
-        esteira_id: e.id,
-        veiculo_nome: e.veiculo_nome,
-        valor_venda: e.valor_venda,
-        comissao_valor: e.comissao_valor,
-        comissao_paga: e.comissao_paga,
-        estagio: e.estagio,
-        aberta_em: e.aberta_em,
-      }))
-      .sort((a, b) => b.aberta_em.localeCompare(a.aberta_em))
+    const data = await api.get<MinhaVendaDTO[]>('/me/vendas')
+    return data.map((v) => ({
+      esteira_id: v.esteira_id,
+      veiculo_nome: v.veiculo_nome ?? undefined,
+      valor_venda: v.valor_venda ?? undefined,
+      comissao_valor: v.comissao_valor ?? undefined,
+      comissao_paga: v.comissao_paga ?? null,
+      estagio: v.estagio as EstagioEsteira,
+      aberta_em: v.aberta_em,
+    }))
   },
 }
