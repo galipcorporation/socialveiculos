@@ -1,26 +1,20 @@
-// Gate de módulos pagos (mock) — espelha /assinaturas/modulos do gestor.
-// Define quais módulos a loja demo tem liberados. Swap p/ API = trocar este mapa.
-
-import { delay } from './db'
+// Gate de módulos pagos — /v1/assinaturas/modulos.
+import { api } from '../lib/api'
 import type { Modulo, ModuloStatus } from './types'
 
-const LIBERADOS: Record<Modulo, boolean> = {
-  contratos: true,
-  simulador: true,
-  marketing: true,
-  assistente: false, // demonstra o paywall no app
-  fiscal: true,
-  site: true,
+interface ModuloDTO {
+  modulo: Modulo
+  liberado: boolean
 }
 
 export const modulosService = {
-  async liberado(modulo: Modulo): Promise<boolean> {
-    await delay(120, 260)
-    return LIBERADOS[modulo] ?? false
+  async todos(): Promise<ModuloStatus[]> {
+    const data = await api.get<ModuloDTO[]>('/assinaturas/modulos')
+    return data.map((m) => ({ modulo: m.modulo, liberado: m.liberado }))
   },
 
-  async todos(): Promise<ModuloStatus[]> {
-    await delay()
-    return (Object.keys(LIBERADOS) as Modulo[]).map((m) => ({ modulo: m, liberado: LIBERADOS[m] }))
+  async liberado(modulo: Modulo): Promise<boolean> {
+    const todos = await this.todos()
+    return todos.find((m) => m.modulo === modulo)?.liberado ?? false
   },
 }

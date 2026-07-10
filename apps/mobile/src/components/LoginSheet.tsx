@@ -21,28 +21,30 @@ export function LoginSheet() {
   const [email, setEmail] = useState('')
   const [entrando, setEntrando] = useState(false)
 
-  const finalizar = (user: ReturnType<typeof vitrineService.loginDemo>) => {
-    login(`mock-access-${Date.now()}`, `mock-refresh-${Date.now()}`, user)
+  const finalizar = (res: { access_token: string; refresh_token: string; user: Parameters<typeof login>[2] }) => {
+    login(res.access_token, res.refresh_token, res.user)
     setNome('')
     setEmail('')
     concluir() // fecha e executa a ação pendente
   }
 
-  const cadastrar = () => {
+  const cadastrar = async () => {
     if (!nome.trim() || !email.trim()) return
     setEntrando(true)
-    setTimeout(() => {
-      finalizar(vitrineService.cadastrar(nome, email))
+    try {
+      finalizar(await vitrineService.cadastrar(nome, email))
+    } finally {
       setEntrando(false)
-    }, 400)
+    }
   }
 
-  const demo = () => {
+  const demo = async () => {
     setEntrando(true)
-    setTimeout(() => {
-      finalizar(vitrineService.loginDemo())
+    try {
+      finalizar(await vitrineService.login())
+    } finally {
       setEntrando(false)
-    }, 300)
+    }
   }
 
   return (

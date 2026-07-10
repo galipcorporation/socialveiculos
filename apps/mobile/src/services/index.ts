@@ -1,6 +1,6 @@
 // Ponto único de acesso à camada de dados.
-// Hoje: adapters mock (AsyncStorage + seed). Amanhã: adapters da API real,
-// mantendo as mesmas assinaturas — as telas não mudam.
+// Todos os adapters falam com a API real (apps/api) via src/lib/api.ts,
+// mantendo as assinaturas que as telas consomem.
 
 export { authService } from './auth'
 export { veiculosService, CATEGORIAS_CUSTO } from './veiculos'
@@ -32,6 +32,4 @@ export { vitrineService, FILTROS_FEED } from './vitrine'
 export type { FiltroFeed } from './vitrine'
 export { simuladorService, BANCOS_SIM } from './simulador'
 export type { BancoSim, ResultadoBanco, SimulacaoInput } from './simulador'
-export { resetDb } from './db'
 export * from './types'
-export { LOJA_NOME } from './seed'

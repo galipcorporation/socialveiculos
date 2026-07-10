@@ -1,96 +1,9 @@
-// Vitrine B2C (M045 fase 2) — mock multi-loja para o comprador final.
-// Feed público, favoritos, chat comprador↔loja, perfil de loja. Estado em
-// memória de sessão. Swap p/ API = reimplementar mantendo as assinaturas.
-
-import { delay, novoId } from './db'
+// Vitrine B2C (comprador) — feed público, favoritos, chat comprador↔loja e
+// auth PF leve, contra /v1/veiculos/marketplace, /v1/vitrine e /v1/auth.
+import { api } from '../lib/api'
 import type { User } from '../stores/authStore'
-import type {
-  AnuncioVitrine, ConversaVitrine, LojaVitrine, Mensagem, Midia, TipoVeiculo,
-} from './types'
-
-const now = Date.now()
-const diasAtras = (d: number) => new Date(now - d * 86_400_000).toISOString()
-const minAtras = (m: number) => new Date(now - m * 60_000).toISOString()
-
-// ── Lojas (coerentes com o diretório de parceiros do M055) ──
-const LOJAS: LojaVitrine[] = [
-  { id: 'vl-1', nome: 'Auto Premium Veículos', cidade: 'Porto Alegre', estado: 'RS', whatsapp: '51999887766', verificada: true, total_veiculos: 0 },
-  { id: 'vl-2', nome: 'Garagem RS Motors', cidade: 'Porto Alegre', estado: 'RS', whatsapp: '51999110022', verificada: true, total_veiculos: 0 },
-  { id: 'vl-3', nome: 'AutoCenter Canoas', cidade: 'Canoas', estado: 'RS', whatsapp: '51998220033', verificada: true, total_veiculos: 0 },
-  { id: 'vl-4', nome: 'Premium Motors Gravataí', cidade: 'Gravataí', estado: 'RS', whatsapp: '51997330044', verificada: false, total_veiculos: 0 },
-  { id: 'vl-5', nome: 'Sul Veículos', cidade: 'São Leopoldo', estado: 'RS', whatsapp: '51996440055', verificada: true, total_veiculos: 0 },
-  { id: 'vl-6', nome: 'Novo Rumo Automóveis', cidade: 'Novo Hamburgo', estado: 'RS', whatsapp: '51995550066', verificada: false, total_veiculos: 0 },
-]
-
-interface ASeed {
-  loja: number; marca: string; modelo: string; versao?: string; tipo?: TipoVeiculo
-  ano: number; km: number; cor: string; cambio?: string; comb?: string; portas?: number
-  preco: number; oferta?: boolean; novidade?: boolean; favs: number; dias: number; desc?: string
-}
-
-const ANUNCIOS: ASeed[] = [
-  { loja: 0, marca: 'Toyota', modelo: 'Corolla Cross', versao: 'XRE 2.0', ano: 2023, km: 28500, cor: 'Branco Polar', cambio: 'Automático CVT', comb: 'Flex', portas: 4, preco: 152900, novidade: true, favs: 12, dias: 2, desc: 'Único dono, revisões na concessionária, laudo aprovado.' },
-  { loja: 1, marca: 'Honda', modelo: 'Civic', versao: 'Touring 1.5 Turbo', ano: 2022, km: 41200, cor: 'Cinza Grafite', cambio: 'Automático CVT', comb: 'Gasolina', portas: 4, preco: 146500, favs: 8, dias: 5 },
-  { loja: 2, marca: 'Jeep', modelo: 'Compass', versao: 'Longitude T270', ano: 2023, km: 22100, cor: 'Preto Carbon', cambio: 'Automático', comb: 'Flex', portas: 4, preco: 139900, oferta: true, favs: 15, dias: 3 },
-  { loja: 0, marca: 'Volkswagen', modelo: 'T-Cross', versao: 'Highline 1.4 TSI', ano: 2022, km: 35400, cor: 'Azul Norway', cambio: 'Automático', comb: 'Flex', portas: 4, preco: 118900, favs: 6, dias: 8 },
-  { loja: 3, marca: 'Hyundai', modelo: 'Creta', versao: 'Ultimate 2.0', ano: 2023, km: 18900, cor: 'Prata Sand', cambio: 'Automático', comb: 'Flex', portas: 4, preco: 132500, novidade: true, favs: 9, dias: 1 },
-  { loja: 4, marca: 'Chevrolet', modelo: 'Onix', versao: 'Premier 1.0 Turbo', ano: 2022, km: 44800, cor: 'Vermelho Chili', cambio: 'Automático', comb: 'Flex', portas: 4, preco: 82900, oferta: true, favs: 4, dias: 12 },
-  { loja: 1, marca: 'Fiat', modelo: 'Toro', versao: 'Volcano 2.0 Diesel 4x4', ano: 2021, km: 68300, cor: 'Cinza Silverstone', cambio: 'Automático', comb: 'Diesel', portas: 4, preco: 129900, favs: 7, dias: 15 },
-  { loja: 5, marca: 'Hyundai', modelo: 'HB20', versao: 'Comfort 1.0', ano: 2022, km: 39500, cor: 'Prata Metal', cambio: 'Manual', comb: 'Flex', portas: 4, preco: 69900, favs: 3, dias: 20 },
-  { loja: 2, marca: 'Toyota', modelo: 'Hilux', versao: 'SRX 2.8 Diesel 4x4', ano: 2022, km: 55600, cor: 'Branco Perolizado', cambio: 'Automático', comb: 'Diesel', portas: 4, preco: 239900, favs: 18, dias: 6, desc: 'Kit multimídia premium, protetor de caçamba.' },
-  { loja: 3, marca: 'Renault', modelo: 'Kwid', versao: 'Zen 1.0', ano: 2023, km: 12400, cor: 'Laranja Ocre', cambio: 'Manual', comb: 'Flex', portas: 4, preco: 58900, novidade: true, favs: 2, dias: 4 },
-  { loja: 4, marca: 'BMW', modelo: '320i', versao: 'M Sport 2.0 Turbo', ano: 2021, km: 47900, cor: 'Azul Portimao', cambio: 'Automático', comb: 'Gasolina', portas: 4, preco: 219900, favs: 22, dias: 9, desc: 'Head-up display, teto solar, som Harman Kardon.' },
-  { loja: 0, marca: 'Honda', modelo: 'HR-V', versao: 'EXL 1.5', ano: 2023, km: 19800, cor: 'Preto Cristal', cambio: 'Automático CVT', comb: 'Flex', portas: 4, preco: 142900, favs: 11, dias: 7 },
-  { loja: 5, marca: 'Honda', modelo: 'CB 500F', tipo: 'moto', ano: 2022, km: 14300, cor: 'Vermelho', comb: 'Gasolina', preco: 38900, favs: 5, dias: 10 },
-  { loja: 1, marca: 'Yamaha', modelo: 'MT-03', tipo: 'moto', ano: 2023, km: 8900, cor: 'Azul Racing', comb: 'Gasolina', preco: 31500, novidade: true, favs: 6, dias: 3 },
-  { loja: 2, marca: 'Chevrolet', modelo: 'Tracker', versao: 'Premier 1.2 Turbo', ano: 2023, km: 16500, cor: 'Vermelho Carmim', cambio: 'Automático', comb: 'Flex', portas: 4, preco: 127900, favs: 8, dias: 5 },
-  { loja: 4, marca: 'Ford', modelo: 'Ranger', versao: 'Limited 3.0 V6 Diesel', ano: 2024, km: 9800, cor: 'Cinza Moscou', cambio: 'Automático', comb: 'Diesel', portas: 4, preco: 289900, novidade: true, favs: 14, dias: 2, desc: 'Pacote tecnológico, som B&O.' },
-  { loja: 3, marca: 'Peugeot', modelo: '208', versao: 'Griffe 1.0 Turbo', ano: 2023, km: 17600, cor: 'Branco Nacré', cambio: 'Automático CVT', comb: 'Flex', portas: 4, preco: 86900, oferta: true, favs: 3, dias: 11 },
-  { loja: 5, marca: 'Volkswagen', modelo: 'Polo', versao: 'TSI 1.0 128cv', ano: 2023, km: 21700, cor: 'Cinza Platinum', cambio: 'Automático', comb: 'Flex', portas: 4, preco: 89900, favs: 7, dias: 6 },
-]
-
-function midiaVazia(): Midia[] { return [] }
-
-let anuncios: AnuncioVitrine[] = ANUNCIOS.map((a) => {
-  const loja = LOJAS[a.loja]
-  return {
-    id: novoId('anun'),
-    loja_id: loja.id,
-    loja_nome: loja.nome,
-    loja_cidade: loja.cidade,
-    loja_estado: loja.estado,
-    loja_whatsapp: loja.whatsapp,
-    loja_verificada: loja.verificada,
-    marca: a.marca,
-    modelo: a.modelo,
-    versao: a.versao,
-    tipo: a.tipo ?? 'carro',
-    ano_fabricacao: a.ano - (a.km > 20000 ? 1 : 0),
-    ano_modelo: a.ano,
-    km: a.km,
-    cor: a.cor,
-    cambio: a.cambio,
-    combustivel: a.comb,
-    portas: a.portas,
-    preco_venda: a.preco,
-    descricao: a.desc,
-    midias: midiaVazia(),
-    oferta: a.oferta,
-    novidade: a.novidade,
-    total_favoritos: a.favs,
-    favoritado_por_mim: false,
-    created_at: diasAtras(a.dias),
-  }
-})
-
-// contagem por loja
-for (const l of LOJAS) l.total_veiculos = anuncios.filter((a) => a.loja_id === l.id).length
-
-const favoritos = new Set<string>()
-
-// ── Chat B2C (comprador ↔ loja) ─────────────────────────────
-let conversas: ConversaVitrine[] = []
-const mensagens: Mensagem[] = []
+import type { LoginResult } from './auth'
+import type { AnuncioVitrine, ConversaVitrine, LojaVitrine, Mensagem, Midia, TipoVeiculo } from './types'
 
 export type FiltroFeed = 'todos' | 'ofertas' | 'novidades' | 'carro' | 'moto'
 
@@ -102,148 +15,211 @@ export const FILTROS_FEED: { value: FiltroFeed; label: string }[] = [
   { value: 'moto', label: 'Motos' },
 ]
 
-function aplicarFav(a: AnuncioVitrine): AnuncioVitrine {
-  const fav = favoritos.has(a.id)
-  // a.total_favoritos é a base do seed; soma +1 quando o comprador favoritou.
-  return { ...a, favoritado_por_mim: fav, total_favoritos: a.total_favoritos + (fav ? 1 : 0) }
+interface VeiculoB2CDTO {
+  id: string
+  loja_id: string
+  loja_nome?: string | null
+  loja_cidade?: string | null
+  loja_estado?: string | null
+  loja_whatsapp?: string | null
+  loja_verificada?: boolean
+  marca: string
+  modelo: string
+  versao?: string | null
+  ano_fabricacao?: number | null
+  ano_modelo: number
+  km?: number | null
+  cor?: string | null
+  cambio?: string | null
+  combustivel?: string | null
+  tipo?: string | null
+  portas?: number | null
+  preco_venda?: number | null
+  descricao?: string | null
+  opcionais?: string | null
+  midias?: { id: string; tipo: 'imagem' | 'video'; url: string; ordem: number }[]
+  total_favoritos?: number
+  favoritado_por_mim?: boolean
+  created_at?: string
+}
+interface ConversaB2CDTO {
+  id: string
+  loja_id?: string | null
+  loja_nome?: string | null
+  veiculo_marca?: string | null
+  veiculo_modelo?: string | null
+  ultima_mensagem?: string | null
+  ultima_mensagem_data?: string | null
+  mensagens_nao_lidas?: number
+}
+interface MensagemB2CDTO {
+  id: string
+  conversa_id: string
+  autor_id?: string | null
+  conteudo: string
+  lida: boolean
+  created_at: string
 }
 
+function mapAnuncio(v: VeiculoB2CDTO): AnuncioVitrine {
+  return {
+    id: v.id,
+    loja_id: v.loja_id,
+    loja_nome: v.loja_nome ?? 'Loja',
+    loja_cidade: v.loja_cidade ?? undefined,
+    loja_estado: v.loja_estado ?? undefined,
+    loja_whatsapp: v.loja_whatsapp ?? undefined,
+    loja_verificada: v.loja_verificada ?? false,
+    marca: v.marca,
+    modelo: v.modelo,
+    versao: v.versao ?? undefined,
+    tipo: (v.tipo as TipoVeiculo) ?? 'carro',
+    ano_fabricacao: v.ano_fabricacao ?? undefined,
+    ano_modelo: v.ano_modelo,
+    km: v.km ?? undefined,
+    cor: v.cor ?? undefined,
+    cambio: v.cambio ?? undefined,
+    combustivel: v.combustivel ?? undefined,
+    portas: v.portas ?? undefined,
+    preco_venda: v.preco_venda ?? undefined,
+    descricao: v.descricao ?? undefined,
+    opcionais: v.opcionais ?? undefined,
+    midias: (v.midias ?? []).map((m): Midia => ({ id: m.id, tipo: m.tipo, url: m.url, ordem: m.ordem })),
+    oferta: false,
+    novidade: false,
+    total_favoritos: v.total_favoritos ?? 0,
+    favoritado_por_mim: v.favoritado_por_mim ?? false,
+    created_at: v.created_at ?? new Date().toISOString(),
+  }
+}
+
+function mapConversa(c: ConversaB2CDTO): ConversaVitrine {
+  const veiculo = [c.veiculo_marca, c.veiculo_modelo].filter(Boolean).join(' ') || undefined
+  return {
+    id: c.id,
+    loja_id: c.loja_id ?? '',
+    loja_nome: c.loja_nome ?? 'Loja',
+    loja_verificada: false,
+    veiculo_interesse: veiculo,
+    ultima_mensagem: c.ultima_mensagem ?? '',
+    ultima_mensagem_em: c.ultima_mensagem_data ?? new Date(0).toISOString(),
+    nao_lidas: c.mensagens_nao_lidas ?? 0,
+  }
+}
+
+function mapMensagem(m: MensagemB2CDTO): Mensagem {
+  return {
+    id: m.id,
+    conversa_id: m.conversa_id,
+    autor: m.autor_id ? 'cliente' : 'loja',
+    texto: m.conteudo,
+    created_at: m.created_at,
+    lida: m.lida,
+  }
+}
+
+const DEMO_PF = { email: 'vitrine@demo.com', senha: 'demo123' }
+
 export const vitrineService = {
-  // Conta PF demo (comprador). Alinhado às credenciais de dev.
-  loginDemo(): User {
-    return {
-      id: 'user-cliente-demo',
-      nome: 'Comprador Demo',
-      email: 'vitrine@demo.com',
-      papel: 'cliente',
-      ativo: true,
-      mfa_ativo: false,
-      loja_id: null,
-    }
+  // ── Auth PF leve ─────────────────────────────────────────
+  async login(): Promise<LoginResult> {
+    return api.post<LoginResult>('/auth/login', DEMO_PF)
   },
 
-  cadastrar(nome: string, email: string): User {
-    return {
-      id: novoId('cli'),
-      nome: nome.trim() || 'Comprador',
-      email: email.trim().toLowerCase(),
-      papel: 'cliente',
-      ativo: true,
-      mfa_ativo: false,
-      loja_id: null,
-    }
+  async cadastrar(nome: string, email: string, senha = 'demo123'): Promise<LoginResult> {
+    await api.post('/auth/register-b2c', { nome: nome.trim(), email: email.trim().toLowerCase(), senha })
+    return api.post<LoginResult>('/auth/login', { email: email.trim().toLowerCase(), senha })
   },
 
+  // ── Feed / detalhe ───────────────────────────────────────
   async feed(filtro: FiltroFeed = 'todos', busca = ''): Promise<AnuncioVitrine[]> {
-    await delay()
-    let lista = anuncios.map(aplicarFav)
+    const params: Record<string, string> = {}
+    if (busca.trim()) params.q = busca.trim()
+    if (filtro === 'carro' || filtro === 'moto') params.tipo = filtro
+    const data = await api.get<VeiculoB2CDTO[]>('/veiculos/marketplace/feed', params)
+    let lista = data.map(mapAnuncio)
     if (filtro === 'ofertas') lista = lista.filter((a) => a.oferta)
     else if (filtro === 'novidades') lista = lista.filter((a) => a.novidade)
-    else if (filtro === 'carro') lista = lista.filter((a) => a.tipo === 'carro')
-    else if (filtro === 'moto') lista = lista.filter((a) => a.tipo === 'moto')
-    const q = busca.trim().toLowerCase()
-    if (q) {
-      lista = lista.filter((a) =>
-        [a.marca, a.modelo, a.versao, a.cor, a.loja_nome, String(a.ano_modelo)]
-          .filter(Boolean)
-          .some((c) => String(c).toLowerCase().includes(q)),
-      )
-    }
     return lista.sort((a, b) => b.created_at.localeCompare(a.created_at))
   },
 
   async detalhe(id: string): Promise<AnuncioVitrine | undefined> {
-    await delay(120, 260)
-    const a = anuncios.find((x) => x.id === id)
-    return a ? aplicarFav(a) : undefined
+    try {
+      return mapAnuncio(await api.get<VeiculoB2CDTO>(`/vitrine/veiculos/${id}`))
+    } catch {
+      return undefined
+    }
   },
 
+  // ── Favoritos ────────────────────────────────────────────
   async favoritos(): Promise<AnuncioVitrine[]> {
-    await delay()
-    return anuncios.filter((a) => favoritos.has(a.id)).map(aplicarFav)
+    const data = await api.get<VeiculoB2CDTO[]>('/vitrine/favoritos')
+    return data.map(mapAnuncio)
   },
 
   async alternarFavorito(id: string): Promise<boolean> {
-    await delay(80, 180)
-    if (favoritos.has(id)) favoritos.delete(id)
-    else favoritos.add(id)
-    return favoritos.has(id)
+    // Descobre o estado atual pelo detalhe e alterna.
+    const atual = await this.detalhe(id)
+    if (atual?.favoritado_por_mim) {
+      await api.delete(`/vitrine/favoritos/${id}`)
+      return false
+    }
+    await api.post('/vitrine/favoritos', { veiculo_id: id })
+    return true
   },
 
+  // ── Lojas ────────────────────────────────────────────────
   async loja(id: string): Promise<LojaVitrine | undefined> {
-    await delay(120, 260)
-    return LOJAS.find((l) => l.id === id)
+    // O feed já carrega os dados da loja em cada anúncio; derivamos a partir dele.
+    const anuncios = await api.get<VeiculoB2CDTO[]>('/veiculos/marketplace/feed').catch(() => [])
+    const daLoja = anuncios.filter((a) => a.loja_id === id)
+    const ref = daLoja[0]
+    if (!ref) return undefined
+    return {
+      id,
+      nome: ref.loja_nome ?? 'Loja',
+      cidade: ref.loja_cidade ?? undefined,
+      estado: ref.loja_estado ?? undefined,
+      whatsapp: ref.loja_whatsapp ?? undefined,
+      verificada: ref.loja_verificada ?? false,
+      total_veiculos: daLoja.length,
+    }
   },
 
   async veiculosDaLoja(lojaId: string): Promise<AnuncioVitrine[]> {
-    await delay()
-    return anuncios.filter((a) => a.loja_id === lojaId).map(aplicarFav)
+    const anuncios = await api.get<VeiculoB2CDTO[]>('/veiculos/marketplace/feed')
+    return anuncios.filter((a) => a.loja_id === lojaId).map(mapAnuncio)
   },
 
-  async seguirLoja(lojaId: string): Promise<boolean> {
-    await delay(80, 180)
-    const l = LOJAS.find((x) => x.id === lojaId)
-    if (l) l.seguindo = !l.seguindo
-    return l?.seguindo ?? false
+  async seguirLoja(_lojaId: string): Promise<boolean> {
+    // Seguir loja no B2C ainda não é exposto pela API; no-op estável.
+    return false
   },
 
-  // ── Chat B2C ──────────────────────────────────────────────
+  // ── Chat B2C (comprador ↔ loja) ──────────────────────────
   async conversas(): Promise<ConversaVitrine[]> {
-    await delay()
-    return [...conversas].sort((a, b) => b.ultima_mensagem_em.localeCompare(a.ultima_mensagem_em))
+    const data = await api.get<ConversaB2CDTO[]>('/vitrine/conversas')
+    return data.map(mapConversa).sort((a, b) => b.ultima_mensagem_em.localeCompare(a.ultima_mensagem_em))
   },
 
   async mensagens(conversaId: string): Promise<Mensagem[]> {
-    await delay(120, 260)
-    return mensagens
-      .filter((m) => m.conversa_id === conversaId)
-      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    const data = await api.get<MensagemB2CDTO[]>(`/vitrine/conversas/${conversaId}/mensagens`)
+    return data.map(mapMensagem).sort((a, b) => a.created_at.localeCompare(b.created_at))
   },
 
-  // Abre (ou reaproveita) a conversa com a loja de um anúncio.
   async abrirConversa(anuncio: AnuncioVitrine): Promise<ConversaVitrine> {
-    await delay(120, 260)
-    let conv = conversas.find((c) => c.loja_id === anuncio.loja_id)
-    if (!conv) {
-      conv = {
-        id: novoId('cv'),
-        loja_id: anuncio.loja_id,
-        loja_nome: anuncio.loja_nome,
-        loja_verificada: anuncio.loja_verificada,
-        veiculo_interesse: `${anuncio.marca} ${anuncio.modelo}`,
-        ultima_mensagem: 'Conversa iniciada',
-        ultima_mensagem_em: new Date().toISOString(),
-        nao_lidas: 0,
-      }
-      conversas = [conv, ...conversas]
-      // Mensagem de boas-vindas da loja
-      mensagens.push({
-        id: novoId('msg'),
-        conversa_id: conv.id,
-        autor: 'loja',
-        texto: `Olá! Obrigado pelo interesse no ${anuncio.marca} ${anuncio.modelo}. Como posso ajudar?`,
-        created_at: minAtras(1),
-        lida: true,
-      })
-    }
-    return conv
+    const c = await api.post<ConversaB2CDTO>('/vitrine/conversas', { veiculo_id: anuncio.id })
+    return mapConversa(c)
   },
 
   async enviar(conversaId: string, texto: string): Promise<Mensagem> {
-    await delay(100, 220)
-    const agora = new Date().toISOString()
-    const msg: Mensagem = { id: novoId('msg'), conversa_id: conversaId, autor: 'cliente', texto, created_at: agora, lida: true }
-    mensagens.push(msg)
-    const conv = conversas.find((c) => c.id === conversaId)
-    if (conv) {
-      conv.ultima_mensagem = texto
-      conv.ultima_mensagem_em = agora
-    }
-    return msg
+    const m = await api.post<MensagemB2CDTO>(`/vitrine/conversas/${conversaId}/mensagens`, { conteudo: texto })
+    return mapMensagem(m)
   },
 
-  async marcarLidas(conversaId: string): Promise<void> {
-    const conv = conversas.find((c) => c.id === conversaId)
-    if (conv) conv.nao_lidas = 0
+  async marcarLidas(_conversaId: string): Promise<void> {
+    return
   },
 }
+
+export type { User }

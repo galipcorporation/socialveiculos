@@ -1,12 +1,10 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
-import { useQueryClient } from '@tanstack/react-query'
 import { useTheme, type ThemeMode } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
-import { AppHeader, Button, Card, ListRow, Screen, Sheet, Txt, useToast } from '../../components/ui'
-import { resetDb } from '../../services'
+import { AppHeader, Card, ListRow, Screen, Txt } from '../../components/ui'
 import { useAuthStore } from '../../stores/authStore'
 import type { RootStackParamList } from '../../navigation/types'
 
@@ -35,26 +33,8 @@ const CONFIG_LOJA: ItemConfigLoja[] = [
 export default function ConfiguracoesScreen() {
   const { colors, mode, setMode } = useTheme()
   const navigation = useNavigation()
-  const queryClient = useQueryClient()
-  const toast = useToast()
   const user = useAuthStore((s) => s.user)
   const gestor = user?.papel !== 'vendedor'
-  const [resetAberto, setResetAberto] = useState(false)
-  const [resetando, setResetando] = useState(false)
-
-  const resetar = async () => {
-    setResetando(true)
-    try {
-      await resetDb()
-      queryClient.clear()
-      await queryClient.invalidateQueries()
-      setResetAberto(false)
-      toast.show('success', 'Dados de demonstração restaurados.')
-    } finally {
-      setResetando(false)
-    }
-  }
-
   return (
     <Screen scroll={false} padded={false}>
       <AppHeader title="Configurações" large={false} back />
@@ -119,21 +99,6 @@ export default function ConfiguracoesScreen() {
           </View>
         </Card>
 
-        {/* Dados */}
-        <Card>
-          <Txt variant="title" style={{ marginBottom: 4 }}>Dados de demonstração</Txt>
-          <Txt variant="caption" color="textDim" style={{ marginBottom: spacing.sm }}>
-            O app funciona 100% offline com dados fictícios salvos neste aparelho. Quando o
-            backend oficial for conectado, esta seção deixa de existir.
-          </Txt>
-          <Button
-            title="Restaurar dados originais"
-            variant="outline"
-            icon="refresh-outline"
-            onPress={() => setResetAberto(true)}
-          />
-        </Card>
-
         {/* Sobre */}
         <Card>
           <Txt variant="title" style={{ marginBottom: spacing.xs }}>Sobre</Txt>
@@ -143,16 +108,6 @@ export default function ConfiguracoesScreen() {
         </Card>
       </Screen>
 
-      <Sheet visible={resetAberto} onClose={() => setResetAberto(false)} title="Restaurar dados" scrollable={false}>
-        <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
-          <Txt variant="body" color="textDim">
-            Isso descarta todas as alterações feitas (veículos, leads, vendas) e recarrega os
-            dados originais de demonstração. Não afeta o seu login.
-          </Txt>
-          <Button title="Restaurar agora" variant="danger" loading={resetando} onPress={resetar} />
-          <Button title="Cancelar" variant="ghost" onPress={() => setResetAberto(false)} />
-        </View>
-      </Sheet>
     </Screen>
   )
 }

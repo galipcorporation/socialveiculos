@@ -8,8 +8,6 @@ import { Button, Input, Screen, Txt } from '../../components/ui'
 import { authService } from '../../services'
 import { useAuthStore } from '../../stores/authStore'
 import { useLojaAtivaStore } from '../../stores/lojaAtivaStore'
-import { LOJA_NOME } from '../../services/seed'
-import { LOJA_ID } from '../../services/seed'
 
 export default function LoginScreen() {
   const { colors } = useTheme()
@@ -27,7 +25,7 @@ export default function LoginScreen() {
     setCarregando(true)
     try {
       const res = await authService.login(emailFinal, senhaFinal)
-      setLoja(res.user.loja_id ?? LOJA_ID, LOJA_NOME)
+      if (res.user.loja_id) setLoja(res.user.loja_id, res.user.nome)
       login(res.access_token, res.refresh_token, res.user)
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível entrar.')

@@ -10,7 +10,8 @@ import {
   SegmentedControl, SelectField, Sheet, SkeletonCard, Txt, useToast,
 } from '../../components/ui'
 import { contratosService } from '../../services'
-import type { ContratoInput } from '../../services/contratos'
+import type { ContratoInput, TemplateContrato } from '../../services/contratos'
+import { VARIAVEIS_CONTRATO } from '../../services/contratos'
 import type { Contrato, StatusContrato } from '../../services/types'
 import { STATUS_CONTRATO_LABEL } from '../../services/types'
 import { formatBRL, formatData, maskMoedaInput, parseMoedaInput } from '../../lib/format'
@@ -27,13 +28,27 @@ export default function ContratosScreen() {
   const queryClient = useQueryClient()
   const [selecionado, setSelecionado] = useState<Contrato | null>(null)
   const [novoAberto, setNovoAberto] = useState(false)
+  const [aba, setAba] = useState<'contratos' | 'modelos'>('contratos')
 
   const q = useQuery({ queryKey: ['contratos'], queryFn: () => contratosService.lista() })
 
   return (
     <Screen scroll={false} padded={false}>
-      <AppHeader title="Contratos" large={false} back />
-      {q.isLoading ? (
+      <AppHeader
+        title="Contratos"
+        large={false}
+        back
+        bottom={
+          <SegmentedControl
+            options={[{ value: 'contratos', label: 'Contratos' }, { value: 'modelos', label: 'Modelos' }]}
+            selected={aba}
+            onSelect={(v) => setAba(v as 'contratos' | 'modelos')}
+          />
+        }
+      />
+      {aba === 'modelos' ? (
+        <ModelosTab />
+      ) : q.isLoading ? (
         <View style={{ padding: spacing.md }}>
           {[0, 1, 2].map((i) => <SkeletonCard key={i} withImage={false} />)}
         </View>
@@ -70,7 +85,7 @@ export default function ContratosScreen() {
         />
       )}
 
-      <Fab icon="add" label="Contrato" onPress={() => setNovoAberto(true)} />
+      {aba === 'contratos' && <Fab icon="add" label="Contrato" onPress={() => setNovoAberto(true)} />}
       {selecionado && <DetalheSheet contrato={selecionado} onClose={() => setSelecionado(null)} />}
       <NovoContratoSheet visible={novoAberto} onClose={() => setNovoAberto(false)} />
     </Screen>
@@ -197,5 +212,201 @@ function Linha({ label, valor }: { label: string; valor: string }) {
       <Txt variant="caption" color="textDim">{label}</Txt>
       <Txt variant="captionMedium" style={{ flex: 1, textAlign: 'right' }} numberOfLines={2}>{valor}</Txt>
     </View>
+  )
+}
+
+function ModelosTab() {
+  const { colors } = useTheme()
+  const queryClient = useQueryClient()
+  const [selecionado, setSelecionado] = useState<TemplateContrato | null>(null)
+  const [novoAberto, setNovoAberto] = useState(false)
+  const toast = useToast()
+
+  const q = useQuery({
+    queryKey: ['templates'],
+    queryFn: () => contratosService.templates(),
+  })
+
+  const dupMut = useMutation({
+    mutationFn: (id: string) => contratosService.duplicarTemplate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['templates'] })
+      toast.show('success', 'Modelo duplicado.')
+    },
+    onError: (err: any) => {
+      toast.show('error', err.message || 'Erro ao duplicar.')
+    },
+  })
+
+  const delMut = useMutation({
+    mutationFn: (id: string) => contratosService.removerTemplate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['templates'] })
+      toast.show('success', 'Modelo removido.')
+    },
+    onError: (err: any) => {
+      toast.show('error', err.message || 'Erro ao remover.')
+    },
+  })
+
+  if (q.isLoading) {
+    return (
+      <View style={{ padding: spacing.md }}>
+        {[0, 1, 2].map((i) => (
+          <SkeletonCard key={i} withImage={false} />
+        ))}
+      </View>
+    )
+  }
+
+  if (q.isError) {
+    return <ErrorState onRetry={() => q.refetch()} />
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <FlatList
+        data={q.data ?? []}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ padding: spacing.md, gap: spacing.xs, paddingBottom: 110 }}
+        refreshing={q.isRefetching}
+        onRefresh={() => queryClient.invalidateQueries({ queryKey: ['templates'] })}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <EmptyState
+            icon="document-text-outline"
+            title="Nenhum modelo"
+            subtitle="Crie modelos de contrato personalizados."
+            actionLabel="Novo modelo"
+            onAction={() => setNovoAberto(true)}
+          />
+        }
+        renderItem={({ item }) => (
+          <Card onPress={() => setSelecionado(item)}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <Txt variant="bodySemibold">{item.nome}</Txt>
+                <Txt variant="caption" color="textDim" numberOfLines={2}>
+                  {item.corpo}
+                </Txt>
+              </View>
+              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                <Button
+                  title=""
+                  variant="ghost"
+                  icon="copy-outline"
+                  onPress={() => dupMut.mutate(item.id)}
+                  style={{ minWidth: 40, paddingHorizontal: 0 }}
+                />
+                <Button
+                  title=""
+                  variant="ghost"
+                  icon="trash-outline"
+                  onPress={() => delMut.mutate(item.id)}
+                  style={{ minWidth: 40, paddingHorizontal: 0 }}
+                />
+              </View>
+            </View>
+          </Card>
+        )}
+      />
+      <Fab icon="add" label="Modelo" onPress={() => setNovoAberto(true)} />
+      {selecionado && (
+        <EditorModeloSheet
+          template={selecionado}
+          onClose={() => setSelecionado(null)}
+        />
+      )}
+      {novoAberto && (
+        <EditorModeloSheet
+          onClose={() => setNovoAberto(false)}
+        />
+      )}
+    </View>
+  )
+}
+
+function EditorModeloSheet({ template, onClose }: { template?: TemplateContrato; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const [nome, setNome] = useState(template?.nome || '')
+  const [corpo, setCorpo] = useState(template?.corpo || '')
+  const [selection, setSelection] = useState({ start: 0, end: 0 })
+  const [salvando, setSalvando] = useState(false)
+
+  const salvar = async () => {
+    if (!nome.trim() || !corpo.trim()) {
+      toast.show('error', 'Preencha nome e corpo do modelo.')
+      return
+    }
+    setSalvando(true)
+    try {
+      await contratosService.salvarTemplate({
+        id: template?.id,
+        nome: nome.trim(),
+        corpo: corpo,
+      })
+      queryClient.invalidateQueries({ queryKey: ['templates'] })
+      toast.show('success', 'Modelo salvo.')
+      onClose()
+    } catch (err: any) {
+      toast.show('error', err.message || 'Erro ao salvar.')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const inserirVariavel = (chave: string) => {
+    const start = selection.start
+    const end = selection.end
+    const novoCorpo = corpo.substring(0, start) + chave + corpo.substring(end)
+    setCorpo(novoCorpo)
+  }
+
+  return (
+    <Sheet visible onClose={onClose} title={template ? 'Editar Modelo' : 'Novo Modelo'}>
+      <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+        <Input
+          label="Nome do modelo"
+          value={nome}
+          onChangeText={setNome}
+          placeholder="Ex: Compra e venda padrão"
+        />
+        <Input
+          label="Texto do contrato"
+          value={corpo}
+          onChangeText={setCorpo}
+          multiline
+          style={{ minHeight: 180, textAlignVertical: 'top' }}
+          placeholder="Digite o corpo do contrato..."
+          onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
+        />
+
+        <Txt variant="caption" color="textDim" style={{ marginTop: spacing.xs }}>
+          Variáveis de Sistema (Toque para inserir no cursor):
+        </Txt>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginVertical: spacing.xs }}>
+          {VARIAVEIS_CONTRATO.map((v) => (
+            <Button
+              key={v.chave}
+              title={v.label}
+              variant="tonal"
+              size="sm"
+              onPress={() => inserirVariavel(v.chave)}
+              style={{ paddingHorizontal: spacing.sm, height: 32 }}
+            />
+          ))}
+        </View>
+
+        <Button
+          title={template ? 'Salvar Alterações' : 'Criar Modelo'}
+          icon="checkmark"
+          loading={salvando}
+          onPress={salvar}
+          full
+          style={{ marginTop: spacing.sm }}
+        />
+      </View>
+    </Sheet>
   )
 }
