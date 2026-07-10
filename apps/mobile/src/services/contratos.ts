@@ -1,7 +1,6 @@
-// Contratos (M051) — mock. Espelha /contratos do gestor (lista + detalhe + PDF).
-// Estado em memória de sessão; swap p/ API = reimplementar mantendo assinaturas.
-
-import { delay, novoId } from './db'
+// Contratos — lista + detalhe + PDF + templates contra /v1/contratos e
+// /v1/templates-contrato.
+import { api } from '../lib/api'
 import type { Contrato, StatusContrato } from './types'
 
 export interface ContratoInput {
@@ -14,60 +13,124 @@ export interface ContratoInput {
   observacoes?: string
 }
 
-const now = Date.now()
-const diasAtras = (d: number) => new Date(now - d * 86_400_000).toISOString()
+export interface TemplateContrato {
+  id: string
+  nome: string
+  corpo: string
+  created_at: string
+}
 
-let contratos: Contrato[] = [
-  { id: 'ctr-001', numero: 'CV-2026-0042', tipo: 'compra_venda', status: 'assinado', veiculo_nome: 'Hyundai HB20 Comfort Plus', cliente_nome: 'Luiz Henrique Ramos', valor_venda: 68500, valor_entrada: 20000, parcelas: 36, created_at: diasAtras(3) },
-  { id: 'ctr-002', numero: 'CV-2026-0041', tipo: 'compra_venda', status: 'aguardando', veiculo_nome: 'Jeep Compass Longitude', cliente_nome: 'Juliana Ferreira', valor_venda: 137500, valor_entrada: 40000, parcelas: 48, created_at: diasAtras(1) },
-  { id: 'ctr-003', numero: 'CV-2026-0040', tipo: 'compra_venda', status: 'assinado', veiculo_nome: 'VW Nivus Highline', cliente_nome: 'André Oliveira', valor_venda: 108500, valor_entrada: 108500, parcelas: 0, created_at: diasAtras(15) },
-  { id: 'ctr-004', numero: 'CV-2026-0039', tipo: 'compra_venda', status: 'rascunho', veiculo_nome: 'Chevrolet Onix Premier', cliente_nome: 'Vanessa Pereira', valor_venda: 81200, created_at: diasAtras(0) },
-  { id: 'ctr-005', numero: 'CO-2026-0011', tipo: 'compra', status: 'assinado', veiculo_nome: 'Fiat Mobi Like', cliente_nome: 'Repasse — AutoCenter Canoas', valor_venda: 48000, created_at: diasAtras(28) },
+export const VARIAVEIS_CONTRATO: { chave: string; label: string }[] = [
+  { chave: '{{cliente_nome}}', label: 'Nome do cliente' },
+  { chave: '{{cliente_cpf}}', label: 'CPF do cliente' },
+  { chave: '{{veiculo}}', label: 'Veículo (marca/modelo)' },
+  { chave: '{{placa}}', label: 'Placa' },
+  { chave: '{{valor}}', label: 'Valor da venda' },
+  { chave: '{{entrada}}', label: 'Entrada' },
+  { chave: '{{parcelas}}', label: 'Nº de parcelas' },
+  { chave: '{{loja_nome}}', label: 'Nome da loja' },
+  { chave: '{{data}}', label: 'Data' },
 ]
+
+interface ContratoDTO {
+  id: string
+  numero: string
+  tipo: 'compra_venda' | 'compra'
+  status: StatusContrato
+  veiculo_nome?: string | null
+  cliente_nome?: string | null
+  valor_venda?: number | null
+  valor_entrada?: number | null
+  parcelas?: number | null
+  observacoes?: string | null
+  created_at: string
+}
+interface TemplateDTO {
+  id: string
+  nome: string
+  conteudo_html: string
+  created_at: string
+}
+
+function mapContrato(c: ContratoDTO): Contrato {
+  return {
+    id: c.id,
+    numero: c.numero,
+    tipo: c.tipo,
+    status: c.status,
+    veiculo_nome: c.veiculo_nome ?? undefined,
+    cliente_nome: c.cliente_nome ?? undefined,
+    valor_venda: c.valor_venda ?? undefined,
+    valor_entrada: c.valor_entrada ?? undefined,
+    parcelas: c.parcelas ?? undefined,
+    observacoes: c.observacoes ?? undefined,
+    created_at: c.created_at,
+  }
+}
+
+function mapTemplate(t: TemplateDTO): TemplateContrato {
+  return { id: t.id, nome: t.nome, corpo: t.conteudo_html, created_at: t.created_at }
+}
+
+const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000/v1'
 
 export const contratosService = {
   async lista(): Promise<Contrato[]> {
-    await delay()
-    return [...contratos].sort((a, b) => b.created_at.localeCompare(a.created_at))
+    const data = await api.get<{ items: ContratoDTO[] }>('/contratos')
+    return (data.items ?? []).map(mapContrato).sort((a, b) => b.created_at.localeCompare(a.created_at))
   },
 
   async detalhe(id: string): Promise<Contrato | undefined> {
-    await delay(120, 260)
-    return contratos.find((c) => c.id === id)
+    try {
+      const c = await api.get<ContratoDTO>(`/contratos/${id}`)
+      return mapContrato(c)
+    } catch {
+      return undefined
+    }
   },
 
-  // URL fictícia do PDF (o app real retornaria /contratos/{id}/pdf autenticado).
   async pdfUrl(id: string): Promise<string> {
-    await delay(150, 300)
-    return `https://demo.socialveiculos.com.br/contratos/${id}.pdf`
+    // O PDF é servido autenticado; retornamos a URL absoluta do endpoint.
+    return `${API_BASE}/contratos/${id}/pdf`
   },
 
   async criar(input: ContratoInput): Promise<Contrato> {
-    await delay(250, 500)
-    const seq = String(43 + contratos.length).padStart(4, '0')
-    const prefixo = input.tipo === 'compra' ? 'CO' : 'CV'
-    const novo: Contrato = {
-      id: novoId('ctr'),
-      numero: `${prefixo}-${new Date().getFullYear()}-${seq}`,
+    const c = await api.post<ContratoDTO>('/contratos', {
       tipo: input.tipo,
-      status: 'aguardando',
-      veiculo_nome: input.veiculo_nome,
-      cliente_nome: input.cliente_nome,
-      valor_venda: input.valor_venda,
-      valor_entrada: input.valor_entrada,
-      parcelas: input.parcelas,
-      observacoes: input.observacoes,
-      created_at: new Date().toISOString(),
-    }
-    contratos = [novo, ...contratos]
-    return novo
+      veiculo_nome: input.veiculo_nome || null,
+      cliente_nome: input.cliente_nome || null,
+      valor_venda: input.valor_venda ?? null,
+      valor_entrada: input.valor_entrada ?? null,
+      parcelas: input.parcelas ?? null,
+      observacoes: input.observacoes || null,
+    })
+    return mapContrato(c)
   },
 
   async alterarStatus(id: string, status: StatusContrato): Promise<Contrato> {
-    await delay(150, 300)
-    const c = contratos.find((x) => x.id === id)
-    if (!c) throw new Error('Contrato não encontrado.')
-    c.status = status
-    return c
+    const c = await api.patch<ContratoDTO>(`/contratos/${id}`, { status })
+    return mapContrato(c)
+  },
+
+  async templates(): Promise<TemplateContrato[]> {
+    const data = await api.get<{ items: TemplateDTO[] }>('/templates-contrato')
+    return (data.items ?? []).map(mapTemplate).sort((a, b) => b.created_at.localeCompare(a.created_at))
+  },
+
+  async salvarTemplate(input: { id?: string; nome: string; corpo: string }): Promise<TemplateContrato> {
+    const payload = { nome: input.nome.trim(), conteudo_html: input.corpo }
+    const t = input.id
+      ? await api.patch<TemplateDTO>(`/templates-contrato/${input.id}`, payload)
+      : await api.post<TemplateDTO>('/templates-contrato', payload)
+    return mapTemplate(t)
+  },
+
+  async duplicarTemplate(id: string): Promise<TemplateContrato> {
+    const t = await api.post<TemplateDTO>(`/templates-contrato/${id}/duplicar`)
+    return mapTemplate(t)
+  },
+
+  async removerTemplate(id: string): Promise<void> {
+    await api.delete(`/templates-contrato/${id}`)
   },
 }

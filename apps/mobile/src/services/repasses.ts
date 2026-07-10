@@ -1,126 +1,190 @@
-// Rede Social / Repasses B2B (M055) — mock. Espelha /repasses, /propostas e o
-// diretório de parceiros do gestor (RedeSocial.tsx). Liga com o chat B2B (M049).
+// Rede Social / Repasses B2B — contra /v1/b2b (repasses, propostas, parceiros).
+import { api } from '../lib/api'
+import { useAuthStore } from '../stores/authStore'
+import type { ComentarioRepasse, LojaParceira, PropostaRepasse, PublicacaoRepasse, StatusProposta } from './types'
 
-import { delay, novoId } from './db'
-import type { ComentarioRepasse, LojaParceira, PropostaRepasse, PublicacaoRepasse } from './types'
+interface VeiculoRefDTO {
+  id?: string
+  marca?: string | null
+  modelo?: string | null
+  versao?: string | null
+  ano_modelo?: number | null
+  km?: number | null
+  midias?: { url: string }[]
+}
+interface ComentarioDTO {
+  id: string
+  publicacao_id: string
+  autor_nome?: string | null
+  conteudo: string
+  created_at: string
+}
+interface PublicacaoDTO {
+  id: string
+  loja_id: string
+  loja_nome?: string | null
+  veiculo_id?: string | null
+  veiculo?: VeiculoRefDTO | null
+  autor_nome?: string | null
+  conteudo?: string | null
+  valor_repasse?: number | null
+  comentarios?: ComentarioDTO[]
+  curtidas?: unknown[]
+  curtido_por_mim?: boolean
+  created_at: string
+}
+interface PropostaDTO {
+  id: string
+  loja_proponente_id: string
+  loja_proponente_nome?: string | null
+  loja_destino_id: string
+  loja_destino_nome?: string | null
+  veiculo?: VeiculoRefDTO | null
+  valor_proposta: number
+  status: StatusProposta
+  observacoes?: string | null
+  created_at: string
+}
+interface LojaDTO {
+  id: string
+  nome: string
+  cidade?: string | null
+  estado?: string | null
+  telefone?: string | null
+  whatsapp?: string | null
+  verificada?: boolean
+  total_veiculos?: number
+  seguindo?: boolean
+  conversa_id?: string | null
+}
 
-const now = Date.now()
-const minAtras = (m: number) => new Date(now - m * 60_000).toISOString()
+function nomeVeiculo(v?: VeiculoRefDTO | null): string {
+  if (!v) return 'Veículo'
+  return [v.marca, v.modelo, v.versao].filter(Boolean).join(' ') || 'Veículo'
+}
 
-let comentarios: ComentarioRepasse[] = [
-  { id: 'com-1', publicacao_id: 'rep-001', autor_nome: 'Auto Premium Veículos', texto: 'Tem laudo cautelar? Interesse aqui.', created_at: minAtras(150) },
-  { id: 'com-2', publicacao_id: 'rep-001', autor_nome: 'Sul Veículos', texto: 'Aceita troca por SUV?', created_at: minAtras(120) },
-  { id: 'com-3', publicacao_id: 'rep-003', autor_nome: 'Auto Premium Veículos', texto: 'Consegue segurar até amanhã?', created_at: minAtras(200) },
-]
+function mapPublicacao(p: PublicacaoDTO): PublicacaoRepasse {
+  return {
+    id: p.id,
+    loja_id: p.loja_id,
+    loja_nome: p.loja_nome ?? 'Loja',
+    autor_nome: p.autor_nome ?? p.loja_nome ?? 'Loja',
+    veiculo_id: p.veiculo_id ?? p.veiculo?.id ?? undefined,
+    veiculo_nome: nomeVeiculo(p.veiculo),
+    veiculo_ano: p.veiculo?.ano_modelo ?? undefined,
+    veiculo_km: p.veiculo?.km ?? undefined,
+    foto_url: p.veiculo?.midias?.[0]?.url,
+    conteudo: p.conteudo ?? undefined,
+    valor_repasse: p.valor_repasse ?? undefined,
+    curtidas: p.curtidas?.length ?? 0,
+    comentarios: p.comentarios?.length ?? 0,
+    curtido_por_mim: p.curtido_por_mim ?? false,
+    created_at: p.created_at,
+  }
+}
 
-const favoritosParceiro = new Set<string>()
+function mapComentario(c: ComentarioDTO): ComentarioRepasse {
+  return {
+    id: c.id,
+    publicacao_id: c.publicacao_id,
+    autor_nome: c.autor_nome ?? 'Loja',
+    texto: c.conteudo,
+    created_at: c.created_at,
+  }
+}
 
-let feed: PublicacaoRepasse[] = [
-  { id: 'rep-001', loja_nome: 'Garagem RS Motors', autor_nome: 'Fábio', veiculo_nome: 'VW Nivus Highline 1.0 TSI', veiculo_ano: 2022, veiculo_km: 31200, conteudo: 'Repasse para lojistas — único dono, revisões em dia. Aceito troca.', valor_repasse: 97000, curtidas: 5, comentarios: 2, curtido_por_mim: false, created_at: minAtras(180) },
-  { id: 'rep-002', loja_nome: 'AutoCenter Canoas', autor_nome: 'Renata', veiculo_nome: 'Fiat Mobi Like 1.0', veiculo_ano: 2022, veiculo_km: 28700, conteudo: 'Saindo por repasse, ótimo para entrada de estoque.', valor_repasse: 46500, curtidas: 3, comentarios: 0, curtido_por_mim: true, created_at: minAtras(1400) },
-  { id: 'rep-003', loja_nome: 'Premium Motors Gravataí', autor_nome: 'Jonas', veiculo_nome: 'Chevrolet Tracker Premier 1.2 Turbo', veiculo_ano: 2023, veiculo_km: 16500, conteudo: 'Disponível para repasse entre parceiros. Laudo aprovado.', valor_repasse: 118000, curtidas: 8, comentarios: 4, curtido_por_mim: false, created_at: minAtras(300) },
-  { id: 'rep-004', loja_nome: 'Sul Veículos', autor_nome: 'Marcelo', veiculo_nome: 'Renault Kwid Zen 1.0', veiculo_ano: 2023, veiculo_km: 12400, valor_repasse: 52000, curtidas: 2, comentarios: 1, curtido_por_mim: false, created_at: minAtras(2600) },
-]
+function mapProposta(p: PropostaDTO, minhaLojaId?: string): PropostaRepasse {
+  const enviada = p.loja_proponente_id === minhaLojaId
+  return {
+    id: p.id,
+    direcao: enviada ? 'enviada' : 'recebida',
+    loja_parceira_nome: (enviada ? p.loja_destino_nome : p.loja_proponente_nome) ?? 'Parceiro',
+    veiculo_nome: nomeVeiculo(p.veiculo),
+    valor_proposta: p.valor_proposta,
+    status: p.status,
+    observacoes: p.observacoes ?? undefined,
+    created_at: p.created_at,
+  }
+}
 
-let propostas: PropostaRepasse[] = [
-  { id: 'prop-001', direcao: 'enviada', loja_parceira_nome: 'Garagem RS Motors', veiculo_nome: 'VW Nivus Highline', valor_proposta: 95000, status: 'pendente', observacoes: 'Consigo buscar em POA na sexta.', created_at: minAtras(120) },
-  { id: 'prop-002', direcao: 'recebida', loja_parceira_nome: 'Premium Motors Gravataí', veiculo_nome: 'Toyota Hilux SRX (do meu estoque)', valor_proposta: 225000, status: 'pendente', observacoes: 'Tenho cliente fechado, pago à vista.', created_at: minAtras(90) },
-  { id: 'prop-003', direcao: 'enviada', loja_parceira_nome: 'AutoCenter Canoas', veiculo_nome: 'Fiat Mobi Like', valor_proposta: 46000, status: 'aceita', created_at: minAtras(1380) },
-  { id: 'prop-004', direcao: 'recebida', loja_parceira_nome: 'Sul Veículos', veiculo_nome: 'Chevrolet Onix Premier (do meu estoque)', valor_proposta: 78000, status: 'rejeitada', observacoes: 'Valor abaixo do repasse.', created_at: minAtras(4000) },
-]
-
-const parceiros: LojaParceira[] = [
-  { id: 'loja-p1', nome: 'Garagem RS Motors', cidade: 'Porto Alegre', estado: 'RS', telefone: '5133001020', whatsapp: '51999110022', verificada: true, total_veiculos: 34, conversa_id: undefined },
-  { id: 'loja-p2', nome: 'AutoCenter Canoas', cidade: 'Canoas', estado: 'RS', telefone: '5134002030', whatsapp: '51998220033', verificada: true, total_veiculos: 21, conversa_id: undefined },
-  { id: 'loja-p3', nome: 'Premium Motors Gravataí', cidade: 'Gravataí', estado: 'RS', telefone: '5134003040', whatsapp: '51997330044', verificada: false, total_veiculos: 18, conversa_id: undefined },
-  { id: 'loja-p4', nome: 'Sul Veículos', cidade: 'São Leopoldo', estado: 'RS', telefone: '5135004050', whatsapp: '51996440055', verificada: true, total_veiculos: 27, conversa_id: undefined },
-]
+function mapLoja(l: LojaDTO): LojaParceira {
+  return {
+    id: l.id,
+    nome: l.nome,
+    cidade: l.cidade ?? undefined,
+    estado: l.estado ?? undefined,
+    telefone: l.telefone ?? undefined,
+    whatsapp: l.whatsapp ?? undefined,
+    verificada: l.verificada ?? false,
+    total_veiculos: l.total_veiculos ?? 0,
+    seguindo: l.seguindo ?? false,
+    conversa_id: l.conversa_id ?? undefined,
+  }
+}
 
 export const repassesService = {
   async feed(): Promise<PublicacaoRepasse[]> {
-    await delay()
-    return [...feed].sort((a, b) => b.created_at.localeCompare(a.created_at))
+    const data = await api.get<PublicacaoDTO[]>('/b2b/repasses')
+    return data.map(mapPublicacao).sort((a, b) => b.created_at.localeCompare(a.created_at))
   },
 
   async curtir(id: string): Promise<void> {
-    await delay(80, 180)
-    feed = feed.map((p) =>
-      p.id === id
-        ? { ...p, curtido_por_mim: !p.curtido_por_mim, curtidas: p.curtidas + (p.curtido_por_mim ? -1 : 1) }
-        : p,
-    )
+    await api.post(`/b2b/repasses/${id}/curtir`)
   },
 
   async propostas(): Promise<PropostaRepasse[]> {
-    await delay()
-    return [...propostas].sort((a, b) => b.created_at.localeCompare(a.created_at))
+    const minhaLojaId = useAuthStore.getState().user?.loja_id ?? undefined
+    const [recebidas, enviadas] = await Promise.all([
+      api.get<PropostaDTO[]>('/b2b/propostas/recebidas').catch(() => []),
+      api.get<PropostaDTO[]>('/b2b/propostas/enviadas').catch(() => []),
+    ])
+    return [...recebidas, ...enviadas]
+      .map((p) => mapProposta(p, minhaLojaId))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
   },
 
   async responderProposta(id: string, aceitar: boolean): Promise<void> {
-    await delay(200, 400)
-    propostas = propostas.map((p) =>
-      p.id === id ? { ...p, status: aceitar ? 'aceita' : 'rejeitada' } : p,
-    )
+    await api.patch(`/b2b/propostas/${id}/status`, { status: aceitar ? 'aceita' : 'rejeitada' })
   },
 
   async cancelarProposta(id: string): Promise<void> {
-    await delay(200, 400)
-    propostas = propostas.map((p) => (p.id === id ? { ...p, status: 'cancelada' } : p))
+    await api.patch(`/b2b/propostas/${id}/status`, { status: 'cancelada' })
   },
 
-  // Cria uma proposta a partir de uma publicação do feed.
-  async criarProposta(input: { loja_nome: string; veiculo_nome: string; valor: number; observacoes?: string }): Promise<PropostaRepasse> {
-    await delay(200, 400)
-    const nova: PropostaRepasse = {
-      id: novoId('prop'),
-      direcao: 'enviada',
-      loja_parceira_nome: input.loja_nome,
-      veiculo_nome: input.veiculo_nome,
+  async criarProposta(input: { veiculo_id: string; valor: number; observacoes?: string }): Promise<PropostaRepasse> {
+    const minhaLojaId = useAuthStore.getState().user?.loja_id ?? undefined
+    const p = await api.post<PropostaDTO>('/b2b/propostas', {
+      veiculo_id: input.veiculo_id,
       valor_proposta: input.valor,
-      status: 'pendente',
-      observacoes: input.observacoes,
-      created_at: new Date().toISOString(),
-    }
-    propostas = [nova, ...propostas]
-    return nova
+      observacoes: input.observacoes || null,
+    })
+    return mapProposta(p, minhaLojaId)
   },
 
   async parceiros(busca = '', apenasFavoritos = false): Promise<LojaParceira[]> {
-    await delay()
-    let lista = parceiros.map((p) => ({ ...p, seguindo: favoritosParceiro.has(p.id) }))
-    const q = busca.trim().toLowerCase()
-    if (q) lista = lista.filter((p) => [p.nome, p.cidade, p.estado].filter(Boolean).some((c) => String(c).toLowerCase().includes(q)))
+    const params: Record<string, string> = {}
+    if (busca.trim()) params.q = busca.trim()
+    const data = await api.get<LojaDTO[]>('/b2b/parceiros', params)
+    let lista = data.map(mapLoja)
     if (apenasFavoritos) lista = lista.filter((p) => p.seguindo)
     return lista
   },
 
   async favoritarParceiro(id: string): Promise<boolean> {
-    await delay(80, 180)
-    if (favoritosParceiro.has(id)) favoritosParceiro.delete(id)
-    else favoritosParceiro.add(id)
-    return favoritosParceiro.has(id)
+    const r = await api.post<{ seguindo: boolean }>(`/b2b/parceiros/${id}/seguir`).catch(() => ({ seguindo: false }))
+    return r.seguindo
   },
 
-  // ── Comentários no feed (M063) ────────────────────────────
   async comentarios(publicacaoId: string): Promise<ComentarioRepasse[]> {
-    await delay(120, 260)
-    return comentarios
-      .filter((c) => c.publicacao_id === publicacaoId)
-      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    const feed = await api.get<PublicacaoDTO[]>('/b2b/repasses')
+    const pub = feed.find((p) => p.id === publicacaoId)
+    return (pub?.comentarios ?? []).map(mapComentario).sort((a, b) => a.created_at.localeCompare(b.created_at))
   },
 
   async comentar(publicacaoId: string, texto: string): Promise<ComentarioRepasse> {
-    await delay(150, 300)
-    const c: ComentarioRepasse = {
-      id: novoId('com'),
-      publicacao_id: publicacaoId,
-      autor_nome: 'Auto Premium Veículos',
-      texto: texto.trim(),
-      created_at: new Date().toISOString(),
-    }
-    comentarios = [...comentarios, c]
-    const pub = feed.find((p) => p.id === publicacaoId)
-    if (pub) pub.comentarios += 1
-    return c
+    const c = await api.post<ComentarioDTO>(`/b2b/repasses/${publicacaoId}/comentarios`, {
+      conteudo: texto.trim(),
+    })
+    return mapComentario(c)
   },
 }

@@ -4,8 +4,10 @@ import { useLojaAtivaStore } from '../stores/lojaAtivaStore'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/v1'
 
+type QueryParams = Record<string, string | number | boolean | undefined>
+
 interface FetchOptions extends RequestInit {
-  params?: Record<string, string>
+  params?: QueryParams
 }
 
 export interface ApiErrorDetails {
@@ -38,8 +40,10 @@ class ApiClient {
 
     let url = `${this.baseUrl}${path}`
     if (params) {
-      const searchParams = new URLSearchParams(params)
-      url += `?${searchParams.toString()}`
+      const pairs = Object.entries(params)
+        .filter(([, v]) => v !== undefined && v !== null && v !== '')
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+      if (pairs.length) url += `?${pairs.join('&')}`
     }
 
     const { token } = useAuthStore.getState()
@@ -122,7 +126,7 @@ class ApiClient {
     return response.status === 204 ? (undefined as T) : response.json()
   }
 
-  get<T>(path: string, params?: Record<string, string>): Promise<T> {
+  get<T>(path: string, params?: QueryParams): Promise<T> {
     return this.request<T>(path, { method: 'GET', params })
   }
 

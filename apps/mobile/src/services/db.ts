@@ -11,12 +11,12 @@ import {
 } from './seed'
 import type {
   Cliente, ConfiguracaoFiscal, Conversa, CredencialBanco, CredencialDetran, CredencialIA,
-  CustoVeiculo, Esteira, Lancamento, Lead, Membro, Mensagem, Negociacao, Notificacao, PerfilLoja,
-  RedeSocialStatus, Veiculo,
+  CustoVeiculo, DocumentoVenda, Esteira, Lancamento, Lead, Membro, Mensagem, Negociacao,
+  Notificacao, PerfilLoja, RedeSocialStatus, SolicitacaoAprovacao, Veiculo,
 } from './types'
 
 const STORAGE_KEY = 'sv-mock-db'
-const SEED_VERSION = 3
+const SEED_VERSION = 4
 
 export interface Database {
   version: number
@@ -40,6 +40,8 @@ export interface Database {
   // Paridade recurso-a-recurso (M058/M059)
   custos: CustoVeiculo[]
   negociacoes: Negociacao[]
+  documentosVenda: DocumentoVenda[]
+  solicitacoes: SolicitacaoAprovacao[]
 }
 
 let cache: Database | null = null
@@ -71,6 +73,8 @@ function buildSeed(): Database {
     configFiscal: buildConfigFiscal(),
     custos: [],
     negociacoes: [],
+    documentosVenda: [],
+    solicitacoes: [],
   }
 }
 

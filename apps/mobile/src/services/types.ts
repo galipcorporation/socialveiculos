@@ -162,6 +162,45 @@ export interface CustoVeiculo {
   created_at: string
 }
 
+// ── Documentos de venda do veículo — M058 (resto) ──────────
+export type TipoDocumentoVenda = 'contrato' | 'nota_fiscal' | 'garantia' | 'laudo' | 'outro'
+
+export const TIPOS_DOC_VENDA: { value: TipoDocumentoVenda; label: string }[] = [
+  { value: 'contrato', label: 'Contrato' },
+  { value: 'nota_fiscal', label: 'Nota fiscal' },
+  { value: 'garantia', label: 'Garantia' },
+  { value: 'laudo', label: 'Laudo cautelar' },
+  { value: 'outro', label: 'Outro' },
+]
+
+export interface DocumentoVenda {
+  id: string
+  veiculo_id: string
+  tipo: TipoDocumentoVenda
+  nome_arquivo: string
+  visivel_comprador: boolean
+  created_at: string
+}
+
+// ── Aprovação do vendedor — M058 (resto) ───────────────────
+export type TipoSolicitacao = 'exclusao' | 'alteracao_preco'
+export type StatusSolicitacao = 'pendente' | 'aprovada' | 'rejeitada'
+
+export interface SolicitacaoAprovacao {
+  id: string
+  veiculo_id: string
+  veiculo_nome: string
+  tipo: TipoSolicitacao
+  motivo: string
+  solicitante_nome: string
+  /** Para alteracao_preco: novo preço proposto. */
+  novo_preco?: number
+  preco_atual?: number
+  status: StatusSolicitacao
+  created_at: string
+  resolvida_em?: string
+}
+
 // ── Negociações (propostas por lead) — M059 ────────────────
 export interface Negociacao {
   id: string
@@ -368,6 +407,8 @@ export interface RedeSocialStatus {
   instagram_account_id?: string | null
   token_expira_em?: string | null
   conectada: boolean
+  /** URL do fluxo OAuth (Meta) a abrir no navegador ao conectar. */
+  oauth_url?: string
 }
 
 export interface CredencialDetran {
@@ -564,8 +605,10 @@ export const TEMPLATES_SITE: { value: TemplateSite; label: string; descricao: st
 // ── Rede Social / Repasses B2B ─────────────────────────────
 export interface PublicacaoRepasse {
   id: string
+  loja_id: string
   loja_nome: string
   autor_nome: string
+  veiculo_id?: string
   veiculo_nome: string
   veiculo_ano?: number
   veiculo_km?: number

@@ -69,7 +69,7 @@ function FeedTab() {
   }
 
   const conversar = async (p: PublicacaoRepasse) => {
-    const convId = await chatService.abrirConversaParceiro(p.loja_nome, p.autor_nome, p.veiculo_nome)
+    const convId = await chatService.abrirConversaParceiro(p.loja_id)
     queryClient.invalidateQueries({ queryKey: ['chat'] })
     navigation.navigate('Conversa', { id: convId, nome: p.loja_nome })
   }
@@ -86,7 +86,7 @@ function FeedTab() {
     if (v <= 0) { toast.show('error', 'Informe o valor da proposta.'); return }
     setEnviando(true)
     try {
-      await repassesService.criarProposta({ loja_nome: proposta.loja_nome, veiculo_nome: proposta.veiculo_nome, valor: v, observacoes: obs.trim() || undefined })
+      await repassesService.criarProposta({ veiculo_id: proposta.veiculo_id ?? '', valor: v, observacoes: obs.trim() || undefined })
       queryClient.invalidateQueries({ queryKey: ['repasses', 'propostas'] })
       toast.show('success', 'Proposta enviada.')
       setProposta(null)
@@ -293,7 +293,7 @@ function ParceirosTab() {
   }
 
   const conversar = async (p: LojaParceira) => {
-    const convId = await chatService.abrirConversaParceiro(p.nome, p.nome)
+    const convId = await chatService.abrirConversaParceiro(p.id)
     queryClient.invalidateQueries({ queryKey: ['chat'] })
     navigation.navigate('Conversa', { id: convId, nome: p.nome })
   }

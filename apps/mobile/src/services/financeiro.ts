@@ -1,5 +1,4 @@
-import { delay, getDb, mutate, novoId } from './db'
-import { LOJA_ID } from './seed'
+import { api } from '../lib/api'
 import type { Lancamento, ResumoFinanceiro, TipoLancamento } from './types'
 
 export interface LancamentoInput {
@@ -15,87 +14,90 @@ export interface PeriodoFinanceiro {
   ano: number
 }
 
-function noPeriodo(dataIso: string, periodo?: PeriodoFinanceiro): boolean {
-  if (!periodo) return true
-  const d = new Date(dataIso)
-  if (d.getFullYear() !== periodo.ano) return false
-  if (periodo.mes !== 'todos' && d.getMonth() !== periodo.mes) return false
-  return true
+interface LancamentoDTO {
+  id: string
+  loja_id: string
+  tipo: TipoLancamento
+  descricao: string
+  valor: number
+  data: string
+  veiculo_nome?: string | null
+  status_pagamento: string
+  created_at: string
+}
+interface ResumoDTO {
+  receitas: number
+  despesas: number
+  comissoes: number
+  saldo: number
+  custo_estoque: number
+  comissoes_pendentes: number
+}
+
+function paramsPeriodo(periodo?: PeriodoFinanceiro): Record<string, string | number> {
+  if (!periodo || periodo.mes === 'todos') return periodo ? { ano: periodo.ano } : {}
+  // Backend usa mês 1-12; o app usa 0-11.
+  return { mes: periodo.mes + 1, ano: periodo.ano }
+}
+
+function mapLancamento(l: LancamentoDTO): Lancamento {
+  return {
+    id: l.id,
+    loja_id: l.loja_id,
+    tipo: l.tipo,
+    descricao: l.descricao,
+    valor: l.valor,
+    data: l.data,
+    veiculo_nome: l.veiculo_nome ?? undefined,
+    status_pagamento: l.status_pagamento === 'pago' ? 'pago' : 'pendente',
+    created_at: l.created_at,
+  }
 }
 
 export const financeiroService = {
   async resumo(periodo?: PeriodoFinanceiro): Promise<ResumoFinanceiro> {
-    await delay()
-    const db = await getDb()
-    const doPeriodo = db.lancamentos.filter((l) => noPeriodo(l.data, periodo))
-
-    const soma = (tipo: TipoLancamento, apenasPagos = false) =>
-      doPeriodo
-        .filter((l) => l.tipo === tipo && (!apenasPagos || l.status_pagamento === 'pago'))
-        .reduce((acc, l) => acc + l.valor, 0)
-
-    const receitas = soma('receita')
-    const despesas = soma('despesa')
-    const comissoes = soma('comissao')
-    const custoEstoque = db.veiculos
-      .filter((v) => v.status === 'disponivel' || v.status === 'reservado')
-      .reduce((acc, v) => acc + (v.preco_custo ?? 0), 0)
-    const comissoesPendentes = db.lancamentos
-      .filter((l) => l.tipo === 'comissao' && l.status_pagamento === 'pendente')
-      .reduce((acc, l) => acc + l.valor, 0)
-
+    const r = await api.get<ResumoDTO>('/financeiro/resumo', paramsPeriodo(periodo))
     return {
-      receitas,
-      despesas,
-      comissoes,
-      saldo: receitas - despesas - comissoes,
-      custo_estoque: custoEstoque,
-      comissoes_pendentes: comissoesPendentes,
+      receitas: r.receitas ?? 0,
+      despesas: r.despesas ?? 0,
+      comissoes: r.comissoes ?? 0,
+      saldo: r.saldo ?? 0,
+      custo_estoque: r.custo_estoque ?? 0,
+      comissoes_pendentes: r.comissoes_pendentes ?? 0,
     }
   },
 
   async lancamentos(filtro?: TipoLancamento | 'todos', periodo?: PeriodoFinanceiro): Promise<Lancamento[]> {
-    await delay()
-    const db = await getDb()
-    let lista = db.lancamentos.filter((l) => noPeriodo(l.data, periodo))
-    if (filtro && filtro !== 'todos') lista = lista.filter((l) => l.tipo === filtro)
-    return lista.sort((a, b) => b.data.localeCompare(a.data))
+    const params = paramsPeriodo(periodo)
+    if (filtro && filtro !== 'todos') params.tipo = filtro
+    const data = await api.get<LancamentoDTO[] | { items: LancamentoDTO[] }>('/financeiro/lancamentos', params)
+    const lista = Array.isArray(data) ? data : data.items ?? []
+    return lista.map(mapLancamento).sort((a, b) => b.data.localeCompare(a.data))
   },
 
   async excluir(idLancamento: string): Promise<void> {
-    await delay(120, 260)
-    return mutate((db) => {
-      db.lancamentos = db.lancamentos.filter((l) => l.id !== idLancamento)
-    })
+    await api.delete(`/financeiro/lancamentos/${idLancamento}`)
   },
 
   async criar(input: LancamentoInput): Promise<Lancamento> {
-    await delay()
-    return mutate((db) => {
-      const agora = new Date().toISOString()
-      const novo: Lancamento = {
-        id: novoId('lan'),
-        loja_id: LOJA_ID,
-        tipo: input.tipo,
-        descricao: input.descricao,
-        valor: input.valor,
-        data: agora,
-        veiculo_nome: input.veiculo_nome,
-        status_pagamento: input.status_pagamento,
-        created_at: agora,
-      }
-      db.lancamentos.unshift(novo)
-      return novo
+    const l = await api.post<LancamentoDTO>('/financeiro/lancamentos', {
+      tipo: input.tipo,
+      descricao: input.descricao,
+      valor: input.valor,
+      status_pagamento: input.status_pagamento,
+      veiculo_nome: input.veiculo_nome || null,
     })
+    return mapLancamento(l)
   },
 
   async alternarPagamento(idLancamento: string): Promise<Lancamento> {
-    await delay(120, 260)
-    return mutate((db) => {
-      const l = db.lancamentos.find((x) => x.id === idLancamento)
-      if (!l) throw new Error('Lançamento não encontrado.')
-      l.status_pagamento = l.status_pagamento === 'pago' ? 'pendente' : 'pago'
-      return l
+    // Lê o atual para inverter o status (o backend não expõe toggle direto).
+    const atuais = await this.lancamentos()
+    const atual = atuais.find((l) => l.id === idLancamento)
+    const novo = atual?.status_pagamento === 'pago' ? 'pendente' : 'pago'
+    const l = await api.patch<LancamentoDTO>(`/financeiro/lancamentos/${idLancamento}`, {
+      status_pagamento: novo,
     })
+    return mapLancamento(l)
   },
 }

@@ -1,70 +1,56 @@
-import { delay, getDb, mutate } from './db'
+import { api } from '../lib/api'
 import type { DashboardKpis, Notificacao } from './types'
 
-const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+interface KpisDTO {
+  escopo?: string
+  estoque_ativo: number
+  leads_ativos: number
+  vendas_mes: number
+  receita_mes?: number | null
+  veiculos_publicados: number
+  minhas_comissoes_pendentes?: number | null
+  minhas_comissoes_pagas_mes?: number | null
+  vendas_por_mes?: { mes: string; total: number }[]
+}
+interface NotificacaoDTO {
+  id: string
+  titulo: string
+  conteudo?: string | null
+  mensagem?: string | null
+  lida: boolean
+  created_at: string
+}
 
 export const dashboardService = {
   async kpis(escopo: 'loja' | 'vendedor'): Promise<DashboardKpis> {
-    await delay()
-    const db = await getDb()
-
-    const inicioMes = new Date()
-    inicioMes.setDate(1)
-    inicioMes.setHours(0, 0, 0, 0)
-
-    const estoqueAtivo = db.veiculos.filter(
-      (v) => v.status === 'disponivel' || v.status === 'reservado'
-    ).length
-    const publicados = db.veiculos.filter((v) => v.publicado_marketplace).length
-    const leadsAtivos = db.leads.filter((l) => l.etapa !== 'perdido' && l.etapa !== 'fechamento').length
-
-    const esteirasMes = db.esteiras.filter((e) => new Date(e.aberta_em) >= inicioMes)
-    const minhas = db.esteiras.filter((e) => e.vendedor_nome === 'Você')
-    const minhasMes = minhas.filter((e) => new Date(e.aberta_em) >= inicioMes)
-
-    const receitaMes = db.lancamentos
-      .filter((l) => l.tipo === 'receita' && new Date(l.data) >= inicioMes)
-      .reduce((acc, l) => acc + l.valor, 0)
-
-    const comissoesPendentes = minhas
-      .filter((e) => e.comissao_paga === false)
-      .reduce((acc, e) => acc + (e.comissao_valor ?? 0), 0)
-    const comissoesPagasMes = minhasMes
-      .filter((e) => e.comissao_paga === true)
-      .reduce((acc, e) => acc + (e.comissao_valor ?? 0), 0)
-
-    // Série de 6 meses: meses anteriores estáveis (demo) + mês corrente real.
-    const vendasMesAtual = escopo === 'vendedor' ? minhasMes.length : esteirasMes.length
-    const base = escopo === 'vendedor' ? [1, 2, 1, 3, 2] : [3, 5, 4, 6, 5]
-    const agora = new Date()
-    const vendasPorMes = [...base, vendasMesAtual].map((total, i) => {
-      const d = new Date(agora.getFullYear(), agora.getMonth() - (5 - i), 1)
-      return { mes: MESES[d.getMonth()], total }
-    })
-
+    const k = await api.get<KpisDTO>('/dashboard/kpis')
     return {
-      escopo,
-      estoque_ativo: estoqueAtivo,
-      leads_ativos: leadsAtivos,
-      vendas_mes: vendasMesAtual,
-      receita_mes: escopo === 'vendedor' ? null : receitaMes,
-      veiculos_publicados: publicados,
-      minhas_comissoes_pendentes: escopo === 'vendedor' ? comissoesPendentes : null,
-      minhas_comissoes_pagas_mes: escopo === 'vendedor' ? comissoesPagasMes : null,
-      vendas_por_mes: vendasPorMes,
+      escopo: (k.escopo as 'loja' | 'vendedor') ?? escopo,
+      estoque_ativo: k.estoque_ativo,
+      leads_ativos: k.leads_ativos,
+      vendas_mes: k.vendas_mes,
+      receita_mes: k.receita_mes ?? null,
+      veiculos_publicados: k.veiculos_publicados,
+      minhas_comissoes_pendentes: k.minhas_comissoes_pendentes ?? null,
+      minhas_comissoes_pagas_mes: k.minhas_comissoes_pagas_mes ?? null,
+      vendas_por_mes: k.vendas_por_mes ?? [],
     }
   },
 
   async notificacoes(): Promise<Notificacao[]> {
-    await delay(120, 260)
-    const db = await getDb()
-    return db.notificacoes.filter((n) => !n.lida)
+    const data = await api.get<NotificacaoDTO[]>('/notificacoes')
+    return data
+      .filter((n) => !n.lida)
+      .map((n) => ({
+        id: n.id,
+        titulo: n.titulo,
+        conteudo: n.conteudo ?? n.mensagem ?? '',
+        lida: n.lida,
+        created_at: n.created_at,
+      }))
   },
 
   async marcarLida(idNotificacao: string): Promise<void> {
-    return mutate((db) => {
-      const n = db.notificacoes.find((x) => x.id === idNotificacao)
-      if (n) n.lida = true
-    })
+    await api.post(`/notificacoes/${idNotificacao}/ler`)
   },
 }
