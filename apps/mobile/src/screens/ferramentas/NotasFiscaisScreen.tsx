@@ -37,6 +37,26 @@ export default function NotasFiscaisScreen() {
   const [menuNota, setMenuNota] = useState<NotaFiscal | null>(null)
   const [justificativa, setJustificativa] = useState('')
   const [cancelando, setCancelando] = useState(false)
+  const [cce, setCce] = useState<NotaFiscal | null>(null)
+  const [cceTexto, setCceTexto] = useState('')
+  const [cceEnviando, setCceEnviando] = useState(false)
+
+  const confirmarCce = async () => {
+    if (!cce || cceTexto.trim().length < 15) {
+      toast.show('error', 'A correção deve ter ao menos 15 caracteres.')
+      return
+    }
+    setCceEnviando(true)
+    try {
+      await notasFiscaisService.emitirCartaCorrecao(cce.id, cceTexto.trim())
+      await queryClient.invalidateQueries({ queryKey: ['notas-fiscais'] })
+      toast.show('success', 'Carta de correção emitida.')
+      setCce(null)
+      setCceTexto('')
+    } finally {
+      setCceEnviando(false)
+    }
+  }
 
   // Só contratos assinados/aguardando ainda sem nota autorizada.
   const contratosEmissiveis = (contratosQ.data ?? []).filter((c) => c.status === 'assinado' || c.status === 'aguardando')
@@ -136,6 +156,12 @@ export default function NotasFiscaisScreen() {
                 {item.status === 'cancelada' && item.justificativa_cancelamento && (
                   <Txt variant="caption" color="error" numberOfLines={2}>Cancelada: {item.justificativa_cancelamento}</Txt>
                 )}
+                {(item.status === 'rejeitada' || item.status === 'erro') && item.motivo_rejeicao && (
+                  <Txt variant="caption" color="error" numberOfLines={2}>Rejeição: {item.motivo_rejeicao}</Txt>
+                )}
+                {item.cartas_correcao && item.cartas_correcao.length > 0 && (
+                  <Txt variant="caption" color="textMuted">📝 {item.cartas_correcao.length} carta(s) de correção</Txt>
+                )}
               </View>
               <View style={{ alignItems: 'flex-end', gap: 4 }}>
                 <Txt variant="bodyMedium">{formatBRL(item.valor_total)}</Txt>
@@ -197,11 +223,16 @@ export default function NotasFiscaisScreen() {
         visible={menuNota !== null}
         onClose={() => setMenuNota(null)}
         title={menuNota ? `NF-e ${menuNota.numero ?? ''}` : 'Nota fiscal'}
-        options={[{ value: 'cancelar', label: 'Cancelar NF-e', sublabel: 'Cancela a nota na SEFAZ. Ação definitiva.', icon: 'close-circle-outline', tone: colors.error }]}
-        onSelect={() => {
+        options={[
+          { value: 'cce', label: 'Carta de Correção (CC-e)', sublabel: 'Corrige dados não-essenciais.', icon: 'create-outline' },
+          { value: 'cancelar', label: 'Cancelar NF-e', sublabel: 'Cancela a nota na SEFAZ. Ação definitiva.', icon: 'close-circle-outline', tone: colors.error },
+        ]}
+        onSelect={(v) => {
           const n = menuNota
           setMenuNota(null)
-          if (n) setCancelar(n)
+          if (!n) return
+          if (v === 'cancelar') setCancelar(n)
+          else setCce(n)
         }}
       />
 
@@ -224,6 +255,33 @@ export default function NotasFiscaisScreen() {
           />
           <Button title="Confirmar cancelamento" variant="danger" loading={cancelando} onPress={confirmarCancelamento} disabled={justificativa.trim().length < 15} />
           <Button title="Voltar" variant="ghost" onPress={() => setCancelar(null)} />
+        </View>
+      </Sheet>
+
+      {/* Carta de Correção (CC-e) */}
+      <Sheet visible={cce !== null} onClose={() => setCce(null)} title="Carta de Correção">
+        <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+          <Txt variant="caption" color="textDim">
+            A CC-e corrige apenas dados **não-essenciais** (ex.: descrição, observações). Não pode alterar valores, impostos, partes ou datas.
+          </Txt>
+          {cce?.cartas_correcao && cce.cartas_correcao.length > 0 && (
+            <View style={{ gap: 4 }}>
+              {cce.cartas_correcao.map((c) => (
+                <Txt key={c.id} variant="caption" color="textMuted">#{c.sequencia}: {c.texto}</Txt>
+              ))}
+            </View>
+          )}
+          <Input
+            label="Texto da correção"
+            value={cceTexto}
+            onChangeText={setCceTexto}
+            placeholder="Descreva a correção"
+            multiline
+            style={{ minHeight: 72, textAlignVertical: 'top' }}
+            hint={`${cceTexto.trim().length}/15 caracteres mínimos`}
+          />
+          <Button title="Emitir carta de correção" icon="create-outline" loading={cceEnviando} onPress={confirmarCce} disabled={cceTexto.trim().length < 15} />
+          <Button title="Voltar" variant="ghost" onPress={() => setCce(null)} />
         </View>
       </Sheet>
     </Screen>

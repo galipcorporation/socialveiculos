@@ -65,4 +65,17 @@ export const notasFiscaisService = {
       n.justificativa_cancelamento = justificativa
     }
   },
+
+  async emitirCartaCorrecao(id: string, texto: string): Promise<void> {
+    await delay(300, 600)
+    const n = notas.find((x) => x.id === id)
+    if (!n) throw new Error('Nota não encontrada.')
+    n.cartas_correcao = n.cartas_correcao ?? []
+    n.cartas_correcao.push({
+      id: novoId('cce'),
+      sequencia: n.cartas_correcao.length + 1,
+      texto: texto.trim(),
+      created_at: new Date().toISOString(),
+    })
+  },
 }

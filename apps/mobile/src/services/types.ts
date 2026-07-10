@@ -286,6 +286,9 @@ export interface Membro {
   modulos?: string
   vendas_mes?: number
   created_at: string
+  // Config do Assistente de IA por vendedor (M066)
+  assistente_ativo?: boolean
+  assistente_autonomia?: 'copiloto' | 'automatico'
 }
 
 // ── Dashboard ──────────────────────────────────────────────
@@ -510,7 +513,15 @@ export interface NotaFiscal {
   justificativa_cancelamento?: string
   danfe_pdf_url?: string
   xml_url?: string
+  cartas_correcao?: CartaCorrecao[]
   emitida_em?: string
+  created_at: string
+}
+
+export interface CartaCorrecao {
+  id: string
+  sequencia: number
+  texto: string
   created_at: string
 }
 

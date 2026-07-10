@@ -10,6 +10,8 @@ export interface MembroInput {
   percentual_comissao?: number | null
   /** JSON array das keys de módulos liberados. Ignorado p/ gestor (acesso total). */
   modulos?: string
+  /** Senha provisória (no convite). No mock só validamos que foi informada. */
+  senha?: string
 }
 
 export const equipeService = {
@@ -64,6 +66,24 @@ export const equipeService = {
       const m = db.equipe.find((x) => x.id === idMembro)
       if (!m) throw new Error('Membro não encontrado.')
       m.ativo = !m.ativo
+      return m
+    })
+  },
+
+  async excluir(idMembro: string): Promise<void> {
+    await delay(150, 300)
+    return mutate((db) => {
+      db.equipe = db.equipe.filter((m) => m.id !== idMembro)
+    })
+  },
+
+  async configurarIA(idMembro: string, input: { ativo: boolean; autonomia: 'copiloto' | 'automatico' }): Promise<Membro> {
+    await delay(150, 300)
+    return mutate((db) => {
+      const m = db.equipe.find((x) => x.id === idMembro)
+      if (!m) throw new Error('Membro não encontrado.')
+      m.assistente_ativo = input.ativo
+      m.assistente_autonomia = input.autonomia
       return m
     })
   },

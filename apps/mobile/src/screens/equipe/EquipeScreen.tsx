@@ -141,6 +141,9 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
   const [papel, setPapel] = useState<Papel>('vendedor')
   const [comissao, setComissao] = useState('2')
   const [modulos, setModulos] = useState<ModuloKey[]>([])
+  const [senha, setSenha] = useState('')
+  const [iaAtivo, setIaAtivo] = useState(false)
+  const [iaAutonomia, setIaAutonomia] = useState<'copiloto' | 'automatico'>('copiloto')
 
   React.useEffect(() => {
     if (visible) {
@@ -150,6 +153,9 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
       setPapel(membro?.papel ?? 'vendedor')
       setComissao(membro?.percentual_comissao != null ? String(membro.percentual_comissao) : '2')
       setModulos(parseModulos(membro?.modulos))
+      setSenha('')
+      setIaAtivo(membro?.assistente_ativo ?? false)
+      setIaAutonomia(membro?.assistente_autonomia ?? 'copiloto')
     }
   }, [visible, membro])
 
@@ -157,7 +163,7 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
     setModulos((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
 
   const mut = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const input = {
         nome: nome.trim(),
         email: email.trim().toLowerCase(),
@@ -165,8 +171,11 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
         papel,
         percentual_comissao: papel === 'vendedor' ? parseFloat(comissao.replace(',', '.')) || 0 : null,
         modulos: papel === 'gestor' ? JSON.stringify(TODOS_MODULOS) : JSON.stringify(modulos),
+        senha: editando ? undefined : senha,
       }
-      return editando ? equipeService.atualizar(membro!.id, input) : equipeService.criar(input)
+      const m = editando ? await equipeService.atualizar(membro!.id, input) : await equipeService.criar(input)
+      if (papel === 'vendedor') await equipeService.configurarIA(m.id, { ativo: iaAtivo, autonomia: iaAutonomia })
+      return m
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['equipe'] })
@@ -177,7 +186,12 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
       toast.show('error', e instanceof Error ? e.message : 'Não foi possível salvar.'),
   })
 
-  const valido = nome.trim().length >= 3 && /\S+@\S+\.\S+/.test(email)
+  const removerMut = useMutation({
+    mutationFn: () => equipeService.excluir(membro!.id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['equipe'] }); onClose(); toast.show('success', 'Membro removido.') },
+  })
+
+  const valido = nome.trim().length >= 3 && /\S+@\S+\.\S+/.test(email) && (editando || senha.length >= 6)
 
   return (
     <Sheet visible={visible} onClose={onClose} title={editando ? 'Editar membro' : 'Novo membro'}>
@@ -200,6 +214,17 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
           value={telefone}
           onChangeText={setTelefone}
         />
+        {!editando && (
+          <Input
+            label="Senha provisória *"
+            placeholder="Mínimo 6 caracteres"
+            icon="lock-closed-outline"
+            secureTextEntry
+            value={senha}
+            onChangeText={setSenha}
+            hint="O membro troca no primeiro acesso."
+          />
+        )}
         <View style={{ gap: 6 }}>
           <Txt variant="captionMedium" color="textDim">Papel</Txt>
           <SegmentedControl
@@ -260,12 +285,41 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
           )}
         </View>
 
+        {/* Config do Assistente de IA (vendedor) */}
+        {papel === 'vendedor' && (
+          <View style={{ gap: 6 }}>
+            <Txt variant="captionMedium" color="textDim">Assistente de IA</Txt>
+            <Card style={{ gap: spacing.sm, padding: spacing.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+                <Txt variant="body" style={{ flex: 1 }}>Habilitar assistente</Txt>
+                <Switch value={iaAtivo} onValueChange={setIaAtivo} trackColor={{ false: colors.overlayStrong, true: colors.primary }} thumbColor="#fff" />
+              </View>
+              {iaAtivo && (
+                <SegmentedControl
+                  options={[{ value: 'copiloto', label: 'Copiloto' }, { value: 'automatico', label: 'Automático' }]}
+                  selected={iaAutonomia}
+                  onSelect={(v) => setIaAutonomia(v as 'copiloto' | 'automatico')}
+                />
+              )}
+              {iaAtivo && (
+                <Txt variant="caption" color="textDim">
+                  {iaAutonomia === 'copiloto' ? 'A IA sugere respostas para o vendedor aprovar.' : 'A IA responde diretamente aos leads.'}
+                </Txt>
+              )}
+            </Card>
+          </View>
+        )}
+
         <Button
           title={editando ? 'Salvar alterações' : 'Adicionar membro'}
           loading={mut.isPending}
           disabled={!valido}
           onPress={() => mut.mutate()}
         />
+        {editando && membro!.papel !== 'gestor' && (
+          <Button title="Remover membro" variant="outline" loading={removerMut.isPending} onPress={() => removerMut.mutate()} style={{ borderColor: colors.error }} />
+        )}
       </View>
     </Sheet>
   )
