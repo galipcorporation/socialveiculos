@@ -1,8 +1,18 @@
 // Contratos (M051) — mock. Espelha /contratos do gestor (lista + detalhe + PDF).
 // Estado em memória de sessão; swap p/ API = reimplementar mantendo assinaturas.
 
-import { delay } from './db'
-import type { Contrato } from './types'
+import { delay, novoId } from './db'
+import type { Contrato, StatusContrato } from './types'
+
+export interface ContratoInput {
+  tipo: 'compra_venda' | 'compra'
+  veiculo_nome?: string
+  cliente_nome?: string
+  valor_venda?: number
+  valor_entrada?: number
+  parcelas?: number
+  observacoes?: string
+}
 
 const now = Date.now()
 const diasAtras = (d: number) => new Date(now - d * 86_400_000).toISOString()
@@ -30,5 +40,34 @@ export const contratosService = {
   async pdfUrl(id: string): Promise<string> {
     await delay(150, 300)
     return `https://demo.socialveiculos.com.br/contratos/${id}.pdf`
+  },
+
+  async criar(input: ContratoInput): Promise<Contrato> {
+    await delay(250, 500)
+    const seq = String(43 + contratos.length).padStart(4, '0')
+    const prefixo = input.tipo === 'compra' ? 'CO' : 'CV'
+    const novo: Contrato = {
+      id: novoId('ctr'),
+      numero: `${prefixo}-${new Date().getFullYear()}-${seq}`,
+      tipo: input.tipo,
+      status: 'aguardando',
+      veiculo_nome: input.veiculo_nome,
+      cliente_nome: input.cliente_nome,
+      valor_venda: input.valor_venda,
+      valor_entrada: input.valor_entrada,
+      parcelas: input.parcelas,
+      observacoes: input.observacoes,
+      created_at: new Date().toISOString(),
+    }
+    contratos = [novo, ...contratos]
+    return novo
+  },
+
+  async alterarStatus(id: string, status: StatusContrato): Promise<Contrato> {
+    await delay(150, 300)
+    const c = contratos.find((x) => x.id === id)
+    if (!c) throw new Error('Contrato não encontrado.')
+    c.status = status
+    return c
   },
 }
