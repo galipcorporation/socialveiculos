@@ -215,6 +215,7 @@ export interface ItemChecklist {
   prazo_em?: string | null
   vencido: boolean
   concluido_em?: string | null
+  documento_nome?: string | null
 }
 
 export interface Esteira {
@@ -564,6 +565,14 @@ export interface PublicacaoRepasse {
   created_at: string
 }
 
+export interface ComentarioRepasse {
+  id: string
+  publicacao_id: string
+  autor_nome: string
+  texto: string
+  created_at: string
+}
+
 export type StatusProposta = 'pendente' | 'aceita' | 'rejeitada' | 'cancelada'
 
 export interface PropostaRepasse {
@@ -594,6 +603,7 @@ export interface LojaParceira {
   verificada: boolean
   total_veiculos: number
   conversa_id?: string
+  seguindo?: boolean
 }
 
 // ── Comissões ──────────────────────────────────────────────

@@ -64,4 +64,27 @@ export const chatService = {
       { cliente: 0, parceiro: 0 },
     )
   },
+
+  /** Abre (ou reaproveita) uma conversa B2B com uma loja parceira (M063). */
+  async abrirConversaParceiro(lojaNome: string, contatoNome: string, veiculoInteresse?: string): Promise<string> {
+    return mutate((db) => {
+      let conv = db.conversas.find((c) => c.tipo === 'parceiro' && c.loja_parceira_nome === lojaNome)
+      if (!conv) {
+        const agora = new Date().toISOString()
+        conv = {
+          id: novoId('conv'),
+          tipo: 'parceiro',
+          cliente_nome: contatoNome,
+          loja_parceira_nome: lojaNome,
+          veiculo_interesse: veiculoInteresse,
+          canal: 'chat',
+          ultima_mensagem: 'Conversa iniciada',
+          ultima_mensagem_em: agora,
+          nao_lidas: 0,
+        }
+        db.conversas.unshift(conv)
+      }
+      return conv.id
+    })
+  },
 }

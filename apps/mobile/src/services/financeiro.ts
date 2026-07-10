@@ -10,17 +10,27 @@ export interface LancamentoInput {
   veiculo_nome?: string
 }
 
+export interface PeriodoFinanceiro {
+  mes: number | 'todos' // 0-11 ou 'todos'
+  ano: number
+}
+
+function noPeriodo(dataIso: string, periodo?: PeriodoFinanceiro): boolean {
+  if (!periodo) return true
+  const d = new Date(dataIso)
+  if (d.getFullYear() !== periodo.ano) return false
+  if (periodo.mes !== 'todos' && d.getMonth() !== periodo.mes) return false
+  return true
+}
+
 export const financeiroService = {
-  async resumo(): Promise<ResumoFinanceiro> {
+  async resumo(periodo?: PeriodoFinanceiro): Promise<ResumoFinanceiro> {
     await delay()
     const db = await getDb()
-    const inicioMes = new Date()
-    inicioMes.setDate(1)
-    inicioMes.setHours(0, 0, 0, 0)
-    const doMes = db.lancamentos.filter((l) => new Date(l.data) >= inicioMes)
+    const doPeriodo = db.lancamentos.filter((l) => noPeriodo(l.data, periodo))
 
     const soma = (tipo: TipoLancamento, apenasPagos = false) =>
-      doMes
+      doPeriodo
         .filter((l) => l.tipo === tipo && (!apenasPagos || l.status_pagamento === 'pago'))
         .reduce((acc, l) => acc + l.valor, 0)
 
@@ -44,12 +54,19 @@ export const financeiroService = {
     }
   },
 
-  async lancamentos(filtro?: TipoLancamento | 'todos'): Promise<Lancamento[]> {
+  async lancamentos(filtro?: TipoLancamento | 'todos', periodo?: PeriodoFinanceiro): Promise<Lancamento[]> {
     await delay()
     const db = await getDb()
-    let lista = [...db.lancamentos]
+    let lista = db.lancamentos.filter((l) => noPeriodo(l.data, periodo))
     if (filtro && filtro !== 'todos') lista = lista.filter((l) => l.tipo === filtro)
     return lista.sort((a, b) => b.data.localeCompare(a.data))
+  },
+
+  async excluir(idLancamento: string): Promise<void> {
+    await delay(120, 260)
+    return mutate((db) => {
+      db.lancamentos = db.lancamentos.filter((l) => l.id !== idLancamento)
+    })
   },
 
   async criar(input: LancamentoInput): Promise<Lancamento> {

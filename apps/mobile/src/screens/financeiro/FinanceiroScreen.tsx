@@ -5,9 +5,10 @@ import { useTheme } from '../../theme/ThemeContext'
 import { fonts, spacing } from '../../theme/tokens'
 import {
   AppHeader, Badge, Button, Card, EmptyState, ErrorState, Fab, FilterChips, Input, KpiCard,
-  Sheet, SegmentedControl, SkeletonCard, TONE_TIPO_LANCAMENTO, Txt, useToast,
+  OptionSheet, Sheet, SegmentedControl, SelectField, SkeletonCard, TONE_TIPO_LANCAMENTO, Txt, useToast,
 } from '../../components/ui'
-import { financeiroService } from '../../services'
+import { financeiroService, veiculosService } from '../../services'
+import type { PeriodoFinanceiro } from '../../services/financeiro'
 import type { Lancamento, TipoLancamento } from '../../services/types'
 import { formatBRL, formatBRLCompact, formatData, maskMoedaInput, parseMoedaInput } from '../../lib/format'
 
@@ -19,18 +20,35 @@ const TIPO_LABEL: Record<TipoLancamento, string> = {
   comissao: 'Comissão',
 }
 
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+
 export default function FinanceiroScreen() {
   const { colors } = useTheme()
   const queryClient = useQueryClient()
+  const toast = useToast()
   const [filtro, setFiltro] = useState<Filtro>('todos')
   const [novoAberto, setNovoAberto] = useState(false)
+  const [periodo, setPeriodo] = useState<PeriodoFinanceiro>({ mes: new Date().getMonth(), ano: new Date().getFullYear() })
+  const [periodoSheet, setPeriodoSheet] = useState(false)
+  const [acaoLanc, setAcaoLanc] = useState<Lancamento | null>(null)
 
-  const resumoQ = useQuery({ queryKey: ['financeiro', 'resumo'], queryFn: () => financeiroService.resumo() })
+  const chave = `${periodo.ano}-${periodo.mes}`
+  const resumoQ = useQuery({ queryKey: ['financeiro', 'resumo', chave], queryFn: () => financeiroService.resumo(periodo) })
   const listaQ = useQuery({
-    queryKey: ['financeiro', 'lancamentos', filtro],
-    queryFn: () => financeiroService.lancamentos(filtro),
+    queryKey: ['financeiro', 'lancamentos', filtro, chave],
+    queryFn: () => financeiroService.lancamentos(filtro, periodo),
   })
 
+  const togglePagMut = useMutation({
+    mutationFn: (idL: string) => financeiroService.alternarPagamento(idL),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['financeiro'] }); setAcaoLanc(null); toast.show('success', 'Status atualizado.') },
+  })
+  const excluirMut = useMutation({
+    mutationFn: (idL: string) => financeiroService.excluir(idL),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['financeiro'] }); setAcaoLanc(null); toast.show('success', 'Lançamento excluído.') },
+  })
+
+  const periodoLabel = periodo.mes === 'todos' ? `${periodo.ano}` : `${MESES[periodo.mes as number]} ${periodo.ano}`
   const r = resumoQ.data
 
   const chips = [
@@ -42,7 +60,7 @@ export default function FinanceiroScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <AppHeader title="Financeiro" subtitle="Movimentações do mês" back />
+      <AppHeader title="Financeiro" subtitle={periodoLabel} back />
       {listaQ.isError ? (
         <ErrorState onRetry={() => listaQ.refetch()} />
       ) : (
@@ -51,10 +69,11 @@ export default function FinanceiroScreen() {
           keyExtractor={(l) => l.id}
           ListHeaderComponent={
             <View style={{ gap: spacing.md, marginBottom: spacing.md }}>
-              {/* Saldo do mês */}
+              <SelectField label="Período" value={periodoLabel} icon="calendar-outline" onPress={() => setPeriodoSheet(true)} />
+              {/* Saldo do período */}
               <Card>
                 <Txt variant="label" color="textMuted" style={{ textTransform: 'uppercase' }}>
-                  Saldo do mês
+                  Saldo do período
                 </Txt>
                 <Txt
                   style={{
@@ -80,7 +99,7 @@ export default function FinanceiroScreen() {
               <FilterChips options={chips} selected={filtro} onSelect={setFiltro} />
             </View>
           }
-          renderItem={({ item }) => <LancamentoRow lancamento={item} />}
+          renderItem={({ item }) => <LancamentoRow lancamento={item} onPress={() => setAcaoLanc(item)} />}
           contentContainerStyle={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
           refreshing={listaQ.isRefetching}
@@ -103,15 +122,46 @@ export default function FinanceiroScreen() {
 
       <Fab icon="add" label="Lançamento" onPress={() => setNovoAberto(true)} />
       <NovoLancamentoSheet visible={novoAberto} onClose={() => setNovoAberto(false)} />
+
+      {/* Período (mês + ano) */}
+      <OptionSheet
+        visible={periodoSheet}
+        onClose={() => setPeriodoSheet(false)}
+        title="Período"
+        selected={periodo.mes === 'todos' ? 'todos' : String(periodo.mes)}
+        options={[
+          { value: 'todos', label: `Ano inteiro (${periodo.ano})` },
+          ...MESES.map((m, i) => ({ value: String(i), label: `${m} ${periodo.ano}` })),
+        ]}
+        onSelect={(v) => setPeriodo((p) => ({ ...p, mes: v === 'todos' ? 'todos' : Number(v) }))}
+      />
+
+      {/* Ações do lançamento */}
+      <Sheet visible={acaoLanc !== null} onClose={() => setAcaoLanc(null)} title={acaoLanc?.descricao} scrollable={false}>
+        {acaoLanc && (
+          <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+            <Txt variant="caption" color="textDim">{formatBRL(acaoLanc.valor)} · {acaoLanc.status_pagamento === 'pago' ? 'Pago' : 'Pendente'}</Txt>
+            <Button
+              title={acaoLanc.status_pagamento === 'pago' ? 'Marcar como pendente' : 'Marcar como pago'}
+              variant="tonal"
+              icon="swap-horizontal-outline"
+              loading={togglePagMut.isPending}
+              onPress={() => togglePagMut.mutate(acaoLanc.id)}
+            />
+            <Button title="Excluir lançamento" variant="danger" icon="trash-outline" loading={excluirMut.isPending} onPress={() => excluirMut.mutate(acaoLanc.id)} />
+            <Button title="Cancelar" variant="ghost" onPress={() => setAcaoLanc(null)} />
+          </View>
+        )}
+      </Sheet>
     </View>
   )
 }
 
-function LancamentoRow({ lancamento }: { lancamento: Lancamento }) {
+function LancamentoRow({ lancamento, onPress }: { lancamento: Lancamento; onPress: () => void }) {
   const { colors } = useTheme()
   const negativo = lancamento.tipo !== 'receita'
   return (
-    <Card style={{ marginBottom: spacing.xs }}>
+    <Card onPress={onPress} style={{ marginBottom: spacing.xs }}>
       <View style={styles.lancRow}>
         <View style={{ flex: 1 }}>
           <Txt variant="bodyMedium" numberOfLines={1}>{lancamento.descricao}</Txt>
@@ -142,6 +192,10 @@ function NovoLancamentoSheet({ visible, onClose }: { visible: boolean; onClose: 
   const [descricao, setDescricao] = useState('')
   const [valor, setValor] = useState('')
   const [status, setStatus] = useState<'pago' | 'pendente'>('pago')
+  const [veiculoNome, setVeiculoNome] = useState<string | undefined>(undefined)
+  const [veicSheet, setVeicSheet] = useState(false)
+
+  const veiculosQ = useQuery({ queryKey: ['veiculos', 'financeiro'], queryFn: () => veiculosService.listar(), enabled: visible })
 
   const mut = useMutation({
     mutationFn: () =>
@@ -150,6 +204,7 @@ function NovoLancamentoSheet({ visible, onClose }: { visible: boolean; onClose: 
         descricao: descricao.trim(),
         valor: parseMoedaInput(valor),
         status_pagamento: status,
+        veiculo_nome: veiculoNome,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['financeiro'] })
@@ -190,6 +245,13 @@ function NovoLancamentoSheet({ visible, onClose }: { visible: boolean; onClose: 
           value={valor}
           onChangeText={(t) => setValor(maskMoedaInput(t))}
         />
+        <SelectField
+          label="Veículo (opcional)"
+          value={veiculoNome}
+          placeholder="Vincular a um veículo"
+          icon="car-sport-outline"
+          onPress={() => setVeicSheet(true)}
+        />
         <SegmentedControl
           options={[
             { value: 'pago', label: 'Pago' },
@@ -200,6 +262,17 @@ function NovoLancamentoSheet({ visible, onClose }: { visible: boolean; onClose: 
         />
         <Button title="Salvar lançamento" loading={mut.isPending} disabled={!valido} onPress={() => mut.mutate()} />
       </View>
+      <OptionSheet
+        visible={veicSheet}
+        onClose={() => setVeicSheet(false)}
+        title="Vincular veículo"
+        selected={veiculoNome}
+        options={[
+          { value: '', label: 'Nenhum' },
+          ...(veiculosQ.data ?? []).map((v) => ({ value: `${v.marca} ${v.modelo}`, label: `${v.marca} ${v.modelo}`, sublabel: v.placa })),
+        ]}
+        onSelect={(val) => setVeiculoNome(val || undefined)}
+      />
     </Sheet>
   )
 }

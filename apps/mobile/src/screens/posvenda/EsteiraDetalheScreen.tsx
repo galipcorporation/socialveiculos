@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
@@ -7,8 +7,8 @@ import * as Haptics from 'expo-haptics'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
 import {
-  AppHeader, Badge, Button, Card, ErrorState, ProgressBar, Screen, Skeleton,
-  TONE_ESTAGIO_ESTEIRA, Txt, useToast,
+  AppHeader, Badge, Button, Card, ErrorState, Input, ProgressBar, Screen, Sheet,
+  Skeleton, TONE_ESTAGIO_ESTEIRA, Txt, useToast,
 } from '../../components/ui'
 import { esteiraService } from '../../services'
 import {
@@ -59,6 +59,32 @@ export default function EsteiraDetalheScreen({ route }: RootScreenProps<'Esteira
       toast.show('success', 'Comissão marcada como paga.')
     },
   })
+
+  const concluirMut = useMutation({
+    mutationFn: () => esteiraService.concluir(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries()
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      toast.show('success', 'Pós-venda concluído e arquivado! 🎉')
+    },
+    onError: (err) => toast.show('error', err instanceof Error ? err.message : 'Não foi possível concluir.'),
+  })
+
+  const anexarMut = useMutation({
+    mutationFn: (p: { itemId: string; nome: string }) => esteiraService.anexarDocumento(id, p.itemId, p.nome),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['esteiras'] }); toast.show('success', 'Documento anexado.') },
+  })
+  const addItemMut = useMutation({
+    mutationFn: (p: { titulo: string; categoria: CategoriaItemEsteira; obrigatorio: boolean }) => esteiraService.adicionarItem(id, p),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['esteiras'] }); toast.show('success', 'Item adicionado.') },
+  })
+  const removeItemMut = useMutation({
+    mutationFn: (itemId: string) => esteiraService.removerItem(id, itemId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['esteiras'] }),
+  })
+
+  const [anexarItem, setAnexarItem] = useState<ItemChecklist | null>(null)
+  const [addCat, setAddCat] = useState<CategoriaItemEsteira | null>(null)
 
   if (q.isError) {
     return (
@@ -153,74 +179,147 @@ export default function EsteiraDetalheScreen({ route }: RootScreenProps<'Esteira
               <Card key={cat} padded={false}>
                 <View style={styles.catHeader}>
                   <Txt variant="title">{CATEGORIA_ITEM_LABEL[cat]}</Txt>
-                  <Txt variant="caption" color="textMuted">
-                    {concluidos}/{itens.length}
-                  </Txt>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                    <Txt variant="caption" color="textMuted">{concluidos}/{itens.length}</Txt>
+                    {gestor && e.estagio !== 'concluido' && (
+                      <Pressable onPress={() => setAddCat(cat)} hitSlop={8}>
+                        <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
                 {itens.map((item) => (
                   <ItemRow
                     key={item.id}
                     item={item}
+                    gestor={gestor}
                     onToggle={() => toggleMut.mutate(item.id)}
+                    onAnexar={() => setAnexarItem(item)}
+                    onRemover={() => removeItemMut.mutate(item.id)}
                     disabled={toggleMut.isPending}
                   />
                 ))}
               </Card>
             )
           })}
+
+        {/* Concluir esteira */}
+        {e && e.estagio !== 'concluido' && (() => {
+          const pendObrig = e.itens.filter((i) => i.obrigatorio && i.status !== 'concluido' && i.status !== 'nao_aplicavel').length
+          return (
+            <Button
+              title={pendObrig > 0 ? `Restam ${pendObrig} item(ns) obrigatório(s)` : 'Concluir pós-venda'}
+              icon="checkmark-done"
+              variant="success"
+              loading={concluirMut.isPending}
+              disabled={pendObrig > 0}
+              onPress={() => concluirMut.mutate()}
+              full
+            />
+          )
+        })()}
       </ScrollView>
+
+      {/* Anexar documento */}
+      {anexarItem && (
+        <AnexarSheet
+          item={anexarItem}
+          onClose={() => setAnexarItem(null)}
+          onConfirm={(nome) => { anexarMut.mutate({ itemId: anexarItem.id, nome }); setAnexarItem(null) }}
+        />
+      )}
+      {/* Adicionar item */}
+      {addCat && (
+        <AddItemSheet
+          categoria={addCat}
+          onClose={() => setAddCat(null)}
+          onConfirm={(titulo, obrigatorio) => { addItemMut.mutate({ titulo, categoria: addCat, obrigatorio }); setAddCat(null) }}
+        />
+      )}
     </Screen>
   )
 }
 
-function ItemRow({ item, onToggle, disabled }: { item: ItemChecklist; onToggle: () => void; disabled: boolean }) {
+function AnexarSheet({ item, onClose, onConfirm }: { item: ItemChecklist; onClose: () => void; onConfirm: (nome: string) => void }) {
+  const [nome, setNome] = useState(item.documento_nome ?? '')
+  return (
+    <Sheet visible onClose={onClose} title="Anexar documento">
+      <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+        <Txt variant="caption" color="textDim">{item.titulo}</Txt>
+        <Input label="Nome do arquivo (PDF)" value={nome} onChangeText={setNome} placeholder="ex.: crlv-assinado.pdf" autoCapitalize="none" hint="No app real, aqui abre o seletor de arquivos." />
+        <Button title="Anexar e concluir item" icon="document-attach-outline" disabled={nome.trim().length < 3} onPress={() => onConfirm(nome.trim())} />
+      </View>
+    </Sheet>
+  )
+}
+
+function AddItemSheet({ categoria, onClose, onConfirm }: { categoria: CategoriaItemEsteira; onClose: () => void; onConfirm: (titulo: string, obrigatorio: boolean) => void }) {
+  const { colors } = useTheme()
+  const [titulo, setTitulo] = useState('')
+  const [obrig, setObrig] = useState(true)
+  return (
+    <Sheet visible onClose={onClose} title={`Novo item · ${CATEGORIA_ITEM_LABEL[categoria]}`}>
+      <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+        <Input label="Título do item" value={titulo} onChangeText={setTitulo} placeholder="ex.: Enviar boleto de IPVA" />
+        <Pressable onPress={() => setObrig((v) => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: 4 }}>
+          <Ionicons name={obrig ? 'checkbox' : 'square-outline'} size={22} color={obrig ? colors.primary : colors.textMuted} />
+          <Txt variant="body">Item obrigatório para concluir</Txt>
+        </Pressable>
+        <Button title="Adicionar item" icon="add" disabled={titulo.trim().length < 3} onPress={() => onConfirm(titulo.trim(), obrig)} />
+      </View>
+    </Sheet>
+  )
+}
+
+function ItemRow({ item, gestor, onToggle, onAnexar, onRemover, disabled }: {
+  item: ItemChecklist; gestor: boolean; onToggle: () => void; onAnexar: () => void; onRemover: () => void; disabled: boolean
+}) {
   const { colors } = useTheme()
   const feito = item.status === 'concluido'
+  const podeAnexar = item.categoria === 'documento' && !feito
   return (
-    <Pressable
-      onPress={() => {
-        Haptics.selectionAsync().catch(() => {})
-        onToggle()
-      }}
-      disabled={disabled}
-      style={({ pressed }) => [
-        styles.item,
-        { borderTopColor: colors.border, backgroundColor: pressed ? colors.overlaySoft : 'transparent' },
-      ]}
-    >
-      <View
-        style={[
-          styles.check,
-          feito
-            ? { backgroundColor: colors.success, borderColor: colors.success }
-            : { borderColor: item.vencido ? colors.error : colors.borderHover },
-        ]}
+    <View style={[styles.item, { borderTopColor: colors.border }]}>
+      <Pressable
+        onPress={() => { Haptics.selectionAsync().catch(() => {}); onToggle() }}
+        disabled={disabled}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 }}
       >
-        {feito && <Ionicons name="checkmark" size={14} color="#fff" />}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Txt
-          variant="body"
-          style={feito ? { textDecorationLine: 'line-through', color: colors.textMuted } : undefined}
+        <View
+          style={[
+            styles.check,
+            feito ? { backgroundColor: colors.success, borderColor: colors.success } : { borderColor: item.vencido ? colors.error : colors.borderHover },
+          ]}
         >
-          {item.titulo}
-        </Txt>
-        <Txt variant="caption" color={item.vencido ? 'error' : 'textMuted'}>
-          {item.vencido
-            ? `Vencido — prazo ${formatData(item.prazo_em)}`
-            : feito
-              ? `Concluído em ${formatData(item.concluido_em)}`
-              : item.prazo_em
-                ? `Prazo: ${formatData(item.prazo_em)}`
-                : item.responsavel === 'loja'
-                  ? 'Responsável: loja'
-                  : 'Responsável: comprador'}
-        </Txt>
-      </View>
-      {item.responsavel === 'comprador' && (
-        <Ionicons name="person-outline" size={15} color={colors.textMuted} />
+          {feito && <Ionicons name="checkmark" size={14} color="#fff" />}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Txt variant="body" style={feito ? { textDecorationLine: 'line-through', color: colors.textMuted } : undefined}>
+            {item.titulo}{item.obrigatorio ? '' : ' (opcional)'}
+          </Txt>
+          <Txt variant="caption" color={item.vencido ? 'error' : 'textMuted'}>
+            {item.documento_nome
+              ? `📎 ${item.documento_nome}`
+              : item.vencido
+                ? `Vencido — prazo ${formatData(item.prazo_em)}`
+                : feito
+                  ? `Concluído em ${formatData(item.concluido_em)}`
+                  : item.prazo_em
+                    ? `Prazo: ${formatData(item.prazo_em)}`
+                    : item.responsavel === 'loja' ? 'Responsável: loja' : 'Responsável: comprador'}
+          </Txt>
+        </View>
+      </Pressable>
+      {podeAnexar && (
+        <Pressable onPress={onAnexar} hitSlop={8} style={{ padding: 4 }}>
+          <Ionicons name="document-attach-outline" size={18} color={colors.primary} />
+        </Pressable>
       )}
-    </Pressable>
+      {gestor && (
+        <Pressable onPress={onRemover} hitSlop={8} style={{ padding: 4 }}>
+          <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
+        </Pressable>
+      )}
+    </View>
   )
 }
 

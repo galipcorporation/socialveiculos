@@ -1,15 +1,18 @@
 import React, { useState } from 'react'
 import { FlatList, Linking, Pressable, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useNavigation } from '@react-navigation/native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing } from '../../theme/tokens'
 import {
-  AppHeader, Avatar, Badge, Button, Card, EmptyState, ErrorState, FilterChips, Input,
-  Screen, Sheet, SkeletonCard, Txt, useToast,
+  AppHeader, Avatar, Badge, Button, Card, EmptyState, ErrorState, FilterChips, Input, SearchBar,
+  SegmentedControl, Screen, Sheet, SkeletonCard, Txt, useToast,
 } from '../../components/ui'
-import { repassesService } from '../../services'
-import type { LojaParceira, PropostaRepasse, PublicacaoRepasse, StatusProposta } from '../../services/types'
+import { chatService, repassesService } from '../../services'
+import type {
+  ComentarioRepasse, LojaParceira, PropostaRepasse, PublicacaoRepasse, StatusProposta,
+} from '../../services/types'
 import { STATUS_PROPOSTA_LABEL } from '../../services/types'
 import { formatBRL, formatRelativo, formatKm, formatTelefone } from '../../lib/format'
 
@@ -49,6 +52,7 @@ export default function RedeSocialScreen() {
 // ── Feed ──────────────────────────────────────────────────
 function FeedTab() {
   const { colors } = useTheme()
+  const navigation = useNavigation<any>()
   const queryClient = useQueryClient()
   const toast = useToast()
   const q = useQuery({ queryKey: ['repasses', 'feed'], queryFn: () => repassesService.feed() })
@@ -57,10 +61,17 @@ function FeedTab() {
   const [valor, setValor] = useState('')
   const [obs, setObs] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [comentarPub, setComentarPub] = useState<PublicacaoRepasse | null>(null)
 
   const curtir = async (id: string) => {
     await repassesService.curtir(id)
     queryClient.invalidateQueries({ queryKey: ['repasses', 'feed'] })
+  }
+
+  const conversar = async (p: PublicacaoRepasse) => {
+    const convId = await chatService.abrirConversaParceiro(p.loja_nome, p.autor_nome, p.veiculo_nome)
+    queryClient.invalidateQueries({ queryKey: ['chat'] })
+    navigation.navigate('Conversa', { id: convId, nome: p.loja_nome })
   }
 
   const abrirProposta = (p: PublicacaoRepasse) => {
@@ -124,16 +135,22 @@ function FeedTab() {
                 <Ionicons name={item.curtido_por_mim ? 'heart' : 'heart-outline'} size={18} color={item.curtido_por_mim ? colors.error : colors.textDim} />
                 <Txt variant="caption" color="textDim">{item.curtidas}</Txt>
               </Pressable>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Pressable onPress={() => setComentarPub(item)} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Ionicons name="chatbubble-outline" size={16} color={colors.textDim} />
                 <Txt variant="caption" color="textDim">{item.comentarios}</Txt>
-              </View>
+              </Pressable>
+              <Pressable onPress={() => conversar(item)} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="paper-plane-outline" size={16} color={colors.primary} />
+                <Txt variant="caption" color="primaryText">Conversar</Txt>
+              </Pressable>
               <View style={{ flex: 1 }} />
-              <Button title="Propor repasse" size="sm" icon="pricetag-outline" onPress={() => abrirProposta(item)} />
+              <Button title="Propor" size="sm" icon="pricetag-outline" onPress={() => abrirProposta(item)} />
             </View>
           </Card>
         )}
       />
+
+      {comentarPub && <ComentariosSheet publicacao={comentarPub} onClose={() => { setComentarPub(null); queryClient.invalidateQueries({ queryKey: ['repasses', 'feed'] }) }} />}
 
       <Sheet visible={proposta !== null} onClose={() => setProposta(null)} title="Propor repasse">
         {proposta && (
@@ -146,6 +163,54 @@ function FeedTab() {
         )}
       </Sheet>
     </>
+  )
+}
+
+function ComentariosSheet({ publicacao, onClose }: { publicacao: PublicacaoRepasse; onClose: () => void }) {
+  const { colors } = useTheme()
+  const queryClient = useQueryClient()
+  const [texto, setTexto] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const q = useQuery({ queryKey: ['repasses', 'comentarios', publicacao.id], queryFn: () => repassesService.comentarios(publicacao.id) })
+
+  const enviar = async () => {
+    if (!texto.trim()) return
+    setEnviando(true)
+    try {
+      await repassesService.comentar(publicacao.id, texto.trim())
+      queryClient.invalidateQueries({ queryKey: ['repasses', 'comentarios', publicacao.id] })
+      setTexto('')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <Sheet visible onClose={onClose} title="Comentários">
+      <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+        <Txt variant="caption" color="textDim">{publicacao.loja_nome} · {publicacao.veiculo_nome}</Txt>
+        {q.isLoading ? (
+          <SkeletonCard withImage={false} />
+        ) : (q.data ?? []).length === 0 ? (
+          <Txt variant="caption" color="textMuted" style={{ paddingVertical: spacing.sm }}>Nenhum comentário ainda. Seja o primeiro.</Txt>
+        ) : (
+          (q.data ?? []).map((c: ComentarioRepasse) => (
+            <View key={c.id} style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' }}>
+              <Avatar nome={c.autor_nome} size={32} />
+              <View style={{ flex: 1, backgroundColor: colors.overlaySoft, borderRadius: 10, padding: spacing.sm }}>
+                <Txt variant="captionMedium">{c.autor_nome}</Txt>
+                <Txt variant="caption" color="textDim">{c.texto}</Txt>
+                <Txt variant="caption" color="textMuted" style={{ marginTop: 2 }}>{formatRelativo(c.created_at)}</Txt>
+              </View>
+            </View>
+          ))
+        )}
+        <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+          <Input value={texto} onChangeText={setTexto} placeholder="Escreva um comentário…" containerStyle={{ flex: 1 }} />
+          <Button title="" icon="send" loading={enviando} disabled={!texto.trim()} onPress={enviar} />
+        </View>
+      </View>
+    </Sheet>
   )
 }
 
@@ -212,8 +277,26 @@ function PropostasTab() {
 // ── Parceiros ─────────────────────────────────────────────
 function ParceirosTab() {
   const { colors } = useTheme()
+  const navigation = useNavigation<any>()
+  const queryClient = useQueryClient()
   const toast = useToast()
-  const q = useQuery({ queryKey: ['repasses', 'parceiros'], queryFn: () => repassesService.parceiros() })
+  const [busca, setBusca] = useState('')
+  const [soFav, setSoFav] = useState<'todos' | 'favoritos'>('todos')
+  const q = useQuery({
+    queryKey: ['repasses', 'parceiros', busca, soFav],
+    queryFn: () => repassesService.parceiros(busca, soFav === 'favoritos'),
+  })
+
+  const favoritar = async (p: LojaParceira) => {
+    await repassesService.favoritarParceiro(p.id)
+    queryClient.invalidateQueries({ queryKey: ['repasses', 'parceiros'] })
+  }
+
+  const conversar = async (p: LojaParceira) => {
+    const convId = await chatService.abrirConversaParceiro(p.nome, p.nome)
+    queryClient.invalidateQueries({ queryKey: ['chat'] })
+    navigation.navigate('Conversa', { id: convId, nome: p.nome })
+  }
 
   const whatsapp = async (p: LojaParceira) => {
     if (!p.whatsapp) { toast.show('info', 'Loja sem WhatsApp cadastrado.'); return }
@@ -223,34 +306,53 @@ function ParceirosTab() {
     else toast.show('info', 'Não foi possível abrir o WhatsApp.')
   }
 
-  if (q.isLoading) return <View style={{ padding: spacing.md }}>{[0, 1, 2].map((i) => <SkeletonCard key={i} withImage={false} />)}</View>
-  if (q.isError) return <ErrorState onRetry={() => q.refetch()} />
-
   return (
-    <FlatList
-      data={q.data ?? []}
-      keyExtractor={(p) => p.id}
-      contentContainerStyle={{ padding: spacing.md, gap: spacing.xs, paddingBottom: spacing.xxl }}
-      showsVerticalScrollIndicator={false}
-      ListEmptyComponent={<EmptyState icon="business-outline" title="Sem parceiros" subtitle="Lojas parceiras da rede aparecem aqui." />}
-      renderItem={({ item }) => (
-        <Card>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <Avatar nome={item.nome} size={44} />
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Txt variant="bodySemibold" numberOfLines={1}>{item.nome}</Txt>
-                {item.verificada && <Ionicons name="checkmark-circle" size={14} color={colors.primary} />}
+    <View style={{ flex: 1 }}>
+      <View style={{ paddingHorizontal: spacing.md, gap: spacing.xs, paddingBottom: spacing.xs }}>
+        <SearchBar value={busca} onChangeText={setBusca} placeholder="Buscar loja, cidade…" />
+        <SegmentedControl
+          options={[{ value: 'todos', label: 'Todos' }, { value: 'favoritos', label: 'Favoritos' }]}
+          selected={soFav}
+          onSelect={(v) => setSoFav(v as 'todos' | 'favoritos')}
+        />
+      </View>
+      {q.isLoading ? (
+        <View style={{ padding: spacing.md }}>{[0, 1, 2].map((i) => <SkeletonCard key={i} withImage={false} />)}</View>
+      ) : q.isError ? (
+        <ErrorState onRetry={() => q.refetch()} />
+      ) : (
+        <FlatList
+          data={q.data ?? []}
+          keyExtractor={(p) => p.id}
+          contentContainerStyle={{ padding: spacing.md, gap: spacing.xs, paddingBottom: spacing.xxl }}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<EmptyState icon="business-outline" title="Sem parceiros" subtitle={soFav === 'favoritos' ? 'Você ainda não favoritou nenhuma loja.' : 'Nenhuma loja encontrada.'} />}
+          renderItem={({ item }) => (
+            <Card>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <Avatar nome={item.nome} size={44} />
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Txt variant="bodySemibold" numberOfLines={1}>{item.nome}</Txt>
+                    {item.verificada && <Ionicons name="checkmark-circle" size={14} color={colors.primary} />}
+                  </View>
+                  <Txt variant="caption" color="textDim">
+                    {[item.cidade && item.estado ? `${item.cidade}/${item.estado}` : null, `${item.total_veiculos} veículos`].filter(Boolean).join(' · ')}
+                  </Txt>
+                  {item.telefone ? <Txt variant="caption" color="textMuted">{formatTelefone(item.telefone)}</Txt> : null}
+                </View>
+                <Pressable onPress={() => favoritar(item)} hitSlop={8} style={{ padding: 4 }}>
+                  <Ionicons name={item.seguindo ? 'star' : 'star-outline'} size={20} color={item.seguindo ? colors.warning : colors.textMuted} />
+                </Pressable>
               </View>
-              <Txt variant="caption" color="textDim">
-                {[item.cidade && item.estado ? `${item.cidade}/${item.estado}` : null, `${item.total_veiculos} veículos`].filter(Boolean).join(' · ')}
-              </Txt>
-              {item.telefone ? <Txt variant="caption" color="textMuted">{formatTelefone(item.telefone)}</Txt> : null}
-            </View>
-            <Button title="WhatsApp" size="sm" variant="outline" icon="logo-whatsapp" onPress={() => whatsapp(item)} />
-          </View>
-        </Card>
+              <View style={{ flexDirection: 'row', gap: spacing.xs, marginTop: spacing.sm }}>
+                <Button title="Conversar" size="sm" icon="chatbubble-outline" onPress={() => conversar(item)} style={{ flex: 1 }} />
+                <Button title="WhatsApp" size="sm" variant="outline" icon="logo-whatsapp" onPress={() => whatsapp(item)} style={{ flex: 1 }} />
+              </View>
+            </Card>
+          )}
+        />
       )}
-    />
+    </View>
   )
 }

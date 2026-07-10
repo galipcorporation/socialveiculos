@@ -2,10 +2,18 @@
 // diretório de parceiros do gestor (RedeSocial.tsx). Liga com o chat B2B (M049).
 
 import { delay, novoId } from './db'
-import type { LojaParceira, PropostaRepasse, PublicacaoRepasse } from './types'
+import type { ComentarioRepasse, LojaParceira, PropostaRepasse, PublicacaoRepasse } from './types'
 
 const now = Date.now()
 const minAtras = (m: number) => new Date(now - m * 60_000).toISOString()
+
+let comentarios: ComentarioRepasse[] = [
+  { id: 'com-1', publicacao_id: 'rep-001', autor_nome: 'Auto Premium Veículos', texto: 'Tem laudo cautelar? Interesse aqui.', created_at: minAtras(150) },
+  { id: 'com-2', publicacao_id: 'rep-001', autor_nome: 'Sul Veículos', texto: 'Aceita troca por SUV?', created_at: minAtras(120) },
+  { id: 'com-3', publicacao_id: 'rep-003', autor_nome: 'Auto Premium Veículos', texto: 'Consegue segurar até amanhã?', created_at: minAtras(200) },
+]
+
+const favoritosParceiro = new Set<string>()
 
 let feed: PublicacaoRepasse[] = [
   { id: 'rep-001', loja_nome: 'Garagem RS Motors', autor_nome: 'Fábio', veiculo_nome: 'VW Nivus Highline 1.0 TSI', veiculo_ano: 2022, veiculo_km: 31200, conteudo: 'Repasse para lojistas — único dono, revisões em dia. Aceito troca.', valor_repasse: 97000, curtidas: 5, comentarios: 2, curtido_por_mim: false, created_at: minAtras(180) },
@@ -77,8 +85,42 @@ export const repassesService = {
     return nova
   },
 
-  async parceiros(): Promise<LojaParceira[]> {
+  async parceiros(busca = '', apenasFavoritos = false): Promise<LojaParceira[]> {
     await delay()
-    return parceiros
+    let lista = parceiros.map((p) => ({ ...p, seguindo: favoritosParceiro.has(p.id) }))
+    const q = busca.trim().toLowerCase()
+    if (q) lista = lista.filter((p) => [p.nome, p.cidade, p.estado].filter(Boolean).some((c) => String(c).toLowerCase().includes(q)))
+    if (apenasFavoritos) lista = lista.filter((p) => p.seguindo)
+    return lista
+  },
+
+  async favoritarParceiro(id: string): Promise<boolean> {
+    await delay(80, 180)
+    if (favoritosParceiro.has(id)) favoritosParceiro.delete(id)
+    else favoritosParceiro.add(id)
+    return favoritosParceiro.has(id)
+  },
+
+  // ── Comentários no feed (M063) ────────────────────────────
+  async comentarios(publicacaoId: string): Promise<ComentarioRepasse[]> {
+    await delay(120, 260)
+    return comentarios
+      .filter((c) => c.publicacao_id === publicacaoId)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+  },
+
+  async comentar(publicacaoId: string, texto: string): Promise<ComentarioRepasse> {
+    await delay(150, 300)
+    const c: ComentarioRepasse = {
+      id: novoId('com'),
+      publicacao_id: publicacaoId,
+      autor_nome: 'Auto Premium Veículos',
+      texto: texto.trim(),
+      created_at: new Date().toISOString(),
+    }
+    comentarios = [...comentarios, c]
+    const pub = feed.find((p) => p.id === publicacaoId)
+    if (pub) pub.comentarios += 1
+    return c
   },
 }
