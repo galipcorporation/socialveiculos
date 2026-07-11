@@ -30,7 +30,9 @@ build/
 # Arquivos Temporários
 *.tmp
 _*.tmp
-documentos/
+# documentação versionada (só evidências/resultados de teste ficam fora)
+documentos/tarefa/_evidencias/
+documentos/tarefa/_resultado*.json
 # OS
 .DS_Store
 Thumbs.db
