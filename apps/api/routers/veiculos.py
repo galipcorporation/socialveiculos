@@ -21,7 +21,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func, or_, case
 
-from datetime import datetime
+from datetime import datetime, timezone
 from storage import storage_provider
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria, get_optional_user
@@ -61,7 +61,7 @@ async def sincronizar_publicacao_b2b(veiculo: Veiculo, db: AsyncSession, autor_i
         if pub:
             pub.ativa = True
             pub.valor_repasse = veiculo.preco_venda
-            pub.updated_at = datetime.utcnow()
+            pub.updated_at = datetime.now(timezone.utc)
         else:
             pub = PublicacaoB2B(
                 loja_id=veiculo.loja_id,
@@ -77,7 +77,7 @@ async def sincronizar_publicacao_b2b(veiculo: Veiculo, db: AsyncSession, autor_i
         pub = res.scalar_one_or_none()
         if pub:
             pub.ativa = False
-            pub.updated_at = datetime.utcnow()
+            pub.updated_at = datetime.now(timezone.utc)
 
 
 # ═══════════════════════════════════════════════════════════════

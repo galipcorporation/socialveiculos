@@ -9,7 +9,7 @@ saem calculados a partir da data da venda (Fase 2, mas barato fazer agora).
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from models import (
     CategoriaItem,
@@ -44,7 +44,7 @@ def montar_checklist(
     - `valor_entrada`/`parcelas`: definem se entrada/carnê se aplicam.
     - venda B2B (repasse): dispensa "chave/manual ao consumidor" (§8).
     """
-    base = data_venda or datetime.utcnow()
+    base = data_venda or datetime.now(timezone.utc)
     tem_entrada = bool(valor_entrada and valor_entrada > 0)
     repasse_b2b = esteira.origem == OrigemLead.REPASSE
 

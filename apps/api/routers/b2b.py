@@ -4,7 +4,7 @@ Isolamento estrito entre tenants e comunicação segura B2B.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, WebSocket, WebSocketDisconnect
 from sqlalchemy import or_, and_, func
@@ -594,7 +594,7 @@ async def processar_proposta_repasse(
                 for outra in res_outras.scalars().all():
                     outra.status = StatusPropostaRepasse.REJEITADA
 
-    proposta.updated_at = datetime.utcnow()
+    proposta.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(proposta)
 
@@ -889,7 +889,7 @@ async def listar_mensagens_b2b(
                         autor_nome=m.get("autor_nome", "Lojista"),
                         conteudo=m.get("conteudo"),
                         lida=m.get("lida", True),
-                        created_at=datetime.fromisoformat(m.get("created_at")) if m.get("created_at") else datetime.utcnow()
+                        created_at=datetime.fromisoformat(m.get("created_at")) if m.get("created_at") else datetime.now(timezone.utc)
                     )
                 )
             return result
@@ -1085,12 +1085,12 @@ async def enviar_mensagem_b2b(
         autor_id=context.usuario.id,
         conteudo=data.conteudo,
         lida=False,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
     db.add(nova_msg)
 
     # Atualizar timestamp da conversa para reposicioná-la no topo
-    conversa.updated_at = datetime.utcnow()
+    conversa.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(nova_msg)
@@ -1200,10 +1200,10 @@ async def chat_websocket_endpoint(websocket: WebSocket, token: Optional[str] = N
                             autor_id=usuario_id,
                             conteudo=conteudo,
                             lida=False,
-                            created_at=datetime.utcnow()
+                            created_at=datetime.now(timezone.utc)
                         )
                         db.add(nova_msg)
-                        conversa.updated_at = datetime.utcnow()
+                        conversa.updated_at = datetime.now(timezone.utc)
                         await db.flush()
 
                         # Criar Notificação correspondente
