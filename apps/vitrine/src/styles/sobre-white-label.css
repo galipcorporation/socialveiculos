@@ -1,0 +1,171 @@
+.sobre-container {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.sobre-header {
+  padding: 3rem 1rem;
+  text-align: center;
+  position: relative;
+}
+
+.sobre-logo {
+  max-height: 100px;
+  max-width: 250px;
+  object-fit: contain;
+  margin-bottom: 1rem;
+}
+
+.sobre-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 1rem 0;
+}
+
+.sobre-verificada {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.3);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  margin-top: 1rem;
+}
+
+.sobre-content {
+  max-width: 900px;
+  margin: -2rem auto 0;
+  background: white;
+  border-radius: 8px 8px 0 0;
+  padding: 2rem 1rem;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+  position: relative;
+  z-index: 1;
+}
+
+.sobre-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.sobre-info-item {
+  padding: 1rem;
+  background: #f9f9f9;
+  border-radius: 4px;
+}
+
+.sobre-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+}
+
+.sobre-info-item p,
+.sobre-info-item a {
+  font-size: 1.1rem;
+  margin: 0;
+  color: #333;
+  font-weight: 500;
+}
+
+.sobre-info-item a {
+  color: #0066cc;
+  text-decoration: none;
+}
+
+.sobre-info-item a:hover {
+  text-decoration: underline;
+}
+
+.sobre-descricao {
+  margin: 2rem 0;
+  padding: 2rem;
+  background: #f9f9f9;
+  border-left: 4px solid;
+  border-radius: 4px;
+}
+
+.sobre-descricao h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+}
+
+.sobre-descricao p {
+  margin: 0;
+  line-height: 1.6;
+  color: #666;
+}
+
+.sobre-extra {
+  margin: 2rem 0;
+  padding: 2rem;
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.sobre-extra h2 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+}
+
+.sobre-extra p {
+  margin: 0;
+  line-height: 1.6;
+  color: #666;
+}
+
+.sobre-cta {
+  text-align: center;
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.sobre-button {
+  display: inline-block;
+  padding: 1rem 2rem;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  font-weight: 600;
+  transition: opacity 0.2s;
+  font-size: 1rem;
+}
+
+.sobre-button:hover {
+  opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+  .sobre-header {
+    padding: 2rem 1rem;
+  }
+
+  .sobre-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .sobre-content {
+    padding: 1.5rem 1rem;
+    margin-top: -1rem;
+  }
+
+  .sobre-info-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .sobre-descricao,
+  .sobre-extra {
+    padding: 1.5rem;
+  }
+}
