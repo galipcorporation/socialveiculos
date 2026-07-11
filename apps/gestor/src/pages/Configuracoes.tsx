@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
 import { mascararCNPJ, mascararTelefone, mascararCEP, capitalizarNome } from '../lib/mascaras'
@@ -64,10 +64,13 @@ export interface RedeSocialStatus {
 }
 
 export function Configuracoes() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const escolherNonce = searchParams.get('escolher')
+
   const location = useLocation()
   const abaInicial = (location.state as { aba?: string } | null)?.aba
   const [abaAtual, setAbaAtual] = useState<'perfil' | 'credenciais' | 'ia' | 'redes' | 'detran' | 'fiscal'>(
-    (['redes', 'fiscal'] as const).includes(abaInicial as any) ? (abaInicial as 'redes' | 'fiscal') : 'perfil'
+    escolherNonce ? 'redes' : (['redes', 'fiscal'] as const).includes(abaInicial as any) ? (abaInicial as 'redes' | 'fiscal') : 'perfil'
   )
 
   const [loja, setLoja] = useState<Loja | null>(null)
@@ -78,6 +81,11 @@ export function Configuracoes() {
   const [error, setError] = useState<string | null>(null)
   const [sucesso, setSucesso] = useState(false)
   const [loadingCep, setLoadingCep] = useState(false)
+
+  // Escolha de página Meta
+  const [paginasMeta, setPaginasMeta] = useState<{page_id: string, name: string, instagram_account_id?: string}[]>([])
+  const [loadingPaginas, setLoadingPaginas] = useState(false)
+  const [confirmandoPagina, setConfirmandoPagina] = useState(false)
 
   const handleCepBlur = async (val: string) => {
     const cepLimpo = val.replace(/\D/g, '')
@@ -302,6 +310,26 @@ export function Configuracoes() {
     }
     carregar()
   }, [])
+
+  useEffect(() => {
+    if (abaAtual === 'redes' && escolherNonce) {
+      const buscar = async () => {
+        setLoadingPaginas(true)
+        setError(null)
+        try {
+          const res = await api.get<any[]>(`/social-auth/meta/paginas?nonce=${escolherNonce}`)
+          setPaginasMeta(res)
+        } catch (err: any) {
+          setError(err.message || 'Erro ao carregar páginas do Facebook.')
+        } finally {
+          setLoadingPaginas(false)
+        }
+      }
+      buscar()
+    } else {
+      setPaginasMeta([])
+    }
+  }, [abaAtual, escolherNonce])
 
   // Ao trocar de banco/escopo, pré-popula com a credencial já salva (senha mascarada, não sobrescreve por engano)
   useEffect(() => {
@@ -1006,6 +1034,64 @@ export function Configuracoes() {
                   Conecte via Meta OAuth
                 </button>
               </div>
+
+              {loadingPaginas && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--sv-primary)' }}>
+                  <div className="spinner" style={{ width: 18, height: 18 }}></div>
+                  <span>Carregando suas páginas da Meta...</span>
+                </div>
+              )}
+
+              {paginasMeta.length > 0 && (
+                <div style={{
+                  padding: '20px',
+                  borderRadius: '12px',
+                  background: 'var(--sv-surface-dim)',
+                  border: '1px solid var(--sv-primary-glow)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px'
+                }}>
+                  <h4 style={{ margin: 0 }}>Selecione a página do Facebook para conectar:</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {paginasMeta.map(p => (
+                      <button
+                        key={p.page_id}
+                        onClick={async () => {
+                          setConfirmandoPagina(true)
+                          setError(null)
+                          try {
+                            await api.post('/social-auth/meta/confirmar', { nonce: escolherNonce, page_id: p.page_id })
+                            setSearchParams({}) // Limpa os parâmetros de busca da URL
+                            const dataRedes = await api.get<RedeSocialStatus[]>('/configuracoes/redes-sociais')
+                            setRedesSociais(dataRedes)
+                            useUIStore.getState().showToast('Página conectada com sucesso!', 'success')
+                          } catch (err: any) {
+                            setError(err.message || 'Erro ao confirmar página.')
+                          } finally {
+                            setConfirmandoPagina(false)
+                          }
+                        }}
+                        className="btn btn-outline"
+                        disabled={confirmandoPagina}
+                        style={{ justifyContent: 'flex-start', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px', width: '100%' }}
+                      >
+                        <div style={{ fontWeight: 600 }}>{p.name}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--sv-text-dim)' }}>
+                          ID da Página: {p.page_id} {p.instagram_account_id ? `· Instagram: ${p.instagram_account_id}` : '· Sem conta do Instagram Business vinculada'}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setSearchParams({})}
+                    className="btn btn-ghost"
+                    style={{ alignSelf: 'flex-start' }}
+                  >
+                    Cancelar escolha
+                  </button>
+                </div>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '8px' }}>
                 {/* Card Facebook */}

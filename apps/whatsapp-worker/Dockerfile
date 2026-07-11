@@ -2,10 +2,13 @@ FROM node:20-slim
 
 # ffmpeg do sistema como garantia (além do ffmpeg-static empacotado).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg git openssh-client ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# Redirecionar dependências do GitHub que usam SSH para HTTPS pública (sem necessidade de chaves SSH)
+RUN git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
 
 # Instala deps a partir do package.json local (sem workspace pnpm no container).
 COPY package.json ./

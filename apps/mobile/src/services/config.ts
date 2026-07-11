@@ -126,10 +126,16 @@ export const configService = {
     return api.get<RedeSocialStatus[]>('/configuracoes/redes-sociais')
   },
   // A conexão real é um fluxo OAuth (Meta); retornamos a URL para abrir no navegador.
+  // origem=app faz o backend redirecionar de volta via deep link (socialveiculos://meta-callback).
   async conectarRede(_rede: 'facebook' | 'instagram'): Promise<RedeSocialStatus> {
-    const { url } = await api.get<{ url: string }>('/social-auth/meta/iniciar')
-    // A tela deve abrir a URL; devolvemos um status "pendente" até o callback concluir.
+    const { url } = await api.get<{ url: string }>('/social-auth/meta/iniciar', { origem: 'app' })
     return { rede: _rede, conectada: false, oauth_url: url }
+  },
+  async metaPaginasPendentes(nonce: string): Promise<{ page_id: string; name: string; instagram_account_id?: string }[]> {
+    return api.get(`/social-auth/meta/paginas`, { nonce })
+  },
+  async metaConfirmarPagina(nonce: string, pageId: string): Promise<void> {
+    await api.post('/social-auth/meta/confirmar', { nonce, page_id: pageId })
   },
   async desconectarRede(rede: 'facebook' | 'instagram'): Promise<void> {
     await api.delete(`/configuracoes/redes-sociais/${rede}`)

@@ -625,16 +625,41 @@ function EsteiraDetalheModal({
 
   const alternarStatus = async (item: ItemChecklist) => {
     if (!esteira) return
+    const anterior = esteira
     const novoStatus: StatusItem = item.status === 'concluido' ? 'pendente' : 'concluido'
+    
+    // Atualização otimista local
+    const novosItens = esteira.itens.map((i) => {
+      if (i.id === item.id) {
+        return {
+          ...i,
+          status: novoStatus,
+          concluido_em: novoStatus === 'concluido' ? new Date().toISOString() : null,
+        }
+      }
+      return i
+    })
+    const novosConcluidos = novosItens.filter(
+      (i) => i.status === 'concluido' || i.status === 'nao_aplicavel'
+    ).length
+
+    setEsteira({
+      ...esteira,
+      itens: novosItens,
+      concluidos: novosConcluidos,
+    })
+
     setSavingItem(item.id)
     try {
       const atualizado = await api.patch<EsteiraDetalheResponse>(
         `/esteira/${esteira.id}/itens/${item.id}`,
-        { status: novoStatus },
+        { status: novoStatus }
       )
       setEsteira(atualizado)
       onUpdated()
     } catch (err) {
+      // Reversão em caso de falha
+      setEsteira(anterior)
       const { message } = extractErrorDetails(err)
       showError(message || 'Erro ao atualizar item.')
     } finally {
@@ -739,12 +764,24 @@ function EsteiraDetalheModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-glass" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>
-            {esteira?.veiculo
-              ? `${esteira.veiculo.marca} ${esteira.veiculo.modelo} ${esteira.veiculo.ano_modelo || ''}`
-              : 'Esteira Pós-venda'}
-          </h3>
+        <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0 }}>
+              {esteira?.veiculo
+                ? `${esteira.veiculo.marca} ${esteira.veiculo.modelo} ${esteira.veiculo.ano_modelo || ''}`
+                : 'Esteira Pós-venda'}
+            </h3>
+            {esteira && esteira.vencidos > 0 && (
+              <div className="posvenda-chip-vencido">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: 12, height: 12 }}>
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>Atrasado ({esteira.vencidos} {esteira.vencidos === 1 ? 'item' : 'itens'})</span>
+              </div>
+            )}
+          </div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
@@ -756,10 +793,16 @@ function EsteiraDetalheModal({
             <div style={{ textAlign: 'center', padding: 20 }}>Erro ao carregar detalhes.</div>
           ) : (
             <>
-              <div style={{ display: 'flex', gap: 16, marginBottom: 16, fontSize: 13, color: 'var(--sv-text-dim)' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 16, fontSize: 13, color: 'var(--sv-text-dim)' }}>
                 <span><strong style={{ color: 'var(--sv-text)' }}>Comprador:</strong> {esteira.comprador?.nome || 'Não informado'}</span>
                 <span><strong style={{ color: 'var(--sv-text)' }}>Placa:</strong> {esteira.veiculo?.placa?.toUpperCase() || '—'}</span>
                 <span><strong style={{ color: 'var(--sv-text)' }}>Aberta em:</strong> {formatData(esteira.aberta_em)}</span>
+                {esteira.comunicacao_venda_em && (
+                  <span><strong style={{ color: 'var(--sv-text)' }}>Comunicação Venda:</strong> {formatData(esteira.comunicacao_venda_em)}</span>
+                )}
+                {esteira.transferencia_em && (
+                  <span><strong style={{ color: 'var(--sv-text)' }}>Transferência:</strong> {formatData(esteira.transferencia_em)}</span>
+                )}
               </div>
 
               {categorias.map((cat) => {

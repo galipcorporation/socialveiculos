@@ -1228,6 +1228,7 @@ class VenderVeiculoRequest(BaseModel):
     observacoes: Optional[str] = None
     origem: Optional[str] = None       # manual | vitrine | whatsapp | simulador | repasse
     financiado: Optional[bool] = False
+    lead_id: Optional[str] = None
 
 
 class VenderVeiculoResponse(BaseModel):
@@ -1237,6 +1238,7 @@ class VenderVeiculoResponse(BaseModel):
     esteira_id: Optional[str] = None
     trocas_veiculo_ids: List[str] = []
     comissao_excedente: Optional[float] = None
+    lead_id: Optional[str] = None
 
 
 # ═══════════════════════════════════════════════════════════════

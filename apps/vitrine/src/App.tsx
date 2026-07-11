@@ -11,10 +11,11 @@ import { Privacidade } from './pages/institucional/Privacidade'
 import { Anuncie } from './pages/institucional/Anuncie'
 import { GoogleCallback } from './pages/GoogleCallback'
 import { UIProvider } from './components/UIProvider'
+import { SiteProvider } from './lib/SiteContext'
 
 export default function App() {
   return (
-    <>
+    <SiteProvider>
       <UIProvider />
       <Routes>
         <Route index element={<Feed />} />
@@ -29,7 +30,7 @@ export default function App() {
         <Route path="/anuncie" element={<Anuncie />} />
         <Route path="/auth/google/callback" element={<GoogleCallback />} />
       </Routes>
-    </>
+    </SiteProvider>
   )
 }
 

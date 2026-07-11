@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Pressable, Share, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigation } from '@react-navigation/native'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
 import {
@@ -10,7 +11,7 @@ import {
 } from '../../components/ui'
 import { OptionSheet } from '../../components/ui'
 import {
-  marketingService, modulosService, veiculosService, TONS_MARKETING, CANAIS_MARKETING,
+  marketingService, modulosService, veiculosService, configService, TONS_MARKETING, CANAIS_MARKETING,
   type TomMarketing, type CanalMarketing,
 } from '../../services'
 import type { PostMarketing } from '../../services/marketing'
@@ -21,9 +22,11 @@ export default function MarketingScreen() {
   const { colors } = useTheme()
   const toast = useToast()
   const queryClient = useQueryClient()
+  const navigation = useNavigation<any>()
 
   const gateQ = useQuery({ queryKey: ['modulo', 'marketing'], queryFn: () => modulosService.liberado('marketing') })
   const veiculosQ = useQuery({ queryKey: ['veiculos', 'marketing'], queryFn: () => veiculosService.listar({ status: 'disponivel' }), enabled: gateQ.data === true })
+  const redesQ = useQuery({ queryKey: ['config', 'redes'], queryFn: () => configService.redesSociais(), enabled: gateQ.data === true })
   const histQ = useQuery({ queryKey: ['marketing', 'historico'], queryFn: () => marketingService.historico(), enabled: gateQ.data === true })
 
   const [veiculo, setVeiculo] = useState<Veiculo | null>(null)
@@ -35,6 +38,24 @@ export default function MarketingScreen() {
   const [legenda, setLegenda] = useState('')
   const [agendarAberto, setAgendarAberto] = useState(false)
 
+  // Publicação / Agendamento
+  const [redesSelecionadas, setRedesSelecionadas] = useState<string[]>([])
+  const [modoEnvio, setModoEnvio] = useState<'agora' | 'agendar'>('agora')
+  const [agendadoPara, setAgendadoPara] = useState<string | null>(null)
+
+  const redesSociais = redesQ.data ?? []
+  const conectadas = useMemo(() => redesSociais.filter(r => r.conectada || r.page_id || r.instagram_account_id).map(r => r.rede), [redesSociais])
+
+  useEffect(() => {
+    if (conectadas.length > 0 && redesSelecionadas.length === 0) {
+      setRedesSelecionadas([conectadas[0]])
+    }
+  }, [conectadas])
+
+  const toggleRede = (rede: string) => {
+    setRedesSelecionadas(prev => prev.includes(rede) ? prev.filter(r => r !== rede) : [...prev, rede])
+  }
+
   const gerar = async () => {
     if (!veiculo) return
     setGerando(true)
@@ -43,13 +64,6 @@ export default function MarketingScreen() {
     } finally {
       setGerando(false)
     }
-  }
-
-  const publicar = async () => {
-    if (!legenda) return
-    await marketingService.publicar(legenda, [canal])
-    queryClient.invalidateQueries({ queryKey: ['marketing', 'historico'] })
-    toast.show('success', `Publicado no ${CANAIS_MARKETING.find((c) => c.value === canal)?.label}.`)
   }
 
   const compartilhar = async () => {
@@ -77,7 +91,7 @@ export default function MarketingScreen() {
   }
 
   return (
-    <Screen scroll={false} padded={false}>
+    <Screen scroll padded={false}>
       <AppHeader title="Marketing IA" large={false} back />
       <Screen padded style={{ gap: spacing.md }}>
         <Txt variant="caption" color="textDim">Gere uma legenda e publique nas redes a partir de um veículo do estoque.</Txt>
@@ -85,7 +99,7 @@ export default function MarketingScreen() {
         <Card style={{ gap: spacing.sm }}>
           <SelectField label="Veículo" value={veiculo ? `${veiculo.marca} ${veiculo.modelo}` : undefined} placeholder={veiculosQ.isLoading ? 'Carregando…' : 'Selecione um veículo'} icon="car-sport-outline" onPress={() => setVeiculoSheet(true)} />
           <View style={{ gap: 6 }}>
-            <Txt variant="captionMedium" color="textDim">Canal</Txt>
+            <Txt variant="captionMedium" color="textDim">Canal / Rede social</Txt>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
               {CANAIS_MARKETING.map((c) => {
                 const ativo = canal === c.value
@@ -107,20 +121,110 @@ export default function MarketingScreen() {
         </Card>
 
         {legenda ? (
-          <Card style={{ gap: spacing.sm }}>
-            <Txt variant="label" color="textMuted" style={{ textTransform: 'uppercase' }}>Legenda gerada</Txt>
-            <View style={{ backgroundColor: colors.overlaySoft, borderRadius: radius.md, padding: spacing.sm }}>
-              <Txt style={{ fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.text }}>{legenda}</Txt>
-            </View>
-            <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-              <Button title="Publicar" icon="send" onPress={publicar} style={{ flex: 1 }} />
-              <Button title="Agendar" variant="outline" icon="time-outline" onPress={() => setAgendarAberto(true)} style={{ flex: 1 }} />
-            </View>
-            <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-              <Button title="Compartilhar" variant="tonal" icon="share-social-outline" onPress={compartilhar} style={{ flex: 1 }} />
-              <Button title="Refazer" variant="ghost" icon="refresh" onPress={gerar} loading={gerando} />
-            </View>
-          </Card>
+          <>
+            <Card style={{ gap: spacing.sm }}>
+              <Txt variant="label" color="textMuted" style={{ textTransform: 'uppercase' }}>Legenda gerada</Txt>
+              <View style={{ backgroundColor: colors.overlaySoft, borderRadius: radius.md, padding: spacing.sm }}>
+                <Txt style={{ fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.text }}>{legenda}</Txt>
+              </View>
+              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                <Button title="Compartilhar manual" variant="tonal" icon="share-social-outline" onPress={compartilhar} style={{ flex: 1 }} />
+                <Button title="Refazer" variant="ghost" icon="refresh" onPress={gerar} loading={gerando} />
+              </View>
+            </Card>
+
+            <Card style={{ gap: spacing.md }}>
+              <Txt variant="bodySemibold">Publicar / Agendar</Txt>
+
+              {!redesQ.isLoading && conectadas.length === 0 ? (
+                <View style={{ gap: spacing.sm, alignItems: 'center', padding: spacing.sm }}>
+                  <Txt variant="caption" color="textDim" align="center">Nenhuma rede social conectada para publicação automática.</Txt>
+                  <Button title="Configurar redes sociais" icon="settings-outline" onPress={() => navigation.navigate('RedesSociais')} size="sm" />
+                </View>
+              ) : (
+                <>
+                  <View style={{ gap: 6 }}>
+                    <Txt variant="captionMedium" color="textDim">Selecione as redes conectadas</Txt>
+                    <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                      {conectadas.map((rede) => {
+                        const selecionada = redesSelecionadas.includes(rede)
+                        const nome = rede === 'facebook' ? 'Facebook' : 'Instagram'
+                        const icon = rede === 'facebook' ? 'logo-facebook' : 'logo-instagram'
+                        return (
+                          <Pressable
+                            key={rede}
+                            onPress={() => toggleRede(rede)}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              paddingHorizontal: 12,
+                              height: 36,
+                              borderRadius: radius.md,
+                              borderWidth: 1,
+                              backgroundColor: selecionada ? colors.primary + '1c' : colors.overlaySoft,
+                              borderColor: selecionada ? colors.primary : colors.border
+                            }}
+                          >
+                            <Ionicons name={icon as any} size={16} color={selecionada ? colors.primary : colors.textMuted} />
+                            <Txt style={{ fontFamily: fonts.semibold, fontSize: 13, color: selecionada ? colors.primaryText : colors.textDim }}>{nome}</Txt>
+                          </Pressable>
+                        )
+                      })}
+                    </View>
+                  </View>
+
+                  <View style={{ gap: 6 }}>
+                    <Txt variant="captionMedium" color="textDim">Modo de Envio</Txt>
+                    <SegmentedControl
+                      options={[
+                        { value: 'agora', label: 'Publicar agora' },
+                        { value: 'agendar', label: 'Agendar' }
+                      ]}
+                      selected={modoEnvio}
+                      onSelect={(v) => setModoEnvio(v as 'agora' | 'agendar')}
+                    />
+                  </View>
+
+                  {modoEnvio === 'agendar' && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.sm, backgroundColor: colors.overlaySoft, borderRadius: radius.md }}>
+                      <Txt variant="captionMedium" color="textDim">
+                        {agendadoPara ? `Agendado para: ${formatDataHora(agendadoPara)}` : 'Nenhuma data selecionada'}
+                      </Txt>
+                      <Button title="Escolher data/hora" variant="outline" size="sm" icon="time-outline" onPress={() => setAgendarAberto(true)} />
+                    </View>
+                  )}
+
+                  <Button
+                    title={modoEnvio === 'agora' ? 'Publicar nas redes' : 'Agendar publicação'}
+                    icon={modoEnvio === 'agora' ? 'send' : 'time-outline'}
+                    disabled={redesSelecionadas.length === 0 || (modoEnvio === 'agendar' && !agendadoPara)}
+                    onPress={async () => {
+                      if (modoEnvio === 'agora') {
+                        try {
+                          await marketingService.publicar(legenda, redesSelecionadas as any[])
+                          queryClient.invalidateQueries({ queryKey: ['marketing', 'historico'] })
+                          toast.show('success', 'Publicado com sucesso!')
+                        } catch (err: any) {
+                          toast.show('error', err.message || 'Erro ao publicar.')
+                        }
+                      } else {
+                        if (!agendadoPara) return
+                        try {
+                          await marketingService.agendar(legenda, redesSelecionadas as any[], agendadoPara)
+                          queryClient.invalidateQueries({ queryKey: ['marketing', 'historico'] })
+                          toast.show('success', 'Publicação agendada.')
+                        } catch (err: any) {
+                          toast.show('error', err.message || 'Erro ao agendar.')
+                        }
+                      }
+                    }}
+                    full
+                  />
+                </>
+              )}
+            </Card>
+          </>
         ) : null}
 
         {/* Histórico */}
@@ -148,10 +252,8 @@ export default function MarketingScreen() {
       <AgendarSheet
         visible={agendarAberto}
         onClose={() => setAgendarAberto(false)}
-        onConfirm={async (quando) => {
-          await marketingService.agendar(legenda, [canal], quando)
-          queryClient.invalidateQueries({ queryKey: ['marketing', 'historico'] })
-          toast.show('success', 'Publicação agendada.')
+        onConfirm={(quando) => {
+          setAgendadoPara(quando)
           setAgendarAberto(false)
         }}
       />

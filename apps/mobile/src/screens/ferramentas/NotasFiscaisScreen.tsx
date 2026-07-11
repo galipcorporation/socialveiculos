@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { FlatList, Linking, Pressable, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -12,6 +12,7 @@ import { contratosService, modulosService, notasFiscaisService } from '../../ser
 import type { Contrato, NotaFiscal, StatusNota } from '../../services/types'
 import { STATUS_NOTA_LABEL } from '../../services/types'
 import { formatBRL, formatData } from '../../lib/format'
+import type { RootScreenProps } from '../../navigation/types'
 
 const TONE: Record<StatusNota, 'success' | 'warning' | 'neutral' | 'error' | 'info'> = {
   autorizada: 'success',
@@ -22,10 +23,11 @@ const TONE: Record<StatusNota, 'success' | 'warning' | 'neutral' | 'error' | 'in
   cancelada: 'neutral',
 }
 
-export default function NotasFiscaisScreen() {
+export default function NotasFiscaisScreen({ route }: RootScreenProps<'NotasFiscais'>) {
   const queryClient = useQueryClient()
   const toast = useToast()
   const { colors } = useTheme()
+  const contratoId = route.params?.contratoId
 
   const gateQ = useQuery({ queryKey: ['modulo', 'fiscal'], queryFn: () => modulosService.liberado('fiscal') })
   const notasQ = useQuery({ queryKey: ['notas-fiscais'], queryFn: () => notasFiscaisService.lista(), enabled: gateQ.data === true })
@@ -60,6 +62,14 @@ export default function NotasFiscaisScreen() {
 
   // Só contratos assinados/aguardando ainda sem nota autorizada.
   const contratosEmissiveis = (contratosQ.data ?? []).filter((c) => c.status === 'assinado' || c.status === 'aguardando')
+  const contratoDestaque = contratoId ? (contratosQ.data ?? []).find((c) => c.id === contratoId) : undefined
+  const notaDestaque = contratoDestaque
+    ? (notasQ.data ?? []).find((n) => n.contrato_numero === contratoDestaque.numero)
+    : undefined
+
+  useEffect(() => {
+    if (contratoId && !notaDestaque && contratoDestaque) setEmitirAberto(true)
+  }, [contratoId, contratoDestaque, notaDestaque])
 
   const emitir = async (contrato: Contrato) => {
     setEmitindo(true)
@@ -140,7 +150,7 @@ export default function NotasFiscaisScreen() {
             : <EmptyState icon="receipt-outline" title="Nenhuma nota" subtitle="Emita a primeira NF-e a partir de um contrato." />
         }
         renderItem={({ item }) => (
-          <Card>
+          <Card style={item.id === notaDestaque?.id ? { borderWidth: 2, borderColor: colors.primary } : undefined}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
@@ -204,7 +214,11 @@ export default function NotasFiscaisScreen() {
             <EmptyState icon="document-outline" title="Sem contratos" subtitle="Nenhum contrato assinado disponível para emissão." />
           ) : (
             contratosEmissiveis.map((c) => (
-              <Card key={c.id} onPress={emitindo ? undefined : () => emitir(c)}>
+              <Card
+                key={c.id}
+                onPress={emitindo ? undefined : () => emitir(c)}
+                style={c.id === contratoId ? { borderWidth: 2, borderColor: colors.primary } : undefined}
+              >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                   <View style={{ flex: 1 }}>
                     <Txt variant="bodyMedium">{c.numero}</Txt>

@@ -78,8 +78,18 @@ if ($pyProcs) {
         }
     }
 }
+# Limpar processos node zumbis (vite, expo, metro, whatsapp-worker)
+$nodeProcs = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue
+if ($nodeProcs) {
+    foreach ($p in $nodeProcs) {
+        if ($p.CommandLine -like "*vite*" -or $p.CommandLine -like "*expo*" -or $p.CommandLine -like "*metro*" -or $p.CommandLine -like "*whatsapp-worker*" -or $p.CommandLine -like "*baileys*") {
+            Write-Host "  -> Finalizando processo node zumbi (PID $($p.ProcessId))..." -ForegroundColor Yellow
+            Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
 
-$targetPorts = @(8000, 5173, 5174, 5175, 8090)
+$targetPorts = @(8000, 5173, 5174, 5175, 8090, 8081)
 foreach ($port in $targetPorts) {
     $connections = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     if ($connections) {
@@ -106,6 +116,7 @@ Write-Host "  [GESTOR]   → http://localhost:5173" -ForegroundColor White
 Write-Host "  [VITRINE]  → http://localhost:5174" -ForegroundColor White
 Write-Host "  [ADMIN]    → http://localhost:5175" -ForegroundColor White
 Write-Host "  [WHATSAPP] → http://localhost:8090" -ForegroundColor White
+Write-Host "  [MOBILE]   → Expo Go (Porta 8081)" -ForegroundColor White
 Write-Host ""
 Write-Host "  Pressione Ctrl+C para parar todos os servidores." -ForegroundColor DarkGray
 Write-Host ""
@@ -145,6 +156,9 @@ $whatsappJob = Start-Job -ScriptBlock {
     pnpm --filter @sv/whatsapp-worker run dev
 } -ArgumentList $ROOT
 
+# Iniciar Mobile em um novo terminal interativo (para exibir o QR Code e interagir com 'a', 'i', 'r')
+$mobileProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$ROOT'; pnpm --filter @sv/mobile run dev" -PassThru -NoNewWindow:$false
+
 Write-Host "  Servidores iniciados! Abrindo no navegador em 4 segundos..." -ForegroundColor Green
 Write-Host ""
 
@@ -169,5 +183,8 @@ finally {
     Write-Host "  Parando servidores..." -ForegroundColor Yellow
     Stop-Job -Job $apiJob, $gestorJob, $vitrineJob, $adminJob, $whatsappJob -ErrorAction SilentlyContinue
     Remove-Job -Job $apiJob, $gestorJob, $vitrineJob, $adminJob, $whatsappJob -Force -ErrorAction SilentlyContinue
+    if ($mobileProcess) {
+        Stop-Process -Id $mobileProcess.Id -Force -ErrorAction SilentlyContinue
+    }
     Write-Host "  [OK] Todos os servidores parados." -ForegroundColor Green
 }

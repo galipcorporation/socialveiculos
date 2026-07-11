@@ -10,6 +10,7 @@ import {
   Sheet, Skeleton, TONE_ETAPA_LEAD, Txt, useToast,
 } from '../../components/ui'
 import { VehiclePhoto } from '../../components/VehiclePhoto'
+import { RegistrarVendaSheet } from '../../components/RegistrarVendaSheet'
 import { leadsService } from '../../services'
 import { ETAPAS_LEAD, ORIGEM_LEAD_LABEL, type EtapaLead, type Interacao } from '../../services/types'
 import { formatBRL, formatDataHora, formatRelativo, formatTelefone, maskMoedaInput, parseMoedaInput } from '../../lib/format'
@@ -33,6 +34,7 @@ export default function LeadDetalheScreen({ route }: RootScreenProps<'LeadDetalh
 
   const [etapaAberta, setEtapaAberta] = useState(false)
   const [interacaoAberta, setInteracaoAberta] = useState(false)
+  const [vendaAberta, setVendaAberta] = useState(false)
 
   const q = useQuery({ queryKey: ['leads', id], queryFn: () => leadsService.obter(id) })
   const lead = q.data
@@ -48,6 +50,7 @@ export default function LeadDetalheScreen({ route }: RootScreenProps<'LeadDetalh
       invalidar()
       const label = ETAPAS_LEAD.find((e) => e.value === l.etapa)?.label
       toast.show('success', `Lead movido para "${label}".`)
+      if (l.etapa === 'fechamento') setVendaAberta(true)
     },
   })
 
@@ -193,6 +196,13 @@ export default function LeadDetalheScreen({ route }: RootScreenProps<'LeadDetalh
         leadId={id}
         visible={interacaoAberta}
         onClose={() => setInteracaoAberta(false)}
+      />
+      <RegistrarVendaSheet
+        veiculo={lead?.veiculo}
+        visible={vendaAberta}
+        onClose={() => setVendaAberta(false)}
+        compradorInicial={lead?.cliente?.nome}
+        leadId={lead?.id}
       />
     </Screen>
   )

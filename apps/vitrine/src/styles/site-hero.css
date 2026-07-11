@@ -1,0 +1,155 @@
+.vt-hero-marketplace {
+  padding: 3rem 1rem;
+  text-align: center;
+  background: linear-gradient(135deg, #0066cc 0%, #0099ff 100%);
+  color: white;
+}
+
+.vt-hero-marketplace h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 1rem 0;
+}
+
+.vt-hero-marketplace p {
+  font-size: 1.1rem;
+  opacity: 0.95;
+}
+
+/* White-label templates */
+.vt-hero-white-label {
+  position: relative;
+  padding: 2rem 1rem;
+  overflow: hidden;
+}
+
+.vt-hero-white-label.premium {
+  min-height: 400px;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vt-hero-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
+
+.vt-hero-white-label.premium .vt-hero-content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  max-width: 600px;
+}
+
+.vt-hero-white-label.clean {
+  padding: 3rem 1rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.vt-hero-white-label.clean .vt-hero-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.vt-hero-white-label.clean h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 1rem 0 0.5rem 0;
+}
+
+.vt-hero-white-label.clean p {
+  font-size: 1rem;
+  color: #666;
+  margin: 0.5rem 0 1.5rem 0;
+}
+
+.vt-hero-white-label.compacto {
+  padding: 1.5rem 1rem;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-size: cover;
+  background-position: center;
+}
+
+.vt-hero-white-label.compacto .vt-hero-content {
+  text-align: center;
+  max-width: 500px;
+}
+
+.vt-hero-logo {
+  max-height: 80px;
+  max-width: 200px;
+  object-fit: contain;
+  margin-bottom: 1rem;
+}
+
+.vt-hero-logo-small {
+  max-height: 50px;
+  max-width: 150px;
+  object-fit: contain;
+  margin-bottom: 0.5rem;
+}
+
+.vt-hero-content h1,
+.vt-hero-content h2 {
+  margin: 0;
+  line-height: 1.2;
+}
+
+.vt-hero-content p {
+  margin: 0.5rem 0 0 0;
+}
+
+.vt-hero-cta,
+.vt-hero-cta-small {
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: opacity 0.2s;
+  margin-top: 1rem;
+}
+
+.vt-hero-cta:hover,
+.vt-hero-cta-small:hover {
+  opacity: 0.9;
+}
+
+.vt-hero-cta-small {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .vt-hero-marketplace h1 {
+    font-size: 1.75rem;
+  }
+
+  .vt-hero-marketplace p {
+    font-size: 1rem;
+  }
+
+  .vt-hero-white-label.premium {
+    min-height: 250px;
+  }
+
+  .vt-hero-white-label.clean {
+    padding: 1.5rem 1rem;
+  }
+
+  .vt-hero-white-label.clean h1 {
+    font-size: 1.5rem;
+  }
+}

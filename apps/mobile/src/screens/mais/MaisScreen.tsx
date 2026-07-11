@@ -9,6 +9,7 @@ import {
 import { useAuthStore } from '../../stores/authStore'
 import { useLojaAtivaStore } from '../../stores/lojaAtivaStore'
 import { useExperienciaStore } from '../../stores/experienciaStore'
+import { parseModulos } from '../../lib/modulos'
 
 export default function MaisScreen() {
   const { colors } = useTheme()
@@ -19,7 +20,9 @@ export default function MaisScreen() {
   const trocarExperiencia = useExperienciaStore((s) => s.trocar)
   const [sairAberto, setSairAberto] = useState(false)
 
-  const gestor = user?.papel !== 'vendedor'
+  const gestor = user?.papel === 'gestor'
+  const modulos = parseModulos(user?.modulos)
+  const liberado = (chave: ReturnType<typeof parseModulos>[number]) => gestor || modulos.includes(chave)
   const sep = { borderTopWidth: 1, borderTopColor: colors.border }
 
   return (
@@ -62,7 +65,7 @@ export default function MaisScreen() {
             chevron
             onPress={() => navigation.navigate('Comissoes')}
           />
-          {gestor && (
+          {liberado('financeiro') && (
             <ListRow
               icon="wallet-outline"
               iconColor={colors.success}
@@ -82,6 +85,16 @@ export default function MaisScreen() {
               onPress={() => navigation.navigate('Equipe')}
             />
           )}
+          {gestor && (
+            <ListRow
+              icon="shield-checkmark-outline"
+              iconColor={colors.warning}
+              title="Aprovações"
+              subtitle="Solicitações de exclusão e alteração de preço"
+              chevron
+              onPress={() => navigation.navigate('Aprovacoes')}
+            />
+          )}
           <ListRow
             icon="git-network-outline"
             iconColor={colors.primary}
@@ -97,15 +110,17 @@ export default function MaisScreen() {
           <Txt variant="label" color="textMuted" style={{ padding: spacing.md, paddingBottom: spacing.xs, textTransform: 'uppercase' }}>
             Ferramentas
           </Txt>
-          <ListRow
-            icon="calculator-outline"
-            iconColor={colors.primary}
-            title="Simulador de financiamento"
-            subtitle="Calcule parcelas para o cliente na hora"
-            chevron
-            onPress={() => navigation.navigate('Simulador')}
-            style={{ borderTopWidth: 0 }}
-          />
+          {liberado('simulador') && (
+            <ListRow
+              icon="calculator-outline"
+              iconColor={colors.primary}
+              title="Simulador de financiamento"
+              subtitle="Calcule parcelas para o cliente na hora"
+              chevron
+              onPress={() => navigation.navigate('Simulador')}
+              style={{ borderTopWidth: 0 }}
+            />
+          )}
           <ListRow
             icon="pricetags-outline"
             iconColor={colors.info}
@@ -115,42 +130,50 @@ export default function MaisScreen() {
             onPress={() => navigation.navigate('Fipe')}
             style={sep}
           />
-          <ListRow
-            icon="document-text-outline"
-            iconColor={colors.success}
-            title="Contratos"
-            subtitle="Contratos de compra e venda + PDF"
-            chevron
-            onPress={() => navigation.navigate('Contratos')}
-            style={sep}
-          />
-          <ListRow
-            icon="receipt-outline"
-            iconColor={colors.warning}
-            title="Notas Fiscais"
-            subtitle="Emitir e acompanhar NF-e de venda"
-            chevron
-            onPress={() => navigation.navigate('NotasFiscais')}
-            style={sep}
-          />
-          <ListRow
-            icon="sparkles-outline"
-            iconColor={colors.primary}
-            title="Marketing IA"
-            subtitle="Gere legendas para redes sociais"
-            chevron
-            onPress={() => navigation.navigate('Marketing')}
-            style={sep}
-          />
-          <ListRow
-            icon="chatbubble-ellipses-outline"
-            iconColor={colors.info}
-            title="Assistente do Vendedor"
-            subtitle="Copiloto de IA para abordagem e objeções"
-            chevron
-            onPress={() => navigation.navigate('AssistenteIA')}
-            style={sep}
-          />
+          {liberado('contratos') && (
+            <ListRow
+              icon="document-text-outline"
+              iconColor={colors.success}
+              title="Contratos"
+              subtitle="Contratos de compra e venda + PDF"
+              chevron
+              onPress={() => navigation.navigate('Contratos')}
+              style={sep}
+            />
+          )}
+          {liberado('fiscal') && (
+            <ListRow
+              icon="receipt-outline"
+              iconColor={colors.warning}
+              title="Notas Fiscais"
+              subtitle="Emitir e acompanhar NF-e de venda"
+              chevron
+              onPress={() => navigation.navigate('NotasFiscais')}
+              style={sep}
+            />
+          )}
+          {liberado('marketing') && (
+            <ListRow
+              icon="sparkles-outline"
+              iconColor={colors.primary}
+              title="Marketing IA"
+              subtitle="Gere legendas para redes sociais"
+              chevron
+              onPress={() => navigation.navigate('Marketing')}
+              style={sep}
+            />
+          )}
+          {liberado('assistente') && (
+            <ListRow
+              icon="chatbubble-ellipses-outline"
+              iconColor={colors.info}
+              title="Assistente do Vendedor"
+              subtitle="Copiloto de IA para abordagem e objeções"
+              chevron
+              onPress={() => navigation.navigate('AssistenteIA')}
+              style={sep}
+            />
+          )}
           {gestor && (
             <ListRow
               icon="globe-outline"

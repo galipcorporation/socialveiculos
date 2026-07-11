@@ -10,7 +10,8 @@ import {
   Avatar, Card, EmptyState, ErrorState, KpiCard, Screen, Sheet, Skeleton, Txt,
 } from '../../components/ui'
 import { BarChart } from '../../components/charts/BarChart'
-import { dashboardService } from '../../services'
+import { dashboardService, esteiraService } from '../../services'
+import { parseModulos } from '../../lib/modulos'
 import { formatBRLCompact, formatNumber, formatRelativo } from '../../lib/format'
 import { useAuthStore } from '../../stores/authStore'
 import { useLojaAtivaStore } from '../../stores/lojaAtivaStore'
@@ -41,19 +42,28 @@ export default function DashboardScreen() {
     queryKey: ['dashboard', 'notificacoes'],
     queryFn: () => dashboardService.notificacoes(),
   })
+  const esteirasQ = useQuery({
+    queryKey: ['esteiras'],
+    queryFn: () => esteiraService.listar(),
+  })
 
   const kpis = kpisQ.data
   const alertas = alertasQ.data ?? []
+  const esteirasAbertas = (esteirasQ.data ?? []).filter((e) => e.estagio !== 'concluido')
   const primeiroNome = user?.nome?.split(' ')[0] ?? ''
 
   const refetch = () => {
     queryClient.invalidateQueries({ queryKey: ['dashboard'] })
   }
 
+  const gestor = user?.papel === 'gestor'
+  const modulos = parseModulos(user?.modulos)
+  const simuladorLiberado = gestor || modulos.includes('simulador')
+
   const acoes: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }[] = [
     { icon: 'add-circle', label: 'Novo veículo', onPress: () => navigation.navigate('VeiculoForm') },
     { icon: 'person-add', label: 'Novo lead', onPress: () => navigation.navigate('LeadForm') },
-    { icon: 'calculator', label: 'Simular', onPress: () => navigation.navigate('Simulador') },
+    ...(simuladorLiberado ? [{ icon: 'calculator' as const, label: 'Simular', onPress: () => navigation.navigate('Simulador') }] : []),
     { icon: 'clipboard', label: 'Pós-venda', onPress: () => navigation.navigate('PosVenda') },
   ]
 
@@ -115,7 +125,7 @@ export default function DashboardScreen() {
                 icon="car-sport"
                 tone="primary"
                 loading={kpisQ.isLoading}
-                onPress={() => navigation.navigate('MainTabs', { screen: 'Estoque' } as never)}
+                onPress={() => navigation.navigate('MainTabs', { screen: 'Estoque', params: { statusInicial: 'disponivel' } } as never)}
               />
               {escopo === 'loja' ? (
                 <KpiCard
@@ -194,6 +204,26 @@ export default function DashboardScreen() {
                 </Pressable>
               ))}
             </View>
+
+            {/* Vendas em andamento */}
+            {esteirasAbertas.length > 0 && (
+              <Pressable
+                onPress={() =>
+                  esteirasAbertas.length === 1
+                    ? navigation.navigate('EsteiraDetalhe', { id: esteirasAbertas[0].id })
+                    : navigation.navigate('PosVenda')
+                }
+              >
+                <Card style={{ marginTop: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <Ionicons name="car" size={22} color={colors.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="bodySemibold">Vendas em andamento ({esteirasAbertas.length})</Txt>
+                    <Txt variant="caption" color="textDim">Toque para acompanhar o pós-venda</Txt>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </Card>
+              </Pressable>
+            )}
 
             {/* Vendas por mês */}
             <Card style={{ marginTop: spacing.lg }}>

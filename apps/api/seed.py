@@ -108,23 +108,31 @@ async def seed():
 
     async with async_session() as session:
         # ── 1. Loja demo ──────────────────────────────────────
-        loja_id = _uuid()
-        loja = Loja(
-            id=loja_id,
-            nome="Auto Premium",
-            slug="auto-premium",
-            cnpj="12.345.678/0001-90",
-            telefone="(11) 99999-0001",
-            whatsapp="5511999990001",
-            email="contato@autopremium.com.br",
-            endereco="Av. Brasil, 1000",
-            cidade="São Paulo",
-            estado="SP",
-            cep="01000-000",
-            verificada=True,
+        res_loja = await session.execute(
+            select(Loja).where(Loja.slug == "auto-premium")
         )
-        session.add(loja)
-        print("  [OK] Loja demo: Auto Premium")
+        existing_loja = res_loja.scalar_one_or_none()
+        if existing_loja:
+            loja_id = existing_loja.id
+            print(f"  [--] Loja demo ja existe: {existing_loja.nome} (ID: {loja_id})")
+        else:
+            loja_id = _uuid()
+            loja = Loja(
+                id=loja_id,
+                nome="Auto Premium",
+                slug="auto-premium",
+                cnpj="12.345.678/0001-90",
+                telefone="(11) 99999-0001",
+                whatsapp="5511999990001",
+                email="contato@autopremium.com.br",
+                endereco="Av. Brasil, 1000",
+                cidade="São Paulo",
+                estado="SP",
+                cep="01000-000",
+                verificada=True,
+            )
+            session.add(loja)
+            print("  [OK] Loja demo criada: Auto Premium")
 
         # ── 2. Usuários ───────────────────────────────────────
         from auth import hash_password
@@ -149,83 +157,121 @@ async def seed():
         else:
             print("  [--] Owner ja existe, pulando")
 
-        gestor_id = _uuid()
-        gestor = Usuario(
-            id=gestor_id,
-            nome="Victor Hugo",
-            email="gestor@autopremium.com.br",
-            telefone="(11) 99999-0001",
-            senha_hash=senha_hash,
-            papel=PapelUsuario.GESTOR,
+        # Gestor
+        res_gestor = await session.execute(
+            select(Usuario).where(Usuario.email == "gestor@autopremium.com.br")
         )
-        session.add(gestor)
+        existing_gestor = res_gestor.scalar_one_or_none()
+        if existing_gestor:
+            gestor_id = existing_gestor.id
+            print("  [--] Gestor ja existe, pulando")
+        else:
+            gestor_id = _uuid()
+            gestor = Usuario(
+                id=gestor_id,
+                nome="Victor Hugo",
+                email="gestor@autopremium.com.br",
+                telefone="(11) 99999-0001",
+                senha_hash=senha_hash,
+                papel=PapelUsuario.GESTOR,
+            )
+            session.add(gestor)
+            session.add(MembroLoja(usuario_id=gestor_id, loja_id=loja_id, papel=PapelUsuario.GESTOR))
+            print("  [OK] Gestor criado")
 
-        vendedor_id = _uuid()
-        vendedor = Usuario(
-            id=vendedor_id,
-            nome="Carlos Silva",
-            email="carlos@autopremium.com.br",
-            telefone="(11) 99999-0002",
-            senha_hash=senha_hash,
-            papel=PapelUsuario.VENDEDOR,
+        # Vendedor
+        res_vendedor = await session.execute(
+            select(Usuario).where(Usuario.email == "carlos@autopremium.com.br")
         )
-        session.add(vendedor)
-
-        # Vínculos loja↔usuario
-        session.add(MembroLoja(usuario_id=gestor_id, loja_id=loja_id, papel=PapelUsuario.GESTOR))
-        session.add(MembroLoja(
-            usuario_id=vendedor_id,
-            loja_id=loja_id,
-            papel=PapelUsuario.VENDEDOR,
-            modulos='["estoque","clientes","negociacoes"]',
-        ))
-        print("  [OK] Usuarios: gestor + vendedor")
+        existing_vendedor = res_vendedor.scalar_one_or_none()
+        if existing_vendedor:
+            vendedor_id = existing_vendedor.id
+            print("  [--] Vendedor ja existe, pulando")
+        else:
+            vendedor_id = _uuid()
+            vendedor = Usuario(
+                id=vendedor_id,
+                nome="Carlos Silva",
+                email="carlos@autopremium.com.br",
+                telefone="(11) 99999-0002",
+                senha_hash=senha_hash,
+                papel=PapelUsuario.VENDEDOR,
+            )
+            session.add(vendedor)
+            session.add(MembroLoja(
+                usuario_id=vendedor_id,
+                loja_id=loja_id,
+                papel=PapelUsuario.VENDEDOR,
+                modulos='["estoque","clientes","negociacoes"]',
+            ))
+            print("  [OK] Vendedor criado")
 
         # ── 3. Veículos demo ──────────────────────────────────
+        # Só insere veículos se a loja foi criada agora ou se ela não tem veículos cadastrados
         from models import Midia, TipoMidia
-        for v_orig in VEICULOS_DEMO:
-            v = v_orig.copy()
-            img_url = v.pop("imagem_url", None)
-            veiculo = Veiculo(loja_id=loja_id, **v)
-            session.add(veiculo)
-            await session.flush()
-            if img_url:
-                session.add(Midia(
-                    veiculo_id=veiculo.id,
-                    tipo=TipoMidia.FOTO,
-                    url=img_url,
-                    ordem=0
-                ))
-
-        print(f"  [OK] Veiculos: {len(VEICULOS_DEMO)} veiculos de teste")
+        res_veiculos = await session.execute(
+            select(Veiculo).where(Veiculo.loja_id == loja_id)
+        )
+        if not res_veiculos.scalars().first():
+            for v_orig in VEICULOS_DEMO:
+                v = v_orig.copy()
+                img_url = v.pop("imagem_url", None)
+                veiculo = Veiculo(loja_id=loja_id, **v)
+                session.add(veiculo)
+                await session.flush()
+                if img_url:
+                    session.add(Midia(
+                        veiculo_id=veiculo.id,
+                        tipo=TipoMidia.FOTO,
+                        url=img_url,
+                        ordem=0
+                    ))
+            print(f"  [OK] Veiculos: {len(VEICULOS_DEMO)} veiculos de teste criados")
+        else:
+            print("  [--] Veiculos ja existem para esta loja, pulando")
 
         # ── 4. Planos + Assinatura ─────────────────────────────
-        session.add(Plano(
-            id=_uuid(),
-            nome="Básico",
-            descricao="Gestão de estoque e CRM, sem módulos premium",
-            preco_mensal=99.90,
-            modulos_incluidos='[]',
-        ))
-        plano_id = _uuid()
-        session.add(Plano(
-            id=plano_id,
-            nome="Profissional",
-            descricao="Gestão completa + todos os módulos premium",
-            preco_mensal=299.90,
-            modulos_incluidos='["contratos","simulador","marketing","assistente_ia"]',
-        ))
+        # Verificar se os planos já existem
+        res_planos = await session.execute(
+            select(Plano).where(Plano.nome == "Profissional")
+        )
+        existing_plano = res_planos.scalar_one_or_none()
+        if existing_plano:
+            plano_id = existing_plano.id
+            print("  [--] Planos ja existem, pulando")
+        else:
+            session.add(Plano(
+                id=_uuid(),
+                nome="Básico",
+                descricao="Gestão de estoque e CRM, sem módulos premium",
+                preco_mensal=99.90,
+                modulos_incluidos='[]',
+            ))
+            plano_id = _uuid()
+            session.add(Plano(
+                id=plano_id,
+                nome="Profissional",
+                descricao="Gestão completa + todos os módulos premium",
+                preco_mensal=299.90,
+                modulos_incluidos='["contratos","simulador","marketing","assistente_ia"]',
+            ))
+            print("  [OK] Planos criados")
 
-        session.add(Assinatura(
-            loja_id=loja_id,
-            plano_id=plano_id,
-            status=StatusAssinatura.ATIVA,
-        ))
-
-        for modulo in ["contratos", "simulador", "marketing", "assistente_ia"]:
-            session.add(ModuloHabilitado(loja_id=loja_id, nome_modulo=modulo))
-
-        print("  [OK] Plano Profissional + assinatura ativa")
+        # Verificar se a assinatura já existe
+        res_assinatura = await session.execute(
+            select(Assinatura).where(Assinatura.loja_id == loja_id)
+        )
+        if not res_assinatura.scalar_one_or_none():
+            session.add(Assinatura(
+                loja_id=loja_id,
+                plano_id=plano_id,
+                status=StatusAssinatura.ATIVA,
+            ))
+            for modulo in ["contratos", "simulador", "marketing", "assistente_ia"]:
+                session.add(ModuloHabilitado(loja_id=loja_id, nome_modulo=modulo))
+            print("  [OK] Plano Profissional + assinatura ativa criados")
+        else:
+            print("  [--] Assinatura ja existe, pulando")
 
         await session.commit()
 

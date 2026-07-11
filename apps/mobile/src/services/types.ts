@@ -262,6 +262,7 @@ export interface Esteira {
   estagio: EstagioEsteira
   veiculo_nome: string
   veiculo_id?: string
+  contrato_id?: string
   comprador_nome: string
   vendedor_nome?: string
   valor_venda?: number

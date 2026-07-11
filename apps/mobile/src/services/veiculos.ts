@@ -39,6 +39,7 @@ export interface RegistrarVendaInput {
   valor_financiado?: number
   valor_troca?: number
   troca_descricao?: string
+  lead_id?: string
 }
 
 export const CATEGORIAS_CUSTO: { value: CategoriaCusto; label: string }[] = [
@@ -281,6 +282,7 @@ export const veiculosService = {
       pagamento_dinheiro: input.valor_dinheiro || null,
       financiamento: input.valor_financiado ? { valor: input.valor_financiado, parcelas: null } : null,
       trocas,
+      lead_id: input.lead_id || null,
     })
     if (resp.esteira_id) {
       return esteiraService.obter(resp.esteira_id)

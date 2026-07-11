@@ -189,6 +189,29 @@ export function VehicleIdentityFields({
   }
 
   // ── Modo autocomplete: captura manual ──
+  const getPlaceholders = () => {
+    switch (value.tipo) {
+      case 'moto':
+        return { marca: 'Ex.: Honda', modelo: 'Ex.: CG 160' }
+      case 'caminhao':
+        return { marca: 'Ex.: Volvo', modelo: 'Ex.: FH 540' }
+      case 'barco':
+        return { marca: 'Ex.: Schaefer', modelo: 'Ex.: Phantom 300' }
+      case 'jet':
+        return { marca: 'Ex.: Sea-Doo', modelo: 'Ex.: GTI 130' }
+      case 'aeronave':
+        return { marca: 'Ex.: Cessna', modelo: 'Ex.: 172 Skyhawk' }
+      case 'reboque':
+        return { marca: 'Ex.: Randon', modelo: 'Ex.: Semirreboque' }
+      case 'outro':
+        return { marca: 'Ex.: Marca', modelo: 'Ex.: Modelo' }
+      case 'carro':
+      default:
+        return { marca: 'Ex.: Toyota', modelo: 'Ex.: Corolla' }
+    }
+  }
+  const placeholders = getPlaceholders()
+
   return (
     <div className="vehicle-identity vid-grid">
       {!ocultarTipo && (
@@ -210,7 +233,7 @@ export function VehicleIdentityFields({
         <div className="autocomplete-wrapper" ref={marcaRef}>
           <input
             type="text"
-            placeholder="Marca"
+            placeholder={placeholders.marca}
             value={value.marca}
             onChange={e => {
               onChange({ marca: e.target.value });
@@ -257,7 +280,7 @@ export function VehicleIdentityFields({
         <div className="autocomplete-wrapper" ref={modeloRef}>
           <input
             type="text"
-            placeholder="Modelo"
+            placeholder={placeholders.modelo}
             value={value.modelo}
             onChange={e => {
               onChange({ modelo: e.target.value });

@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { MainTabsParamList } from '../../navigation/types'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
 import {
@@ -28,9 +29,10 @@ const ORDENACOES: { value: Ordenacao; label: string }[] = [
 export default function EstoqueScreen() {
   const { colors } = useTheme()
   const navigation = useNavigation()
+  const route = useRoute<RouteProp<MainTabsParamList, 'Estoque'>>()
   const queryClient = useQueryClient()
   const [busca, setBusca] = useState('')
-  const [status, setStatus] = useState<FiltroStatus>('todos')
+  const [status, setStatus] = useState<FiltroStatus>(route.params?.statusInicial ?? 'todos')
   const [ordem, setOrdem] = useState<Ordenacao>('recentes')
   const [ordemSheet, setOrdemSheet] = useState(false)
 

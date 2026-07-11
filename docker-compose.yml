@@ -1,0 +1,62 @@
+services:
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api/socialveiculos.db:/app/socialveiculos.db
+      - ./apps/api/static:/app/static
+    env_file:
+      - ./apps/api/.env
+    environment:
+      - DATABASE_URL=sqlite:////app/socialveiculos.db
+      - API_PORT=8000
+      - API_HOST=0.0.0.0
+    restart: unless-stopped
+
+  whatsapp-worker:
+    build:
+      context: ./apps/whatsapp-worker
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./apps/whatsapp-worker/sessions:/app/sessions
+    environment:
+      - PORT=8090
+    restart: unless-stopped
+
+  gestor:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: gestor
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  vitrine:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: vitrine
+    ports:
+      - "5174:5174"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: admin
+    ports:
+      - "5175:5175"
+    depends_on:
+      - api
+    restart: unless-stopped

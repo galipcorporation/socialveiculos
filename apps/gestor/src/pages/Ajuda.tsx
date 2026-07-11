@@ -155,12 +155,29 @@ const TOPICOS: Topico[] = [
     modulo: 'marketing' as const,
     icone: 'M3 11l18-5v12L3 14v-3zM11.6 16.8a3 3 0 11-5.8-1.6',
     imagem: '/ajuda/marketing.png',
-    descricao: 'Gere posts e criativos profissionais para redes sociais a partir dos veículos do seu estoque com um clique.',
+    descricao: 'Gere posts a partir dos veículos do seu estoque com IA e publique (ou agende) direto no Instagram e Facebook da loja.',
     passos: [
-      { texto: 'Acesse "Ferramentas → Marketing" no menu lateral. O módulo permite criar artes prontas para Instagram, WhatsApp e Facebook usando os dados e fotos dos veículos já cadastrados no Estoque.' },
-      { texto: 'Selecione o veículo que deseja divulgar. As fotos e as informações (marca, modelo, ano, preço) são carregadas automaticamente a partir do cadastro do Estoque.' },
-      { texto: 'Escolha o template de arte desejado (formato quadrado para Instagram, stories, etc.). O sistema aplica as informações do veículo e o logotipo da loja no criativo.' },
-      { texto: 'Faça o download da arte gerada e publique diretamente nas redes sociais da loja, ou envie pelo WhatsApp para clientes interessados.', dica: 'Para melhores resultados, cadastre os veículos com fotos de alta qualidade. A primeira foto do veículo será usada como imagem principal no criativo.' },
+      { texto: 'Acesse "Ferramentas → Marketing" no menu lateral. Selecione um veículo do estoque, a rede/canal e o tom da mensagem, e clique em "Gerar anúncio". A IA escreve a legenda com base nas informações do veículo (marca, modelo, ano, preço).' },
+      { texto: 'Revise o texto na prévia. Você pode copiá-lo para publicar manualmente onde quiser, ou publicar direto pela plataforma no painel "Publicar / Agendar" logo abaixo.' },
+      { texto: 'Para publicar direto, primeiro conecte suas redes: no painel "Publicar / Agendar" (ou no banner de aviso), clique em "Configurar redes sociais". Você será levado às Configurações → Redes Sociais.' },
+      { texto: 'Clique em "Conectar via Meta". Faça login na sua conta do Facebook e autorize o acesso. Se você administra mais de uma Página, o sistema pedirá para escolher qual Página do Facebook e qual conta do Instagram Business usar.', dica: 'Para publicar no Instagram, a conta precisa ser Instagram Business (ou Creator) e estar vinculada a uma Página do Facebook. Contas pessoais do Instagram não são suportadas pela API da Meta.' },
+      { texto: 'De volta ao Marketing, marque as redes onde quer publicar, escolha "Publicar agora" ou "Agendar para" (data e hora) e clique no botão. Posts agendados são publicados automaticamente pela plataforma no horário marcado.', dica: 'Para publicar no Instagram, o veículo precisa ter ao menos uma foto cadastrada — o Instagram não aceita post só de texto.' },
+      { texto: 'Acompanhe tudo no painel "Histórico de posts": status (agendado, publicado, falhou, cancelado), data e a rede de cada publicação. Posts ainda agendados podem ser cancelados pelo ícone de X.' },
+    ],
+  },
+  {
+    id: 'marketing-meta-setup',
+    titulo: 'Conectar Instagram/Facebook (Meta)',
+    gestorOnly: true,
+    icone: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3a3 3 0 110 6 3 3 0 010-6zm0 14.2a7.2 7.2 0 01-6-3.22c.03-2 4-3.08 6-3.08s5.97 1.09 6 3.08a7.2 7.2 0 01-6 3.22z',
+    descricao: 'Guia para o responsável pela plataforma habilitar a publicação automática de posts no Instagram e Facebook via API oficial da Meta.',
+    passos: [
+      { texto: 'A publicação direta usa a API oficial da Meta (Graph API). Para habilitá-la é preciso criar um App no Meta for Developers uma única vez, para toda a plataforma. Acesse developers.facebook.com e faça login com a conta que administrará o app.' },
+      { texto: 'Crie um novo App do tipo "Business". No painel do app, adicione os produtos "Facebook Login" e "Instagram Graph API".' },
+      { texto: 'Anote o "App ID" e o "App Secret" (em Configurações → Básico). Em Facebook Login → Configurações, cadastre a URL de redirecionamento (redirect URI) que aponta para o endpoint de callback da plataforma: https://SEU-DOMINIO/api/v1/social-auth/meta/callback.' },
+      { texto: 'Configure essas credenciais como variáveis de ambiente da aplicação — META_APP_ID, META_APP_SECRET e META_REDIRECT_URI —, além da FERNET_KEY (usada para cifrar os tokens das lojas). No deploy em nuvem (Vercel/Expo/Supabase) essas chaves vão nos painéis de variáveis de ambiente do provedor, não em arquivo local.', dica: 'A FERNET_KEY é a mesma chave usada para cifrar as credenciais bancárias. Nunca a exponha nem a versione no Git.' },
+      { texto: 'As permissões necessárias — instagram_content_publish, pages_manage_posts, pages_show_list, instagram_basic, pages_read_engagement — exigem revisão da Meta (App Review) antes de funcionar com contas que não sejam de teste. Enquanto o app estiver em modo de desenvolvimento, só contas com papel no app (admin/testador) conseguem conectar.', dica: 'Submeta o App Review com um vídeo mostrando o fluxo de conexão e publicação. A aprovação da Meta costuma levar de alguns dias a semanas — planeje com antecedência antes do lançamento.' },
+      { texto: 'Após aprovar o App Review e publicar o app (modo "Ativo"), qualquer loja poderá conectar suas próprias contas em Configurações → Redes Sociais, sem precisar de credenciais próprias — o app da plataforma intermedia a autorização.' },
     ],
   },
   {
@@ -283,6 +300,11 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     pergunta: 'Posso alterar o tema para claro?',
     resposta: 'Sim! No canto superior direito, ao lado do seu avatar, há um ícone de sol/lua que alterna entre o tema escuro e claro. Sua preferência fica salva no navegador.',
+  },
+  {
+    pergunta: 'Por que não consigo conectar o Instagram no Marketing?',
+    resposta: 'Três requisitos precisam estar atendidos: (1) sua conta do Instagram deve ser Business ou Creator — contas pessoais não são aceitas pela API da Meta; (2) essa conta do Instagram precisa estar vinculada a uma Página do Facebook que você administra; e (3) o app da plataforma na Meta precisa ter o App Review aprovado. Se você acabou de configurar e ainda está em ambiente de testes, apenas contas com papel no app conseguem conectar. Além disso, para publicar no Instagram o veículo precisa ter ao menos uma foto.',
+    gestorOnly: true,
   },
   {
     pergunta: 'O que são módulos premium?',

@@ -606,6 +606,7 @@ async def vender_veiculo(
         comprador_id=cliente.id,
         vendedor_id=ctx.usuario.id,
         origem=origem,
+        lead_id=body.lead_id,
     )
     db.add(esteira)
     await db.flush()  # garante esteira.id para os itens
@@ -675,6 +676,7 @@ async def vender_veiculo(
         esteira_id=esteira.id,
         trocas_veiculo_ids=[v.id for v in trocas_criadas],
         comissao_excedente=excedente if excedente > 0 else None,
+        lead_id=esteira.lead_id,
     )
 
 

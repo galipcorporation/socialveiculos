@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { FlatList, Linking, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
@@ -15,6 +15,7 @@ import { VARIAVEIS_CONTRATO } from '../../services/contratos'
 import type { Contrato, StatusContrato } from '../../services/types'
 import { STATUS_CONTRATO_LABEL } from '../../services/types'
 import { formatBRL, formatData, maskMoedaInput, parseMoedaInput } from '../../lib/format'
+import type { RootScreenProps } from '../../navigation/types'
 
 const TONE: Record<StatusContrato, 'success' | 'warning' | 'neutral' | 'error'> = {
   assinado: 'success',
@@ -23,14 +24,24 @@ const TONE: Record<StatusContrato, 'success' | 'warning' | 'neutral' | 'error'> 
   cancelado: 'error',
 }
 
-export default function ContratosScreen() {
+export default function ContratosScreen({ route }: RootScreenProps<'Contratos'>) {
   const { colors } = useTheme()
   const queryClient = useQueryClient()
   const [selecionado, setSelecionado] = useState<Contrato | null>(null)
   const [novoAberto, setNovoAberto] = useState(false)
   const [aba, setAba] = useState<'contratos' | 'modelos'>('contratos')
+  const contratoId = route.params?.contratoId
+  const listRef = useRef<FlatList<Contrato>>(null)
 
   const q = useQuery({ queryKey: ['contratos'], queryFn: () => contratosService.lista() })
+
+  useEffect(() => {
+    if (!contratoId || !q.data) return
+    const idx = q.data.findIndex((c) => c.id === contratoId)
+    if (idx >= 0) {
+      listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.3 })
+    }
+  }, [contratoId, q.data])
 
   return (
     <Screen scroll={false} padded={false}>
@@ -56,15 +67,20 @@ export default function ContratosScreen() {
         <ErrorState onRetry={() => q.refetch()} />
       ) : (
         <FlatList
+          ref={listRef}
           data={q.data ?? []}
           keyExtractor={(c) => c.id}
           contentContainerStyle={{ padding: spacing.md, gap: spacing.xs, paddingBottom: 110 }}
           refreshing={q.isRefetching}
           onRefresh={() => queryClient.invalidateQueries({ queryKey: ['contratos'] })}
           showsVerticalScrollIndicator={false}
+          onScrollToIndexFailed={() => {}}
           ListEmptyComponent={<EmptyState icon="document-text-outline" title="Nenhum contrato" subtitle="Gere um contrato de compra e venda." actionLabel="Novo contrato" onAction={() => setNovoAberto(true)} />}
           renderItem={({ item }) => (
-            <Card onPress={() => setSelecionado(item)}>
+            <Card
+              onPress={() => setSelecionado(item)}
+              style={item.id === contratoId ? { borderWidth: 2, borderColor: colors.primary } : undefined}
+            >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>

@@ -110,16 +110,70 @@ META_REDIRECT_URI = os.getenv("META_REDIRECT_URI", "")  # ex: https://app.social
 _META_SCOPES = "pages_show_list,instagram_basic,instagram_content_publish,pages_read_engagement,pages_manage_posts"
 
 
+# Sessões pendentes de OAuth Meta para escolha de página (chave: nonce)
+_oauth_sessions: dict[str, dict] = {}
+
+
+def _gerar_state_assinado(loja_id: str, origem: str = "web") -> tuple[str, str]:
+    import hmac
+    import hashlib
+    import time
+    import base64
+    import uuid
+    nonce = str(uuid.uuid4())
+    ts = int(time.time())
+    payload = json.dumps({"loja_id": loja_id, "nonce": nonce, "ts": ts, "origem": origem}, separators=(',', ':'))
+    sig = hmac.new(_FERNET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    raw_state = f"{payload}.{sig}"
+    state = base64.urlsafe_b64encode(raw_state.encode()).decode().rstrip("=")
+    return state, nonce
+
+
+def _verificar_state_assinado(state: str) -> tuple[str, str, str]:
+    import hmac
+    import hashlib
+    import time
+    import base64
+    try:
+        padding = 4 - (len(state) % 4)
+        if padding < 4:
+            state += "=" * padding
+        raw_state = base64.urlsafe_b64decode(state.encode()).decode()
+        parts = raw_state.rsplit(".", 1)
+        if len(parts) != 2:
+            raise HTTPException(400, "State inválido.")
+        payload_json, sig = parts
+        expected_sig = hmac.new(_FERNET_KEY.encode(), payload_json.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            raise HTTPException(400, "State inválido.")
+        payload = json.loads(payload_json)
+        if int(time.time()) - payload["ts"] > 600:
+            raise HTTPException(400, "State expirado.")
+        return payload["loja_id"], payload["nonce"], payload.get("origem", "web")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(400, "State inválido ou expirado.")
+
+
+def _redirect_final(origem: str, escolher_nonce: Optional[str] = None) -> str:
+    """Monta a URL de retorno pós-OAuth: deep link do app mobile ou path do gestor web."""
+    if origem == "app":
+        base = "socialveiculos://meta-callback"
+        return f"{base}?escolher={escolher_nonce}" if escolher_nonce else base
+    base = "/configuracoes"
+    return f"{base}?escolher={escolher_nonce}" if escolher_nonce else base
+
+
 @router.get("/social-auth/meta/iniciar")
 async def meta_oauth_iniciar(
+    origem: str = Query("web", pattern="^(web|app)$"),
     ctx: B2BContext = Depends(get_current_b2b_user),
 ):
     """Gera URL de autorização OAuth do Meta. Frontend redireciona para ela."""
     if not META_APP_ID or not META_REDIRECT_URI:
         raise HTTPException(503, "OAuth Meta não configurado (META_APP_ID / META_REDIRECT_URI ausentes).")
-    # state encoda loja_id para recuperar no callback
-    import base64
-    state = base64.urlsafe_b64encode(ctx.loja_id.encode()).decode()
+    state, _ = _gerar_state_assinado(ctx.loja_id, origem)
     url = (
         f"https://www.facebook.com/v19.0/dialog/oauth"
         f"?client_id={META_APP_ID}"
@@ -138,14 +192,10 @@ async def meta_oauth_callback(
     db: AsyncSession = Depends(get_db),
 ):
     """Troca code por access_token de longa duração e salva credencial."""
-    import base64
     if not META_APP_ID or not META_APP_SECRET or not META_REDIRECT_URI:
         raise HTTPException(503, "OAuth Meta não configurado.")
 
-    try:
-        loja_id = base64.urlsafe_b64decode(state.encode()).decode()
-    except Exception:
-        raise HTTPException(400, "State inválido.")
+    loja_id, nonce, origem = _verificar_state_assinado(state)
 
     # Troca code por token curto
     async with httpx.AsyncClient() as client:
@@ -185,13 +235,43 @@ async def meta_oauth_callback(
         )
         pages = r3.json().get("data", [])
 
+    from datetime import timedelta
+    expira = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+
+    # Se houver mais de uma página, guarda na sessão pendente e redireciona para a escolha no front
+    if len(pages) > 1:
+        # Limpa sessões expiradas
+        agora = datetime.now(timezone.utc)
+        for k in list(_oauth_sessions.keys()):
+            if (agora - _oauth_sessions[k]["created_at"]).total_seconds() > 600:
+                _oauth_sessions.pop(k, None)
+
+        paginas_list = []
+        for p in pages:
+            ig_id = None
+            if p.get("instagram_business_account"):
+                ig_id = p["instagram_business_account"].get("id")
+            paginas_list.append({
+                "page_id": p["id"],
+                "name": p["name"],
+                "instagram_account_id": ig_id
+            })
+
+        _oauth_sessions[nonce] = {
+            "loja_id": loja_id,
+            "long_token": long_token,
+            "expira": expira,
+            "paginas": paginas_list,
+            "created_at": agora
+        }
+
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=_redirect_final(origem, nonce))
+
     page_id = pages[0]["id"] if pages else None
     ig_id = None
     if pages and pages[0].get("instagram_business_account"):
         ig_id = pages[0]["instagram_business_account"].get("id")
-
-    from datetime import timedelta
-    expira = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
     # Salva / atualiza credencial
     for rede in (["instagram"] if ig_id else []) + ["facebook"]:
@@ -219,9 +299,79 @@ async def meta_oauth_callback(
                 ativo=True,
             ))
     await db.commit()
-    # Redireciona de volta para Configurações
+    # Redireciona de volta para Configurações (web) ou app mobile via deep link
     from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/configuracoes#redes-sociais")
+    return RedirectResponse(url=_redirect_final(origem))
+
+
+@router.get("/social-auth/meta/paginas")
+async def meta_oauth_listar_paginas(
+    nonce: str = Query(...),
+):
+    """Retorna as páginas temporárias para escolha do usuário."""
+    sessao = _oauth_sessions.get(nonce)
+    if not sessao:
+        raise HTTPException(400, "Sessão expirada ou inválida.")
+    # Verifica expiração (10 min)
+    if (datetime.now(timezone.utc) - sessao["created_at"]).total_seconds() > 600:
+        _oauth_sessions.pop(nonce, None)
+        raise HTTPException(400, "Sessão expirada.")
+    return sessao["paginas"]
+
+
+class ConfirmarPaginaRequest(BaseModel):
+    nonce: str
+    page_id: str
+
+
+@router.post("/social-auth/meta/confirmar")
+async def meta_oauth_confirmar_pagina(
+    data: ConfirmarPaginaRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Confirma a página escolhida pelo usuário e salva as credenciais."""
+    sessao = _oauth_sessions.pop(data.nonce, None)
+    if not sessao:
+        raise HTTPException(400, "Sessão expirada ou inválida.")
+    if (datetime.now(timezone.utc) - sessao["created_at"]).total_seconds() > 600:
+        raise HTTPException(400, "Sessão expirada.")
+
+    pagina_escolhida = next((p for p in sessao["paginas"] if p["page_id"] == data.page_id), None)
+    if not pagina_escolhida:
+        raise HTTPException(400, "Página inválida.")
+
+    loja_id = sessao["loja_id"]
+    long_token = sessao["long_token"]
+    expira = sessao["expira"]
+    page_id = pagina_escolhida["page_id"]
+    ig_id = pagina_escolhida["instagram_account_id"]
+
+    for rede in (["instagram"] if ig_id else []) + ["facebook"]:
+        stmt = select(CredencialRedeSocial).where(
+            CredencialRedeSocial.loja_id == loja_id,
+            CredencialRedeSocial.rede == rede,
+        )
+        res = await db.execute(stmt)
+        cred = res.scalar_one_or_none()
+        token_cifrado = _cifrar(long_token)
+        if cred:
+            cred.access_token_cifrado = token_cifrado
+            cred.token_expira_em = expira
+            cred.page_id = page_id
+            cred.instagram_account_id = ig_id
+            cred.ativo = True
+            cred.atualizado_em = datetime.now(timezone.utc)
+        else:
+            db.add(CredencialRedeSocial(
+                loja_id=loja_id, rede=rede,
+                access_token_cifrado=token_cifrado,
+                token_expira_em=expira,
+                page_id=page_id,
+                instagram_account_id=ig_id,
+                ativo=True,
+            ))
+    await db.commit()
+    return {"status": "sucesso"}
 
 
 # ══════════════════════════════════════════════════════════════
@@ -241,6 +391,9 @@ class PublicarResponse(BaseModel):
 
 async def _publicar_na_rede(rede: str, texto_completo: str, midia_url: Optional[str], cred: CredencialRedeSocial) -> dict:
     """Tenta publicar em uma rede. Retorna { rede, sucesso, erro? }."""
+    if rede == "instagram" and not midia_url:
+        return {"rede": rede, "sucesso": False, "erro": "Instagram exige ao menos uma foto no veículo."}
+
     try:
         token = _decifrar(cred.access_token_cifrado)
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -352,6 +505,7 @@ async def agendar_post(
         raise HTTPException(400, "publicar_em deve ser no futuro.")
 
     midia_urls = None
+    has_midia = False
     if data.veiculo_id:
         from sqlalchemy.orm import selectinload
         stmt_v = select(Veiculo).options(selectinload(Veiculo.midias)).where(
@@ -362,6 +516,10 @@ async def agendar_post(
             urls = [m.url for m in v.midias if m.url]
             if urls:
                 midia_urls = json.dumps(urls)
+                has_midia = True
+
+    if "instagram" in data.redes and not has_midia:
+        raise HTTPException(400, "Instagram exige ao menos uma foto no veículo.")
 
     post = PostAgendado(
         loja_id=ctx.loja_id,

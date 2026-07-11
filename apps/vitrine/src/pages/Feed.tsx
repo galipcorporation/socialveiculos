@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useUIStore } from '../stores/uiStore'
+import { useSiteConfig } from '../lib/SiteContext'
 import { LoginModal } from '../components/LoginModal'
 import { MfaSettingsModal } from '../components/MfaSettingsModal'
 import { api } from '../lib/api'
@@ -77,7 +78,8 @@ const CarIcon = () => (
 export function Feed() {
   const navigate = useNavigate()
   const { isAuthenticated, user, openLoginModal, logout, updateUser } = useAuthStore()
-  
+  const { config, lojaId, isWhiteLabel } = useSiteConfig()
+
   // Tema escuro
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('vt-theme') === 'dark'
@@ -196,6 +198,7 @@ export function Feed() {
       if (selectedStory && isAuthenticated && !['Ofertas', 'Novidades', 'Destaques'].includes(selectedStory)) {
         params.carroceria = selectedStory
       }
+      if (isWhiteLabel && lojaId) params.loja_id = lojaId
 
       const data = await api.get<Veiculo[]>('/marketplace/feed', params)
       

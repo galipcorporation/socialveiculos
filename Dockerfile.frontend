@@ -1,0 +1,44 @@
+# ── ESTÁGIO DE CONSTRUÇÃO ─────────────────────────────────────
+FROM node:20-slim AS builder
+
+# Habilitar corepack para gerenciar o pnpm
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
+WORKDIR /app
+
+# Copiar arquivos de configuração do monorepo
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+
+# Copiar todos os arquivos (excluindo os listados no .dockerignore)
+COPY . .
+
+# Instalar dependências de todo o workspace (agora com a estrutura de arquivos completa)
+RUN pnpm install --frozen-lockfile
+
+# Executar build das SPAs
+RUN pnpm --filter @sv/gestor build
+RUN pnpm --filter @sv/vitrine build
+RUN pnpm --filter @sv/admin build
+
+# ── ESTÁGIO GESTOR ────────────────────────────────────────────
+FROM nginx:alpine AS gestor
+COPY --from=builder /app/apps/gestor/dist /usr/share/nginx/html
+COPY docker/nginx.gestor.conf /etc/nginx/conf.d/default.conf
+EXPOSE 5173
+CMD ["nginx", "-g", "daemon off;"]
+
+# ── ESTÁGIO VITRINE ───────────────────────────────────────────
+FROM nginx:alpine AS vitrine
+COPY --from=builder /app/apps/vitrine/dist /usr/share/nginx/html
+COPY docker/nginx.vitrine.conf /etc/nginx/conf.d/default.conf
+EXPOSE 5174
+CMD ["nginx", "-g", "daemon off;"]
+
+# ── ESTÁGIO ADMIN ─────────────────────────────────────────────
+FROM nginx:alpine AS admin
+COPY --from=builder /app/apps/admin/dist /usr/share/nginx/html
+COPY docker/nginx.admin.conf /etc/nginx/conf.d/default.conf
+EXPOSE 5175
+CMD ["nginx", "-g", "daemon off;"]

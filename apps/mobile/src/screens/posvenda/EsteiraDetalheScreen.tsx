@@ -199,6 +199,26 @@ export default function EsteiraDetalheScreen({ route }: RootScreenProps<'Esteira
                     disabled={toggleMut.isPending}
                   />
                 ))}
+                {cat === 'contrato' && (
+                  <Button
+                    title="Gerar contrato"
+                    variant="outline"
+                    icon="document-text-outline"
+                    size="sm"
+                    onPress={() => navigation.navigate('Contratos', { contratoId: e.contrato_id })}
+                    style={{ margin: spacing.sm }}
+                  />
+                )}
+                {cat === 'documento' && (
+                  <Button
+                    title="Emitir NF-e"
+                    variant="outline"
+                    icon="receipt-outline"
+                    size="sm"
+                    onPress={() => navigation.navigate('NotasFiscais', { contratoId: e.contrato_id })}
+                    style={{ margin: spacing.sm }}
+                  />
+                )}
               </Card>
             )
           })}

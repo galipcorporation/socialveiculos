@@ -1555,6 +1555,7 @@ class EsteiraPosVenda(Base):
     contrato_id = Column(String(36), ForeignKey("contrato.id", ondelete="SET NULL"), nullable=True)
     comprador_id = Column(String(36), ForeignKey("cliente_pf.id", ondelete="SET NULL"), nullable=True)
     vendedor_id = Column(String(36), ForeignKey("usuario.id", ondelete="SET NULL"), nullable=True)
+    lead_id = Column(String(36), ForeignKey("lead.id", ondelete="SET NULL"), nullable=True)
 
     estagio = Column(Enum(EstagioPosVenda), default=EstagioPosVenda.CONTRATO, nullable=False)
     origem = Column(Enum(OrigemLead), nullable=True)   # manual, vitrine, whatsapp, simulador, repasse

@@ -10,6 +10,7 @@ export type RootStackParamList = {
   LeadDetalhe: { id: string }
   LeadForm: { veiculoId?: string } | undefined
   Clientes: undefined
+  Aprovacoes: undefined
   Conversa: { id: string; nome: string }
   PosVenda: undefined
   EsteiraDetalhe: { id: string }
@@ -25,8 +26,8 @@ export type RootStackParamList = {
   Detran: undefined
   Fiscal: undefined
   Fipe: undefined
-  Contratos: undefined
-  NotasFiscais: undefined
+  Contratos: { contratoId?: string } | undefined
+  NotasFiscais: { contratoId?: string } | undefined
   MeuSite: undefined
   RedeSocial: undefined
   Marketing: undefined
@@ -35,7 +36,7 @@ export type RootStackParamList = {
 
 export type MainTabsParamList = {
   Inicio: undefined
-  Estoque: undefined
+  Estoque: { statusInicial?: 'disponivel' | 'todos' } | undefined
   CRM: undefined
   Chat: undefined
   Mais: undefined

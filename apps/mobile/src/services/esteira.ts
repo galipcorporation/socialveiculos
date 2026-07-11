@@ -40,6 +40,7 @@ interface EsteiraResumoDTO {
 }
 interface EsteiraDetalheDTO extends EsteiraResumoDTO {
   vendedor_id?: string | null
+  contrato_id?: string | null
   concluida_em?: string | null
   itens: ItemChecklistDTO[]
 }
@@ -89,6 +90,7 @@ function mapDetalhe(d: EsteiraDetalheDTO): Esteira {
     estagio: d.estagio,
     veiculo_nome: nomeVeiculo(d.veiculo),
     veiculo_id: d.veiculo?.id,
+    contrato_id: d.contrato_id ?? undefined,
     comprador_nome: d.comprador?.nome ?? '—',
     vendedor_nome: undefined,
     valor_venda: undefined,

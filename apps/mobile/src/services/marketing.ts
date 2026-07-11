@@ -80,7 +80,14 @@ export const marketingService = {
   },
 
   async publicar(legenda: string, canais: CanalMarketing[]): Promise<PostMarketing> {
-    await api.post('/marketing/publicar', { texto: legenda, hashtags: [], redes: canais })
+    const res = await api.post<{ resultados: { rede: string; sucesso: boolean; erro?: string }[] }>(
+      '/marketing/publicar',
+      { texto: legenda, hashtags: [], redes: canais },
+    )
+    const falhas = res.resultados.filter((r) => !r.sucesso)
+    if (falhas.length > 0) {
+      throw new Error(falhas.map((f) => `${f.rede}: ${f.erro ?? 'falha ao publicar'}`).join(' · '))
+    }
     return {
       id: `local-${Date.now()}`,
       canais,

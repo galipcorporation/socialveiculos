@@ -2,6 +2,7 @@
   "expo": {
     "name": "Social Veículos",
     "slug": "socialveiculos-mobile",
+    "scheme": "socialveiculos",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -22,7 +23,6 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-image",
       "expo-font",
       [
         "expo-splash-screen",
