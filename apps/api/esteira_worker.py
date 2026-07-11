@@ -82,7 +82,7 @@ async def _tick() -> None:
             if fase is None:
                 continue
 
-            link = f"/pos-venda/{esteira.id}?item={item.chave}#{fase}"
+            link = f"esteira:{esteira.id}:{item.chave}:{fase}"
             if await _ja_notificado(db, esteira.loja_id, link):
                 continue
 

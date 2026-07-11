@@ -18,6 +18,7 @@ interface NotificacaoDTO {
   conteudo?: string | null
   mensagem?: string | null
   lida: boolean
+  link?: string | null
   created_at: string
 }
 
@@ -46,6 +47,7 @@ export const dashboardService = {
         titulo: n.titulo,
         conteudo: n.conteudo ?? n.mensagem ?? '',
         lida: n.lida,
+        link: n.link ?? null,
         created_at: n.created_at,
       }))
   },

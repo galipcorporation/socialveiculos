@@ -72,6 +72,8 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
   const [sheet, setSheet] = useState<'ano' | 'cambio' | 'combustivel' | null>(null)
   const [txtOpcional, setTxtOpcional] = useState('')
   const [consultandoPlaca, setConsultandoPlaca] = useState(false)
+  const [rapido, setRapido] = useState(!editando)
+  const [secaoAberta, setSecaoAberta] = useState<'detalhes' | 'identificacao' | 'opcionais' | 'descricao' | null>(null)
 
   const consultarPlaca = async () => {
     const p = form.placa.replace(/[^A-Za-z0-9]/g, '')
@@ -188,7 +190,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
     preco_custo: form.precoCusto ? parseMoedaInput(form.precoCusto) : undefined,
     opcionais: form.opcionais.trim() || undefined,
     descricao: form.descricao.trim() || undefined,
-    publicado_marketplace: form.publicado,
+    publicado_marketplace: rapido ? false : form.publicado,
     fotos: form.fotos,
   })
 
@@ -245,6 +247,15 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
         showsVerticalScrollIndicator={false}
       >
         <View style={{ gap: spacing.md }}>
+          {rapido && (
+            <View style={[styles.badgeRascunho, { backgroundColor: colors.warning + '24' }]}>
+              <Ionicons name="document-text-outline" size={14} color={colors.warning} />
+              <Txt variant="caption" style={{ color: colors.warning, fontFamily: fonts.semibold }}>
+                Cadastro rápido — sempre entra como rascunho, sem publicar na vitrine
+              </Txt>
+            </View>
+          )}
+
           {/* Tipo */}
           <Card>
             <Txt variant="title" style={{ marginBottom: spacing.sm }}>Tipo de veículo</Txt>
@@ -342,46 +353,57 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
           </Card>
 
           {/* Detalhes técnicos */}
-          <Card style={{ gap: spacing.md }}>
-            <Txt variant="title">Detalhes</Txt>
-            {regra.km && (
-              <Input
-                label={usoLabel}
-                placeholder="Ex.: 45.000"
-                keyboardType="numeric"
-                value={form.km ? formatNumber(parseInt(form.km.replace(/\D/g, ''), 10) || 0) : ''}
-                onChangeText={(t) => set('km', t.replace(/\D/g, ''))}
-              />
-            )}
-            <View style={styles.row2}>
-              {regra.cambio && (
-                <SelectField
-                  label="Câmbio"
-                  value={form.cambio || undefined}
-                  onPress={() => setSheet('cambio')}
-                  containerStyle={{ flex: 1 }}
+          {rapido ? (
+            <Pressable
+              onPress={() => setSecaoAberta(secaoAberta === 'detalhes' ? null : 'detalhes')}
+              style={[styles.accordionHeader, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Txt variant="bodySemibold">Detalhes técnicos</Txt>
+              <Ionicons name={secaoAberta === 'detalhes' ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
+          {(!rapido || secaoAberta === 'detalhes') && (
+            <Card style={{ gap: spacing.md }}>
+              {!rapido && <Txt variant="title">Detalhes</Txt>}
+              {regra.km && (
+                <Input
+                  label={usoLabel}
+                  placeholder="Ex.: 45.000"
+                  keyboardType="numeric"
+                  value={form.km ? formatNumber(parseInt(form.km.replace(/\D/g, ''), 10) || 0) : ''}
+                  onChangeText={(t) => set('km', t.replace(/\D/g, ''))}
                 />
               )}
-              {regra.combustivel && (
-                <SelectField
-                  label="Combustível"
-                  value={form.combustivel || undefined}
-                  onPress={() => setSheet('combustivel')}
-                  containerStyle={{ flex: 1 }}
+              <View style={styles.row2}>
+                {regra.cambio && (
+                  <SelectField
+                    label="Câmbio"
+                    value={form.cambio || undefined}
+                    onPress={() => setSheet('cambio')}
+                    containerStyle={{ flex: 1 }}
+                  />
+                )}
+                {regra.combustivel && (
+                  <SelectField
+                    label="Combustível"
+                    value={form.combustivel || undefined}
+                    onPress={() => setSheet('combustivel')}
+                    containerStyle={{ flex: 1 }}
+                  />
+                )}
+              </View>
+              {regra.portas && (
+                <Input
+                  label="Portas"
+                  keyboardType="numeric"
+                  maxLength={1}
+                  value={form.portas}
+                  onChangeText={(t) => set('portas', t.replace(/\D/g, ''))}
+                  containerStyle={{ width: 120 }}
                 />
               )}
-            </View>
-            {regra.portas && (
-              <Input
-                label="Portas"
-                keyboardType="numeric"
-                maxLength={1}
-                value={form.portas}
-                onChangeText={(t) => set('portas', t.replace(/\D/g, ''))}
-                containerStyle={{ width: 120 }}
-              />
-            )}
-          </Card>
+            </Card>
+          )}
 
           {/* Preços */}
           <Card style={{ gap: spacing.md }}>
@@ -433,8 +455,18 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
           </Card>
 
           {/* Extras */}
+          {rapido ? (
+            <Pressable
+              onPress={() => setSecaoAberta(secaoAberta === 'opcionais' ? null : 'opcionais')}
+              style={[styles.accordionHeader, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Txt variant="bodySemibold">Opcionais e descrição</Txt>
+              <Ionicons name={secaoAberta === 'opcionais' ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
+          {(!rapido || secaoAberta === 'opcionais') && (
           <Card style={{ gap: spacing.md }}>
-            <Txt variant="title">Informações adicionais</Txt>
+            {!rapido && <Txt variant="title">Informações adicionais</Txt>}
             {/* Opcionais (Tags) */}
             <View style={{ gap: spacing.xs }}>
               <Txt variant="captionMedium" color="textDim">Opcionais</Txt>
@@ -533,22 +565,25 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
               multiline
               style={{ minHeight: 70, textAlignVertical: 'top' }}
             />
-            <View style={styles.publicarRow}>
-              <View style={{ flex: 1 }}>
-                <Txt variant="bodyMedium">Publicar na vitrine</Txt>
-                <Txt variant="caption" color="textDim">O veículo aparece no marketplace público</Txt>
+            {!rapido && (
+              <View style={styles.publicarRow}>
+                <View style={{ flex: 1 }}>
+                  <Txt variant="bodyMedium">Publicar na vitrine</Txt>
+                  <Txt variant="caption" color="textDim">O veículo aparece no marketplace público</Txt>
+                </View>
+                <Switch
+                  value={form.publicado}
+                  onValueChange={(v) => set('publicado', v)}
+                  trackColor={{ false: colors.overlayStrong, true: colors.primary }}
+                  thumbColor="#fff"
+                />
               </View>
-              <Switch
-                value={form.publicado}
-                onValueChange={(v) => set('publicado', v)}
-                trackColor={{ false: colors.overlayStrong, true: colors.primary }}
-                thumbColor="#fff"
-              />
-            </View>
+            )}
           </Card>
+          )}
 
           <Button
-            title={editando ? 'Salvar alterações' : 'Cadastrar veículo'}
+            title={rapido ? 'Cadastrar como rascunho' : editando ? 'Salvar alterações' : 'Cadastrar veículo'}
             size="lg"
             loading={salvarMut.isPending}
             onPress={salvar}
@@ -586,6 +621,14 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
 }
 
 const styles = StyleSheet.create({
+  badgeRascunho: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.full,
+  },
+  accordionHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    padding: spacing.md, borderRadius: radius.lg, borderWidth: 1,
+  },
   tipoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   tipoChip: {
     paddingHorizontal: 14,

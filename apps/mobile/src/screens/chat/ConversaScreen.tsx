@@ -70,7 +70,7 @@ export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
 
   return (
     <Screen scroll={false} padded={false}>
-      <AppHeader title={nome} large={false} back />
+      <AppHeader title={nome ?? 'Conversa'} large={false} back />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

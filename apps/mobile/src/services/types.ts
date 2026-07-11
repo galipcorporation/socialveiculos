@@ -349,6 +349,7 @@ export interface Notificacao {
   titulo: string
   conteudo: string
   lida: boolean
+  link?: string | null
   created_at: string
 }
 

@@ -453,7 +453,7 @@ async def iniciar_conversa_b2c(
             titulo="Nova Mensagem de Cliente",
             conteudo=f"{current_user.nome}: {nova_msg.conteudo[:60]}",
             tipo="chat_b2c",
-            link="/rede-social",
+            link=f"chat:{conversa.id}",
         )
         db.add(notif)
         await db.commit()

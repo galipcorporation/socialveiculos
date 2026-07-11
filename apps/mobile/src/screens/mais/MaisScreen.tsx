@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
-import { View } from 'react-native'
+import { Pressable, View } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing } from '../../theme/tokens'
+import { radius, spacing } from '../../theme/tokens'
 import {
   AppHeader, Avatar, Badge, Button, Card, ListRow, Screen, Sheet, Txt,
 } from '../../components/ui'
@@ -25,10 +26,48 @@ export default function MaisScreen() {
   const liberado = (chave: ReturnType<typeof parseModulos>[number]) => gestor || modulos.includes(chave)
   const sep = { borderTopWidth: 1, borderTopColor: colors.border }
 
+  const atalhos: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }[] = gestor
+    ? [
+        { icon: 'wallet-outline', label: 'Financeiro', onPress: () => navigation.navigate('Financeiro') },
+        { icon: 'people-outline', label: 'Equipe', onPress: () => navigation.navigate('Equipe') },
+        { icon: 'clipboard-outline', label: 'Pós-venda', onPress: () => navigation.navigate('PosVenda') },
+        { icon: 'sparkles-outline', label: 'Marketing', onPress: () => navigation.navigate('Marketing') },
+      ]
+    : [
+        { icon: 'calculator-outline', label: 'Simulador', onPress: () => navigation.navigate('Simulador') },
+        { icon: 'chatbubble-ellipses-outline', label: 'Assistente IA', onPress: () => navigation.navigate('AssistenteIA') },
+        { icon: 'ribbon-outline', label: 'Comissões', onPress: () => navigation.navigate('Comissoes') },
+        { icon: 'pricetags-outline', label: 'FIPE', onPress: () => navigation.navigate('Fipe') },
+      ]
+
   return (
     <Screen scroll={false} padded={false}>
       <AppHeader title="Mais" />
       <Screen padded style={{ gap: spacing.md }}>
+        {/* Atalhos */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+          {atalhos.map((a) => (
+            <Pressable
+              key={a.label}
+              onPress={a.onPress}
+              style={({ pressed }) => ({
+                flexBasis: '48%', flexGrow: 1,
+                backgroundColor: pressed ? colors.surfaceElevated : colors.surface,
+                borderColor: colors.border, borderWidth: 1, borderRadius: radius.lg,
+                padding: spacing.md, gap: spacing.sm,
+              })}
+            >
+              <View style={{
+                width: 36, height: 36, borderRadius: radius.full,
+                backgroundColor: colors.primary + '24', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Ionicons name={a.icon} size={18} color={colors.primary} />
+              </View>
+              <Txt variant="captionMedium" numberOfLines={1}>{a.label}</Txt>
+            </Pressable>
+          ))}
+        </View>
+
         {/* Perfil */}
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>

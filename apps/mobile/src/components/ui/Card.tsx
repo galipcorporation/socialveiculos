@@ -8,11 +8,12 @@ import { Txt } from './Txt'
 interface CardProps {
   children: React.ReactNode
   onPress?: () => void
+  onLongPress?: () => void
   style?: StyleProp<ViewStyle>
   padded?: boolean
 }
 
-export function Card({ children, onPress, style, padded = true }: CardProps) {
+export function Card({ children, onPress, onLongPress, style, padded = true }: CardProps) {
   const { colors, dark } = useTheme()
   const base: ViewStyle = {
     backgroundColor: colors.surface,
@@ -29,12 +30,13 @@ export function Card({ children, onPress, style, padded = true }: CardProps) {
           elevation: 1,
         }),
   }
-  if (!onPress) {
+  if (!onPress && !onLongPress) {
     return <View style={[base, padded && styles.padded, style]}>{children}</View>
   }
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       style={({ pressed }) => [
         base,
         padded && styles.padded,

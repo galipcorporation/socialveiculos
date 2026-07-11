@@ -129,7 +129,6 @@ export default function SimuladorScreen({ route }: RootScreenProps<'Simulador'>)
                 >
                   <Ionicons name={ativo ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={ativo ? colors.primary : colors.textMuted} />
                   <Txt style={{ fontFamily: fonts.semibold, fontSize: 13, color: ativo ? colors.primaryText : colors.textDim }}>{b.nome}</Txt>
-                  {b.tier === 'paid' && <Badge label="Pro" tone="warning" size="sm" />}
                 </Pressable>
               )
             })}

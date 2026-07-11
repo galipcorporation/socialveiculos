@@ -26,7 +26,7 @@ function saudacao(): string {
 export default function DashboardScreen() {
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
-  const navigation = useNavigation()
+  const navigation = useNavigation<any>()
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const lojaNome = useLojaAtivaStore((s) => s.lojaNome)
@@ -67,6 +67,14 @@ export default function DashboardScreen() {
     { icon: 'clipboard', label: 'Pós-venda', onPress: () => navigation.navigate('PosVenda') },
   ]
 
+  const navegarPorLink = (link?: string | null) => {
+    if (!link) return
+    const [tipo, id] = link.split(':')
+    if (tipo === 'esteira' && id) navigation.navigate('EsteiraDetalhe', { id })
+    else if (tipo === 'lead' && id) navigation.navigate('LeadDetalhe', { id })
+    else if (tipo === 'chat' && id) navigation.navigate('Conversa', { id })
+  }
+
   return (
     <Screen scroll={false} padded={false}>
       {/* Header próprio: saudação + notificações */}
@@ -94,7 +102,7 @@ export default function DashboardScreen() {
             </View>
           )}
         </Pressable>
-        <Pressable onPress={() => navigation.navigate('Configuracoes')} hitSlop={8}>
+        <Pressable onPress={() => navigation.navigate('MainTabs', { screen: 'Mais' } as never)} hitSlop={8}>
           <Avatar nome={user?.nome} size={44} />
         </Pressable>
       </View>
@@ -289,9 +297,12 @@ export default function DashboardScreen() {
             {alertas.map((al) => (
               <Pressable
                 key={al.id}
-                onPress={async () => {
-                  await dashboardService.marcarLida(al.id)
-                  queryClient.invalidateQueries({ queryKey: ['dashboard', 'notificacoes'] })
+                onPress={() => {
+                  dashboardService.marcarLida(al.id).then(() => {
+                    queryClient.invalidateQueries({ queryKey: ['dashboard', 'notificacoes'] })
+                  })
+                  setAlertasAbertos(false)
+                  navegarPorLink(al.link)
                 }}
                 style={({ pressed }) => [
                   styles.notif,

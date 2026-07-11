@@ -192,7 +192,6 @@ const STATUS_ASSINATURA: Record<string, { label: string; cls: string }> = {
    ══════════════════════════════════════════════════════════════ */
 
 export function Ferramentas() {
-  const [activeTab, setActiveTab] = useState<'modulos' | 'assinatura'>('modulos')
   const [toasts, setToasts] = useState<Toast[]>([])
 
   const addToast = useCallback((type: ToastType, message: string, details?: ApiErrorDetails) => {
@@ -211,33 +210,10 @@ export function Ferramentas() {
 
       <div className="page-header">
         <h2>Ferramentas & Módulos Premium</h2>
-        <p>Acesse os módulos contratados e gerencie a assinatura da sua loja.</p>
+        <p>Acesse os módulos habilitados para a sua loja.</p>
       </div>
 
-      <div className="crm-tabs">
-        <button
-          className={`crm-tab-btn ${activeTab === 'modulos' ? 'active' : ''}`}
-          onClick={() => setActiveTab('modulos')}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <WrenchIcon />
-            <span>Módulos</span>
-          </div>
-        </button>
-        <button
-          className={`crm-tab-btn ${activeTab === 'assinatura' ? 'active' : ''}`}
-          onClick={() => setActiveTab('assinatura')}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <CreditCardIcon />
-            <span>Planos & Assinatura</span>
-          </div>
-        </button>
-      </div>
-
-      {activeTab === 'modulos'
-        ? <ModulosTab addToast={addToast} onGoToPlanos={() => setActiveTab('assinatura')} />
-        : <AssinaturaTab addToast={addToast} />}
+      <ModulosTab addToast={addToast} />
     </div>
   )
 }
@@ -248,10 +224,8 @@ export function Ferramentas() {
 
 function ModulosTab({
   addToast,
-  onGoToPlanos,
 }: {
   addToast: (type: ToastType, message: string, details?: any) => void
-  onGoToPlanos: () => void
 }) {
   const [modulos, setModulos] = useState<ModuloStatus[]>([])
   const [loading, setLoading] = useState(true)
@@ -306,8 +280,6 @@ function ModulosTab({
               <div className="modulo-icon">{ModuloIcons[m.modulo] || <WrenchIcon />}</div>
               {m.liberado ? (
                 <span className="modulo-badge success"><CheckIcon /> Ativo</span>
-              ) : m.contratado ? (
-                <span className="modulo-badge warning"><LockIcon /> Inadimplente</span>
               ) : (
                 <span className="modulo-badge muted"><LockIcon /> Bloqueado</span>
               )}
@@ -328,143 +300,14 @@ function ModulosTab({
               ) : (
                 <div className="paywall-cta">
                   <p className="paywall-text">
-                    {m.contratado
-                      ? 'Assinatura pendente. Regularize para reativar.'
-                      : 'Este módulo não está no seu plano atual.'}
+                    Este módulo não está ativo para a sua loja. Entre em contato com o suporte para habilitar.
                   </p>
-                  <button className="btn btn-upgrade" style={{ width: '100%' }} onClick={onGoToPlanos}>
-                    Fazer upgrade <ArrowRightIcon />
-                  </button>
                 </div>
               )}
             </div>
           </div>
         )
       })}
-    </div>
-  )
-}
-
-/* ══════════════════════════════════════════════════════════════
-   ASSINATURA TAB — status + planos
-   ══════════════════════════════════════════════════════════════ */
-
-function AssinaturaTab({ addToast }: { addToast: (type: ToastType, message: string, details?: any) => void }) {
-  const [minha, setMinha] = useState<MinhaAssinatura | null>(null)
-  const [planos, setPlanos] = useState<Plano[]>([])
-  const [loading, setLoading] = useState(true)
-  const [assinando, setAssinando] = useState<string | null>(null)
-
-  const fetchAll = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [m, p] = await Promise.all([
-        api.get<MinhaAssinatura>('/assinaturas/minha'),
-        api.get<Plano[]>('/assinaturas/planos'),
-      ])
-      setMinha(m)
-      setPlanos(p)
-    } catch (err) {
-      const { message, details } = extractErrorDetails(err)
-      addToast('error', message || 'Erro ao carregar assinatura', details)
-    } finally {
-      setLoading(false)
-    }
-  }, [addToast])
-
-  useEffect(() => { fetchAll() }, [fetchAll])
-
-  const assinar = async (plano: Plano) => {
-    const ok = await useUIStore.getState().confirm({
-      title: 'Contratar Plano',
-      message: `Deseja contratar o plano ${plano.nome} por ${formatCurrency(plano.preco_mensal)}/mês?`,
-      confirmText: 'Contratar',
-      cancelText: 'Cancelar',
-    })
-    if (!ok) return
-    setAssinando(plano.id)
-    try {
-      await api.post('/assinaturas/assinar', { plano_id: plano.id })
-      addToast('success', `Plano ${plano.nome} contratado! Aguardando confirmação de pagamento.`)
-      fetchAll()
-    } catch (err) {
-      const { message, details } = extractErrorDetails(err)
-      addToast('error', message || 'Erro ao contratar plano', details)
-    } finally {
-      setAssinando(null)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="empty-state">
-        <div className="spinner" />
-        <p style={{ marginTop: 16 }}>Carregando assinatura…</p>
-      </div>
-    )
-  }
-
-  const st = minha?.assinatura ? STATUS_ASSINATURA[minha.assinatura.status] : null
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Status atual */}
-      <div className="billing-status-card">
-        <div>
-          <span className="billing-label">Plano atual</span>
-          <h3 className="billing-plano">{minha?.plano?.nome || 'Nenhum plano contratado'}</h3>
-          {minha?.plano && (
-            <p className="billing-preco">{formatCurrency(minha.plano.preco_mensal)}<span> /mês</span></p>
-          )}
-        </div>
-        <div className="billing-status-right">
-          {st && <span className={`modulo-badge ${st.cls}`}>{st.label}</span>}
-          {minha?.modulos_ativos && minha.modulos_ativos.length > 0 && (
-            <p className="billing-modulos">
-              {minha.modulos_ativos.length} módulo(s) ativo(s)
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Planos disponíveis */}
-      <div>
-        <h3 className="section-title">Planos disponíveis</h3>
-        <div className="planos-grid">
-          {planos.map(plano => {
-            const modulos: string[] = plano.modulos_incluidos ? JSON.parse(plano.modulos_incluidos) : []
-            const atual = minha?.plano?.id === plano.id
-            return (
-              <div key={plano.id} className={`plano-card ${atual ? 'current' : ''}`}>
-                {atual && <span className="plano-current-tag">Seu plano</span>}
-                <h4 className="plano-nome">{plano.nome}</h4>
-                <p className="plano-preco">{formatCurrency(plano.preco_mensal)}<span> /mês</span></p>
-                <p className="plano-desc">{plano.descricao}</p>
-
-                <ul className="plano-features">
-                  <li><CheckIcon /> Estoque e CRM completos</li>
-                  {modulos.length === 0 ? (
-                    <li className="muted">Sem módulos premium</li>
-                  ) : (
-                    modulos.map(mod => (
-                      <li key={mod}><CheckIcon /> Módulo {MODULO_INFO[mod]?.titulo || mod}</li>
-                    ))
-                  )}
-                </ul>
-
-                <button
-                  className={`btn ${atual ? '' : 'btn-primary'}`}
-                  style={{ width: '100%', ...(atual ? { background: 'transparent', border: '1px solid var(--sv-border)' } : {}) }}
-                  disabled={atual || assinando === plano.id}
-                  onClick={() => assinar(plano)}
-                >
-                  {atual ? 'Plano atual' : assinando === plano.id ? 'Contratando…' : 'Contratar'}
-                </button>
-              </div>
-            )
-          })}
-        </div>
-      </div>
     </div>
   )
 }

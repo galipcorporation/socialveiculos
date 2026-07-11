@@ -396,7 +396,7 @@ async def criar_proposta_repasse(
             titulo="Nova Proposta de Repasse",
             conteudo=msg_notif,
             tipo="proposta",
-            link="/rede-social",
+            link="rede_social:",
         )
         db.add(notif)
         await db.commit()
@@ -1111,7 +1111,7 @@ async def enviar_mensagem_b2b(
             titulo=f"Mensagem de {loja_nome}",
             conteudo=f"{context.usuario.nome}: {nova_msg.conteudo[:60]}",
             tipo="chat_b2b",
-            link="/rede-social",
+            link=f"chat:{conversa.id}",
         )
         db.add(notif)
         await db.flush()
@@ -1231,7 +1231,7 @@ async def chat_websocket_endpoint(websocket: WebSocket, token: Optional[str] = N
                                         titulo=f"Mensagem de {loja_nome}",
                                         conteudo=f"{user.nome if user else 'Lojista'}: {conteudo[:60]}",
                                         tipo="chat_b2b",
-                                        link="/rede-social",
+                                        link=f"chat:{conversa_id}",
                                     )
                                     db.add(notif)
                                     await db.flush()
@@ -1244,7 +1244,7 @@ async def chat_websocket_endpoint(websocket: WebSocket, token: Optional[str] = N
                                         titulo="Nova Mensagem de Cliente",
                                         conteudo=f"{user.nome if user else 'Cliente'}: {conteudo[:60]}",
                                         tipo="chat_b2c",
-                                        link="/rede-social",
+                                        link=f"chat:{conversa_id}",
                                     )
                                     db.add(notif)
                                     await db.flush()

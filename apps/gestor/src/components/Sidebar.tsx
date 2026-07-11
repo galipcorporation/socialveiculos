@@ -186,7 +186,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   }
 
   const visibleFerramentasChildren = FERRAMENTAS_CHILDREN.filter((c) => podeVer(c.path))
-  const ferramentasAtiva = visibleFerramentasChildren.some((c) => location.pathname === c.path)
+  const ferramentasAtiva = location.pathname === '/ferramentas' || visibleFerramentasChildren.some((c) => location.pathname === c.path)
   const [ferramentasAberto, setFerramentasAberto] = useState(ferramentasAtiva)
 
   const visibleNavItems = isAdmin
@@ -208,6 +208,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const handleNav = (path: string) => {
     navigate(path)
     onClose?.()
+  }
+
+  const handleFerramentasClick = () => {
+    if (window.innerWidth <= 1024) {
+      handleNav('/ferramentas')
+    } else {
+      setFerramentasAberto((v) => !v)
+    }
   }
 
   return (
@@ -250,10 +258,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <>
         <div
           className={`sidebar-nav-item ${ferramentasAtiva ? 'active' : ''}`}
-          onClick={() => setFerramentasAberto((v) => !v)}
+          onClick={handleFerramentasClick}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && setFerramentasAberto((v) => !v)}
+          onKeyDown={(e) => e.key === 'Enter' && handleFerramentasClick()}
           aria-expanded={ferramentasAberto}
         >
           {FerramentasIcon}
