@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "PRERENDER_API_URL=https://socialveiculos-api.fly.dev pnpm --filter @sv/vitrine run build",
+  "outputDirectory": "apps/vitrine/dist",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "rewrites": [
+    { "source": "/v1/:path*", "destination": "https://socialveiculos-api.fly.dev/v1/:path*" },
+    { "source": "/static/:path*", "destination": "https://socialveiculos-api.fly.dev/static/:path*" },
+    { "source": "/((?!v1/|static/|assets/|.*\\..*).*)", "destination": "/index.html" }
+  ]
+}

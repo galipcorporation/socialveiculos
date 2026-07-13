@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm --filter @sv/gestor run build",
+  "outputDirectory": "apps/gestor/dist",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "rewrites": [
+    { "source": "/v1/:path*", "destination": "https://socialveiculos-api.fly.dev/v1/:path*" },
+    { "source": "/static/:path*", "destination": "https://socialveiculos-api.fly.dev/static/:path*" },
+    { "source": "/((?!v1/|static/|assets/|.*\\..*).*)", "destination": "/index.html" }
+  ]
+}
