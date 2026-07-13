@@ -14,6 +14,7 @@ import httpx
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
 from models import (
+    utcnow,
     AssistentePermissao,
     AssistenteConfig,
     ConversaWhatsapp,
@@ -279,7 +280,7 @@ async def atualizar_config(
     config.tom = data.tom
     config.consentimento_voz = data.consentimento_voz
     if data.consentimento_voz and not config.consentimento_timestamp:
-        config.consentimento_timestamp = datetime.now(timezone.utc)
+        config.consentimento_timestamp = utcnow()
     elif not data.consentimento_voz:
         config.consentimento_timestamp = None
         config.voz_id = None  # Revoga voz clonada se desmarcar
@@ -500,7 +501,7 @@ async def enviar_mensagem(
     if ult_msg:
         ult_msg.sugestao_ia = None
 
-    conversa.updated_at = datetime.now(timezone.utc)
+    conversa.updated_at = utcnow()
     await db.commit()
     await db.refresh(msg)
 
@@ -611,7 +612,7 @@ async def enviar_mensagem_audio(
     if ult_msg:
         ult_msg.sugestao_ia = None
 
-    conversa.updated_at = datetime.now(timezone.utc)
+    conversa.updated_at = utcnow()
     await db.commit()
     await db.refresh(msg)
 

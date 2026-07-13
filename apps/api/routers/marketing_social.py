@@ -17,7 +17,7 @@ from cryptography.fernet import Fernet
 
 from database import get_db
 from deps import get_current_b2b_user, B2BContext
-from models import CredencialRedeSocial, PostAgendado, Veiculo
+from models import CredencialRedeSocial, PostAgendado, Veiculo, utcnow
 from modulos import exige_modulo, Modulo
 
 router = APIRouter(prefix="/v1", tags=["Marketing Social"])
@@ -288,7 +288,7 @@ async def meta_oauth_callback(
             cred.page_id = page_id
             cred.instagram_account_id = ig_id
             cred.ativo = True
-            cred.atualizado_em = datetime.now(timezone.utc)
+            cred.atualizado_em = utcnow()
         else:
             db.add(CredencialRedeSocial(
                 loja_id=loja_id, rede=rede,
@@ -360,7 +360,7 @@ async def meta_oauth_confirmar_pagina(
             cred.page_id = page_id
             cred.instagram_account_id = ig_id
             cred.ativo = True
-            cred.atualizado_em = datetime.now(timezone.utc)
+            cred.atualizado_em = utcnow()
         else:
             db.add(CredencialRedeSocial(
                 loja_id=loja_id, rede=rede,

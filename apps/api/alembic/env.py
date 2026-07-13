@@ -18,7 +18,9 @@ config = context.config
 
 # Em produção a URL vem do ambiente (DATABASE_URL, via settings), não do
 # alembic.ini — sobrescrevemos aqui para migrar o Postgres real (asyncpg).
-config.set_main_option("sqlalchemy.url", _get_async_url())
+# O "%" é escapado: set_main_option grava no configparser, que trata "%" como
+# sintaxe de interpolação e rejeita senhas percent-encoded (ex.: %23 = "#").
+config.set_main_option("sqlalchemy.url", _get_async_url().replace("%", "%%"))
 
 # Logging
 if config.config_file_name is not None:

@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 from database import get_db, async_session
 from deps import get_current_user, get_optional_user
 from models import (
+    utcnow,
     Usuario, Veiculo, Favorito, Conversa, Mensagem, Loja,
     ClientePF, Lead, EtapaLead, OrigemLead, TipoConversa, StatusVeiculo, VeiculoDocumento
 )
@@ -317,7 +318,7 @@ async def enviar_mensagem_b2c_loja(
         conteudo=conteudo
     )
     db.add(nova_msg)
-    conversa.updated_at = datetime.now(timezone.utc)
+    conversa.updated_at = utcnow()
     
     # Commit e refresh
     await db.commit()
@@ -392,7 +393,7 @@ async def iniciar_conversa_b2c(
         conteudo=data.mensagem
     )
     db.add(nova_msg)
-    conversa.updated_at = datetime.now(timezone.utc)
+    conversa.updated_at = utcnow()
     await db.flush()
 
     # 4. Criar Lead e ClientePF automaticamente se for nova conversa
@@ -565,7 +566,7 @@ async def enviar_mensagem_conversa(
         conteudo=data.mensagem
     )
     db.add(nova_msg)
-    conversa.updated_at = datetime.now(timezone.utc)
+    conversa.updated_at = utcnow()
     await db.commit()
     await db.refresh(nova_msg)
 
@@ -639,7 +640,7 @@ async def chat_websocket_b2c_endpoint(websocket: WebSocket, token: Optional[str]
                             conteudo=conteudo
                         )
                         db.add(nova_msg)
-                        conversa.updated_at = datetime.now(timezone.utc)
+                        conversa.updated_at = utcnow()
                         await db.commit()
                         await db.refresh(nova_msg)
 

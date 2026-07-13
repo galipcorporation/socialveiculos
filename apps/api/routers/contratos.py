@@ -22,6 +22,7 @@ from sqlalchemy import func, or_, desc
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
 from models import (
+    utcnow,
     Contrato, Veiculo, ClientePF, StatusContrato, TipoContrato,
     StatusVeiculo, LancamentoFinanceiro, TipoLancamento,
     EsteiraPosVenda, OrigemLead, OrigemVeiculo, ComissaoVenda, MembroLoja,
@@ -258,7 +259,7 @@ async def atualizar_contrato(
     for key, value in update_data.items():
         setattr(contrato, key, value)
 
-    contrato.updated_at = datetime.now(timezone.utc)
+    contrato.updated_at = utcnow()
     await db.commit()
 
     # Reload with relationships
@@ -400,7 +401,7 @@ async def atualizar_template_contrato(
         template.campos_extras = json.dumps(campos) if campos else None
     for key, value in update_data.items():
         setattr(template, key, value)
-    template.updated_at = datetime.now(timezone.utc)
+    template.updated_at = utcnow()
     await db.commit()
     await db.refresh(template)
     return _template_to_response(template)
@@ -415,7 +416,7 @@ async def excluir_template_contrato(
     """Soft delete — marca como inativo."""
     template = await _obter_template_ou_404(template_id, ctx.loja.id, db)
     template.ativo = False
-    template.updated_at = datetime.now(timezone.utc)
+    template.updated_at = utcnow()
     await db.commit()
 
 
@@ -515,7 +516,7 @@ async def vender_veiculo(
     # 2. Marcar veículo como vendido
     veiculo.status = StatusVeiculo.VENDIDO
     veiculo.publicado_marketplace = False
-    veiculo.updated_at = datetime.now(timezone.utc)
+    veiculo.updated_at = utcnow()
 
     # 3. Criar contrato de compra e venda (trocas = dação em pagamento)
     observacoes = body.observacoes or ""
@@ -587,7 +588,7 @@ async def vender_veiculo(
             veiculo_id=veiculo.id,
             categoria="venda_veiculo",
             observacoes="Composição: " + ", ".join(composicao) if composicao else None,
-            data=datetime.now(timezone.utc),
+            data=utcnow(),
         )
         db.add(lancamento)
 
@@ -615,7 +616,7 @@ async def vender_veiculo(
         valor_entrada=entrada_total or None,
         parcelas=parcelas,
         financiado=financiado,
-        data_venda=datetime.now(timezone.utc),
+        data_venda=utcnow(),
     ):
         db.add(item)
 

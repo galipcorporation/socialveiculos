@@ -44,7 +44,15 @@ def _uuid() -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    # As colunas são DateTime sem timezone (TIMESTAMP WITHOUT TIME ZONE). O SQLite
+    # aceita um datetime aware, mas o Postgres o rejeita — o valor é UTC, apenas
+    # sem o rótulo de fuso.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+# Alias público: use em qualquer escrita de coluna DateTime, no lugar de
+# datetime.now(timezone.utc), que o Postgres rejeita nessas colunas.
+utcnow = _now
 
 
 # ═══════════════════════════════════════════════════════════════

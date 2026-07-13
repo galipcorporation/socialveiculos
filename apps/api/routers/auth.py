@@ -25,7 +25,7 @@ from auth import (
 )
 from database import get_db
 from deps import get_current_user, credentials_exception, registrar_auditoria
-from models import Usuario, Loja, MembroLoja, Sessao, PapelUsuario
+from models import Usuario, Loja, MembroLoja, Sessao, PapelUsuario, utcnow
 from config import settings
 from limiter import rate_limit
 from storage import storage_provider
@@ -179,7 +179,7 @@ async def _emitir_sessao_login(
         refresh_token=refresh_token,
         ip=client_ip,
         user_agent=user_agent,
-        expira_em=datetime.now(timezone.utc) + timedelta(days=7),
+        expira_em=utcnow() + timedelta(days=7),
         revogada=False
     )
     db.add(nova_sessao)
@@ -581,7 +581,7 @@ async def refresh(
         refresh_token=new_refresh_token,
         ip=client_ip,
         user_agent=user_agent,
-        expira_em=datetime.now(timezone.utc) + timedelta(days=7),
+        expira_em=utcnow() + timedelta(days=7),
         revogada=False
     )
     db.add(nova_sessao)

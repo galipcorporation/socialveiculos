@@ -27,6 +27,7 @@ from config import settings
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
 from models import (
+    utcnow,
     ConfiguracaoFiscal,
     NotaFiscal,
     CartaCorrecaoNfe,
@@ -478,12 +479,12 @@ async def webhook_focus(
     nota.motivo_rejeicao = payload.get("mensagem_sefaz")
 
     if nota.status == "cancelada":
-        nota.cancelada_em = datetime.now(timezone.utc)
+        nota.cancelada_em = utcnow()
 
     if nota.status == "autorizada":
         nota.chave_acesso = payload.get("chave_nfe")
         nota.protocolo = payload.get("numero_protocolo")
-        nota.emitida_em = datetime.now(timezone.utc)
+        nota.emitida_em = utcnow()
 
         for campo_url, campo_destino in (("caminho_xml_nota_fiscal", "xml_url"), ("caminho_danfe", "danfe_pdf_url")):
             origem_url = payload.get(campo_url)

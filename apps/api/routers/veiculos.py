@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from storage import storage_provider
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria, get_optional_user
-from models import Veiculo, Midia, Usuario, SolicitacaoAprovacao, StatusAprovacao, TipoAcaoAprovacao, StatusVeiculo, OrigemVeiculo, Negociacao, PapelUsuario, PublicacaoB2B, Favorito, ClientePF, VeiculoDocumento, TipoDocumentoVeiculo, LojaSeguidora, Loja
+from models import Veiculo, Midia, Usuario, SolicitacaoAprovacao, StatusAprovacao, TipoAcaoAprovacao, StatusVeiculo, OrigemVeiculo, Negociacao, PapelUsuario, PublicacaoB2B, Favorito, ClientePF, VeiculoDocumento, TipoDocumentoVeiculo, LojaSeguidora, Loja, utcnow
 from rbac import exige_permissao, Acao, Recurso, can
 from schemas import (
     VeiculoB2BResponse,
@@ -61,7 +61,7 @@ async def sincronizar_publicacao_b2b(veiculo: Veiculo, db: AsyncSession, autor_i
         if pub:
             pub.ativa = True
             pub.valor_repasse = veiculo.preco_venda
-            pub.updated_at = datetime.now(timezone.utc)
+            pub.updated_at = utcnow()
         else:
             pub = PublicacaoB2B(
                 loja_id=veiculo.loja_id,
@@ -77,7 +77,7 @@ async def sincronizar_publicacao_b2b(veiculo: Veiculo, db: AsyncSession, autor_i
         pub = res.scalar_one_or_none()
         if pub:
             pub.ativa = False
-            pub.updated_at = datetime.now(timezone.utc)
+            pub.updated_at = utcnow()
 
 
 # ═══════════════════════════════════════════════════════════════

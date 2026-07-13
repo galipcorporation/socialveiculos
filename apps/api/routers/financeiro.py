@@ -16,6 +16,7 @@ from sqlalchemy.future import select
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
 from models import (
+    utcnow,
     LancamentoFinanceiro,
     ComissaoVenda,
     Veiculo,
@@ -595,7 +596,7 @@ async def adicionar_custo_veiculo(
         tipo=TipoLancamento.DESPESA,
         descricao=data.descricao,
         valor=data.valor,
-        data=datetime.now(timezone.utc),
+        data=utcnow(),
         veiculo_id=veiculo.id,
         categoria=data.categoria,
         observacoes=data.observacoes,
@@ -816,7 +817,7 @@ async def marcar_comissao_paga(
         tipo=TipoLancamento.COMISSAO,
         descricao=f"Pagamento de comissão {comissao.id}",
         valor=comissao.valor_comissao,
-        data=datetime.now(timezone.utc),
+        data=utcnow(),
         veiculo_id=comissao.veiculo_id,
         status_pagamento=StatusPagamento.PAGO
     )

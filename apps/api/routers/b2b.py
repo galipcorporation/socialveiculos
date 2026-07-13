@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 from database import get_db, async_session
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
 from models import (
+    utcnow,
     PublicacaoB2B, Comentario, Curtida, PropostaRepasse,
     Conversa, Mensagem, Loja, Veiculo, StatusVeiculo,
     StatusPropostaRepasse, TipoConversa, Usuario, MembroLoja
@@ -594,7 +595,7 @@ async def processar_proposta_repasse(
                 for outra in res_outras.scalars().all():
                     outra.status = StatusPropostaRepasse.REJEITADA
 
-    proposta.updated_at = datetime.now(timezone.utc)
+    proposta.updated_at = utcnow()
     await db.commit()
     await db.refresh(proposta)
 
@@ -1085,12 +1086,12 @@ async def enviar_mensagem_b2b(
         autor_id=context.usuario.id,
         conteudo=data.conteudo,
         lida=False,
-        created_at=datetime.now(timezone.utc)
+        created_at=utcnow()
     )
     db.add(nova_msg)
 
     # Atualizar timestamp da conversa para reposicioná-la no topo
-    conversa.updated_at = datetime.now(timezone.utc)
+    conversa.updated_at = utcnow()
 
     await db.commit()
     await db.refresh(nova_msg)
@@ -1200,10 +1201,10 @@ async def chat_websocket_endpoint(websocket: WebSocket, token: Optional[str] = N
                             autor_id=usuario_id,
                             conteudo=conteudo,
                             lida=False,
-                            created_at=datetime.now(timezone.utc)
+                            created_at=utcnow()
                         )
                         db.add(nova_msg)
-                        conversa.updated_at = datetime.now(timezone.utc)
+                        conversa.updated_at = utcnow()
                         await db.flush()
 
                         # Criar Notificação correspondente
