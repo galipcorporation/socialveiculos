@@ -87,7 +87,7 @@ export default function ChatScreen() {
               <EmptyState
                 icon="business-outline"
                 title="Nenhum parceiro"
-                subtitle="Conversas com lojas parceiras (repasses B2B) aparecem aqui."
+                subtitle="Conversas com lojas parceiras (repasses entre lojas) aparecem aqui."
               />
             )
           }

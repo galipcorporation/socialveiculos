@@ -102,7 +102,7 @@ export default function ConfiguracoesScreen() {
         {/* Sobre */}
         <Card>
           <Txt variant="title" style={{ marginBottom: spacing.xs }}>Sobre</Txt>
-          <Linha label="Versão" valor="0.1.0 (demo)" />
+          <Linha label="Versão" valor="0.1.0" />
           <Linha label="Plataforma" valor="Social Veículos — Gestor" />
           <Linha label="Suporte" valor="suporte@socialveiculos.com.br" />
         </Card>

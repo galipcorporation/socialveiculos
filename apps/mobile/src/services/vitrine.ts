@@ -118,15 +118,9 @@ function mapMensagem(m: MensagemB2CDTO): Mensagem {
   }
 }
 
-const DEMO_PF = { email: 'vitrine@demo.com', senha: 'demo123' }
-
 export const vitrineService = {
   // ── Auth PF leve ─────────────────────────────────────────
-  async login(): Promise<LoginResult> {
-    return api.post<LoginResult>('/auth/login', DEMO_PF)
-  },
-
-  async cadastrar(nome: string, email: string, senha = 'demo123'): Promise<LoginResult> {
+  async cadastrar(nome: string, email: string, senha: string): Promise<LoginResult> {
     await api.post('/auth/register-b2c', { nome: nome.trim(), email: email.trim().toLowerCase(), senha })
     return api.post<LoginResult>('/auth/login', { email: email.trim().toLowerCase(), senha })
   },

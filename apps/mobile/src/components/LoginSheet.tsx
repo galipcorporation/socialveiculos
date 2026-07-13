@@ -19,6 +19,7 @@ export function LoginSheet() {
 
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
+  const [senha, setSenha] = useState('')
   const [entrando, setEntrando] = useState(false)
 
   const finalizar = (res: { access_token: string; refresh_token: string; user: Parameters<typeof login>[2] }) => {
@@ -29,19 +30,10 @@ export function LoginSheet() {
   }
 
   const cadastrar = async () => {
-    if (!nome.trim() || !email.trim()) return
+    if (!nome.trim() || !email.trim() || !senha.trim()) return
     setEntrando(true)
     try {
-      finalizar(await vitrineService.cadastrar(nome, email))
-    } finally {
-      setEntrando(false)
-    }
-  }
-
-  const demo = async () => {
-    setEntrando(true)
-    try {
-      finalizar(await vitrineService.login())
+      finalizar(await vitrineService.cadastrar(nome, email, senha))
     } finally {
       setEntrando(false)
     }
@@ -57,13 +49,9 @@ export function LoginSheet() {
 
         <Input label="Nome" value={nome} onChangeText={setNome} placeholder="Como quer ser chamado" />
         <Input label="E-mail" value={email} onChangeText={setEmail} placeholder="voce@email.com" autoCapitalize="none" keyboardType="email-address" />
+        <Input label="Senha" value={senha} onChangeText={setSenha} placeholder="Crie uma senha" secureTextEntry />
 
-        <Button title="Criar conta e continuar" icon="person-add-outline" loading={entrando} onPress={cadastrar} full disabled={!nome.trim() || !email.trim()} />
-        <Button title="Entrar com conta demo" variant="ghost" onPress={demo} disabled={entrando} />
-
-        <Txt variant="caption" color="textMuted" align="center">
-          Conta leve — só para salvar favoritos e conversar com as lojas.
-        </Txt>
+        <Button title="Criar conta e continuar" icon="person-add-outline" loading={entrando} onPress={cadastrar} full disabled={!nome.trim() || !email.trim() || !senha.trim()} />
       </View>
     </Sheet>
   )

@@ -83,7 +83,7 @@ export default function PerfilScreen() {
           )}
         </Card>
 
-        <Txt variant="caption" color="textMuted" align="center">Social Veículos · Vitrine · ambiente de demonstração</Txt>
+        <Txt variant="caption" color="textMuted" align="center">Social Veículos · Vitrine</Txt>
       </Screen>
 
       <Sheet visible={sairAberto} onClose={() => setSairAberto(false)} title="Sair da conta" scrollable={false}>

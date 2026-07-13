@@ -34,13 +34,6 @@ export default function LoginScreen() {
     }
   }
 
-  const entrarDemo = () => {
-    const demo = authService.credenciaisDemo()
-    setEmail(demo.email)
-    setSenha(demo.senha)
-    entrar(demo.email, demo.senha)
-  }
-
   return (
     <Screen keyboardAvoiding style={{ justifyContent: 'center', flexGrow: 1 }}>
       <View style={styles.brand}>
@@ -105,12 +98,7 @@ export default function LoginScreen() {
           onPress={() => entrar(email, senha)}
           style={{ marginTop: spacing.xs }}
         />
-        <Button title="Explorar com conta demo" variant="ghost" onPress={entrarDemo} disabled={carregando} />
       </View>
-
-      <Txt variant="caption" color="textMuted" align="center" style={{ marginTop: spacing.xxl }}>
-        Ambiente de demonstração — dados fictícios
-      </Txt>
     </Screen>
   )
 }

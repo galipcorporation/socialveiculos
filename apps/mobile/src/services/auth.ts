@@ -21,8 +21,4 @@ export const authService = {
       // logout local sempre prossegue mesmo se a revogação remota falhar
     }
   },
-
-  credenciaisDemo(): { email: string; senha: string } {
-    return { email: 'gestor@autopremium.com.br', senha: 'demo123' }
-  },
 }

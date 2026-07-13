@@ -234,7 +234,7 @@ export default function MaisScreen() {
           <ListRow
             icon="settings-outline"
             title="Configurações"
-            subtitle="Tema, dados de demonstração"
+            subtitle="Tema, preferências"
             chevron
             onPress={() => navigation.navigate('Configuracoes')}
           />
@@ -257,7 +257,7 @@ export default function MaisScreen() {
         </Card>
 
         <Txt variant="caption" color="textMuted" align="center">
-          Social Veículos · v0.1 · ambiente de demonstração
+          Social Veículos · v0.1
         </Txt>
       </Screen>
 

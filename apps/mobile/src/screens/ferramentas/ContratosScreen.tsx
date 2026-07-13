@@ -126,9 +126,9 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
       const url = await contratosService.pdfUrl(contrato.id)
       const ok = await Linking.canOpenURL(url)
       if (ok) await Linking.openURL(url)
-      else toast.show('info', 'Ambiente de demonstração — PDF não disponível offline.')
+      else toast.show('info', 'PDF não disponível offline.')
     } catch {
-      toast.show('info', 'Ambiente de demonstração — PDF não disponível offline.')
+      toast.show('info', 'PDF não disponível offline.')
     } finally {
       setAbrindoPdf(false)
     }
