@@ -2,6 +2,7 @@
 
 Backlog de implementação derivado de [social.md](../social.md). Cada arquivo é um épico/módulo com tarefas codificáveis (não documentação de produto). Ordenadas por dependência: o que está no topo destrava o resto.
 
+> ⚠️ **ANTES de mexer em banco, migrations ou deploy:** leia [ARMADILHAS-PRODUCAO.md](ARMADILHAS-PRODUCAO.md). Três coisas já quebraram produção (datetime aware em coluna naive, migrations SQLite-only que não rodam em Postgres, deploy Vercel fora da raiz do monorepo) e a mensagem de erro de cada uma aponta para a causa errada.
 > 🐛 **Bugs:** registro contínuo em [BUGS.md](BUGS.md) — adicionar/referenciar a cada ajuste.
 > ✨ **Melhorias/ajustes de UX:** registro contínuo em [MELHORIAS.md](MELHORIAS.md) (consolidou os antigos arquivos soltos `melhorias/01..19`).
 > 📐 **Specs/planos de design:** arquivados em [specs/](specs/) (recuperados de `docs/superpowers/` em 2026-07-11). **Regra:** toda documentação nova vai para `documentos/tarefa/` — não criar outras pastas de docs na raiz.

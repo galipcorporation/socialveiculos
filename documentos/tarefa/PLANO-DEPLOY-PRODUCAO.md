@@ -1,5 +1,11 @@
 # Plano de Deploy em Produção — Social Veículos
 
+> ✅ **EXECUTADO em 2026-07-12.** API, os 4 fronts e o APK estão no ar; o WhatsApp
+> worker não subiu. As URLs de produção e as três armadilhas que apareceram na
+> execução (e quebraram produção) estão em
+> [ARMADILHAS-PRODUCAO.md](ARMADILHAS-PRODUCAO.md) — leia-o antes de mexer em
+> banco, migrations ou deploy. Este documento fica como o **plano original**.
+
 > Objetivo: colocar a plataforma no ar esta semana (lançamento 1 cidade), com capacidade para dezenas–centenas de usuários simultâneos, em infraestrutura majoritariamente gratuita.
 > Data: 2026-06-29 · Stack decidida com o fundador.
 
