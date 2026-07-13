@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
+import * as ImageManipulator from 'expo-image-manipulator'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
 import {
@@ -152,15 +153,31 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
     if (erros[campo]) setErros((e) => ({ ...e, [campo]: undefined }))
   }
 
+  const [carregandoFotos, setCarregandoFotos] = useState(false)
+
   const escolherFotos = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
-      selectionLimit: 8,
+      selectionLimit: 8 - form.fotos.length,
       quality: 0.8,
     })
-    if (!res.canceled) {
-      set('fotos', [...form.fotos, ...res.assets.map((a) => a.uri)].slice(0, 8))
+    if (res.canceled || res.assets.length === 0) return
+    setCarregandoFotos(true)
+    try {
+      const redimensionadas = await Promise.all(
+        res.assets.map(async (a) => {
+          const r = await ImageManipulator.manipulateAsync(
+            a.uri,
+            [{ resize: { width: 1600 } }],
+            { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+          )
+          return r.uri
+        }),
+      )
+      set('fotos', [...form.fotos, ...redimensionadas].slice(0, 8))
+    } finally {
+      setCarregandoFotos(false)
     }
   }
 
@@ -191,12 +208,19 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
     opcionais: form.opcionais.trim() || undefined,
     descricao: form.descricao.trim() || undefined,
     publicado_marketplace: rapido ? false : form.publicado,
-    fotos: form.fotos,
   })
 
   const salvarMut = useMutation({
-    mutationFn: () =>
-      editando ? veiculosService.atualizar(id!, montarInput()) : veiculosService.criar(montarInput()),
+    mutationFn: async () => {
+      const veiculo = editando
+        ? await veiculosService.atualizar(id!, montarInput())
+        : await veiculosService.criar(montarInput())
+      const fotosNovas = form.fotos.filter((uri) => uri.startsWith('file://'))
+      for (const uri of fotosNovas) {
+        await veiculosService.enviarFoto(veiculo.id, uri)
+      }
+      return veiculo
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['veiculos'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
@@ -434,10 +458,11 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.xs }}>
               <Pressable
                 onPress={escolherFotos}
+                disabled={carregandoFotos || form.fotos.length >= 8}
                 style={[styles.addFoto, { borderColor: colors.borderHover, backgroundColor: colors.overlaySoft }]}
               >
-                <Ionicons name="camera-outline" size={24} color={colors.textDim} />
-                <Txt variant="caption" color="textDim">Adicionar</Txt>
+                <Ionicons name={carregandoFotos ? 'hourglass-outline' : 'camera-outline'} size={24} color={colors.textDim} />
+                <Txt variant="caption" color="textDim">{carregandoFotos ? 'Preparando…' : 'Adicionar'}</Txt>
               </Pressable>
               {form.fotos.map((uri, i) => (
                 <View key={uri + i}>

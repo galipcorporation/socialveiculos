@@ -28,7 +28,6 @@ export interface VeiculoInput {
   descricao?: string
   opcionais?: string
   publicado_marketplace?: boolean
-  fotos?: string[]
 }
 
 export interface RegistrarVendaInput {
@@ -189,7 +188,6 @@ function bodyVeiculo(input: VeiculoInput) {
     descricao: input.descricao || null,
     opcionais: input.opcionais || null,
     publicado_marketplace: input.publicado_marketplace ?? false,
-    fotos: input.fotos ?? undefined,
   }
 }
 
@@ -262,6 +260,17 @@ export const veiculosService = {
 
   async excluir(idVeiculo: string): Promise<void> {
     await api.delete(`/veiculos/${idVeiculo}`)
+  },
+
+  /** Envia uma foto local (uri file://) ao storage e associa ao veículo. */
+  async enviarFoto(idVeiculo: string, uri: string): Promise<void> {
+    const nome = uri.split('/').pop() || 'foto.jpg'
+    const ext = nome.split('.').pop()?.toLowerCase()
+    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+    const fd = new FormData()
+    fd.append('file', { uri, name: nome, type: mime } as unknown as Blob)
+    const { url } = await api.post<{ url: string }>('/midias/upload', fd)
+    await api.post(`/veiculos/${idVeiculo}/midias`, { url, tipo: 'foto' })
   },
 
   /** Venda: cria contrato + esteira no backend e retorna a esteira criada. */

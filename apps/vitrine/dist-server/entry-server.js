@@ -5,7 +5,7 @@ import { jsx, jsxs, Fragment } from "react/jsx-runtime";
 import { renderToString } from "react-dom/server";
 import { useNavigate, Link, useLocation, useParams, Routes, Route, StaticRouter } from "react-router-dom";
 import { Helmet, HelmetProvider } from "react-helmet-async";
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { createContext, useState, useEffect, useContext, useRef, useCallback } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { X, AlertCircle, KeyRound, Mail, EyeOff, Eye, User, Phone } from "lucide-react";
@@ -80,6 +80,106 @@ const useUIStore = create((set, get) => ({
     }
   }
 }));
+const DEFAULT_MARKETPLACE_CONFIG = {
+  tipo: "marketplace",
+  paleta: {
+    primary: "#0066cc",
+    secondary: "#00cc99",
+    accent: "#ff6600",
+    background: "#f5f5f5"
+  },
+  template: "clean",
+  hero: {
+    titulo: "Encontre seu próximo veículo",
+    subtitulo: "Marketplace de carros de lojas verificadas",
+    ctaTexto: "Buscar agora"
+  }
+};
+function detectarTipoSite(host) {
+  if (!host) return "marketplace";
+  const parts = host.split(".");
+  return parts.length > 2 ? "white-label" : "marketplace";
+}
+function extrairSlugDoHost(host) {
+  if (!host) return null;
+  const tipo = detectarTipoSite(host);
+  if (tipo === "marketplace") return null;
+  return host.split(".")[0];
+}
+async function getThemeConfig(host) {
+  const tipo = detectarTipoSite(host);
+  if (tipo === "marketplace") {
+    return DEFAULT_MARKETPLACE_CONFIG;
+  }
+  const slug = extrairSlugDoHost(host);
+  if (!slug) return DEFAULT_MARKETPLACE_CONFIG;
+  try {
+    const response = await fetch(
+      `${void 0}/v1/public/site/${host}`,
+      { credentials: "omit" }
+    );
+    if (!response.ok) return DEFAULT_MARKETPLACE_CONFIG;
+    const siteData = await response.json();
+    return {
+      tipo: "white-label",
+      lojaId: siteData.loja_id,
+      lojaSlug: slug,
+      paleta: {
+        primary: siteData.cor_primaria || "#0066cc",
+        secondary: siteData.cor_secundaria || "#00cc99",
+        accent: siteData.cor_destaque || "#ff6600",
+        background: "#f5f5f5"
+      },
+      logo: siteData.logo_url,
+      template: siteData.template || "clean",
+      hero: {
+        titulo: siteData.hero_titulo || "Bem-vindo",
+        subtitulo: siteData.hero_subtitulo || "",
+        ctaTexto: siteData.hero_cta || "Ver estoque",
+        banner: siteData.banner_url
+      },
+      footerText: siteData.sobre_texto,
+      analytics: {
+        ga4: siteData.ga4_id,
+        pixel: siteData.pixel_id
+      }
+    };
+  } catch (error) {
+    console.error("[theme] Erro ao buscar config:", error);
+    return DEFAULT_MARKETPLACE_CONFIG;
+  }
+}
+const SiteContext = createContext(void 0);
+function SiteProvider({ children }) {
+  const [host, setHost] = useState("");
+  const [config, setConfig] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const currentHost = window.location.hostname;
+    setHost(currentHost);
+    getThemeConfig(currentHost).then((cfg) => {
+      setConfig(cfg);
+      setLoading(false);
+    }).catch((err) => {
+      console.error("[SiteContext] Erro ao carregar config:", err);
+      setLoading(false);
+    });
+  }, []);
+  const value = {
+    config,
+    host,
+    loading,
+    tipo: (config == null ? void 0 : config.tipo) || "marketplace",
+    lojaId: config == null ? void 0 : config.lojaId,
+    isWhiteLabel: detectarTipoSite(host) === "white-label"
+  };
+  return /* @__PURE__ */ jsx(SiteContext.Provider, { value, children });
+}
+function useSiteConfig() {
+  const ctx = useContext(SiteContext);
+  if (!ctx) throw new Error("useSiteConfig deve estar dentro de <SiteProvider>");
+  return ctx;
+}
 const API_BASE = "/v1";
 class ApiError extends Error {
   constructor(message, details) {
@@ -818,6 +918,7 @@ const CarIcon = () => /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: 
 function Feed() {
   const navigate = useNavigate();
   const { isAuthenticated, user, openLoginModal, logout, updateUser } = useAuthStore();
+  const { config, lojaId, isWhiteLabel } = useSiteConfig();
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem("vt-theme") === "dark";
   });
@@ -921,6 +1022,7 @@ function Feed() {
       if (selectedStory && isAuthenticated && !["Ofertas", "Novidades", "Destaques"].includes(selectedStory)) {
         params.carroceria = selectedStory;
       }
+      if (isWhiteLabel && lojaId) params.loja_id = lojaId;
       const data = await api.get("/marketplace/feed", params);
       setVeiculos((prev) => {
         if (resetList || currentPage === 1) return data;
@@ -1025,23 +1127,23 @@ function Feed() {
       console.error("Erro ao iniciar conversa:", err);
     }
   };
-  const handleSeguir = async (lojaId, seguindo) => {
+  const handleSeguir = async (lojaId2, seguindo) => {
     if (!isAuthenticated) {
       openLoginModal("login");
       return;
     }
     setVeiculos((prev) => prev.map(
-      (v) => v.loja_id === lojaId ? { ...v, seguindo_loja: !seguindo } : v
+      (v) => v.loja_id === lojaId2 ? { ...v, seguindo_loja: !seguindo } : v
     ));
     try {
       if (seguindo) {
-        await api.delete(`/vitrine/lojas/${lojaId}/seguir`);
+        await api.delete(`/vitrine/lojas/${lojaId2}/seguir`);
       } else {
-        await api.post(`/vitrine/lojas/${lojaId}/seguir`, {});
+        await api.post(`/vitrine/lojas/${lojaId2}/seguir`, {});
       }
     } catch {
       setVeiculos((prev) => prev.map(
-        (v) => v.loja_id === lojaId ? { ...v, seguindo_loja: seguindo } : v
+        (v) => v.loja_id === lojaId2 ? { ...v, seguindo_loja: seguindo } : v
       ));
     }
   };
@@ -2011,6 +2113,35 @@ function CarroDetalhe({ initialData }) {
     ] })
   ] });
 }
+function StoreItemMedia({ midias, alt }) {
+  const [idx, setIdx] = useState(0);
+  const ordenadas = [...midias ?? []].sort((a, b) => a.ordem - b.ordem);
+  const atual = ordenadas[idx];
+  const prev = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIdx((i) => i === 0 ? ordenadas.length - 1 : i - 1);
+  };
+  const next = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIdx((i) => i === ordenadas.length - 1 ? 0 : i + 1);
+  };
+  if (!atual) return /* @__PURE__ */ jsx("div", { className: "vt-store-item-empty" });
+  return /* @__PURE__ */ jsxs("div", { className: "vt-store-item-media", children: [
+    atual.tipo === "video" ? /* @__PURE__ */ jsx("video", { src: atual.url, preload: "metadata", muted: true }) : /* @__PURE__ */ jsx("img", { src: atual.url, alt, loading: "lazy" }),
+    ordenadas.length > 1 && /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsxs("span", { className: "vt-media-count", children: [
+        idx + 1,
+        "/",
+        ordenadas.length
+      ] }),
+      /* @__PURE__ */ jsx("button", { className: "vt-media-arrow left", onClick: prev, children: "‹" }),
+      /* @__PURE__ */ jsx("button", { className: "vt-media-arrow right", onClick: next, children: "›" }),
+      /* @__PURE__ */ jsx("div", { className: "vt-media-dots", children: ordenadas.map((_, i) => /* @__PURE__ */ jsx("span", { className: i === idx ? "on" : "" }, i)) })
+    ] })
+  ] });
+}
 function Loja({ initialData }) {
   const { slug } = useParams();
   const seed = initialData ?? getSSGData();
@@ -2067,9 +2198,8 @@ function Loja({ initialData }) {
       ")"
     ] }),
     loja.veiculos.length === 0 ? /* @__PURE__ */ jsx("div", { className: "vt-empty", children: "Esta loja não tem veículos publicados no momento." }) : /* @__PURE__ */ jsx("div", { className: "vt-store-grid", children: loja.veiculos.map((v) => {
-      const capa = [...v.midias ?? []].sort((a, b) => a.ordem - b.ordem)[0];
       return /* @__PURE__ */ jsxs(Link, { to: `/carro/${v.id}`, className: "vt-store-item", children: [
-        capa ? capa.tipo === "video" ? /* @__PURE__ */ jsx("video", { src: capa.url, preload: "metadata", muted: true }) : /* @__PURE__ */ jsx("img", { src: capa.url, alt: `${v.marca} ${v.modelo}`, loading: "lazy" }) : /* @__PURE__ */ jsx("div", { className: "vt-store-item-empty" }),
+        /* @__PURE__ */ jsx(StoreItemMedia, { midias: v.midias, alt: `${v.marca} ${v.modelo}` }),
         /* @__PURE__ */ jsxs("div", { className: "vt-store-item-body", children: [
           /* @__PURE__ */ jsxs("div", { className: "vt-store-item-title", children: [
             v.marca,
@@ -2246,6 +2376,74 @@ function Sobre() {
       ]
     }
   );
+}
+function SobreWhiteLabel() {
+  var _a, _b;
+  const { isWhiteLabel, lojaId, config } = useSiteConfig();
+  const [loja, setLoja] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!isWhiteLabel || !lojaId) {
+      setLoading(false);
+      return;
+    }
+    api.get(`/marketplace/lojas/${lojaId}`).then(setLoja).catch((err) => console.error("Erro ao carregar info da loja:", err)).finally(() => setLoading(false));
+  }, [isWhiteLabel, lojaId]);
+  if (!isWhiteLabel) {
+    return /* @__PURE__ */ jsxs("div", { className: "sobre-container", children: [
+      /* @__PURE__ */ jsx("div", { className: "sobre-header", children: /* @__PURE__ */ jsx("h1", { children: "Sobre o Social Veículos" }) }),
+      /* @__PURE__ */ jsx("div", { className: "sobre-content", children: /* @__PURE__ */ jsx("p", { children: "O maior marketplace de veículos com lojas verificadas." }) })
+    ] });
+  }
+  if (loading) {
+    return /* @__PURE__ */ jsx("div", { className: "sobre-container", children: "Carregando..." });
+  }
+  if (!loja) {
+    return /* @__PURE__ */ jsx("div", { className: "sobre-container", children: "Loja não encontrada" });
+  }
+  return /* @__PURE__ */ jsxs("div", { className: "sobre-container", children: [
+    /* @__PURE__ */ jsxs(
+      "div",
+      {
+        className: "sobre-header",
+        style: { backgroundColor: ((_a = config == null ? void 0 : config.paleta) == null ? void 0 : _a.primary) || "#0066cc", color: "#fff" },
+        children: [
+          loja.logo_url && /* @__PURE__ */ jsx("img", { src: loja.logo_url, alt: loja.nome, className: "sobre-logo" }),
+          /* @__PURE__ */ jsx("h1", { children: loja.nome }),
+          loja.verificada && /* @__PURE__ */ jsx("span", { className: "sobre-verificada", children: "✓ Verificada" })
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxs("div", { className: "sobre-content", children: [
+      /* @__PURE__ */ jsxs("div", { className: "sobre-info-grid", children: [
+        /* @__PURE__ */ jsxs("div", { className: "sobre-info-item", children: [
+          /* @__PURE__ */ jsx("span", { className: "sobre-label", children: "Localização" }),
+          /* @__PURE__ */ jsxs("p", { children: [
+            loja.cidade,
+            ", ",
+            loja.estado
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "sobre-info-item", children: [
+          /* @__PURE__ */ jsx("span", { className: "sobre-label", children: "Veículos em estoque" }),
+          /* @__PURE__ */ jsx("p", { children: loja.total_veiculos })
+        ] }),
+        loja.whatsapp && /* @__PURE__ */ jsxs("div", { className: "sobre-info-item", children: [
+          /* @__PURE__ */ jsx("span", { className: "sobre-label", children: "WhatsApp" }),
+          /* @__PURE__ */ jsx("a", { href: `https://wa.me/${loja.whatsapp.replace(/\D/g, "")}`, target: "_blank", rel: "noreferrer", children: loja.whatsapp })
+        ] })
+      ] }),
+      loja.descricao && /* @__PURE__ */ jsxs("div", { className: "sobre-descricao", children: [
+        /* @__PURE__ */ jsx("h2", { children: "Sobre" }),
+        /* @__PURE__ */ jsx("p", { children: loja.descricao })
+      ] }),
+      (config == null ? void 0 : config.footerText) && /* @__PURE__ */ jsxs("div", { className: "sobre-extra", children: [
+        /* @__PURE__ */ jsx("h2", { children: "Informações Adicionais" }),
+        /* @__PURE__ */ jsx("p", { children: config.footerText })
+      ] }),
+      /* @__PURE__ */ jsx("div", { className: "sobre-cta", children: /* @__PURE__ */ jsx("a", { href: "/", className: "sobre-button", style: { backgroundColor: ((_b = config == null ? void 0 : config.paleta) == null ? void 0 : _b.primary) || "#0066cc" }, children: "Ver estoque completo" }) })
+    ] })
+  ] });
 }
 function Termos() {
   return /* @__PURE__ */ jsxs(
@@ -2562,22 +2760,27 @@ function UIProvider() {
     ] }) })
   ] });
 }
+function AppRoutes() {
+  const { isWhiteLabel } = useSiteConfig();
+  const sobrePage = isWhiteLabel ? /* @__PURE__ */ jsx(SobreWhiteLabel, {}) : /* @__PURE__ */ jsx(Sobre, {});
+  return /* @__PURE__ */ jsxs(Routes, { children: [
+    /* @__PURE__ */ jsx(Route, { index: true, element: /* @__PURE__ */ jsx(Feed, {}) }),
+    /* @__PURE__ */ jsx(Route, { path: "/favoritos", element: /* @__PURE__ */ jsx(Favoritos, {}) }),
+    /* @__PURE__ */ jsx(Route, { path: "/mensagens", element: /* @__PURE__ */ jsx(Mensagens, {}) }),
+    /* @__PURE__ */ jsx(Route, { path: "/carro/:id", element: /* @__PURE__ */ jsx(CarroDetalhe, {}) }),
+    /* @__PURE__ */ jsx(Route, { path: "/loja/:slug", element: /* @__PURE__ */ jsx(Loja, {}) }),
+    /* @__PURE__ */ jsx(Route, { path: "/minha-conta/veiculos", element: /* @__PURE__ */ jsx(MeusVeiculos, {}) }),
+    /* @__PURE__ */ jsx(Route, { path: "/sobre", element: sobrePage }),
+    /* @__PURE__ */ jsx(Route, { path: "/termos", element: /* @__PURE__ */ jsx(Termos, {}) }),
+    /* @__PURE__ */ jsx(Route, { path: "/privacidade", element: /* @__PURE__ */ jsx(Privacidade, {}) }),
+    /* @__PURE__ */ jsx(Route, { path: "/anuncie", element: /* @__PURE__ */ jsx(Anuncie, {}) }),
+    /* @__PURE__ */ jsx(Route, { path: "/auth/google/callback", element: /* @__PURE__ */ jsx(GoogleCallback, {}) })
+  ] });
+}
 function App() {
-  return /* @__PURE__ */ jsxs(Fragment, { children: [
+  return /* @__PURE__ */ jsxs(SiteProvider, { children: [
     /* @__PURE__ */ jsx(UIProvider, {}),
-    /* @__PURE__ */ jsxs(Routes, { children: [
-      /* @__PURE__ */ jsx(Route, { index: true, element: /* @__PURE__ */ jsx(Feed, {}) }),
-      /* @__PURE__ */ jsx(Route, { path: "/favoritos", element: /* @__PURE__ */ jsx(Favoritos, {}) }),
-      /* @__PURE__ */ jsx(Route, { path: "/mensagens", element: /* @__PURE__ */ jsx(Mensagens, {}) }),
-      /* @__PURE__ */ jsx(Route, { path: "/carro/:id", element: /* @__PURE__ */ jsx(CarroDetalhe, {}) }),
-      /* @__PURE__ */ jsx(Route, { path: "/loja/:slug", element: /* @__PURE__ */ jsx(Loja, {}) }),
-      /* @__PURE__ */ jsx(Route, { path: "/minha-conta/veiculos", element: /* @__PURE__ */ jsx(MeusVeiculos, {}) }),
-      /* @__PURE__ */ jsx(Route, { path: "/sobre", element: /* @__PURE__ */ jsx(Sobre, {}) }),
-      /* @__PURE__ */ jsx(Route, { path: "/termos", element: /* @__PURE__ */ jsx(Termos, {}) }),
-      /* @__PURE__ */ jsx(Route, { path: "/privacidade", element: /* @__PURE__ */ jsx(Privacidade, {}) }),
-      /* @__PURE__ */ jsx(Route, { path: "/anuncie", element: /* @__PURE__ */ jsx(Anuncie, {}) }),
-      /* @__PURE__ */ jsx(Route, { path: "/auth/google/callback", element: /* @__PURE__ */ jsx(GoogleCallback, {}) })
-    ] })
+    /* @__PURE__ */ jsx(AppRoutes, {})
   ] });
 }
 function render(url, ssgData) {
