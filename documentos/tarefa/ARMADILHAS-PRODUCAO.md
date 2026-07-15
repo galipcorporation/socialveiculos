@@ -140,6 +140,22 @@ foto salva mas dá 403 ao carregar. O `put_object` **não** manda ACL
 Como validar: subir uma imagem por `POST /v1/midias/upload` e conferir que a URL
 retornada começa com `https://pub-...r2.dev/` (não `/static/`) e responde `200`.
 
+**Organização por pasta:** os uploads são prefixados por loja e tipo — não jogue
+arquivo na raiz do bucket. `upload_file(..., prefixo=...)` recebe a "pasta":
+
+| Upload | Prefixo |
+|---|---|
+| foto/vídeo de veículo | `lojas/{loja_id}/veiculos` |
+| documento de veículo | `lojas/{loja_id}/documentos` |
+| NF-e (XML/DANFE) | `lojas/{loja_id}/fiscal` |
+| áudio do assistente | `lojas/{loja_id}/assistente` |
+| avatar do usuário | `usuarios/{usuario_id}/avatar` |
+
+Isso permite navegar no painel do R2 e apagar toda a mídia de uma loja de uma vez
+(LGPD / plano cancelado). Ao adicionar um novo ponto de upload, passe um
+`prefixo` no mesmo padrão. `delete_file` deriva a Key da URL pública — não quebre
+esse cálculo (senão o delete apaga a Key errada e deixa lixo).
+
 ---
 
 ## Produção — o que está no ar
