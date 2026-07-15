@@ -114,6 +114,34 @@ ERR_PNPM_META_FETCH_FAIL: Value of "this" must be of type URLSearchParams
 
 ---
 
+## 4. Storage: sem os secrets S3, as imagens vão pro disco EFÊMERO do Fly
+
+**Sintoma:** o upload responde `201` com uma URL `/static/uploads/...`, e a
+imagem carrega **de forma intermitente** (404/200 alternado). Pior: some a cada
+deploy.
+
+**Causa:** `storage.py` só usa o R2/S3 se `S3_ACCESS_KEY` **e** `S3_SECRET_KEY`
+**e** `S3_BUCKET_NAME` estiverem setados. Faltando qualquer um, cai
+**silenciosamente** no provedor LOCAL (`apps/api/static/uploads/`) — que no Fly é
+disco efêmero e não é compartilhado entre as 2 máquinas.
+
+**Correção (feita em 2026-07-12):** 5 secrets no Fly, mais redeploy:
+
+```
+S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET_NAME=socialveiculos,
+S3_ENDPOINT_URL=https://<ACCOUNT_ID>.r2.cloudflarestorage.com,
+S3_PUBLIC_URL=https://pub-xxxx.r2.dev
+```
+
+O bucket R2 **precisa de acesso público habilitado** (R2.dev subdomain), senão a
+foto salva mas dá 403 ao carregar. O `put_object` **não** manda ACL
+`public-read` de propósito — o R2 não aceita, o acesso público vem do bucket.
+
+Como validar: subir uma imagem por `POST /v1/midias/upload` e conferir que a URL
+retornada começa com `https://pub-...r2.dev/` (não `/static/`) e responde `200`.
+
+---
+
 ## Produção — o que está no ar
 
 | | |
