@@ -116,8 +116,15 @@ export const chatService = {
   },
 
   async totalNaoLidas(): Promise<number> {
-    const lista = await this.conversas()
-    return lista.reduce((acc, c) => acc + c.nao_lidas, 0)
+    // Tenta endpoint leve que retorna só a contagem (sem carregar todas as conversas).
+    // Se o backend ainda não tiver, faz fallback carregando a lista completa.
+    try {
+      const r = await api.get<{ total: number }>('/chat/nao-lidas')
+      return r.total
+    } catch {
+      const lista = await this.conversas()
+      return lista.reduce((acc, c) => acc + c.nao_lidas, 0)
+    }
   },
 
   async naoLidasPorTipo(): Promise<{ cliente: number; parceiro: number }> {

@@ -27,7 +27,8 @@ export default function MainTabs() {
   const { data: naoLidas } = useQuery({
     queryKey: ['chat', 'nao-lidas'],
     queryFn: () => chatService.totalNaoLidas(),
-    refetchInterval: 15000,
+    staleTime: 45_000,
+    refetchInterval: 60_000,
   })
 
   return (

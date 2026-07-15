@@ -41,10 +41,13 @@ export default function DashboardScreen() {
   const alertasQ = useQuery({
     queryKey: ['dashboard', 'notificacoes'],
     queryFn: () => dashboardService.notificacoes(),
+    staleTime: 2 * 60_000,
   })
   const esteirasQ = useQuery({
     queryKey: ['esteiras'],
     queryFn: () => esteiraService.listar(),
+    staleTime: 2 * 60_000,
+    enabled: kpisQ.isSuccess,  // só carrega após KPIs para não competir no startup
   })
 
   const kpis = kpisQ.data

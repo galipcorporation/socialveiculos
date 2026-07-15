@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
@@ -67,6 +67,17 @@ export default function CrmScreen() {
     })),
   ]
 
+  const renderLead = useCallback(({ item }: { item: Lead }) => (
+    <LeadCard
+      lead={item}
+      onPress={() => navigation.navigate('LeadDetalhe', { id: item.id })}
+      onLongPress={() => {
+        Haptics.selectionAsync().catch(() => {})
+        setEtapaLead(item)
+      }}
+    />
+  ), [navigation])
+
   return (
     <View style={{ flex: 1 }}>
       <AppHeader
@@ -98,21 +109,16 @@ export default function CrmScreen() {
       ) : (
         <FlatList
           data={filtrados}
-          keyExtractor={(l) => l.id}
-          renderItem={({ item }) => (
-            <LeadCard
-              lead={item}
-              onPress={() => navigation.navigate('LeadDetalhe', { id: item.id })}
-              onLongPress={() => {
-                Haptics.selectionAsync().catch(() => {})
-                setEtapaLead(item)
-              }}
-            />
-          )}
+          keyExtractor={keyExtractorLead}
+          renderItem={renderLead}
           contentContainerStyle={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
           refreshing={leadsQ.isRefetching}
           onRefresh={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
+          initialNumToRender={10}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          removeClippedSubviews={true}
           ListEmptyComponent={
             <EmptyState
               icon="people-outline"
@@ -142,7 +148,9 @@ export default function CrmScreen() {
   )
 }
 
-function LeadCard({ lead, onPress, onLongPress }: { lead: Lead; onPress: () => void; onLongPress: () => void }) {
+const keyExtractorLead = (l: Lead) => l.id
+
+const LeadCard = React.memo(function LeadCard({ lead, onPress, onLongPress }: { lead: Lead; onPress: () => void; onLongPress: () => void }) {
   const { colors } = useTheme()
   const etapa = ETAPAS_LEAD.find((e) => e.value === lead.etapa)
 
@@ -172,7 +180,7 @@ function LeadCard({ lead, onPress, onLongPress }: { lead: Lead; onPress: () => v
       </View>
     </Card>
   )
-}
+})
 
 const styles = StyleSheet.create({
   chipFixo: {

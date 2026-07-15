@@ -18,12 +18,10 @@ Login demo: `gestor@autopremium.com.br` / `demo123` (gestor) ou
 ```
 src/
   theme/        tokens (--sv-* portados) + ThemeProvider (system/light/dark persistido)
-  lib/          format.ts (BRL, datas, máscaras), api.ts (client HTTP pronto p/ API real)
-  services/     CAMADA DE DADOS — hoje mock, amanhã API real
+  lib/          format.ts (BRL, datas, máscaras), api.ts (client HTTP — refresh token + X-Loja-Id)
+  services/     CAMADA DE DADOS — API real (apps/api), um service por domínio
     types.ts    modelos de domínio (mesmas shapes do apps/api)
-    seed.ts     dados fake realistas (veículos, leads, chat, esteiras, financeiro)
-    db.ts       "banco" local: AsyncStorage + latência simulada
-    *.ts        um service por domínio (veiculos, leads, chat, esteira, financeiro…)
+    *.ts        veiculos, leads, chat, esteira, financeiro, assistente… (todos via lib/api)
   components/
     ui/         design system: Button, Card, Badge, Input, Sheet, Skeleton, Toast…
     charts/     BarChart (série única, tap = tooltip)
@@ -31,13 +29,34 @@ src/
   screens/      uma pasta por módulo
 ```
 
-## Trocar mock → API real
+## Camada de dados
 
-As telas **só** conhecem os services (`src/services/index.ts`). Para plugar o
-backend: reimplementar cada service usando `src/lib/api.ts` (client com refresh
-token e header `X-Loja-Id` já pronto) mantendo as assinaturas. Nada muda nas
-telas, hooks ou navegação. O login mock em `services/auth.ts` vira
-`api.post('/auth/login')` com o mesmo contrato.
+As telas **só** conhecem os services (`src/services/index.ts`); toda a comunicação
+com o backend passa por `src/lib/api.ts` (client com refresh token e header
+`X-Loja-Id`). A API-alvo é definida por `EXPO_PUBLIC_API_URL` (fallback
+`http://localhost:8000/v1` em dev). Nos builds EAS a URL vem do `eas.json`.
+
+## Build do APK (EAS)
+
+APK instalável direto no celular (não precisa Play Store):
+
+```bash
+cd apps/mobile
+npx eas-cli build --profile preview --platform android           # build na nuvem Expo (conta na cota mensal)
+npx eas-cli build --profile preview --platform android --local   # build na sua máquina (NÃO conta na cota; exige Android SDK + JDK)
+```
+
+O profile `preview` gera `.apk` e injeta `EXPO_PUBLIC_API_URL` apontando para a
+API de produção (Fly). `production` gera `.aab` (só Play Store, não instala direto).
+
+### Versão (controle manual)
+
+`appVersionSource: "local"` no `eas.json` → a versão é controlada **à mão** no
+`app.json`, então você vê o número no arquivo (útil com a cota mensal da Expo):
+
+- `expo.version` (`1.0.0`) → versão visível ao usuário; bumpe a cada release (1.0.1, 1.1.0…).
+- `expo.android.versionCode` (inteiro) → **incremente +1 a cada APK** que for instalar/distribuir.
+  Se dois APKs tiverem o mesmo `versionCode`, o Android trata como a mesma build.
 
 ## Módulos
 

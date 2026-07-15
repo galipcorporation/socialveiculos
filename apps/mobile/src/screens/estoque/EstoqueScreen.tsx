@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
@@ -76,6 +76,10 @@ export default function EstoqueScreen() {
     { value: 'inativo' as const, label: 'Inativos', count: contagem('inativo') },
   ]
 
+  const renderVeiculo = useCallback(({ item }: { item: Veiculo }) => (
+    <VeiculoCard veiculo={item} onPress={() => navigation.navigate('VeiculoDetalhe', { id: item.id })} />
+  ), [navigation])
+
   return (
     <View style={{ flex: 1 }}>
       <AppHeader
@@ -103,7 +107,7 @@ export default function EstoqueScreen() {
       ) : (
         <FlatList
           data={filtrados}
-          keyExtractor={(v) => v.id}
+          keyExtractor={keyExtractor}
           ListHeaderComponent={
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
               <KpiCard label="Total" value={formatNumber(todos.length)} icon="car-sport" tone="primary" />
@@ -111,13 +115,16 @@ export default function EstoqueScreen() {
               <KpiCard label="Na vitrine" value={formatNumber(naVitrine)} icon="globe" tone="primary" />
             </View>
           }
-          renderItem={({ item }) => (
-            <VeiculoCard veiculo={item} onPress={() => navigation.navigate('VeiculoDetalhe', { id: item.id })} />
-          )}
+          renderItem={renderVeiculo}
           contentContainerStyle={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
           refreshing={listaQ.isRefetching}
           onRefresh={() => queryClient.invalidateQueries({ queryKey: ['veiculos'] })}
+          initialNumToRender={8}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          removeClippedSubviews={true}
+          getItemLayout={getItemLayout}
           ListEmptyComponent={
             busca || status !== 'todos' ? (
               <EmptyState
@@ -151,7 +158,16 @@ export default function EstoqueScreen() {
   )
 }
 
-function VeiculoCard({ veiculo, onPress }: { veiculo: Veiculo; onPress: () => void }) {
+// ── Altura fixa para getItemLayout (card 98px + padding + margem) ──
+const ITEM_HEIGHT = 98 + 12 + 12 // foto + padding sm*2 + marginBottom sm
+const keyExtractor = (v: Veiculo) => v.id
+const getItemLayout = (_data: unknown, index: number) => ({
+  length: ITEM_HEIGHT,
+  offset: ITEM_HEIGHT * index,
+  index,
+})
+
+const VeiculoCard = React.memo(function VeiculoCard({ veiculo, onPress }: { veiculo: Veiculo; onPress: () => void }) {
   const { colors } = useTheme()
   const detalhes = [
     veiculo.ano_fabricacao && veiculo.ano_fabricacao !== veiculo.ano_modelo
@@ -194,7 +210,7 @@ function VeiculoCard({ veiculo, onPress }: { veiculo: Veiculo; onPress: () => vo
       </View>
     </Card>
   )
-}
+})
 
 const styles = StyleSheet.create({
   cardRow: {
