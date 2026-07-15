@@ -1266,7 +1266,10 @@ async def upload_documento(
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Veículo não encontrado")
 
-    url = await storage_provider.upload_file(content, file.filename or "documento.pdf", "application/pdf")
+    url = await storage_provider.upload_file(
+        content, file.filename or "documento.pdf", "application/pdf",
+        prefixo=f"lojas/{ctx.loja.id}/documentos",
+    )
     tipo_enum = TipoDocumentoVeiculo(tipo) if tipo in TipoDocumentoVeiculo._value2member_map_ else TipoDocumentoVeiculo.OUTRO
     doc = VeiculoDocumento(
         veiculo_id=veiculo_id,

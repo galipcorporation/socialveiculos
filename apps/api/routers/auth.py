@@ -717,7 +717,10 @@ async def upload_avatar(
         )
 
     try:
-        url = await storage_provider.upload_file(content, file.filename or "avatar", content_type)
+        url = await storage_provider.upload_file(
+            content, file.filename or "avatar", content_type,
+            prefixo=f"usuarios/{current_user.id}/avatar",
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

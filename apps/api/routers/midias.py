@@ -77,7 +77,10 @@ async def upload_midia(
 
     # 2. Upload
     try:
-        url = await storage_provider.upload_file(content, file.filename or "file", content_type)
+        url = await storage_provider.upload_file(
+            content, file.filename or "file", content_type,
+            prefixo=f"lojas/{current_user.loja_id}/veiculos",
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

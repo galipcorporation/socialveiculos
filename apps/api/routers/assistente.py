@@ -561,7 +561,10 @@ async def enviar_mensagem_audio(
         )
 
     # 3. Subir MP3 no storage (para a UI reproduzir o que foi enviado)
-    midia_url = await storage_provider.upload_file(audio_bytes, "resposta.mp3", "audio/mpeg")
+    midia_url = await storage_provider.upload_file(
+        audio_bytes, "resposta.mp3", "audio/mpeg",
+        prefixo=f"lojas/{context.loja_id}/assistente",
+    )
 
     # 4. Enviar via worker como nota de voz
     import base64 as _b64

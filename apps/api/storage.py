@@ -57,11 +57,25 @@ class StorageProvider:
             ext = os.path.splitext(original_filename)[1].lower()
         return f"{uuid.uuid4().hex}{ext}"
 
-    async def upload_file(self, file_content: bytes, filename: str, content_type: str) -> str:
+    @staticmethod
+    def _build_key(prefixo: str, unique_filename: str) -> str:
+        # Prefixo organiza os objetos em "pastas" virtuais no R2 (ex.:
+        # "lojas/<loja_id>/veiculos"). Opcional: sem prefixo, cai na raiz —
+        # mantém compatível com as URLs já existentes.
+        prefixo = (prefixo or "").strip("/")
+        return f"{prefixo}/{unique_filename}" if prefixo else unique_filename
+
+    async def upload_file(
+        self, file_content: bytes, filename: str, content_type: str, prefixo: str = ""
+    ) -> str:
         """
         Faz upload do arquivo e retorna a URL pública de acesso.
+
+        prefixo: "pasta" virtual no storage (ex.: "lojas/<id>/veiculos"). Serve
+        para organizar/isolar os arquivos por loja e tipo — navegação no painel
+        e exclusão em lote (LGPD). Vazio = raiz do bucket.
         """
-        unique_filename = self.generate_filename(filename, content_type)
+        unique_filename = self._build_key(prefixo, self.generate_filename(filename, content_type))
 
         if self.use_s3:
             try:
@@ -89,18 +103,27 @@ class StorageProvider:
             # Retornar URL local
             return f"/static/uploads/{unique_filename}"
 
+    def _key_from_url(self, file_url: str) -> str:
+        # A Key pode ter prefixo (ex.: "lojas/<id>/veiculos/<uuid>.jpg"), então
+        # não basta pegar o último segmento: derivamos a Key relativa à base
+        # pública do bucket. Fallback para o último segmento (URLs antigas, sem
+        # prefixo, ou storage local).
+        base = (settings.s3_public_url or "").rstrip("/")
+        if base and file_url.startswith(base):
+            return file_url[len(base):].lstrip("/")
+        return file_url.split("/")[-1]
+
     async def delete_file(self, file_url: str):
         """
         Remove um arquivo do storage baseado em sua URL pública.
         """
-        filename = file_url.split("/")[-1]
-
         if self.use_s3:
             try:
-                self.s3_client.delete_object(Bucket=self.bucket_name, Key=filename)
+                self.s3_client.delete_object(Bucket=self.bucket_name, Key=self._key_from_url(file_url))
             except ClientError as e:
                 print(f"[Storage] Erro ao deletar do S3: {e}")
         else:
+            filename = file_url.split("/")[-1]
             file_path = os.path.join(self.local_dir, filename)
             if os.path.exists(file_path):
                 os.remove(file_path)

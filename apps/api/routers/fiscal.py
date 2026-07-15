@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 import httpx
@@ -495,7 +495,10 @@ async def webhook_focus(
                     r = await client.get(origem_url)
                     r.raise_for_status()
                     content_type = "application/xml" if campo_destino == "xml_url" else "application/pdf"
-                    url_final = await storage_provider.upload_file(r.content, f"nfe-{nota.id}", content_type)
+                    url_final = await storage_provider.upload_file(
+                        r.content, f"nfe-{nota.id}", content_type,
+                        prefixo=f"lojas/{nota.loja_id}/fiscal",
+                    )
                     setattr(nota, campo_destino, url_final)
             except Exception as e:
                 logger.error(f"[Fiscal] Falha ao baixar/subir {campo_destino} da nota {nota.id}: {e}")
