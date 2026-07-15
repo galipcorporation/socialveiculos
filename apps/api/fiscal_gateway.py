@@ -112,9 +112,25 @@ async def emitir_carta_correcao(config: ConfiguracaoFiscal, ref: str, correcao: 
         return r.json()
 
 
+def _item_veiculo(config: ConfiguracaoFiscal, veiculo, valor_total: float, cfop: str) -> dict:
+    return {
+        "numero_item": 1,
+        "codigo_produto": getattr(veiculo, "id", "veiculo"),
+        "descricao": f"{getattr(veiculo, 'marca', '')} {getattr(veiculo, 'modelo', '')} {getattr(veiculo, 'ano_modelo', '')}".strip(),
+        "cfop": cfop,
+        "ncm": config.ncm_padrao,
+        "unidade_comercial": "UN",
+        "quantidade_comercial": 1,
+        "valor_unitario_comercial": valor_total,
+        "valor_bruto": valor_total,
+        "icms_origem": config.origem_mercadoria,
+        "icms_situacao_tributaria": config.csosn or config.cst,
+    }
+
+
 def montar_payload_venda(config: ConfiguracaoFiscal, loja, cliente, veiculo, valor_total: float) -> dict:
-    """Monta o payload mínimo de uma NF-e de venda de veículo usado a partir
-    da configuração fiscal da loja + dados da venda."""
+    """Monta o payload mínimo de uma NF-e de venda (saída) de veículo usado a
+    partir da configuração fiscal da loja + dados da venda."""
     return {
         "natureza_operacao": config.natureza_operacao,
         "data_emissao": None,  # Focus usa now() se omitido
@@ -123,19 +139,32 @@ def montar_payload_venda(config: ConfiguracaoFiscal, loja, cliente, veiculo, val
         "cnpj_emitente": loja.cnpj,
         "nome_destinatario": getattr(cliente, "nome", None),
         "cpf_destinatario": getattr(cliente, "cpf", None),
-        "items": [
-            {
-                "numero_item": 1,
-                "codigo_produto": getattr(veiculo, "id", "veiculo"),
-                "descricao": f"{getattr(veiculo, 'marca', '')} {getattr(veiculo, 'modelo', '')} {getattr(veiculo, 'ano_modelo', '')}".strip(),
-                "cfop": config.cfop_venda,
-                "ncm": config.ncm_padrao,
-                "unidade_comercial": "UN",
-                "quantidade_comercial": 1,
-                "valor_unitario_comercial": valor_total,
-                "valor_bruto": valor_total,
-                "icms_origem": config.origem_mercadoria,
-                "icms_situacao_tributaria": config.csosn or config.cst,
-            }
-        ],
+        "items": [_item_veiculo(config, veiculo, valor_total, config.cfop_venda)],
     }
+
+
+def montar_payload_entrada(config: ConfiguracaoFiscal, loja, fornecedor, veiculo, valor_total: float) -> dict:
+    """Monta o payload de uma NF-e de entrada (compra) de veículo. O emitente é
+    a própria loja (NF-e de entrada para dar entrada do veículo no estoque);
+    o destinatário/fornecedor é quem vendeu o veículo à loja.
+
+    `fornecedor` pode trazer nome + cpf ou cnpj (dados de quem vendeu o carro).
+    """
+    dados = {
+        "natureza_operacao": "Compra de veículo usado",
+        "data_emissao": None,
+        "tipo_documento": 0,      # entrada
+        "finalidade_emissao": 1,  # normal
+        "cnpj_emitente": loja.cnpj,
+        "items": [_item_veiculo(config, veiculo, valor_total, config.cfop_entrada)],
+    }
+    nome = getattr(fornecedor, "nome", None) if fornecedor else None
+    cpf = getattr(fornecedor, "cpf", None) if fornecedor else None
+    cnpj = getattr(fornecedor, "cnpj", None) if fornecedor else None
+    if nome:
+        dados["nome_destinatario"] = nome
+    if cnpj:
+        dados["cnpj_destinatario"] = cnpj
+    elif cpf:
+        dados["cpf_destinatario"] = cpf
+    return dados

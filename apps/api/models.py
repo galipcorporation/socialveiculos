@@ -101,6 +101,7 @@ class OrigemLead(str, enum.Enum):
     WHATSAPP = "whatsapp"
     REPASSE = "repasse"   # venda B2B para outra loja (via PropostaRepasse)
     SITE_PROPRIO = "site_proprio"  # formulário de contato do site white-label (M038)
+    PRE_APROVACAO = "pre_aprovacao"  # pedido de pré-aprovação de crédito na vitrine (M017)
 
 
 # ── Esteira pós-venda (ESTEIRA-POS-VENDA.md §6.1) ──
@@ -998,6 +999,7 @@ class ConfiguracaoFiscal(Base):
 
     natureza_operacao = Column(String(60), nullable=False, default="Venda de veículo usado")
     cfop_venda = Column(String(4), nullable=False, default="5102")
+    cfop_entrada = Column(String(4), nullable=False, default="1102")  # NF-e de compra (M039 Fase 2)
     ncm_padrao = Column(String(8), nullable=False, default="87032310")
     csosn = Column(String(4), nullable=True)
     cst = Column(String(3), nullable=True)
@@ -1464,6 +1466,9 @@ class SiteLoja(Base):
     subdominio = Column(String(100), nullable=False)  # deriva de Loja.slug
     dominio_customizado = Column(String(255), nullable=True)
     dominio_status = Column(String(20), nullable=False, default="pendente")  # pendente|verificando|ativo|erro
+    dominio_cf_id = Column(String(40), nullable=True)  # id do custom hostname na Cloudflare (M038)
+    dominio_txt_name = Column(String(255), nullable=True)   # registro TXT de validação DV
+    dominio_txt_value = Column(String(255), nullable=True)
 
     publicado = Column(Boolean, default=False)
     template = Column(String(30), nullable=False, default="clean")  # clean|premium|compacto

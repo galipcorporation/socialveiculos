@@ -32,6 +32,8 @@ export type RootStackParamList = {
   RedeSocial: undefined
   Marketing: undefined
   AssistenteIA: undefined
+  ConversaAssistente: { id: string; nome: string }
+  AssistenteConfig: undefined
 }
 
 export type MainTabsParamList = {

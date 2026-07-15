@@ -15,8 +15,10 @@ from pydantic import BaseModel, ConfigDict
 
 from config import settings
 from database import get_db
-from models import Veiculo, Loja, Favorito, StatusVeiculo
+from limiter import rate_limit
+from models import Veiculo, Loja, Favorito, StatusVeiculo, ClientePF, Lead, EtapaLead, OrigemLead
 from schemas import VeiculoB2CResponse
+from pydantic import Field
 
 router = APIRouter(prefix="/v1/marketplace", tags=["Marketplace Público B2C"])
 
@@ -140,3 +142,63 @@ async def get_sitemap_xml(db: AsyncSession = Depends(get_db)):
     body.append("</urlset>")
 
     return Response(content="\n".join(body), media_type="application/xml")
+
+
+# ── Pré-aprovação de crédito (M017) ────────────────────────────
+# Captura de lead consumer-facing. NÃO roda o motor de simulação real — sem
+# parceria formal com banco, simular parcela ao consumidor é risco jurídico/LGPD.
+# O pedido vira um Lead (origem pre_aprovacao) no CRM da loja, que dá sequência.
+# Quando houver banco parceiro, é só ligar o OrquestradorV2 aqui (motor já existe).
+
+class PreAprovacaoRequest(BaseModel):
+    veiculo_id: str
+    nome: str = Field(..., min_length=2, max_length=200)
+    telefone: str = Field(..., min_length=8, max_length=20)
+    email: Optional[str] = Field(None, max_length=200)
+    renda_mensal: Optional[float] = Field(None, ge=0)
+    entrada: Optional[float] = Field(None, ge=0)
+
+
+@router.post("/pre-aprovacao", dependencies=[Depends(rate_limit(5, 60))])
+async def solicitar_pre_aprovacao(data: PreAprovacaoRequest, db: AsyncSession = Depends(get_db)):
+    """Formulário público de pré-aprovação de crédito → Lead no CRM da loja dona
+    do veículo. Endpoint anônimo (rate limit 5/min). Não simula nem promete
+    aprovação — apenas encaminha o interesse à loja."""
+    res = await db.execute(
+        select(Veiculo).where(
+            Veiculo.id == data.veiculo_id,
+            Veiculo.publicado_marketplace == True,
+            Veiculo.status == StatusVeiculo.DISPONIVEL,
+        )
+    )
+    veiculo = res.scalar_one_or_none()
+    if not veiculo:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Veículo não encontrado ou indisponível.")
+
+    # Reaproveita ClientePF pelo telefone na loja, ou cria (sem exigir login).
+    res_cliente = await db.execute(
+        select(ClientePF).where(ClientePF.loja_id == veiculo.loja_id, ClientePF.telefone == data.telefone)
+    )
+    cliente = res_cliente.scalar_one_or_none()
+    if not cliente:
+        cliente = ClientePF(loja_id=veiculo.loja_id, nome=data.nome, telefone=data.telefone, email=data.email)
+        db.add(cliente)
+        await db.flush()
+
+    partes = ["Pedido de pré-aprovação de crédito via vitrine."]
+    if data.renda_mensal is not None:
+        partes.append(f"Renda informada: R$ {data.renda_mensal:,.2f}.")
+    if data.entrada is not None:
+        partes.append(f"Entrada pretendida: R$ {data.entrada:,.2f}.")
+
+    lead = Lead(
+        loja_id=veiculo.loja_id,
+        cliente_id=cliente.id,
+        veiculo_id=veiculo.id,
+        origem=OrigemLead.PRE_APROVACAO,
+        etapa=EtapaLead.LEAD,
+        observacoes=" ".join(partes),
+    )
+    db.add(lead)
+    await db.commit()
+    return {"ok": True, "mensagem": "Recebemos seu pedido! A loja entrará em contato para dar sequência ao financiamento."}

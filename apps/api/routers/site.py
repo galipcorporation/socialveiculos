@@ -194,6 +194,155 @@ async def despublicar_site(
 
 
 # ═══════════════════════════════════════════════════════════════
+# DOMÍNIO PRÓPRIO (M038 — Cloudflare for SaaS)
+# ═══════════════════════════════════════════════════════════════
+
+class DominioRequest(BaseModel):
+    dominio: str = Field(..., min_length=4, max_length=255)
+
+
+class DominioResponse(BaseModel):
+    dominio_customizado: Optional[str] = None
+    dominio_status: str
+    dns_target: Optional[str] = None      # CNAME que o cliente deve criar
+    txt_name: Optional[str] = None        # registro TXT de validação (enquanto pendente)
+    txt_value: Optional[str] = None
+    instrucoes: Optional[str] = None
+
+
+def _normalizar_dominio(bruto: str) -> str:
+    d = bruto.strip().lower()
+    for prefixo in ("https://", "http://"):
+        if d.startswith(prefixo):
+            d = d[len(prefixo):]
+    d = d.strip("/").split("/")[0]
+    return d
+
+
+@router.post("/dominio", response_model=DominioResponse,
+             dependencies=[Depends(exige_modulo(Modulo.SITE)), Depends(exige_permissao(Acao.EDITAR, Recurso.CONFIGURACOES))])
+async def conectar_dominio(
+    data: DominioRequest,
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """Conecta um domínio próprio ao site da loja via Cloudflare for SaaS.
+    Registra o custom hostname e devolve as instruções de DNS (CNAME + TXT)
+    que o lojista deve criar no registrador dele. A validação e o SSL são
+    conferidos depois em GET /dominio."""
+    from cloudflare_saas import criar_custom_hostname
+
+    dominio = _normalizar_dominio(data.dominio)
+    if "." not in dominio or " " in dominio:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Informe um domínio válido, ex.: www.sualoja.com.br")
+
+    site = await _carregar_ou_criar(db, context.loja_id)
+
+    # Domínio já usado por outra loja?
+    res = await db.execute(
+        select(SiteLoja).where(SiteLoja.dominio_customizado == dominio, SiteLoja.loja_id != context.loja_id)
+    )
+    if res.scalar_one_or_none():
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Este domínio já está em uso por outra loja.")
+
+    try:
+        cf = await criar_custom_hostname(dominio)
+    except RuntimeError as e:
+        # Cloudflare não configurado na plataforma.
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+    except Exception as e:  # httpx erros da API Cloudflare
+        logger.error(f"[CLOUDFLARE] Falha ao criar custom hostname {dominio}: {e}")
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Não foi possível registrar o domínio na Cloudflare. Tente novamente.")
+
+    site.dominio_customizado = dominio
+    site.dominio_cf_id = cf["id"]
+    site.dominio_status = cf["status"]
+    site.dominio_txt_name = cf["txt_name"]
+    site.dominio_txt_value = cf["txt_value"]
+    await db.commit()
+    await db.refresh(site)
+
+    return _dominio_response(site, cf["dns_target"])
+
+
+@router.get("/dominio", response_model=DominioResponse,
+            dependencies=[Depends(exige_permissao(Acao.VER, Recurso.CONFIGURACOES))])
+async def status_dominio(
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """Consulta o status atual do domínio próprio, atualizando-o a partir da
+    Cloudflare (validação DNS + emissão do certificado SSL)."""
+    from cloudflare_saas import status_custom_hostname
+
+    site = await _carregar_ou_criar(db, context.loja_id)
+    if not site.dominio_customizado or not site.dominio_cf_id:
+        return DominioResponse(dominio_status="pendente")
+
+    try:
+        cf = await status_custom_hostname(site.dominio_cf_id)
+        site.dominio_status = cf["status"]
+        if cf["txt_name"]:
+            site.dominio_txt_name = cf["txt_name"]
+            site.dominio_txt_value = cf["txt_value"]
+        await db.commit()
+        await db.refresh(site)
+        dns_target = cf["dns_target"]
+    except RuntimeError:
+        dns_target = settings.cloudflare_fallback_origin
+    except Exception as e:
+        logger.warning(f"[CLOUDFLARE] Falha ao consultar status de {site.dominio_customizado}: {e}")
+        dns_target = settings.cloudflare_fallback_origin
+
+    return _dominio_response(site, dns_target)
+
+
+@router.delete("/dominio", response_model=DominioResponse,
+               dependencies=[Depends(exige_permissao(Acao.EDITAR, Recurso.CONFIGURACOES))])
+async def desconectar_dominio(
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """Remove o domínio próprio (o site continua no subdomínio automático)."""
+    from cloudflare_saas import remover_custom_hostname
+
+    site = await _carregar_ou_criar(db, context.loja_id)
+    if site.dominio_cf_id:
+        try:
+            await remover_custom_hostname(site.dominio_cf_id)
+        except Exception as e:
+            logger.warning(f"[CLOUDFLARE] Falha ao remover custom hostname: {e}")  # segue removendo local
+
+    site.dominio_customizado = None
+    site.dominio_cf_id = None
+    site.dominio_status = "pendente"
+    site.dominio_txt_name = None
+    site.dominio_txt_value = None
+    await db.commit()
+    await db.refresh(site)
+    return DominioResponse(dominio_status="pendente")
+
+
+def _dominio_response(site: SiteLoja, dns_target: Optional[str]) -> DominioResponse:
+    instr = None
+    if site.dominio_customizado and site.dominio_status != "ativo":
+        instr = (
+            f"No seu registrador de domínio, crie um CNAME de '{site.dominio_customizado}' "
+            f"apontando para '{dns_target}'."
+        )
+        if site.dominio_txt_name:
+            instr += f" E um registro TXT '{site.dominio_txt_name}' com o valor fornecido, para validar o SSL."
+    return DominioResponse(
+        dominio_customizado=site.dominio_customizado,
+        dominio_status=site.dominio_status,
+        dns_target=dns_target,
+        txt_name=site.dominio_txt_name,
+        txt_value=site.dominio_txt_value,
+        instrucoes=instr,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
 # SITEMAP (consumido pelo prerender de apps/site)
 # ═══════════════════════════════════════════════════════════════
 

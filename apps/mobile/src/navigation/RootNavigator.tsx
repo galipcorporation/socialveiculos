@@ -37,6 +37,8 @@ import NotasFiscaisScreen from '../screens/ferramentas/NotasFiscaisScreen'
 import MeuSiteScreen from '../screens/ferramentas/MeuSiteScreen'
 import MarketingScreen from '../screens/ferramentas/MarketingScreen'
 import AssistenteIAScreen from '../screens/ferramentas/AssistenteIAScreen'
+import ConversaAssistenteScreen from '../screens/ferramentas/ConversaAssistenteScreen'
+import AssistenteConfigScreen from '../screens/ferramentas/AssistenteConfigScreen'
 import RedeSocialScreen from '../screens/rede/RedeSocialScreen'
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
@@ -120,6 +122,8 @@ export default function RootNavigator() {
             <Stack.Screen name="MeuSite" component={MeuSiteScreen} />
             <Stack.Screen name="Marketing" component={MarketingScreen} />
             <Stack.Screen name="AssistenteIA" component={AssistenteIAScreen} />
+            <Stack.Screen name="ConversaAssistente" component={ConversaAssistenteScreen} />
+            <Stack.Screen name="AssistenteConfig" component={AssistenteConfigScreen} />
             <Stack.Screen name="RedeSocial" component={RedeSocialScreen} />
           </>
         ) : (

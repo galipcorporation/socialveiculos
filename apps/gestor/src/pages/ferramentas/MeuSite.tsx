@@ -26,11 +26,27 @@ interface SiteLoja {
   meta_pixel_id?: string | null
 }
 
+interface DominioInfo {
+  dominio_customizado?: string | null
+  dominio_status: string   // pendente | verificando | ativo | erro
+  dns_target?: string | null
+  txt_name?: string | null
+  txt_value?: string | null
+  instrucoes?: string | null
+}
+
 const TEMPLATES = [
   { value: 'clean', label: 'Clean' },
   { value: 'premium', label: 'Premium' },
   { value: 'compacto', label: 'Compacto' },
 ]
+
+const DOMINIO_STATUS_LABEL: Record<string, { txt: string; cor: string }> = {
+  pendente: { txt: 'Não configurado', cor: 'var(--sv-text-dim)' },
+  verificando: { txt: 'Aguardando validação DNS/SSL', cor: 'var(--sv-warning)' },
+  ativo: { txt: 'Ativo (SSL emitido)', cor: 'var(--sv-success)' },
+  erro: { txt: 'Erro na validação', cor: 'var(--sv-error)' },
+}
 
 export function MeuSitePage() {
   const showToast = useUIStore((s) => s.showToast)
@@ -43,6 +59,10 @@ export function MeuSitePage() {
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
   const [mostrarAvancado, setMostrarAvancado] = useState(false)
+
+  const [dominio, setDominio] = useState<DominioInfo | null>(null)
+  const [novoDominio, setNovoDominio] = useState('')
+  const [dominioBusy, setDominioBusy] = useState(false)
 
   useEffect(() => {
     const verificar = async () => {
@@ -136,6 +156,68 @@ export function MeuSitePage() {
       useUIStore.getState().showError(message || 'Erro ao enviar imagem.')
     } finally {
       setUploading(false)
+    }
+  }
+
+  const carregarDominio = useCallback(async () => {
+    try {
+      const res = await api.get<DominioInfo>('/site/dominio')
+      setDominio(res)
+    } catch {
+      // Sem Cloudflare configurado ou sem domínio ainda — mantém null (UI mostra "conectar").
+    }
+  }, [])
+
+  useEffect(() => {
+    if (liberado) carregarDominio()
+  }, [liberado, carregarDominio])
+
+  const conectarDominio = async () => {
+    const d = novoDominio.trim()
+    if (!d) return
+    setDominioBusy(true)
+    try {
+      const res = await api.post<DominioInfo>('/site/dominio', { dominio: d })
+      setDominio(res)
+      setNovoDominio('')
+      showToast('Domínio registrado. Siga as instruções de DNS abaixo.', 'success')
+    } catch (err) {
+      const { message } = extractErrorDetails(err)
+      useUIStore.getState().showError(message || 'Não foi possível conectar o domínio.')
+    } finally {
+      setDominioBusy(false)
+    }
+  }
+
+  const verificarDominio = async () => {
+    setDominioBusy(true)
+    try {
+      const res = await api.get<DominioInfo>('/site/dominio')
+      setDominio(res)
+      showToast(
+        res.dominio_status === 'ativo' ? 'Domínio ativo e com SSL!' : 'Ainda validando — o DNS pode levar até 24h para propagar.',
+        res.dominio_status === 'ativo' ? 'success' : 'info',
+      )
+    } catch (err) {
+      const { message } = extractErrorDetails(err)
+      useUIStore.getState().showError(message || 'Erro ao verificar domínio.')
+    } finally {
+      setDominioBusy(false)
+    }
+  }
+
+  const desconectarDominio = async () => {
+    if (!confirm('Remover o domínio próprio? O site continua acessível pelo subdomínio automático.')) return
+    setDominioBusy(true)
+    try {
+      const res = await api.delete<DominioInfo>('/site/dominio')
+      setDominio(res)
+      showToast('Domínio removido.', 'success')
+    } catch (err) {
+      const { message } = extractErrorDetails(err)
+      useUIStore.getState().showError(message || 'Erro ao remover domínio.')
+    } finally {
+      setDominioBusy(false)
     }
   }
 
@@ -363,6 +445,65 @@ export function MeuSitePage() {
           <ExternalLink style={{ width: 14, height: 14 }} /> Site publicado e acessível em {urlSite}
         </div>
       )}
+
+      {/* ── Domínio próprio (M038 / Cloudflare for SaaS) ── */}
+      <div className="glass-card" style={{ marginBottom: 16, padding: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <Globe style={{ width: 16, height: 16, color: 'var(--sv-primary)' }} />
+          <h4 style={{ margin: 0 }}>Domínio próprio</h4>
+          {dominio?.dominio_customizado && (
+            <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: (DOMINIO_STATUS_LABEL[dominio.dominio_status] ?? DOMINIO_STATUS_LABEL.pendente).cor }}>
+              {(DOMINIO_STATUS_LABEL[dominio.dominio_status] ?? DOMINIO_STATUS_LABEL.pendente).txt}
+            </span>
+          )}
+        </div>
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--sv-text-dim)' }}>
+          Use o endereço da sua marca (ex.: www.sualoja.com.br) em vez do subdomínio. O SSL é emitido automaticamente.
+        </p>
+
+        {!dominio?.dominio_customizado ? (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input
+              className="form-input"
+              style={{ flex: 1, minWidth: 220 }}
+              placeholder="www.sualoja.com.br"
+              value={novoDominio}
+              onChange={(e) => setNovoDominio(e.target.value)}
+              disabled={dominioBusy}
+            />
+            <button className="btn btn-primary" onClick={conectarDominio} disabled={dominioBusy || !novoDominio.trim()}>
+              {dominioBusy ? 'Conectando…' : 'Conectar domínio'}
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{dominio.dominio_customizado}</span>
+              <button className="btn btn-outline btn-sm" onClick={verificarDominio} disabled={dominioBusy}>
+                {dominioBusy ? 'Verificando…' : 'Verificar status'}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={desconectarDominio} disabled={dominioBusy} style={{ color: 'var(--sv-error)' }}>
+                Remover
+              </button>
+            </div>
+
+            {dominio.dominio_status !== 'ativo' && (
+              <div style={{ background: 'var(--sv-overlay-soft)', borderRadius: 8, padding: 12, fontSize: 13 }}>
+                <strong>Configure no seu registrador de domínio:</strong>
+                <div style={{ marginTop: 8, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.8 }}>
+                  <div>CNAME &nbsp; <b>{dominio.dominio_customizado}</b> &nbsp;→&nbsp; {dominio.dns_target ?? 'sites.socialveiculos.com.br'}</div>
+                  {dominio.txt_name && (
+                    <div>TXT &nbsp;&nbsp;&nbsp;&nbsp; <b>{dominio.txt_name}</b> &nbsp;=&nbsp; {dominio.txt_value}</div>
+                  )}
+                </div>
+                <p style={{ margin: '10px 0 0', color: 'var(--sv-text-dim)', fontSize: 12 }}>
+                  Após criar os registros, clique em "Verificar status". A propagação de DNS pode levar até 24h.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="site-builder-grid">
         {/* Left Side: Editor Form */}

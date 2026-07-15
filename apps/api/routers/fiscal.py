@@ -57,6 +57,7 @@ class ConfiguracaoFiscalRequest(BaseModel):
     ambiente: str = Field(default="homologacao")
     natureza_operacao: str = Field(default="Venda de veículo usado")
     cfop_venda: str = Field(default="5102")
+    cfop_entrada: str = Field(default="1102")
     ncm_padrao: str = Field(default="87032310")
     csosn: Optional[str] = None
     cst: Optional[str] = None
@@ -71,7 +72,11 @@ class ConfiguracaoFiscalResponse(BaseModel):
     ambiente: Optional[str] = None
     natureza_operacao: Optional[str] = None
     cfop_venda: Optional[str] = None
+    cfop_entrada: Optional[str] = None
     ncm_padrao: Optional[str] = None
+    csosn: Optional[str] = None
+    cst: Optional[str] = None
+    origem_mercadoria: Optional[str] = None
     certificado_configurado: bool = False
     certificado_validade: Optional[datetime] = None
     ativo: bool = False
@@ -88,7 +93,11 @@ def _to_config_response(c: Optional[ConfiguracaoFiscal]) -> dict:
         "ambiente": c.ambiente,
         "natureza_operacao": c.natureza_operacao,
         "cfop_venda": c.cfop_venda,
+        "cfop_entrada": c.cfop_entrada,
         "ncm_padrao": c.ncm_padrao,
+        "csosn": c.csosn,
+        "cst": c.cst,
+        "origem_mercadoria": c.origem_mercadoria,
         "certificado_configurado": bool(c.certificado_a1_cifrado),
         "certificado_validade": c.certificado_validade,
         "ativo": c.ativo,
@@ -284,6 +293,84 @@ async def emitir_nota(
     await registrar_auditoria(
         db, context.usuario.id, "nfe_emissao_solicitada",
         f"NF-e solicitada para contrato {contrato.numero} (ref {ref}).",
+    )
+    return nota
+
+
+class _Fornecedor:
+    """Dados de quem vendeu o veículo à loja (destinatário da NF-e de entrada)."""
+    def __init__(self, nome: Optional[str], cpf: Optional[str], cnpj: Optional[str]):
+        self.nome = nome
+        self.cpf = cpf
+        self.cnpj = cnpj
+
+
+class EmitirNotaEntradaRequest(BaseModel):
+    veiculo_id: str
+    valor_compra: float = Field(..., gt=0)
+    fornecedor_nome: Optional[str] = Field(None, max_length=200)
+    fornecedor_cpf: Optional[str] = Field(None, max_length=14)
+    fornecedor_cnpj: Optional[str] = Field(None, max_length=18)
+
+
+@router.post("/notas/entrada", response_model=NotaFiscalResponse,
+             dependencies=[Depends(exige_modulo(Modulo.FISCAL)), Depends(exige_permissao(Acao.CRIAR, Recurso.FINANCEIRO))])
+async def emitir_nota_entrada(
+    data: EmitirNotaEntradaRequest,
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """Emite uma NF-e de ENTRADA (compra) para dar entrada de um veículo no
+    estoque. Diferente da nota de venda, não depende de contrato — parte do
+    veículo + valor de compra + dados do fornecedor (quem vendeu à loja)."""
+    from models import Veiculo  # import local para não inflar o topo
+
+    config = await _carregar_config(db, context.loja_id)
+    if not config or not config.ativo:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Configure os dados fiscais e o certificado antes de emitir NF-e.")
+
+    res = await db.execute(select(Veiculo).where(Veiculo.id == data.veiculo_id, Veiculo.loja_id == context.loja_id))
+    veiculo = res.scalar_one_or_none()
+    if not veiculo:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Veículo não encontrado.")
+
+    res_loja = await db.execute(select(Loja).where(Loja.id == context.loja_id))
+    loja = res_loja.scalar_one_or_none()
+
+    ref = f"sv-ent-{context.loja_id[:8]}-{veiculo.id[:8]}"
+    existente = await db.execute(select(NotaFiscal).where(NotaFiscal.focus_nfe_ref == ref))
+    if existente.scalar_one_or_none():
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Já existe uma NF-e de entrada para este veículo.")
+
+    fornecedor = _Fornecedor(data.fornecedor_nome, data.fornecedor_cpf, data.fornecedor_cnpj)
+    payload = fiscal_gateway.montar_payload_entrada(config, loja, fornecedor, veiculo, data.valor_compra)
+
+    try:
+        resposta = await fiscal_gateway.emitir_nfe(config, ref, payload)
+    except Exception as e:
+        logger.error(f"[Fiscal] Falha ao emitir NF-e de entrada (veículo {veiculo.id}): {e}")
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Falha ao comunicar com o gateway fiscal. Tente novamente.")
+
+    numero = config.proximo_numero
+    config.proximo_numero += 1
+
+    nota = NotaFiscal(
+        loja_id=context.loja_id,
+        veiculo_id=veiculo.id,
+        tipo="entrada",
+        ambiente=config.ambiente,
+        serie=config.serie_nfe,
+        numero=numero,
+        focus_nfe_ref=ref,
+        status=resposta.get("status", "processando"),
+        valor_total=data.valor_compra,
+    )
+    db.add(nota)
+    await db.commit()
+    await db.refresh(nota)
+    await registrar_auditoria(
+        db, context.usuario.id, "nfe_entrada_solicitada",
+        f"NF-e de entrada solicitada para veículo {veiculo.marca} {veiculo.modelo} (ref {ref}).",
     )
     return nota
 

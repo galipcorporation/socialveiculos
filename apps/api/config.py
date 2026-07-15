@@ -65,6 +65,16 @@ class Settings(BaseSettings):
     focus_nfe_master_token: Optional[str] = Field(default=None)
     focus_nfe_webhook_secret: Optional[str] = Field(default=None)
 
+    # Domínio próprio / SSL dos sites white-label (M038, Cloudflare for SaaS)
+    # Criar em https://dash.cloudflare.com → adicionar a zona socialveiculos.com.br,
+    # ativar "SSL for SaaS" e gerar um API Token com permissões:
+    #   Zone > SSL and Certificates > Edit  +  Zone > Custom Hostnames > Edit (na zona da plataforma).
+    cloudflare_api_token: Optional[str] = Field(default=None)
+    cloudflare_zone_id: Optional[str] = Field(default=None)
+    # Hostname de fallback para onde os domínios dos clientes apontam (CNAME alvo).
+    # Normalmente o próprio host do app público (apps/site) atrás do Cloudflare.
+    cloudflare_fallback_origin: str = Field(default="sites.socialveiculos.com.br")
+
     # Login social Google (M029) — criar em https://console.cloud.google.com/apis/credentials
     google_client_id: Optional[str] = Field(default=None)
     google_client_secret: Optional[str] = Field(default=None)

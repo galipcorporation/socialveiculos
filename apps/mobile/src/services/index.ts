@@ -28,6 +28,11 @@ export { siteService } from './site'
 export { repassesService } from './repasses'
 export { marketingService, TONS_MARKETING, CANAIS_MARKETING } from './marketing'
 export type { TomMarketing, CanalMarketing, PostMarketing } from './marketing'
+export { assistenteService, TONS_ASSISTENTE } from './assistente'
+export type {
+  TomAssistente, AutonomiaAssistente, SessaoAssistente,
+  ConversaAssistente, MensagemAssistente, ConfigAssistente,
+} from './assistente'
 export { vitrineService, FILTROS_FEED } from './vitrine'
 export type { FiltroFeed } from './vitrine'
 export { simuladorService, BANCOS_SIM } from './simulador'
