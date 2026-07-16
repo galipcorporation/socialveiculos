@@ -96,6 +96,7 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
 
   const lojaInicial = (veiculo.loja_nome ?? veiculo.marca).slice(0, 2).toUpperCase()
   const localidade = [veiculo.loja_cidade, veiculo.loja_estado].filter(Boolean).join(', ')
+  const indisponivel = veiculo.status !== 'disponivel'
 
   return (
     <div className="vt-car-card">
@@ -141,9 +142,15 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
 
         {/* badges */}
         <div className="vt-car-card-badges">
-          <span className="vt-badge vt-badge-destaque">Destaque</span>
-          {veiculo.descricao?.toLowerCase().includes('troca') && (
-            <span className="vt-badge vt-badge-troca">Aceita troca</span>
+          {indisponivel ? (
+            <span className="vt-badge vt-badge-vendido">Vendido</span>
+          ) : (
+            <>
+              <span className="vt-badge vt-badge-destaque">Destaque</span>
+              {veiculo.descricao?.toLowerCase().includes('troca') && (
+                <span className="vt-badge vt-badge-troca">Aceita troca</span>
+              )}
+            </>
           )}
         </div>
 
@@ -229,22 +236,30 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
           )}
         </div>
 
-        <div className="vt-card-cta">
-          {veiculo.loja_whatsapp && (
-            <button className="vt-btn-negociar" onClick={() => onWhatsApp(veiculo)}>
-              <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor">
-                <path d="M.06 24l1.7-6.2A11.9 11.9 0 1 1 12 24a11.9 11.9 0 0 1-5.7-1.5L.06 24zM6.6 20l.4.2a9.9 9.9 0 1 0-3.4-3.4l.2.4-1 3.7 3.8-.9z"/>
-              </svg>
-              WhatsApp
+        {indisponivel ? (
+          <div className="vt-card-cta">
+            <button className="vt-btn-chat" disabled title="Este veículo não está mais disponível">
+              Vendido
             </button>
-          )}
-          <button className="vt-btn-chat" onClick={() => onConversar(veiculo)}>
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-            </svg>
-            Conversar
-          </button>
-        </div>
+          </div>
+        ) : (
+          <div className="vt-card-cta">
+            {veiculo.loja_whatsapp && (
+              <button className="vt-btn-negociar" onClick={() => onWhatsApp(veiculo)}>
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor">
+                  <path d="M.06 24l1.7-6.2A11.9 11.9 0 1 1 12 24a11.9 11.9 0 0 1-5.7-1.5L.06 24zM6.6 20l.4.2a9.9 9.9 0 1 0-3.4-3.4l.2.4-1 3.7 3.8-.9z"/>
+                </svg>
+                WhatsApp
+              </button>
+            )}
+            <button className="vt-btn-chat" onClick={() => onConversar(veiculo)}>
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+              </svg>
+              Conversar
+            </button>
+          </div>
+        )}
 
         <div className="vt-card-time">{veiculo.loja_cidade ?? ''}</div>
       </div>

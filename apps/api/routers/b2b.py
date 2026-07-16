@@ -572,12 +572,24 @@ async def processar_proposta_repasse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Apenas propostas pendentes podem ser processadas."
             )
+
+        # Venda dupla: o veículo pode ter sido vendido no balcão (contrato)
+        # enquanto esta proposta B2B ainda estava pendente.
+        if data.status == StatusPropostaRepasse.ACEITA and proposta.veiculo:
+            if proposta.veiculo.status == StatusVeiculo.VENDIDO:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Veículo já foi vendido por outro canal."
+                )
+
         proposta.status = data.status
 
         # Se for aceita, marca o veículo como vendido e as outras propostas pendentes como rejeitadas
         if data.status == StatusPropostaRepasse.ACEITA:
             if proposta.veiculo:
                 proposta.veiculo.status = StatusVeiculo.VENDIDO
+                proposta.veiculo.publicado_marketplace = False
+                proposta.veiculo.updated_at = utcnow()
                 # Atualizar a publicação B2B correspondente
                 pub_stmt = select(PublicacaoB2B).where(PublicacaoB2B.veiculo_id == proposta.veiculo_id)
                 pub_res = await db.execute(pub_stmt)

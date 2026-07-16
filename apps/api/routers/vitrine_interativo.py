@@ -358,12 +358,19 @@ async def iniciar_conversa_b2c(
     Inicia uma conversa B2C associada a um veículo, enviando a mensagem inicial.
     Cria automaticamente ClientePF e Lead no CRM da loja se for o primeiro contato.
     """
-    # 1. Validar veículo
-    v_stmt = select(Veiculo).where(Veiculo.id == data.veiculo_id)
+    # 1. Validar veículo (só permite conversa sobre carro publicado/disponível)
+    v_stmt = select(Veiculo).where(
+        Veiculo.id == data.veiculo_id,
+        Veiculo.publicado_marketplace == True,
+        Veiculo.status == StatusVeiculo.DISPONIVEL,
+    )
     v_res = await db.execute(v_stmt)
     veiculo = v_res.scalar_one_or_none()
     if not veiculo:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Veículo não encontrado.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Veículo não encontrado ou não disponível.")
+
+    # loja_id sempre derivado do veículo — nunca confiar no valor enviado pelo cliente
+    loja_id = veiculo.loja_id
 
     # 2. Verificar se já existe conversa ativa para este cliente + veículo
     check_stmt = select(Conversa).where(
@@ -378,7 +385,7 @@ async def iniciar_conversa_b2c(
     if not conversa:
         conversa = Conversa(
             tipo=TipoConversa.B2C,
-            loja_id=data.loja_id,
+            loja_id=loja_id,
             cliente_id=current_user.id,
             veiculo_id=data.veiculo_id
         )
@@ -400,7 +407,7 @@ async def iniciar_conversa_b2c(
     if nova_conversa_criada:
         # Verificar se já existe ClientePF associado a este e-mail/CPF na loja
         cli_stmt = select(ClientePF).where(
-            ClientePF.loja_id == data.loja_id,
+            ClientePF.loja_id == loja_id,
             ClientePF.email == current_user.email
         )
         cli_res = await db.execute(cli_stmt)
@@ -408,7 +415,7 @@ async def iniciar_conversa_b2c(
 
         if not cliente:
             cliente = ClientePF(
-                loja_id=data.loja_id,
+                loja_id=loja_id,
                 nome=current_user.nome,
                 email=current_user.email,
                 telefone=getattr(current_user, 'telefone', None) or ""
@@ -418,7 +425,7 @@ async def iniciar_conversa_b2c(
 
         # Criar Lead
         lead = Lead(
-            loja_id=data.loja_id,
+            loja_id=loja_id,
             cliente_id=cliente.id,
             veiculo_id=data.veiculo_id,
             origem=OrigemLead.VITRINE,

@@ -470,6 +470,7 @@ a {
 }
 .vt-badge-destaque { background: rgba(245,158,11,0.92); color: #1a1200; }
 .vt-badge-troca    { background: rgba(0,0,0,0.45); color: #fff; }
+.vt-badge-vendido  { background: rgba(220,38,38,0.92); color: #fff; }
 
 /* Contador de mídias */
 .vt-media-count {
@@ -677,6 +678,8 @@ a {
   transition: all var(--vt-transition);
 }
 .vt-btn-chat:hover { border-color: var(--vt-primary); color: var(--vt-primary); }
+.vt-btn-chat:disabled { opacity: 0.5; cursor: not-allowed; }
+.vt-btn-chat:disabled:hover { border-color: inherit; color: inherit; }
 
 .vt-card-time {
   font-size: 11px;

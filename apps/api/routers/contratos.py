@@ -26,7 +26,8 @@ from models import (
     Contrato, Veiculo, ClientePF, StatusContrato, TipoContrato,
     StatusVeiculo, LancamentoFinanceiro, TipoLancamento,
     EsteiraPosVenda, OrigemLead, OrigemVeiculo, ComissaoVenda, MembroLoja,
-    TemplateContrato,
+    TemplateContrato, PublicacaoB2B, PropostaRepasse, StatusPropostaRepasse,
+    EtapaLead, Lead,
 )
 from pos_venda_template import montar_checklist
 from schemas import (
@@ -517,6 +518,36 @@ async def vender_veiculo(
     veiculo.status = StatusVeiculo.VENDIDO
     veiculo.publicado_marketplace = False
     veiculo.updated_at = utcnow()
+
+    # 2b. Desativar publicação B2B e rejeitar propostas de repasse pendentes
+    #     (venda no balcão fecha o ciclo mesmo se o veículo estava em REPASSE)
+    pub_res = await db.execute(
+        select(PublicacaoB2B).where(PublicacaoB2B.veiculo_id == veiculo.id)
+    )
+    publicacao_b2b = pub_res.scalar_one_or_none()
+    if publicacao_b2b:
+        publicacao_b2b.ativa = False
+        publicacao_b2b.updated_at = utcnow()
+
+    propostas_res = await db.execute(
+        select(PropostaRepasse).where(
+            PropostaRepasse.veiculo_id == veiculo.id,
+            PropostaRepasse.status == StatusPropostaRepasse.PENDENTE,
+        )
+    )
+    for proposta_pendente in propostas_res.scalars().all():
+        proposta_pendente.status = StatusPropostaRepasse.REJEITADA
+        proposta_pendente.updated_at = utcnow()
+
+    # 2c. Fechar leads em aberto deste veículo (o carro foi vendido)
+    leads_res = await db.execute(
+        select(Lead).where(
+            Lead.veiculo_id == veiculo.id,
+            Lead.etapa.notin_([EtapaLead.FECHAMENTO, EtapaLead.PERDIDO]),
+        )
+    )
+    for lead_aberto in leads_res.scalars().all():
+        lead_aberto.etapa = EtapaLead.FECHAMENTO
 
     # 3. Criar contrato de compra e venda (trocas = dação em pagamento)
     observacoes = body.observacoes or ""

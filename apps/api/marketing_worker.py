@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from database import async_session
-from models import CredencialRedeSocial, PostAgendado
+from models import CredencialRedeSocial, PostAgendado, Veiculo, StatusVeiculo
 
 logger = logging.getLogger("marketing_worker")
 
@@ -61,6 +61,17 @@ async def _renovar_se_perto_de_expirar(cred: CredencialRedeSocial, db) -> None:
 
 async def _processar_post(post: PostAgendado, db) -> None:
     from routers.marketing_social import _publicar_na_rede
+
+    if post.veiculo_id:
+        veiculo = (await db.execute(
+            select(Veiculo).where(Veiculo.id == post.veiculo_id)
+        )).scalar_one_or_none()
+        if not veiculo or veiculo.status != StatusVeiculo.DISPONIVEL:
+            post.status = "cancelado"
+            post.erro = "Veículo não está mais disponível (vendido/inativo) — publicação cancelada."
+            post.atualizado_em = datetime.now(timezone.utc).replace(tzinfo=None)
+            await db.commit()
+            return
 
     redes = json.loads(post.redes) if post.redes else []
     midia_urls = json.loads(post.midia_urls) if post.midia_urls else []

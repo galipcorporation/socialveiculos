@@ -210,13 +210,14 @@ async def get_dashboard_kpis(
         )
 
     # ── Escopo GESTOR/ADMIN: comportamento original ──
-    # Vendas do mês (veículos com status vendido, atualizados no mês corrente)
+    # Vendas do mês: usa ComissaoVenda.created_at (gravado uma única vez no
+    # ato da venda) em vez de Veiculo.updated_at, que reconta o veículo toda
+    # vez que ele é editado depois de vendido (B051).
     stmt_vendas = (
-        select(func.count()).select_from(Veiculo)
+        select(func.count()).select_from(ComissaoVenda)
         .where(
-            Veiculo.loja_id == loja_id,
-            Veiculo.status == StatusVeiculo.VENDIDO,
-            Veiculo.updated_at >= inicio_mes,
+            ComissaoVenda.loja_id == loja_id,
+            ComissaoVenda.created_at >= inicio_mes,
         )
     )
     vendas_mes = (await db.execute(stmt_vendas)).scalar() or 0
