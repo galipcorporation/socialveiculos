@@ -59,7 +59,9 @@ class LojaConfigIn(BaseModel):
 # ── Helpers ────────────────────────────────────────────────────
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    # NAIVE UTC: colunas são TIMESTAMP WITHOUT TIME ZONE; o Postgres/asyncpg
+    # rejeita datetime aware em escrita E em comparação. Ver ARMADILHAS-PRODUCAO.md #1.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 

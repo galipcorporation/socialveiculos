@@ -73,14 +73,17 @@ _ITENS_BLOQUEIO_CONCLUSAO = {
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    # NAIVE UTC: colunas são TIMESTAMP WITHOUT TIME ZONE; o Postgres/asyncpg
+    # rejeita datetime aware em escrita E em comparação. Ver ARMADILHAS-PRODUCAO.md #1.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _aware(dt: Optional[datetime]) -> Optional[datetime]:
-    """SQLite devolve datetimes naive; normaliza para UTC-aware para comparar."""
+    """Normaliza para naive UTC (Postgres devolve naive; SQLite dev pode devolver
+    aware). Assim toda comparação em Python fica naive-vs-naive, consistente com _now()."""
     if dt is None:
         return None
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt.replace(tzinfo=None) if dt.tzinfo else dt
 
 
 def _vencido(item: ItemChecklist) -> bool:

@@ -53,8 +53,11 @@ router = APIRouter(prefix="/v1", tags=["Dashboard, Métricas & Financeiro"])
 # ═══════════════════════════════════════════════════════════════
 
 def _inicio_mes_corrente() -> datetime:
+    # NAIVE UTC de propósito: as colunas de data são TIMESTAMP WITHOUT TIME ZONE
+    # e o asyncpg (Postgres) rejeita um datetime *aware* como parâmetro de query,
+    # mesmo em comparação (500 no /dashboard/kpis). Ver ARMADILHAS-PRODUCAO.md #1.
     agora = datetime.now(timezone.utc)
-    return datetime(agora.year, agora.month, 1, tzinfo=timezone.utc)
+    return datetime(agora.year, agora.month, 1)
 
 
 async def _calcular_resumo(
@@ -411,7 +414,8 @@ async def criar_lancamento(
     """
     payload = data.model_dump()
     if payload.get("data") is None:
-        payload["data"] = datetime.now(timezone.utc)
+        # naive UTC: coluna é TIMESTAMP WITHOUT TIME ZONE (ver ARMADILHAS-PRODUCAO.md #1)
+        payload["data"] = datetime.now(timezone.utc).replace(tzinfo=None)
 
     lancamento = LancamentoFinanceiro(
         loja_id=context.loja_id,

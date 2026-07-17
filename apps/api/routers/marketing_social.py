@@ -236,7 +236,8 @@ async def meta_oauth_callback(
         pages = r3.json().get("data", [])
 
     from datetime import timedelta
-    expira = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    # naive UTC: token_expira_em é TIMESTAMP WITHOUT TIME ZONE (ARMADILHAS-PRODUCAO.md #1)
+    expira = (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).replace(tzinfo=None)
 
     # Se houver mais de uma página, guarda na sessão pendente e redireciona para a escolha no front
     if len(pages) > 1:
