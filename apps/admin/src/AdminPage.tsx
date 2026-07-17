@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package } from 'lucide-react'
 import { api } from './lib/api'
-import { capitalizarNome, mascararCNPJ, validarCNPJ } from './lib/mascaras'
+import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda } from './lib/mascaras'
 
 // ── Tipos ────────────────────────────────────────────────────────
 
@@ -490,7 +490,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
 
   const [form, setForm] = useState({
     plano_id: '',
-    valor_mensal: '99.90',
+    valor_mensal: mascararMoeda(99.90),
     meses: '1',
     forma_pagamento: 'pix_manual',
     referencia_pagamento: '',
@@ -512,7 +512,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
         setForm((f) => ({
           ...f,
           plano_id: det.assinatura?.plano_id || ativos[0]?.id || '',
-          valor_mensal: String(det.assinatura?.valor_mensal ?? ativos[0]?.preco_mensal ?? '99.90'),
+          valor_mensal: mascararMoeda(det.assinatura?.valor_mensal ?? ativos[0]?.preco_mensal ?? 99.90),
         }))
       })
       .catch((err) => setErro(err.message || 'Erro ao carregar assinatura.'))
@@ -534,7 +534,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
     try {
       await api.post(`/admin/lojas/${lojaId}/assinatura/ativar`, {
         plano_id: form.plano_id,
-        valor_mensal: parseFloat(form.valor_mensal),
+        valor_mensal: parseMoeda(form.valor_mensal),
         meses: parseInt(form.meses, 10),
         forma_pagamento: form.forma_pagamento,
         referencia_pagamento: form.referencia_pagamento || null,
@@ -557,7 +557,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
     setSaving(true)
     try {
       await api.post(`/admin/lojas/${lojaId}/assinatura/renovar`, {
-        valor_mensal: form.valor_mensal ? parseFloat(form.valor_mensal) : null,
+        valor_mensal: form.valor_mensal ? parseMoeda(form.valor_mensal) : null,
         meses: parseInt(form.meses, 10),
         forma_pagamento: form.forma_pagamento,
         referencia_pagamento: form.referencia_pagamento || null,
@@ -696,7 +696,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: '12px' }}>
               <div className="form-group">
                 <label>Valor combinado (R$/mês)</label>
-                <input type="number" step="0.01" min="0" value={form.valor_mensal} onChange={(e) => setForm((f) => ({ ...f, valor_mensal: e.target.value }))} required={!temAssinaturaAtivavel} placeholder="99.90" />
+                <input type="text" inputMode="numeric" value={form.valor_mensal} onChange={(e) => setForm((f) => ({ ...f, valor_mensal: mascararMoeda(e.target.value) }))} required={!temAssinaturaAtivavel} placeholder="99,90" />
               </div>
               <div className="form-group">
                 <label>Meses pagos</label>
@@ -891,7 +891,7 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
         setForm({
           nome: p.nome,
           descricao: p.descricao || '',
-          preco_mensal: String(p.preco_mensal),
+          preco_mensal: mascararMoeda(p.preco_mensal),
           modulos_incluidos: p.modulos_incluidos ? JSON.parse(p.modulos_incluidos) : [],
           ativo: p.ativo,
         })
@@ -917,7 +917,7 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
       const payload = {
         nome: form.nome.trim(),
         descricao: form.descricao.trim() || null,
-        preco_mensal: parseFloat(form.preco_mensal),
+        preco_mensal: parseMoeda(form.preco_mensal),
         modulos_incluidos: form.modulos_incluidos,
         ativo: form.ativo,
       }
@@ -968,7 +968,7 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
             </div>
             <div className="form-group">
               <label>Preço (R$/mês)</label>
-              <input type="number" step="0.01" min="0" value={form.preco_mensal} onChange={(e) => setForm((f) => ({ ...f, preco_mensal: e.target.value }))} required placeholder="299.90" />
+              <input type="text" inputMode="numeric" value={form.preco_mensal} onChange={(e) => setForm((f) => ({ ...f, preco_mensal: mascararMoeda(e.target.value) }))} required placeholder="299,90" />
             </div>
           </div>
 

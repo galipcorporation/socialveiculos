@@ -19,6 +19,38 @@ export function capitalizarNome(val: string): string {
 }
 
 /**
+ * Aplica máscara de Moeda BRL (R$) em tempo real (padrão do projeto — mesmo algoritmo de apps/gestor/src/lib/mascaras.ts).
+ * Ex: "555" -> "5,55"
+ * Ex: "5555" -> "55,55"
+ * Ex: "555555" -> "5.555,55"
+ */
+export function mascararMoeda(val: string | number): string {
+  if (val === undefined || val === null) return ''
+
+  const str = typeof val === 'number'
+    ? val.toFixed(2).replace('.', '')
+    : val.toString().replace(/\D/g, '')
+
+  if (!str) return ''
+
+  const centavos = parseInt(str, 10) / 100
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(centavos)
+}
+
+/**
+ * Converte string formatada de moeda de volta para número float.
+ * Ex: "1.500,55" -> 1500.55
+ */
+export function parseMoeda(val: string): number {
+  if (!val) return 0
+  const valorLimpo = val.replace(/\./g, '').replace(',', '.')
+  return parseFloat(valorLimpo) || 0
+}
+
+/**
  * Aplica máscara de CNPJ: 00.000.000/0000-00
  */
 export function mascararCNPJ(val: string): string {
