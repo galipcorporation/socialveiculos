@@ -25,6 +25,7 @@ from schemas import (
     AssinaturaResponse, PagamentoResponse, PlanoResponse,
     AdminAtivarAssinaturaRequest, AdminRenovarAssinaturaRequest, AdminSuspenderAssinaturaRequest,
     AdminAssinaturaDetalheResponse, AdminVencimentoItem,
+    AdminCriarPlanoRequest, AdminEditarPlanoRequest,
 )
 from auth import hash_password, create_access_token
 
@@ -964,4 +965,120 @@ async def get_assinaturas_vencendo(
         )
         for assinatura, loja_nome, plano_nome in rows
     ]
+
+
+# ═══════════════════════════════════════════════════════════════
+# Planos — catálogo de assinatura (CRUD)
+# ═══════════════════════════════════════════════════════════════
+
+@router.get(
+    "/planos",
+    response_model=List[PlanoResponse],
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def get_todos_planos(db: AsyncSession = Depends(get_db)):
+    """Lista todos os planos, inclusive inativos — só a plataforma gerencia o catálogo."""
+    stmt = select(Plano).order_by(Plano.preco_mensal)
+    return (await db.execute(stmt)).scalars().all()
+
+
+@router.post(
+    "/planos",
+    response_model=PlanoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def criar_plano(
+    data: AdminCriarPlanoRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    plano = Plano(
+        nome=data.nome.strip(),
+        descricao=data.descricao,
+        preco_mensal=data.preco_mensal,
+        modulos_incluidos=json.dumps(data.modulos_incluidos),
+        ativo=data.ativo,
+    )
+    db.add(plano)
+    await db.flush()
+
+    await registrar_auditoria(
+        db=db, loja_id=None, ator_id=admin.id, ator_nome=admin.nome,
+        acao="plano.criar", entidade="plano", entidade_id=plano.id,
+        detalhes=json.dumps({
+            "nome": plano.nome, "preco_mensal": plano.preco_mensal, "modulos": data.modulos_incluidos,
+        }),
+    )
+    await db.commit()
+    await db.refresh(plano)
+    return plano
+
+
+@router.patch(
+    "/planos/{plano_id}",
+    response_model=PlanoResponse,
+)
+async def editar_plano(
+    plano_id: str,
+    data: AdminEditarPlanoRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    plano = (await db.execute(select(Plano).where(Plano.id == plano_id))).scalar_one_or_none()
+    if not plano:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plano não encontrado.")
+
+    if data.nome is not None:
+        plano.nome = data.nome.strip()
+    if data.descricao is not None:
+        plano.descricao = data.descricao
+    if data.preco_mensal is not None:
+        plano.preco_mensal = data.preco_mensal
+    if data.modulos_incluidos is not None:
+        plano.modulos_incluidos = json.dumps(data.modulos_incluidos)
+    if data.ativo is not None:
+        plano.ativo = data.ativo
+
+    await registrar_auditoria(
+        db=db, loja_id=None, ator_id=admin.id, ator_nome=admin.nome,
+        acao="plano.editar", entidade="plano", entidade_id=plano.id,
+        detalhes=json.dumps(data.model_dump(exclude_unset=True)),
+    )
+    await db.commit()
+    await db.refresh(plano)
+    return plano
+
+
+@router.delete(
+    "/planos/{plano_id}",
+    status_code=status.HTTP_200_OK,
+)
+async def excluir_plano(
+    plano_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """Exclui de vez um plano sem histórico. Se já tem assinatura vinculada, use desativar (PATCH ativo=false)."""
+    plano = (await db.execute(select(Plano).where(Plano.id == plano_id))).scalar_one_or_none()
+    if not plano:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plano não encontrado.")
+
+    em_uso = (await db.execute(
+        select(func.count()).select_from(Assinatura).where(Assinatura.plano_id == plano_id)
+    )).scalar() or 0
+    if em_uso > 0:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=f"Este plano tem {em_uso} assinatura(s) vinculada(s) — desative em vez de excluir.",
+        )
+
+    nome = plano.nome
+    await db.delete(plano)
+    await registrar_auditoria(
+        db=db, loja_id=None, ator_id=admin.id, ator_nome=admin.nome,
+        acao="plano.excluir", entidade="plano", entidade_id=plano_id,
+        detalhes=json.dumps({"nome": nome}),
+    )
+    await db.commit()
+    return {"ok": True}
 

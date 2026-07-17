@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard } from 'lucide-react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package } from 'lucide-react'
 import { api } from './lib/api'
 import { capitalizarNome, mascararCNPJ, validarCNPJ } from './lib/mascaras'
 
@@ -416,6 +416,7 @@ interface PlanoItem {
   nome: string
   descricao?: string | null
   preco_mensal: number
+  modulos_incluidos?: string | null // JSON array string
   ativo: boolean
 }
 
@@ -502,15 +503,16 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
     setLoading(true)
     Promise.all([
       api.get<AssinaturaDetalhe>(`/admin/lojas/${lojaId}/assinatura`),
-      api.get<PlanoItem[]>('/assinaturas/planos'),
+      api.get<PlanoItem[]>('/admin/planos'),
     ])
-      .then(([det, pl]) => {
+      .then(([det, todosPlanos]) => {
+        const ativos = todosPlanos.filter((p) => p.ativo)
         setDetalhe(det)
-        setPlanos(pl)
+        setPlanos(ativos)
         setForm((f) => ({
           ...f,
-          plano_id: det.assinatura?.plano_id || pl[0]?.id || '',
-          valor_mensal: String(det.assinatura?.valor_mensal ?? pl[0]?.preco_mensal ?? '99.90'),
+          plano_id: det.assinatura?.plano_id || ativos[0]?.id || '',
+          valor_mensal: String(det.assinatura?.valor_mensal ?? ativos[0]?.preco_mensal ?? '99.90'),
         }))
       })
       .catch((err) => setErro(err.message || 'Erro ao carregar assinatura.'))
@@ -842,6 +844,323 @@ function AbaAssinaturas() {
           lojaId={lojaSelecionada.id}
           lojaNome={lojaSelecionada.nome}
           onClose={() => setLojaSelecionada(null)}
+          onSaved={carregar}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Planos (catálogo — CRUD completo) ─────────────────────────────
+
+const TODOS_MODULOS = [
+  { key: 'contratos', label: 'Contratos' },
+  { key: 'simulador', label: 'Simulador' },
+  { key: 'marketing', label: 'Marketing' },
+  { key: 'assistente_ia', label: 'Assistente de IA' },
+  { key: 'fiscal', label: 'Fiscal / NF-e' },
+  { key: 'site', label: 'Meu Site / Vitrine' },
+]
+
+interface ModalPlanoProps {
+  planoId: string | null // null = criar novo
+  onClose: () => void
+  onSaved: () => void
+}
+
+function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
+  const [form, setForm] = useState({
+    nome: '',
+    descricao: '',
+    preco_mensal: '',
+    modulos_incluidos: [] as string[],
+    ativo: true,
+  })
+  const [loading, setLoading] = useState(!!planoId)
+  const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  // Carrega o plano específico a partir da lista (evita endpoint extra de detalhe)
+  useEffect(() => {
+    if (!planoId) { setLoading(false); return }
+    setLoading(true)
+    api.get<PlanoItem[]>('/admin/planos')
+      .then((planos) => {
+        const p = planos.find((x) => x.id === planoId)
+        if (!p) { setErro('Plano não encontrado.'); return }
+        setForm({
+          nome: p.nome,
+          descricao: p.descricao || '',
+          preco_mensal: String(p.preco_mensal),
+          modulos_incluidos: p.modulos_incluidos ? JSON.parse(p.modulos_incluidos) : [],
+          ativo: p.ativo,
+        })
+      })
+      .catch((err) => setErro(err.message || 'Erro ao carregar plano.'))
+      .finally(() => setLoading(false))
+  }, [planoId])
+
+  const toggleModulo = (modulo: string) => {
+    setForm((f) => {
+      const ativos = f.modulos_incluidos.includes(modulo)
+        ? f.modulos_incluidos.filter((m) => m !== modulo)
+        : [...f.modulos_incluidos, modulo]
+      return { ...f, modulos_incluidos: ativos }
+    })
+  }
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setErro(null)
+    try {
+      const payload = {
+        nome: form.nome.trim(),
+        descricao: form.descricao.trim() || null,
+        preco_mensal: parseFloat(form.preco_mensal),
+        modulos_incluidos: form.modulos_incluidos,
+        ativo: form.ativo,
+      }
+      if (planoId) {
+        await api.patch(`/admin/planos/${planoId}`, payload)
+      } else {
+        await api.post('/admin/planos', payload)
+      }
+      onSaved()
+      onClose()
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao salvar plano.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="modal-overlay">
+        <div className="modal-container glass-card" style={{ maxWidth: 520, padding: 32, textAlign: 'center' }}>
+          <span className="spinner" />
+          <p style={{ marginTop: 12, color: 'var(--sv-text-dim)' }}>Carregando plano...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+        <div className="modal-header">
+          <h3 className="modal-title">{planoId ? 'Editar Plano' : 'Novo Plano'}</h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '75vh', overflowY: 'auto' }}>
+          {erro && (
+            <div className="login-error-alert" style={{ margin: 0 }}>
+              <AlertTriangle size={16} />
+              <span>{erro}</span>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '12px' }}>
+            <div className="form-group">
+              <label>Nome do Plano</label>
+              <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} required placeholder="Profissional" />
+            </div>
+            <div className="form-group">
+              <label>Preço (R$/mês)</label>
+              <input type="number" step="0.01" min="0" value={form.preco_mensal} onChange={(e) => setForm((f) => ({ ...f, preco_mensal: e.target.value }))} required placeholder="299.90" />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Descrição</label>
+            <textarea
+              value={form.descricao}
+              onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))}
+              placeholder="Gestão completa + módulos premium"
+              rows={2}
+              style={{ resize: 'vertical' }}
+            />
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '8px 0' }} />
+          <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 0 }}>Módulos Incluídos</p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {TODOS_MODULOS.map((m) => {
+              const ativo = form.modulos_incluidos.includes(m.key)
+              return (
+                <div
+                  key={m.key}
+                  onClick={() => toggleModulo(m.key)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px',
+                    background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--sv-border)',
+                    borderRadius: 'var(--sv-radius)', cursor: 'pointer', userSelect: 'none',
+                  }}
+                >
+                  <input type="checkbox" checked={ativo} onChange={() => {}} style={{ pointerEvents: 'none' }} />
+                  <span style={{ fontSize: '14px', color: 'var(--sv-text)' }}>{m.label}</span>
+                </div>
+              )
+            })}
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--sv-text)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={form.ativo}
+              onChange={(e) => setForm((f) => ({ ...f, ativo: e.target.checked }))}
+            />
+            Plano ativo (visível para contratação)
+          </label>
+
+          <div className="modal-footer" style={{ paddingTop: '16px' }}>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? <span className="spinner" /> : planoId ? 'Salvar Alterações' : 'Criar Plano'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function AbaPlanos() {
+  const [planos, setPlanos] = useState<PlanoItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [modalAberto, setModalAberto] = useState(false)
+  const [planoEditandoId, setPlanoEditandoId] = useState<string | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+  const [acaoLoading, setAcaoLoading] = useState<string | null>(null)
+
+  const carregar = useCallback(() => {
+    setLoading(true)
+    api.get<PlanoItem[]>('/admin/planos').then(setPlanos).finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  const toggleAtivo = async (plano: PlanoItem) => {
+    setAcaoLoading(plano.id)
+    try {
+      await api.patch(`/admin/planos/${plano.id}`, { ativo: !plano.ativo })
+      carregar()
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao atualizar plano.')
+      setTimeout(() => setErro(null), 6000)
+    } finally {
+      setAcaoLoading(null)
+    }
+  }
+
+  const excluir = async (plano: PlanoItem) => {
+    if (!window.confirm(`Excluir o plano "${plano.nome}" definitivamente? Só é possível se nenhuma loja estiver vinculada a ele.`)) return
+    setAcaoLoading(plano.id)
+    try {
+      await api.delete(`/admin/planos/${plano.id}`)
+      carregar()
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao excluir plano.')
+      setTimeout(() => setErro(null), 8000)
+    } finally {
+      setAcaoLoading(null)
+    }
+  }
+
+  return (
+    <div style={{ marginTop: '24px' }}>
+      {erro && (
+        <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', marginBottom: '16px', background: 'color-mix(in srgb, var(--sv-error) 12%, var(--sv-surface))', border: '1px solid color-mix(in srgb, var(--sv-error) 30%, var(--sv-border))', borderLeft: '3px solid var(--sv-error)', borderRadius: 'var(--sv-radius)', fontSize: '14px', color: 'var(--sv-text)' }}>
+          <AlertTriangle size={16} style={{ color: 'var(--sv-error)', flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>{erro}</span>
+          <button onClick={() => setErro(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--sv-text-muted)', display: 'flex', padding: '2px' }}><X size={14} /></button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+        <button className="btn btn-primary" onClick={() => { setPlanoEditandoId(null); setModalAberto(true) }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Plus size={16} /> Novo Plano
+        </button>
+      </div>
+
+      {loading ? (
+        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+      ) : planos.length === 0 ? (
+        <EmptyState msg="Nenhum plano cadastrado ainda. Crie o primeiro para poder ativar assinaturas." />
+      ) : (
+        <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
+          <table className="stock-table">
+            <thead>
+              <tr>
+                {['Nome', 'Preço', 'Módulos', 'Status', 'Ações'].map((h) => (
+                  <th key={h}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {planos.map((p) => {
+                const modulos: string[] = p.modulos_incluidos ? JSON.parse(p.modulos_incluidos) : []
+                return (
+                  <tr key={p.id}>
+                    <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>
+                      {p.nome}
+                      {p.descricao && <div style={{ fontSize: 12, color: 'var(--sv-text-muted)', fontWeight: 400, marginTop: 2 }}>{p.descricao}</div>}
+                    </td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>{fmtMoeda(p.preco_mensal)}</td>
+                    <td style={{ color: 'var(--sv-text-dim)', fontSize: 13 }}>{modulos.length > 0 ? modulos.join(', ') : '—'}</td>
+                    <td>
+                      <span style={{
+                        display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: '12px', fontWeight: 600,
+                        background: p.ativo ? 'color-mix(in srgb, var(--sv-success) 15%, transparent)' : 'color-mix(in srgb, var(--sv-text-muted) 15%, transparent)',
+                        color: p.ativo ? 'var(--sv-success)' : 'var(--sv-text-muted)',
+                      }}>
+                        {p.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                          onClick={() => { setPlanoEditandoId(p.id); setModalAberto(true) }}
+                        >
+                          <Edit size={14} /> Editar
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                          onClick={() => toggleAtivo(p)}
+                          disabled={acaoLoading === p.id}
+                          title={p.ativo ? 'Desativar (não pode mais ser contratado)' : 'Reativar'}
+                        >
+                          {p.ativo ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                          {p.ativo ? 'Desativar' : 'Ativar'}
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--sv-error)' }}
+                          onClick={() => excluir(p)}
+                          disabled={acaoLoading === p.id}
+                          title="Excluir definitivamente (só se nenhuma loja estiver vinculada)"
+                        >
+                          <X size={14} /> Excluir
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {modalAberto && (
+        <ModalPlano
+          planoId={planoEditandoId}
+          onClose={() => setModalAberto(false)}
           onSaved={carregar}
         />
       )}
@@ -1528,12 +1847,13 @@ function AbaErros() {
 
 // ── Página principal ─────────────────────────────────────────────
 
-type Aba = 'overview' | 'lojas' | 'assinaturas' | 'auditoria' | 'erros'
+type Aba = 'overview' | 'lojas' | 'assinaturas' | 'planos' | 'auditoria' | 'erros'
 
 const ABAS: { id: Aba; label: string; Icon: typeof Shield }[] = [
   { id: 'overview', label: 'Overview', Icon: Shield },
   { id: 'lojas', label: 'Lojas', Icon: Building2 },
   { id: 'assinaturas', label: 'Assinaturas', Icon: CreditCard },
+  { id: 'planos', label: 'Planos', Icon: Package },
   { id: 'auditoria', label: 'Auditoria', Icon: ClipboardList },
   { id: 'erros', label: 'Erros', Icon: AlertTriangle },
 ]
@@ -1569,6 +1889,7 @@ export function AdminPage() {
       {aba === 'overview' && <AbaOverview />}
       {aba === 'lojas' && <AbaLojas />}
       {aba === 'assinaturas' && <AbaAssinaturas />}
+      {aba === 'planos' && <AbaPlanos />}
       {aba === 'auditoria' && <AbaAuditoria />}
       {aba === 'erros' && <AbaErros />}
     </div>

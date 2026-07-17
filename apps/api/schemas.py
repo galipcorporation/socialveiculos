@@ -841,6 +841,24 @@ class AdminSuspenderAssinaturaRequest(BaseModel):
     motivo: Optional[str] = None
 
 
+# ── Admin — catálogo de planos (CRUD) ────────────────────────────
+
+class AdminCriarPlanoRequest(BaseModel):
+    nome: str = Field(..., max_length=100)
+    descricao: Optional[str] = None
+    preco_mensal: float = Field(..., ge=0)
+    modulos_incluidos: List[str] = []
+    ativo: bool = True
+
+
+class AdminEditarPlanoRequest(BaseModel):
+    nome: Optional[str] = Field(default=None, max_length=100)
+    descricao: Optional[str] = None
+    preco_mensal: Optional[float] = Field(default=None, ge=0)
+    modulos_incluidos: Optional[List[str]] = None
+    ativo: Optional[bool] = None
+
+
 class AdminAssinaturaDetalheResponse(BaseModel):
     assinatura: Optional[AssinaturaResponse] = None
     plano: Optional[PlanoResponse] = None
