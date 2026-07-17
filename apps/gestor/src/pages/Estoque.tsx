@@ -266,6 +266,10 @@ export function Estoque() {
   // ── Publish Toggle ──
   const handlePublishToggle = async (veiculo: Veiculo) => {
     const newValue = !veiculo.publicado_marketplace
+    if (newValue && (!veiculo.midias || veiculo.midias.length === 0)) {
+      addToast('error', 'Adicione pelo menos 1 foto para publicar na vitrine.')
+      return
+    }
     // Optimistic UI Update
     setVeiculos(prev => prev.map(v => v.id === veiculo.id ? { ...v, publicado_marketplace: newValue } : v))
     try {
@@ -299,14 +303,17 @@ export function Estoque() {
 
   // ── Toggle All Publish ──
   const handleToggleAllPublish = async (newValue: boolean) => {
-    const disponiveis = veiculos.filter(v => v.status === 'disponivel' && v.publicado_marketplace !== newValue)
+    // Ao publicar, exige pelo menos 1 foto (regra da vitrine)
+    const elegivel = (v: Veiculo) =>
+      v.status === 'disponivel' &&
+      v.publicado_marketplace !== newValue &&
+      (!newValue || (!!v.midias && v.midias.length > 0))
+    const disponiveis = veiculos.filter(elegivel)
     if (disponiveis.length === 0) return
 
     // Optimistic UI Update
-    setVeiculos(prev => prev.map(v => 
-      (v.status === 'disponivel' && v.publicado_marketplace !== newValue)
-        ? { ...v, publicado_marketplace: newValue }
-        : v
+    setVeiculos(prev => prev.map(v =>
+      elegivel(v) ? { ...v, publicado_marketplace: newValue } : v
     ))
 
     try {
@@ -546,11 +553,14 @@ export function Estoque() {
                     />
                   </td>
                   <td className="col-secondary">
-                    <label className={`toggle-publish ${v.publicado_marketplace ? 'is-on' : 'is-off'}`}>
+                    <label
+                      className={`toggle-publish ${v.publicado_marketplace ? 'is-on' : 'is-off'}`}
+                      title={!v.publicado_marketplace && (!v.midias || v.midias.length === 0) ? 'Adicione pelo menos 1 foto para publicar' : undefined}
+                    >
                       <input
                         type="checkbox"
                         checked={v.publicado_marketplace}
-                        disabled={v.status !== 'disponivel' && !v.publicado_marketplace}
+                        disabled={!v.publicado_marketplace && (v.status !== 'disponivel' || !v.midias || v.midias.length === 0)}
                         onChange={() => handlePublishToggle(v)}
                       />
                       <span className="toggle-slider" />

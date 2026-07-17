@@ -296,11 +296,17 @@ async def gerar_pdf_contrato(
     if not contrato:
         raise HTTPException(status_code=404, detail="Contrato não encontrado")
 
-    # Gera HTML do contrato: template editável (se houver) ou gerador legado
+    # Gera HTML do contrato: template editável (se houver) ou gerador legado.
+    # Cabeçalho/rodapé/marca-d'água da loja envolvem o corpo, repetindo em toda
+    # página impressa — salvo se o modelo tiver desativado a identidade da loja.
     if contrato.template_id and contrato.template:
-        html_content = _render_template_contrato(contrato.template, contrato, ctx.loja)
+        usar_identidade = contrato.template.usar_identidade_loja
+        corpo = _render_template_contrato(contrato.template, contrato, ctx.loja)
     else:
-        html_content = _gerar_html_contrato(contrato, ctx.loja)
+        usar_identidade = True
+        corpo = _gerar_html_contrato(contrato, ctx.loja)
+
+    html_content = _envolver_identidade_loja(corpo, contrato, ctx.loja, usar_identidade)
 
     # Retorna como HTML para impressão (PDF real requer wkhtmltopdf/weasyprint)
     return StreamingResponse(
@@ -324,6 +330,7 @@ def _template_to_response(t: TemplateContrato) -> TemplateContratoResponse:
         nome=t.nome,
         conteudo_html=t.conteudo_html,
         campos_extras=campos,
+        usar_identidade_loja=t.usar_identidade_loja,
         ativo=t.ativo,
         created_at=t.created_at,
         updated_at=t.updated_at,
@@ -358,6 +365,7 @@ async def criar_template_contrato(
         nome=body.nome,
         conteudo_html=body.conteudo_html,
         campos_extras=campos_json,
+        usar_identidade_loja=body.usar_identidade_loja,
         ativo=True,
     )
     db.add(template)
@@ -433,6 +441,7 @@ async def duplicar_template_contrato(
         nome=f"{original.nome} (cópia)",
         conteudo_html=original.conteudo_html,
         campos_extras=original.campos_extras,
+        usar_identidade_loja=original.usar_identidade_loja,
         ativo=True,
     )
     db.add(copia)
@@ -772,6 +781,116 @@ def _render_template_contrato(template: TemplateContrato, contrato: Contrato, lo
     }
 
     return _jinja_env.from_string(template.conteudo_html).render(**contexto)
+
+
+# ═══════════════════════════════════════════════════════════════
+# ── IDENTIDADE DA LOJA NO DOCUMENTO (cabeçalho/rodapé/marca-d'água)
+# ═══════════════════════════════════════════════════════════════
+
+def _contexto_documento(contrato: Contrato, loja) -> dict:
+    """Contexto Jinja compartilhado (cabeçalho/rodapé aceitam as mesmas variáveis)."""
+    veiculo = contrato.veiculo
+    cliente = contrato.cliente
+    return {
+        "loja": {
+            "nome": loja.nome,
+            "cnpj": loja.cnpj or "___.___.___/____-__",
+            "endereco": loja.endereco or "___________",
+            "cidade": loja.cidade or "___________",
+            "estado": loja.estado or "__",
+            "telefone": loja.telefone or loja.whatsapp or "___________",
+        },
+        "cliente": {"nome": cliente.nome if cliente else "___________"},
+        "veiculo": {
+            "marca": (veiculo.marca if veiculo else None) or "___________",
+            "modelo": (veiculo.modelo if veiculo else None) or "___________",
+        },
+        "contrato": {
+            "numero": contrato.numero,
+            "data": contrato.created_at.strftime("%d/%m/%Y") if contrato.created_at else "___/___/______",
+        },
+    }
+
+
+def _envolver_identidade_loja(corpo_html: str, contrato: Contrato, loja, usar_identidade: bool) -> str:
+    """
+    Envolve o corpo do contrato com cabeçalho/rodapé/marca-d'água da loja, fixos
+    para repetir no topo e no rodapé de CADA página impressa (@page + position:fixed).
+
+    - Respeita o toggle do modelo (usar_identidade=False → devolve o corpo intacto).
+    - Cabeçalho/rodapé são HTML rico do editor e podem conter variáveis Jinja.
+    - Marca-d'água usa a imagem própria da loja ou, na ausência, a logo.
+    """
+    cabecalho = (loja.contrato_cabecalho or "").strip() if usar_identidade else ""
+    rodape = (loja.contrato_rodape or "").strip() if usar_identidade else ""
+    marca_url = None
+    if usar_identidade and loja.contrato_marca_dagua_ativa:
+        marca_url = loja.contrato_marca_dagua_url or loja.logo_url
+
+    # Nada a aplicar: preserva o documento como veio (inclui o gerador legado completo).
+    if not cabecalho and not rodape and not marca_url:
+        return corpo_html
+
+    ctx = _contexto_documento(contrato, loja)
+    if cabecalho:
+        cabecalho = _jinja_env.from_string(cabecalho).render(**ctx)
+    if rodape:
+        rodape = _jinja_env.from_string(rodape).render(**ctx)
+
+    header_html = f'<div class="doc-cabecalho">{cabecalho}</div>' if cabecalho else ""
+    footer_html = f'<div class="doc-rodape">{rodape}</div>' if rodape else ""
+    marca_html = (
+        f'<div class="doc-marca-dagua"><img src="{marca_url}" alt=""></div>' if marca_url else ""
+    )
+
+    # Se o corpo é um documento completo (gerador legado), extrai só o miolo do <body>.
+    corpo_interno = corpo_html
+    low = corpo_html.lower()
+    if "<body" in low and "</body>" in low:
+        ini = low.index("<body")
+        ini = low.index(">", ini) + 1
+        corpo_interno = corpo_html[ini: low.index("</body>")]
+
+    identidade_css = """
+  @page { margin: 3.2cm 2cm 2.6cm 2cm; }
+  .doc-cabecalho { position: fixed; top: -2.6cm; left: 0; right: 0; text-align: center; font-size: 12px; }
+  .doc-rodape    { position: fixed; bottom: -2cm; left: 0; right: 0; text-align: center; font-size: 11px; color: #888; }
+  .doc-cabecalho img, .doc-rodape img { max-height: 60px; }
+  .doc-marca-dagua { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: -1; }
+  .doc-marca-dagua img { width: 55%; max-width: 480px; opacity: 0.06; }
+  .doc-corpo { position: relative; }
+"""
+
+    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>{contrato.numero}</title>
+<style>
+  body {{ font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #1a1a1a; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }}
+  h1 {{ text-align: center; font-size: 18px; margin-bottom: 4px; letter-spacing: 1px; }}
+  h2 {{ font-size: 14px; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 28px; color: #333; }}
+  table {{ width: 100%; border-collapse: collapse; margin: 8px 0; }}
+  td {{ padding: 4px 8px; vertical-align: top; }}
+  td:first-child {{ width: 180px; color: #555; }}
+  .numero {{ text-align: center; color: #666; font-size: 12px; margin-bottom: 30px; }}
+  .valor {{ font-size: 16px; font-weight: bold; color: #0053db; }}
+  .assinatura {{ margin-top: 60px; display: flex; justify-content: space-between; gap: 40px; }}
+  .assinatura div {{ flex: 1; text-align: center; border-top: 1px solid #333; padding-top: 8px; }}
+  .obs {{ background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; margin: 12px 0; }}
+  .footer {{ margin-top: 40px; text-align: center; font-size: 11px; color: #999; }}
+{identidade_css}
+</style>
+</head>
+<body>
+{marca_html}
+{header_html}
+{footer_html}
+<div class="doc-corpo">
+{corpo_interno}
+</div>
+</body>
+</html>"""
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -55,7 +55,9 @@ class ApiClient {
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const { token } = useAuthStore.getState()
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    const headers: Record<string, string> = {}
+    // FormData: deixa o browser definir o Content-Type (com boundary).
+    if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json'
     if (token) headers['Authorization'] = `Bearer ${token}`
 
     const response = await fetch(`${this.baseUrl}${path}`, { ...options, headers })
@@ -82,7 +84,8 @@ class ApiClient {
   }
 
   post<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined })
+    const payload = body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined)
+    return this.request<T>(path, { method: 'POST', body: payload })
   }
 
   patch<T>(path: string, body?: unknown): Promise<T> {

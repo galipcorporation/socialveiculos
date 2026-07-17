@@ -120,7 +120,7 @@ class ApiClient {
       const body = await response.json().catch(() => ({}))
       const ts = new Date().toISOString()
       const requestId = response.headers.get('x-request-id') ?? undefined
-      if (response.status >= 500) {
+      if (response.status >= 500 && response.status !== 503) {
         void reportarErroServidor({ path, status: response.status, timestamp: ts, requestId, origem: 'gestor' })
       }
       throw new ApiError(friendlyHttpMessage(response.status, body.error ?? body.detail), {
@@ -203,6 +203,7 @@ function friendlyHttpMessage(status: number, serverMessage?: string): string {
   if (status === 404) return 'O recurso solicitado não foi encontrado.'
   if (status === 422) return serverMessage || 'Os dados enviados são inválidos.'
   if (status === 429) return 'Muitas requisições. Aguarde um momento e tente de novo.'
+  if (status === 503) return serverMessage || 'Serviço indisponível no momento. Tente novamente em instantes.'
   if (status >= 500) return 'Erro no servidor. Nossa equipe já foi notificada.'
   return serverMessage || 'Erro de comunicação com o servidor.'
 }

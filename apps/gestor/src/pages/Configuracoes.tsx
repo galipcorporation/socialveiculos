@@ -4,6 +4,8 @@ import { api } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
 import { mascararCNPJ, mascararTelefone, mascararCEP, capitalizarNome } from '../lib/mascaras'
 import { buscarCEP } from '../lib/cep'
+import { RichEditor } from '../components/RichEditor'
+import { CATALOGO_VARIAVEIS, labelsDe } from '../lib/variaveisContrato'
 import { Link2, Unlink, Gem, FileText, ShieldCheck, Upload, AlertTriangle } from 'lucide-react'
 
 interface Loja {
@@ -18,6 +20,11 @@ interface Loja {
   cidade?: string
   estado?: string
   cep?: string
+  logo_url?: string
+  contrato_cabecalho?: string
+  contrato_rodape?: string
+  contrato_marca_dagua_url?: string
+  contrato_marca_dagua_ativa?: boolean
   percentual_comissao_padrao: number
   verificada: boolean
   ativa: boolean
@@ -63,6 +70,12 @@ export interface RedeSocialStatus {
   conectada: boolean
 }
 
+const MODELOS_IA_POR_PROVEDOR: Record<'anthropic' | 'openai' | 'gemini', string[]> = {
+  anthropic: ['claude-sonnet-5', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'],
+  openai: ['gpt-5.1', 'gpt-5.1-mini', 'gpt-5.1-nano'],
+  gemini: ['gemini-3-pro', 'gemini-3-flash'],
+}
+
 export function Configuracoes() {
   const [searchParams, setSearchParams] = useSearchParams()
   const escolherNonce = searchParams.get('escolher')
@@ -82,8 +95,15 @@ export function Configuracoes() {
   const [sucesso, setSucesso] = useState(false)
   const [loadingCep, setLoadingCep] = useState(false)
 
+  // Identidade nos contratos (cabeçalho/rodapé/marca-d'água)
+  const [cabecalho, setCabecalho] = useState('')
+  const [rodape, setRodape] = useState('')
+  const [marcaDaguaAtiva, setMarcaDaguaAtiva] = useState(false)
+  const [marcaDaguaUrl, setMarcaDaguaUrl] = useState<string | null>(null)
+  const [enviandoMarca, setEnviandoMarca] = useState(false)
+
   // Escolha de página Meta
-  const [paginasMeta, setPaginasMeta] = useState<{page_id: string, name: string, instagram_account_id?: string}[]>([])
+  const [paginasMeta, setPaginasMeta] = useState<{ page_id: string, name: string, instagram_account_id?: string }[]>([])
   const [loadingPaginas, setLoadingPaginas] = useState(false)
   const [confirmandoPagina, setConfirmandoPagina] = useState(false)
 
@@ -297,6 +317,10 @@ export function Configuracoes() {
             cep: dataLoja.cep ? mascararCEP(dataLoja.cep) : '',
           })
           setPercentualComissao(String(dataLoja.percentual_comissao_padrao ?? 0))
+          setCabecalho(dataLoja.contrato_cabecalho ?? '')
+          setRodape(dataLoja.contrato_rodape ?? '')
+          setMarcaDaguaAtiva(dataLoja.contrato_marca_dagua_ativa ?? false)
+          setMarcaDaguaUrl(dataLoja.contrato_marca_dagua_url ?? null)
         }
         setCredenciais(dataCreds)
         setRedesSociais(dataRedes)
@@ -344,6 +368,24 @@ export function Configuracoes() {
     setResultadoTeste(null)
   }, [bancoSelecionado, credEscopo, credenciais])
 
+  const handleUploadMarcaDagua = async (file: File) => {
+    setEnviandoMarca(true)
+    setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const atualizada = await api.post<Loja>('/configuracoes/loja/marca-dagua', fd)
+      setMarcaDaguaUrl(atualizada.contrato_marca_dagua_url ?? null)
+      setMarcaDaguaAtiva(atualizada.contrato_marca_dagua_ativa ?? true)
+      setLoja(atualizada)
+      useUIStore.getState().showToast('Marca d\'água enviada.', 'success')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao enviar marca d\'água.')
+    } finally {
+      setEnviandoMarca(false)
+    }
+  }
+
   const handleSalvarPerfil = async (e: React.FormEvent) => {
     e.preventDefault()
     setSalvando(true)
@@ -354,6 +396,9 @@ export function Configuracoes() {
       const atualizada = await api.patch<Loja>('/configuracoes/loja', {
         ...form,
         percentual_comissao_padrao: pct,
+        contrato_cabecalho: cabecalho,
+        contrato_rodape: rodape,
+        contrato_marca_dagua_ativa: marcaDaguaAtiva,
       })
       setPercentualComissao(String(atualizada.percentual_comissao_padrao ?? pct))
       setLoja(atualizada)
@@ -551,7 +596,7 @@ export function Configuracoes() {
         maxWidth: '100%',
         WebkitOverflowScrolling: 'touch',
       }}>
-        <button 
+        <button
           onClick={() => setAbaAtual('perfil')}
           style={{
             background: abaAtual === 'perfil' ? 'var(--sv-primary)' : 'transparent',
@@ -564,7 +609,7 @@ export function Configuracoes() {
           }}>
           Perfil da Loja
         </button>
-        <button 
+        <button
           onClick={() => setAbaAtual('credenciais')}
           style={{
             background: abaAtual === 'credenciais' ? 'var(--sv-primary)' : 'transparent',
@@ -702,6 +747,73 @@ export function Configuracoes() {
                   </p>
                 </div>
               </div>
+
+              {/* ── Identidade nos contratos ── */}
+              <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--sv-border)' }}>
+                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>Identidade nos contratos</div>
+                <p style={{ fontSize: '12px', color: 'var(--sv-text-muted)', margin: '0 0 16px', maxWidth: '620px' }}>
+                  Cabeçalho, rodapé e marca d'água aplicados a todos os contratos. Repetem no topo e no rodapé de cada página impressa.
+                  Cada modelo pode desativá-los individualmente. Você pode misturar texto, imagem e variáveis (ex: <code style={{ fontFamily: 'monospace', fontSize: 11 }}>&#123;&#123;loja.cnpj&#125;&#125;</code>).
+                </p>
+
+                <div className="form-group" style={{ marginBottom: 16 }}>
+                  <label>Cabeçalho do documento</label>
+                  <RichEditor
+                    value={cabecalho}
+                    onChange={setCabecalho}
+                    variaveis={CATALOGO_VARIAVEIS}
+                    labels={labelsDe(CATALOGO_VARIAVEIS)}
+                    minHeight={80}
+                    compact
+                    placeholder="Ex: logo, nome da loja, endereço…"
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 16 }}>
+                  <label>Rodapé do documento</label>
+                  <RichEditor
+                    value={rodape}
+                    onChange={setRodape}
+                    variaveis={CATALOGO_VARIAVEIS}
+                    labels={labelsDe(CATALOGO_VARIAVEIS)}
+                    minHeight={60}
+                    compact
+                    placeholder="Ex: Documento gerado em {{contrato.data}}"
+                  />
+                </div>
+
+                {/* Marca d'água */}
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 14px', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)', borderRadius: 8, cursor: 'pointer', marginBottom: 12 }}>
+                  <div>
+                    <strong style={{ fontSize: 13 }}>Exibir marca d'água ao fundo</strong>
+                    <div style={{ fontSize: 12, color: 'var(--sv-text-muted)', marginTop: 2 }}>Imagem clara e centralizada em cada página. Sem imagem própria, usa a logo da loja.</div>
+                  </div>
+                  <input type="checkbox" checked={marcaDaguaAtiva} onChange={(e) => setMarcaDaguaAtiva(e.target.checked)} style={{ width: 18, height: 18, flexShrink: 0, accentColor: 'var(--sv-primary)' }} />
+                </label>
+
+                {marcaDaguaAtiva && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    {marcaDaguaUrl && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--sv-overlay-soft)', border: '1px solid var(--sv-border)', borderRadius: 8, padding: '8px 12px' }}>
+                        <img src={marcaDaguaUrl} alt="marca d'água" style={{ width: 44, height: 44, objectFit: 'contain', background: '#fff', borderRadius: 6, padding: 4 }} />
+                        <span style={{ fontSize: 12, color: 'var(--sv-text-dim)' }}>Imagem atual</span>
+                      </div>
+                    )}
+                    <label className="btn btn-outline" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Upload style={{ width: 15, height: 15 }} />
+                      {enviandoMarca ? 'Enviando…' : (marcaDaguaUrl ? 'Trocar imagem' : 'Enviar imagem específica')}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        hidden
+                        disabled={enviandoMarca}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadMarcaDagua(f); e.target.value = '' }}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
                 <button className="btn btn-primary" type="submit" disabled={salvando}>
                   {salvando ? 'Salvando...' : 'Salvar alterações'}
@@ -891,7 +1003,10 @@ export function Configuracoes() {
                   <select
                     className="filter-select"
                     value={iaProvedor}
-                    onChange={e => setIaProvedor(e.target.value as 'anthropic' | 'openai' | 'gemini')}
+                    onChange={e => {
+                      setIaProvedor(e.target.value as 'anthropic' | 'openai' | 'gemini')
+                      setIaModelo('')
+                    }}
                     style={{ width: '100%' }}
                   >
                     <option value="anthropic">Anthropic (Claude)</option>
@@ -920,13 +1035,20 @@ export function Configuracoes() {
 
                 <div className="form-group">
                   <label>Modelo padrão (opcional)</label>
-                  <input
-                    type="text"
+                  <select
+                    className="filter-select"
                     value={iaModelo}
                     onChange={e => setIaModelo(e.target.value)}
-                    placeholder="claude-haiku-4-5-20251001"
                     style={{ width: '100%' }}
-                  />
+                  >
+                    <option value="">Padrão da plataforma</option>
+                    {MODELOS_IA_POR_PROVEDOR[iaProvedor].map(modelo => (
+                      <option key={modelo} value={modelo}>{modelo}</option>
+                    ))}
+                  </select>
+                  <span style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>
+                    Deixe em "Padrão da plataforma" para usar o modelo recomendado automaticamente.
+                  </span>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -943,7 +1065,7 @@ export function Configuracoes() {
               <p style={{ fontSize: 14, color: 'var(--sv-text-dim)', margin: 0 }}>
                 Conecte o seu fornecedor de consulta veicular para exibir débitos (IPVA, licenciamento, multas) e a situação
                 da transferência/ATPV-e direto na esteira de pós-venda. Sem fornecedor configurado, essas consultas ficam
-                indisponíveis — nunca mostramos valores fictícios.
+                indisponíveis.
               </p>
 
               <div style={{ padding: '12px 16px', borderRadius: 8, border: '1px solid var(--sv-border)', background: 'var(--sv-overlay-soft)', fontSize: 13, color: 'var(--sv-text-muted)' }}>
@@ -1025,8 +1147,8 @@ export function Configuracoes() {
                     Conecte a página do Facebook e a conta do Instagram Business da sua loja para automatizar a publicação e agendamento de posts de marketing.
                   </p>
                 </div>
-                <button 
-                  className="btn btn-primary" 
+                <button
+                  className="btn btn-primary"
                   onClick={handleConectarMeta}
                   style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
@@ -1118,7 +1240,7 @@ export function Configuracoes() {
                           justifyContent: 'center',
                         }}>
                           <svg width="22" height="22" viewBox="0 0 24 24" fill={fb ? '#1877F2' : 'var(--sv-text-dim)'}>
-                            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
                           </svg>
                         </div>
                         <div>
@@ -1176,9 +1298,9 @@ export function Configuracoes() {
                           justifyContent: 'center',
                         }}>
                           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={ig ? '#E1306C' : 'var(--sv-text-dim)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-                            <circle cx="12" cy="12" r="4"/>
-                            <circle cx="17.5" cy="6.5" r="0.5" fill={ig ? '#E1306C' : 'var(--sv-text-dim)'}/>
+                            <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+                            <circle cx="12" cy="12" r="4" />
+                            <circle cx="17.5" cy="6.5" r="0.5" fill={ig ? '#E1306C' : 'var(--sv-text-dim)'} />
                           </svg>
                         </div>
                         <div>

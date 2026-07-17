@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api, extractErrorDetails } from '../../lib/api'
 import { useUIStore } from '../../stores/uiStore'
 import { useAuthStore } from '../../stores/authStore'
@@ -6,6 +6,8 @@ import { useLojaAtivaStore } from '../../stores/lojaAtivaStore'
 import { mascararMoeda, parseMoeda, mascararCPF } from '../../lib/mascaras'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { SearchSelect } from '../../components/SearchSelect'
+import { RichEditor, type VarGroup } from '../../components/RichEditor'
+import { CATALOGO_VARIAVEIS } from '../../lib/variaveisContrato'
 import { FileSignature } from 'lucide-react'
 
 /* ── Types ───────────────────────────────────────────────────── */
@@ -66,6 +68,7 @@ interface TemplateItem {
   nome: string
   conteudo_html: string
   campos_extras: CampoExtra[]
+  usar_identidade_loja: boolean
   ativo: boolean
   created_at: string
   updated_at: string
@@ -109,56 +112,6 @@ const STATUS_CLASSES: Record<string, string> = {
   cancelado: 'status-cancelado',
 }
 
-const CATALOGO_VARIAVEIS: { grupo: string; itens: { chave: string; label: string }[] }[] = [
-  {
-    grupo: 'Cliente',
-    itens: [
-      { chave: 'cliente.nome', label: 'Nome' },
-      { chave: 'cliente.cpf', label: 'CPF' },
-      { chave: 'cliente.rg', label: 'RG' },
-      { chave: 'cliente.telefone', label: 'Telefone' },
-      { chave: 'cliente.endereco', label: 'Endereço' },
-      { chave: 'cliente.cidade', label: 'Cidade' },
-      { chave: 'cliente.estado', label: 'Estado' },
-    ],
-  },
-  {
-    grupo: 'Veículo',
-    itens: [
-      { chave: 'veiculo.marca', label: 'Marca' },
-      { chave: 'veiculo.modelo', label: 'Modelo' },
-      { chave: 'veiculo.versao', label: 'Versão' },
-      { chave: 'veiculo.ano_fabricacao', label: 'Ano fabricação' },
-      { chave: 'veiculo.ano_modelo', label: 'Ano modelo' },
-      { chave: 'veiculo.placa', label: 'Placa' },
-      { chave: 'veiculo.cor', label: 'Cor' },
-      { chave: 'veiculo.km', label: 'KM' },
-      { chave: 'veiculo.combustivel', label: 'Combustível' },
-    ],
-  },
-  {
-    grupo: 'Loja',
-    itens: [
-      { chave: 'loja.nome', label: 'Razão social' },
-      { chave: 'loja.cnpj', label: 'CNPJ' },
-      { chave: 'loja.endereco', label: 'Endereço' },
-      { chave: 'loja.cidade', label: 'Cidade' },
-      { chave: 'loja.estado', label: 'Estado' },
-      { chave: 'loja.telefone', label: 'Telefone' },
-    ],
-  },
-  {
-    grupo: 'Contrato / Valores',
-    itens: [
-      { chave: 'contrato.numero', label: 'Número' },
-      { chave: 'contrato.data', label: 'Data' },
-      { chave: 'contrato.valor_venda', label: 'Valor da venda' },
-      { chave: 'contrato.valor_entrada', label: 'Entrada' },
-      { chave: 'contrato.parcelas', label: 'Parcelas' },
-      { chave: 'contrato.observacoes', label: 'Observações' },
-    ],
-  },
-]
 
 /* ── Icons ───────────────────────────────────────────────────── */
 
@@ -733,28 +686,29 @@ function EditorTemplateContent({ template, onClose, onSaved }: {
 }) {
   const [nome, setNome] = useState(template?.nome || '')
   const [campos, setCampos] = useState<CampoExtra[]>(template?.campos_extras || [])
+  const [conteudoHtml, setConteudoHtml] = useState(template?.conteudo_html || '<p>Digite o texto do contrato aqui…</p>')
+  const [usarIdentidade, setUsarIdentidade] = useState(template?.usar_identidade_loja ?? true)
   const [novoCampoChave, setNovoCampoChave] = useState('')
   const [novoCampoLabel, setNovoCampoLabel] = useState('')
   const [saving, setSaving] = useState(false)
-  const editorRef = useRef<HTMLDivElement>(null)
 
   const toast = (type: 'success' | 'error' | 'info', message: string) => useUIStore.getState().showToast(message, type)
 
   useEffect(() => {
     setNome(template?.nome || '')
     setCampos(template?.campos_extras || [])
-    if (editorRef.current) {
-      const rawHtml = template?.conteudo_html || '<p>Digite o texto do contrato aqui...</p>'
-      const displayHtml = rawHtml.replace(/\{\{([a-zA-Z0-9_\.]+)\}\}/g, '&lt;$1&gt;')
-      editorRef.current.innerHTML = displayHtml
-    }
+    setConteudoHtml(template?.conteudo_html || '<p>Digite o texto do contrato aqui…</p>')
+    setUsarIdentidade(template?.usar_identidade_loja ?? true)
   }, [template])
 
-  const inserirVariavel = (chave: string) => {
-    const placeholder = `<${chave}>`
-    editorRef.current?.focus()
-    document.execCommand('insertText', false, placeholder)
-  }
+  // Catálogo de variáveis para o popover + labels (para pintar as pílulas),
+  // já incluindo os campos personalizados deste modelo.
+  const variaveis: VarGroup[] = [
+    ...CATALOGO_VARIAVEIS,
+    ...(campos.length > 0 ? [{ grupo: 'Personalizados deste modelo', itens: campos }] : []),
+  ]
+  const labels: Record<string, string> = {}
+  for (const g of variaveis) for (const it of g.itens) labels[it.chave] = it.label
 
   const adicionarCampoExtra = () => {
     if (!novoCampoChave.trim() || !novoCampoLabel.trim()) return
@@ -774,12 +728,12 @@ function EditorTemplateContent({ template, onClose, onSaved }: {
     }
     setSaving(true)
     try {
-      const editorHtml = editorRef.current?.innerHTML || ''
-      const saveHtml = editorHtml
-        .replace(/&lt;([a-zA-Z0-9_\.]+)&gt;/g, '{{$1}}')
-        .replace(/&lt;([a-zA-Z0-9_\.]+)\>/g, '{{$1}}')
-        .replace(/<([a-zA-Z0-9_\.]+)>/g, '{{$1}}')
-      const payload = { nome, conteudo_html: saveHtml, campos_extras: campos }
+      const payload = {
+        nome,
+        conteudo_html: conteudoHtml,
+        campos_extras: campos,
+        usar_identidade_loja: usarIdentidade,
+      }
       if (template) {
         await api.patch(`/templates-contrato/${template.id}`, payload)
       } else {
@@ -795,99 +749,60 @@ function EditorTemplateContent({ template, onClose, onSaved }: {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div className="form-group">
         <label>Nome do modelo</label>
         <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Compra e Venda — Sedans" style={{ width: '100%' }} />
       </div>
 
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 300 }}>
-          <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--sv-text-dim)' }}>Texto do contrato</label>
-          <div
-            ref={editorRef}
-            contentEditable
-            suppressContentEditableWarning
-            style={{
-              minHeight: 320,
-              border: '1px solid var(--sv-border)',
-              borderRadius: 8,
-              padding: 12,
-              background: 'var(--sv-input-bg)',
-              overflowY: 'auto',
-            }}
-          />
+      {/* Texto do contrato — editor rico em largura total */}
+      <div>
+        <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--sv-text-dim)' }}>Texto do contrato</label>
+        <RichEditor
+          value={conteudoHtml}
+          onChange={setConteudoHtml}
+          variaveis={variaveis}
+          labels={labels}
+          minHeight={300}
+          placeholder="Digite o texto do contrato…"
+        />
+        <p style={{ fontSize: 12, color: 'var(--sv-text-muted)', marginTop: 8 }}>
+          Use <strong>+ Variável</strong> na barra para inserir dados que serão preenchidos automaticamente ao gerar o contrato.
+        </p>
+      </div>
 
-          <div style={{ marginTop: 16 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--sv-text-dim)' }}>Campos personalizados</label>
-            <div className="form-group" style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              <input
-                type="text"
-                placeholder="chave (ex: garantia_meses)"
-                value={novoCampoChave}
-                onChange={e => setNovoCampoChave(e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <input
-                type="text"
-                placeholder="rótulo (ex: Meses de garantia)"
-                value={novoCampoLabel}
-                onChange={e => setNovoCampoLabel(e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <button className="btn btn-primary" onClick={adicionarCampoExtra} style={{ height: 42, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Adicionar</button>
-            </div>
+      {/* Campos personalizados — abaixo do editor */}
+      <div>
+        <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--sv-text-dim)' }}>
+          Campos personalizados <span style={{ fontWeight: 400, color: 'var(--sv-text-muted)' }}>— dados extras que você preenche ao gerar o contrato</span>
+        </label>
+        {campos.map(c => (
+          <div key={c.chave} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--sv-overlay-soft)', border: '1px solid var(--sv-border)', borderRadius: 7, padding: '7px 12px', marginBottom: 6, fontSize: 13 }}>
+            <span style={{ flex: 1 }}>{c.label} <span style={{ color: 'var(--sv-text-muted)', fontFamily: 'monospace', fontSize: 12 }}>{c.chave}</span></span>
+            <button className="action-btn" title="Remover campo" onClick={() => removerCampoExtra(c.chave)} style={{ color: 'var(--sv-error)', flexShrink: 0 }}>
+              <XIcon />
+            </button>
           </div>
-        </div>
-
-        <div style={{ width: 220 }}>
-          <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--sv-text-dim)' }}>Variáveis do sistema</label>
-          <div style={{ maxHeight: 420, overflowY: 'auto', border: '1px solid var(--sv-border)', borderRadius: 8, padding: 8, background: 'var(--sv-surface-dim)' }}>
-            {CATALOGO_VARIAVEIS.map(grupo => (
-              <div key={grupo.grupo} style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--sv-text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{grupo.grupo}</div>
-                {grupo.itens.map(item => (
-                  <button
-                    key={item.chave}
-                    className="btn btn-outline"
-                    style={{ display: 'block', width: '100%', textAlign: 'left', fontSize: 12, padding: '6px 8px', marginBottom: 4 }}
-                    onClick={() => inserirVariavel(item.chave)}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            ))}
-
-            {campos.length > 0 && (
-              <div style={{ marginTop: 4 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--sv-primary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Personalizados</div>
-                {campos.map(c => (
-                  <div key={c.chave} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                    <button
-                      className="btn btn-outline"
-                      style={{ flex: 1, textAlign: 'left', fontSize: 12, padding: '6px 8px', borderColor: 'var(--sv-primary)', color: 'var(--sv-primary)' }}
-                      onClick={() => inserirVariavel(c.chave)}
-                    >
-                      {c.label}
-                    </button>
-                    <button
-                      className="action-btn"
-                      title="Remover campo"
-                      onClick={() => removerCampoExtra(c.chave)}
-                      style={{ color: 'var(--sv-error)', flexShrink: 0 }}
-                    >
-                      <XIcon />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <input type="text" placeholder="chave (ex: garantia_meses)" value={novoCampoChave} onChange={e => setNovoCampoChave(e.target.value)} style={{ flex: 1 }} />
+          <input type="text" placeholder="rótulo (ex: Meses de garantia)" value={novoCampoLabel} onChange={e => setNovoCampoLabel(e.target.value)} style={{ flex: 1 }} />
+          <button className="btn btn-primary" onClick={adicionarCampoExtra} style={{ height: 42, whiteSpace: 'nowrap' }}>Adicionar</button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 16, borderTop: '1px solid var(--sv-border)', paddingTop: 16 }}>
+      {/* Toggle identidade da loja (cabeçalho/rodapé/marca-d'água) */}
+      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 14px', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)', borderRadius: 8, cursor: 'pointer' }}>
+        <div>
+          <strong style={{ fontSize: 13 }}>Usar cabeçalho, rodapé e marca d'água da loja</strong>
+          <div style={{ fontSize: 12, color: 'var(--sv-text-muted)', marginTop: 2 }}>
+            Configurados em Configurações › Perfil da Loja. Desmarque para gerar este modelo sem eles.
+          </div>
+        </div>
+        <input type="checkbox" checked={usarIdentidade} onChange={e => setUsarIdentidade(e.target.checked)} style={{ width: 18, height: 18, flexShrink: 0, accentColor: 'var(--sv-primary)' }} />
+      </label>
+
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 4, borderTop: '1px solid var(--sv-border)', paddingTop: 16 }}>
         <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
         <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
           {saving ? 'Salvando...' : 'Salvar Modelo'}

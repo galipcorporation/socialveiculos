@@ -370,6 +370,11 @@ class LojaResponse(BaseModel):
     cidade: Optional[str] = None
     estado: Optional[str] = None
     cep: Optional[str] = None
+    logo_url: Optional[str] = None
+    contrato_cabecalho: Optional[str] = None
+    contrato_rodape: Optional[str] = None
+    contrato_marca_dagua_url: Optional[str] = None
+    contrato_marca_dagua_ativa: bool = False
     percentual_comissao_padrao: float = 0.0
     verificada: bool
     ativa: bool
@@ -866,6 +871,22 @@ class AdminAssinaturaDetalheResponse(BaseModel):
     dias_para_vencer: Optional[int] = None
 
 
+class ContratoVersaoResponse(BaseModel):
+    id: str
+    versao: str
+    conteudo_html: str
+    vigente: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContratoVersaoCreateRequest(BaseModel):
+    versao: str = Field(..., max_length=20)
+    conteudo_html: str = Field(..., min_length=1)
+    tornar_vigente: bool = True
+
+
 class AdminVencimentoItem(BaseModel):
     loja_id: str
     loja_nome: str
@@ -1037,6 +1058,11 @@ class LojaUpdateRequest(BaseModel):
     cidade: Optional[str] = Field(None, max_length=100)
     estado: Optional[str] = Field(None, max_length=2)
     cep: Optional[str] = Field(None, max_length=10)
+    # Identidade nos contratos (HTML rico do editor); marca-d'água opcional
+    contrato_cabecalho: Optional[str] = None
+    contrato_rodape: Optional[str] = None
+    contrato_marca_dagua_url: Optional[str] = Field(None, max_length=500)
+    contrato_marca_dagua_ativa: Optional[bool] = None
     # % de comissão padrão da loja (0-100); override individual em MembroLoja
     percentual_comissao_padrao: Optional[float] = Field(None, ge=0, le=100)
 
@@ -1184,12 +1210,14 @@ class TemplateContratoCreateRequest(BaseModel):
     nome: str = Field(..., min_length=1, max_length=200)
     conteudo_html: str = Field(..., min_length=1)
     campos_extras: Optional[List[CampoExtraTemplate]] = None
+    usar_identidade_loja: bool = True
 
 
 class TemplateContratoUpdateRequest(BaseModel):
     nome: Optional[str] = Field(None, min_length=1, max_length=200)
     conteudo_html: Optional[str] = None
     campos_extras: Optional[List[CampoExtraTemplate]] = None
+    usar_identidade_loja: Optional[bool] = None
     ativo: Optional[bool] = None
 
 
@@ -1199,6 +1227,7 @@ class TemplateContratoResponse(BaseModel):
     nome: str
     conteudo_html: str
     campos_extras: List[CampoExtraTemplate] = []
+    usar_identidade_loja: bool = True
     ativo: bool
     created_at: datetime
     updated_at: datetime

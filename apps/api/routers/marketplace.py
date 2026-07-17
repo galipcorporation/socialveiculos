@@ -71,6 +71,7 @@ async def get_loja_publica(slug: str, db: AsyncSession = Depends(get_db)):
             Veiculo.loja_id == loja.id,
             Veiculo.publicado_marketplace == True,
             Veiculo.status == StatusVeiculo.DISPONIVEL,
+            Veiculo.midias.any(),
         )
         .order_by(Veiculo.created_at.desc())
     )
@@ -108,6 +109,7 @@ async def get_sitemap_data(db: AsyncSession = Depends(get_db)):
     car_stmt = select(Veiculo.id).where(
         Veiculo.publicado_marketplace == True,
         Veiculo.status == StatusVeiculo.DISPONIVEL,
+        Veiculo.midias.any(),
     )
     car_res = await db.execute(car_stmt)
     car_ids = [row[0] for row in car_res.all()]

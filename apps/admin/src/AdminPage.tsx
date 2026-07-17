@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package } from 'lucide-react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload } from 'lucide-react'
 import { api } from './lib/api'
 import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda } from './lib/mascaras'
 
@@ -211,6 +211,8 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [enviandoLogo, setEnviandoLogo] = useState(false)
 
   useEffect(() => {
     api.get<any>(`/admin/lojas/${lojaId}`)
@@ -224,10 +226,26 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
           whatsapp: data.whatsapp || '',
           modulos_ativos: data.modulos_ativos || [],
         })
+        setLogoUrl(data.logo_url || null)
       })
       .catch((err) => setErro(err.message || 'Erro ao carregar detalhes da loja.'))
       .finally(() => setLoading(false))
   }, [lojaId])
+
+  const handleUploadLogo = async (file: File) => {
+    setEnviandoLogo(true)
+    setErro(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const data = await api.post<any>(`/admin/lojas/${lojaId}/logo`, fd)
+      setLogoUrl(data.logo_url || null)
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao enviar a logo.')
+    } finally {
+      setEnviandoLogo(false)
+    }
+  }
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value
@@ -307,6 +325,28 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
             <div className="form-group">
               <label>CNPJ</label>
               <input value={form.cnpj} onChange={set('cnpj')} placeholder="00.000.000/0000-00" />
+            </div>
+          </div>
+
+          {/* Logo da loja — usada em contratos, vitrine e marca-d'água padrão */}
+          <div className="form-group">
+            <label>Logo da loja</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              {logoUrl && (
+                <img src={logoUrl} alt="logo" style={{ width: 52, height: 52, objectFit: 'contain', background: '#fff', borderRadius: 6, padding: 4, border: '1px solid var(--sv-border)' }} />
+              )}
+              <label className="btn btn-secondary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Upload size={15} />
+                {enviandoLogo ? 'Enviando…' : (logoUrl ? 'Trocar logo' : 'Enviar logo')}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  hidden
+                  disabled={enviandoLogo}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadLogo(f); e.target.value = '' }}
+                />
+              </label>
+              <span style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>PNG, JPG ou WEBP · até 2 MB</span>
             </div>
           </div>
 

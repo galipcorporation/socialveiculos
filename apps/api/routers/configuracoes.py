@@ -5,7 +5,7 @@ Escopado por tenant (loja do contexto) e protegido por RBAC (Recurso.CONFIGURACO
 """
 
 import json
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -13,6 +13,10 @@ from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
 from models import Loja
 from rbac import exige_permissao, Acao, Recurso
+from storage import storage_provider
+
+_IMG_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
+_IMG_MAX_BYTES = 2 * 1024 * 1024  # 2 MB
 from schemas import (
     LojaResponse, LojaUpdateRequest,
     SimuladorBancoCredencialResponse, SimuladorBancoCredencialRequest,
@@ -99,6 +103,39 @@ async def atualizar_minha_loja(
     )
     await db.commit()
 
+    return loja
+
+
+@router.post(
+    "/loja/marca-dagua",
+    response_model=LojaResponse,
+    dependencies=[Depends(exige_permissao(Acao.EDITAR, Recurso.CONFIGURACOES))],
+)
+async def upload_marca_dagua(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """Sobe uma imagem específica de marca-d'água para os contratos da loja."""
+    if file.content_type not in _IMG_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Envie uma imagem PNG, JPG ou WEBP.")
+    content = await file.read()
+    if len(content) > _IMG_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Imagem muito grande. Máximo 2MB.")
+
+    res = await db.execute(select(Loja).where(Loja.id == context.loja_id))
+    loja = res.scalar_one_or_none()
+    if not loja:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Loja não encontrada.")
+
+    url = await storage_provider.upload_file(
+        content, file.filename or "marca-dagua.png", file.content_type,
+        prefixo=f"lojas/{context.loja_id}/identidade",
+    )
+    loja.contrato_marca_dagua_url = url
+    loja.contrato_marca_dagua_ativa = True
+    await db.commit()
+    await db.refresh(loja)
     return loja
 
 

@@ -243,6 +243,11 @@ class Loja(Base):
     slug = Column(String(100), unique=True, nullable=False)
     cnpj = Column(String(18), unique=True, nullable=True)
     logo_url = Column(String(500), nullable=True)
+    # Identidade nos documentos (contratos) — HTML rico do editor, reaplicado em todo modelo
+    contrato_cabecalho = Column(Text, nullable=True)
+    contrato_rodape = Column(Text, nullable=True)
+    contrato_marca_dagua_url = Column(String(500), nullable=True)  # imagem própria; cai na logo_url se nula
+    contrato_marca_dagua_ativa = Column(Boolean, default=False, nullable=False, server_default="0")
     telefone = Column(String(20), nullable=True)
     whatsapp = Column(String(20), nullable=True)
     whatsapp_pareado = Column(String(20), nullable=True)  # último número visto conectado via QR (Baileys)
@@ -786,6 +791,18 @@ class Pagamento(Base):
     )
 
 
+class ContratoAssinaturaVersao(Base):
+    """Texto versionado do contrato de assinatura B2B (Social Veículos ↔ Loja) — não é por loja."""
+    __tablename__ = "contrato_assinatura_versao"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    versao = Column(String(20), nullable=False, unique=True)  # ex: "2026-07"
+    conteudo_html = Column(Text, nullable=False)
+    vigente = Column(Boolean, default=False, nullable=False)  # só uma vigente por vez
+    criado_por_admin_id = Column(String(36), ForeignKey("usuario.id"), nullable=True)
+    created_at = Column(DateTime, default=_now)
+
+
 class ModuloHabilitado(Base):
     """Módulo premium habilitado para uma loja."""
     __tablename__ = "modulo_habilitado"
@@ -1319,6 +1336,8 @@ class TemplateContrato(Base):
     nome = Column(String(200), nullable=False)
     conteudo_html = Column(Text, nullable=False)
     campos_extras = Column(Text, nullable=True)  # JSON: [{"chave": "...", "label": "..."}]
+    # Herda cabeçalho/rodapé/marca-d'água da loja; pode desativar por modelo
+    usar_identidade_loja = Column(Boolean, default=True, nullable=False, server_default="1")
     ativo = Column(Boolean, default=True, nullable=False)
 
     created_at = Column(DateTime, default=_now)

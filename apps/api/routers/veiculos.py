@@ -102,7 +102,8 @@ async def get_veiculos_vitrine(
         .where(
             Veiculo.publicado_marketplace == True,
             Veiculo.status == StatusVeiculo.DISPONIVEL,
-            Loja.ativa == True
+            Loja.ativa == True,
+            Veiculo.midias.any(),
         )
         .order_by(Veiculo.created_at.desc())
         .offset(offset)
@@ -153,7 +154,8 @@ async def get_marketplace_feed(
         .where(
             Veiculo.publicado_marketplace == True,
             Veiculo.status == StatusVeiculo.DISPONIVEL,
-            Loja.ativa == True
+            Loja.ativa == True,
+            Veiculo.midias.any(),
         )
     )
 
@@ -916,6 +918,13 @@ async def toggle_publicar_veiculo(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Só é possível publicar veículos com status 'disponível'. Status atual: {veiculo.status.value}."
+        )
+
+    # Não permitir vitrine sem imagem
+    if data.publicado and not veiculo.midias:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Só é possível publicar veículos com pelo menos uma foto."
         )
 
     veiculo.publicado_marketplace = data.publicado

@@ -300,7 +300,7 @@ function ModulosTab({
               ) : (
                 <div className="paywall-cta">
                   <p className="paywall-text">
-                    Este módulo não está ativo para a sua loja. Entre em contato com o suporte para habilitar.
+                    Este módulo não está ativo para a sua loja. Contate o seu consultor ou o suporte para habilitar.
                   </p>
                 </div>
               )}

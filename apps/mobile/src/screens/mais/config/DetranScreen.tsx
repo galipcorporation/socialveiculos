@@ -61,7 +61,7 @@ export default function DetranScreen() {
       <AppHeader title="Consulta DETRAN" large={false} back />
       <Screen padded style={{ gap: spacing.md }}>
         <Txt variant="caption" color="textDim">
-          Conecte o fornecedor de consulta veicular para exibir débitos (IPVA, licenciamento, multas) e a situação da transferência/ATPV-e na esteira de pós-venda. Sem fornecedor, essas consultas ficam indisponíveis — nunca mostramos valores fictícios.
+          Conecte o fornecedor de consulta veicular para exibir débitos (IPVA, licenciamento, multas) e a situação da transferência/ATPV-e na esteira de pós-venda. Sem fornecedor, essas consultas ficam indisponíveis.
         </Txt>
 
         {q.isLoading ? (

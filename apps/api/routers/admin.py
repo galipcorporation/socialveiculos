@@ -8,7 +8,7 @@ import unicodedata
 import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -18,7 +18,7 @@ from database import get_db
 from deps import get_current_active_user, registrar_auditoria
 from models import (
     Usuario, Loja, Veiculo, LogAuditoria, PapelUsuario, MembroLoja, Lead, ModuloHabilitado,
-    Plano, Assinatura, Pagamento, StatusAssinatura, StatusPagamento, utcnow,
+    Plano, Assinatura, Pagamento, StatusAssinatura, StatusPagamento, ContratoAssinaturaVersao, utcnow,
 )
 from schemas import (
     LojaResponse, LogAuditoriaResponse,
@@ -26,10 +26,16 @@ from schemas import (
     AdminAtivarAssinaturaRequest, AdminRenovarAssinaturaRequest, AdminSuspenderAssinaturaRequest,
     AdminAssinaturaDetalheResponse, AdminVencimentoItem,
     AdminCriarPlanoRequest, AdminEditarPlanoRequest,
+    ContratoVersaoResponse, ContratoVersaoCreateRequest,
 )
 from auth import hash_password, create_access_token
+from storage import storage_provider
 
 router = APIRouter(prefix="/v1/admin", tags=["Administração Global"])
+
+# Imagens aceitas para logo da loja (mesma whitelist do storage)
+_LOGO_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
+_LOGO_MAX_BYTES = 2 * 1024 * 1024  # 2 MB
 
 
 async def exige_admin_plataforma(current_user: Usuario = Depends(get_current_active_user)) -> Usuario:
@@ -156,6 +162,7 @@ async def get_loja_detalhe(
         nome=loja.nome,
         slug=loja.slug,
         cnpj=loja.cnpj,
+        logo_url=loja.logo_url,
         telefone=loja.telefone,
         whatsapp=loja.whatsapp,
         email=loja.email,
@@ -308,6 +315,38 @@ async def editar_loja(
                 ativo=True
             ))
 
+    await db.commit()
+    await db.refresh(loja)
+    return loja
+
+
+@router.post(
+    "/lojas/{loja_id}/logo",
+    response_model=LojaResponse,
+)
+async def upload_logo_loja(
+    loja_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    _admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """Sobe a logo da loja (usada em contratos, vitrine e marca-d'água padrão)."""
+    if file.content_type not in _LOGO_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Envie uma imagem PNG, JPG ou WEBP.")
+    content = await file.read()
+    if len(content) > _LOGO_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Imagem muito grande. Máximo 2MB.")
+
+    res = await db.execute(select(Loja).where(Loja.id == loja_id))
+    loja = res.scalar_one_or_none()
+    if not loja:
+        raise HTTPException(status_code=404, detail="Loja não encontrada.")
+
+    url = await storage_provider.upload_file(
+        content, file.filename or "logo.png", file.content_type,
+        prefixo=f"lojas/{loja_id}/identidade",
+    )
+    loja.logo_url = url
     await db.commit()
     await db.refresh(loja)
     return loja
@@ -1081,4 +1120,105 @@ async def excluir_plano(
     )
     await db.commit()
     return {"ok": True}
+
+
+# ═══════════════════════════════════════════════════════════════
+# Contrato de assinatura — versões (texto editável, TipTap no front)
+# ═══════════════════════════════════════════════════════════════
+
+@router.get(
+    "/contrato-assinatura/versoes",
+    response_model=List[ContratoVersaoResponse],
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def listar_versoes_contrato_assinatura(db: AsyncSession = Depends(get_db)):
+    stmt = select(ContratoAssinaturaVersao).order_by(ContratoAssinaturaVersao.created_at.desc())
+    return (await db.execute(stmt)).scalars().all()
+
+
+@router.get(
+    "/contrato-assinatura/vigente",
+    response_model=ContratoVersaoResponse,
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def get_versao_vigente_contrato_assinatura(db: AsyncSession = Depends(get_db)):
+    stmt = select(ContratoAssinaturaVersao).where(ContratoAssinaturaVersao.vigente == True)
+    versao = (await db.execute(stmt)).scalar_one_or_none()
+    if not versao:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Nenhuma versão do contrato foi cadastrada ainda.")
+    return versao
+
+
+@router.post(
+    "/contrato-assinatura/versoes",
+    response_model=ContratoVersaoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def criar_versao_contrato_assinatura(
+    data: ContratoVersaoCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    existente = (await db.execute(
+        select(ContratoAssinaturaVersao).where(ContratoAssinaturaVersao.versao == data.versao)
+    )).scalar_one_or_none()
+    if existente:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Já existe uma versão de contrato com esse identificador.")
+
+    if data.tornar_vigente:
+        await db.execute(
+            ContratoAssinaturaVersao.__table__.update()
+            .where(ContratoAssinaturaVersao.vigente == True)
+            .values(vigente=False)
+        )
+
+    versao = ContratoAssinaturaVersao(
+        versao=data.versao.strip(),
+        conteudo_html=data.conteudo_html,
+        vigente=data.tornar_vigente,
+        criado_por_admin_id=admin.id,
+    )
+    db.add(versao)
+    await db.flush()
+
+    await registrar_auditoria(
+        db=db, loja_id=None, ator_id=admin.id, ator_nome=admin.nome,
+        acao="contrato_assinatura.criar_versao", entidade="contrato_assinatura_versao", entidade_id=versao.id,
+        detalhes=json.dumps({"versao": versao.versao, "vigente": versao.vigente}),
+    )
+    await db.commit()
+    await db.refresh(versao)
+    return versao
+
+
+@router.patch(
+    "/contrato-assinatura/versoes/{versao_id}/tornar-vigente",
+    response_model=ContratoVersaoResponse,
+)
+async def tornar_vigente_versao_contrato_assinatura(
+    versao_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    versao = (await db.execute(
+        select(ContratoAssinaturaVersao).where(ContratoAssinaturaVersao.id == versao_id)
+    )).scalar_one_or_none()
+    if not versao:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Versão do contrato não encontrada.")
+
+    await db.execute(
+        ContratoAssinaturaVersao.__table__.update()
+        .where(ContratoAssinaturaVersao.vigente == True)
+        .values(vigente=False)
+    )
+    versao.vigente = True
+
+    await registrar_auditoria(
+        db=db, loja_id=None, ator_id=admin.id, ator_nome=admin.nome,
+        acao="contrato_assinatura.tornar_vigente", entidade="contrato_assinatura_versao", entidade_id=versao.id,
+        detalhes=json.dumps({"versao": versao.versao}),
+    )
+    await db.commit()
+    await db.refresh(versao)
+    return versao
 
