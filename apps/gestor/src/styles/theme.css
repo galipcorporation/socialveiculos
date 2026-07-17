@@ -5255,3 +5255,17 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   justify-content: center;
 }
 
+/* ── SVG / Lucide Icons ── */
+svg {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+svg[stroke="currentColor"] {
+  stroke: currentColor;
+  fill: none;
+}
+
+
