@@ -3,9 +3,10 @@ Social Veículos — Rotas de Administração Global da Plataforma (/v1/admin/*)
 Acesso exclusivo para usuários com papel admin_plataforma.
 """
 
+import json
 import unicodedata
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -14,9 +15,17 @@ from sqlalchemy.future import select
 from sqlalchemy import func
 
 from database import get_db
-from deps import get_current_active_user
-from models import Usuario, Loja, Veiculo, LogAuditoria, PapelUsuario, MembroLoja, Lead, ModuloHabilitado
-from schemas import LojaResponse, LogAuditoriaResponse
+from deps import get_current_active_user, registrar_auditoria
+from models import (
+    Usuario, Loja, Veiculo, LogAuditoria, PapelUsuario, MembroLoja, Lead, ModuloHabilitado,
+    Plano, Assinatura, Pagamento, StatusAssinatura, StatusPagamento, utcnow,
+)
+from schemas import (
+    LojaResponse, LogAuditoriaResponse,
+    AssinaturaResponse, PagamentoResponse, PlanoResponse,
+    AdminAtivarAssinaturaRequest, AdminRenovarAssinaturaRequest, AdminSuspenderAssinaturaRequest,
+    AdminAssinaturaDetalheResponse, AdminVencimentoItem,
+)
 from auth import hash_password, create_access_token
 
 router = APIRouter(prefix="/v1/admin", tags=["Administração Global"])
@@ -675,4 +684,284 @@ async def rodar_testes():
         resumo=resumo,
         saida=saida[-8000:],  # limita para não estourar a resposta
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# Assinaturas — ativação manual (Pix) enquanto não há gateway
+# ═══════════════════════════════════════════════════════════════
+
+# Grava e compara sempre naive UTC — colunas são TIMESTAMP WITHOUT TIME ZONE
+# (Postgres rejeita datetime aware nessas colunas; ver ARMADILHAS-PRODUCAO.md #1).
+_now = utcnow
+
+
+async def _assinatura_mais_recente(db: AsyncSession, loja_id: str) -> Optional[Assinatura]:
+    stmt = (
+        select(Assinatura)
+        .where(Assinatura.loja_id == loja_id)
+        .order_by(Assinatura.created_at.desc())
+        .limit(1)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+def _dias_para_vencer(venc: Optional[datetime]) -> Optional[int]:
+    if not venc:
+        return None
+    return (venc - _now()).days
+
+
+async def _habilitar_modulos_do_plano(db: AsyncSession, loja_id: str, plano: Plano) -> List[str]:
+    modulos_incluidos = json.loads(plano.modulos_incluidos) if plano.modulos_incluidos else []
+    for nome in modulos_incluidos:
+        existente = (await db.execute(
+            select(ModuloHabilitado).where(
+                ModuloHabilitado.loja_id == loja_id,
+                ModuloHabilitado.nome_modulo == nome,
+            )
+        )).scalar_one_or_none()
+        if existente:
+            existente.ativo = True
+        else:
+            db.add(ModuloHabilitado(loja_id=loja_id, nome_modulo=nome, ativo=True))
+    return modulos_incluidos
+
+
+@router.post(
+    "/lojas/{loja_id}/assinatura/ativar",
+    response_model=AssinaturaResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def ativar_assinatura_manual(
+    loja_id: str,
+    data: AdminAtivarAssinaturaRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """
+    Ativa (ou substitui) a assinatura de uma loja via cobrança manual (Pix),
+    sem depender de gateway. Exige aceite de contrato explícito — é o registro
+    jurídico de que o cliente concordou com os termos antes de virar pagante.
+    """
+    loja = (await db.execute(select(Loja).where(Loja.id == loja_id))).scalar_one_or_none()
+    if not loja:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loja não encontrada.")
+
+    if not data.contrato_aceito:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="É obrigatório confirmar que o cliente aceitou o contrato de assinatura antes de ativar.",
+        )
+
+    plano = (await db.execute(
+        select(Plano).where(Plano.id == data.plano_id, Plano.ativo == True)
+    )).scalar_one_or_none()
+    if not plano:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plano não encontrado ou inativo.")
+
+    atual = await _assinatura_mais_recente(db, loja_id)
+    if atual and atual.status == StatusAssinatura.ATIVA:
+        atual.status = StatusAssinatura.CANCELADA
+        atual.fim = _now()
+
+    agora = _now()
+    assinatura = Assinatura(
+        loja_id=loja_id,
+        plano_id=plano.id,
+        status=StatusAssinatura.ATIVA,
+        inicio=agora,
+        valor_mensal=data.valor_mensal,
+        proximo_vencimento=agora + timedelta(days=30 * data.meses),
+        contrato_aceito_em=agora,
+        contrato_versao=data.contrato_versao,
+        observacoes=data.observacoes,
+        criado_por_admin=True,
+    )
+    db.add(assinatura)
+    await db.flush()
+
+    modulos_incluidos = await _habilitar_modulos_do_plano(db, loja_id, plano)
+
+    pagamento = Pagamento(
+        assinatura_id=assinatura.id,
+        valor=data.valor_mensal * data.meses,
+        status=StatusPagamento.PAGO,
+        referencia=data.referencia_pagamento or f"admin-manual-{assinatura.id}",
+        metodo=data.forma_pagamento,
+        data_pagamento=agora,
+    )
+    db.add(pagamento)
+
+    await registrar_auditoria(
+        db=db, loja_id=loja_id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="assinatura.ativar_manual", entidade="assinatura", entidade_id=assinatura.id,
+        detalhes=json.dumps({
+            "plano_id": plano.id, "valor_mensal": data.valor_mensal, "meses": data.meses,
+            "forma_pagamento": data.forma_pagamento, "contrato_versao": data.contrato_versao,
+            "modulos": modulos_incluidos,
+        }),
+    )
+    await db.commit()
+    await db.refresh(assinatura)
+    return assinatura
+
+
+@router.post(
+    "/lojas/{loja_id}/assinatura/renovar",
+    response_model=AssinaturaResponse,
+)
+async def renovar_assinatura_manual(
+    loja_id: str,
+    data: AdminRenovarAssinaturaRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """Registra novo pagamento manual e estende o vencimento da assinatura existente."""
+    assinatura = await _assinatura_mais_recente(db, loja_id)
+    if not assinatura:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="Loja ainda não tem assinatura. Use /assinatura/ativar para a primeira contratação.",
+        )
+    if assinatura.status == StatusAssinatura.CANCELADA:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Assinatura cancelada — use /assinatura/ativar para iniciar uma nova.",
+        )
+
+    agora = _now()
+    base = assinatura.proximo_vencimento or agora
+    if base < agora:
+        base = agora  # não acumula atraso: renovação sempre soma a partir de hoje se já venceu
+
+    assinatura.status = StatusAssinatura.ATIVA
+    assinatura.fim = None
+    assinatura.proximo_vencimento = base + timedelta(days=30 * data.meses)
+    if data.valor_mensal is not None:
+        assinatura.valor_mensal = data.valor_mensal
+    if data.observacoes:
+        assinatura.observacoes = data.observacoes
+
+    valor_pago = (data.valor_mensal if data.valor_mensal is not None else (assinatura.valor_mensal or 0)) * data.meses
+    pagamento = Pagamento(
+        assinatura_id=assinatura.id,
+        valor=valor_pago,
+        status=StatusPagamento.PAGO,
+        referencia=data.referencia_pagamento or f"admin-manual-{assinatura.id}-{int(agora.timestamp())}",
+        metodo=data.forma_pagamento,
+        data_pagamento=agora,
+    )
+    db.add(pagamento)
+
+    await registrar_auditoria(
+        db=db, loja_id=loja_id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="assinatura.renovar_manual", entidade="assinatura", entidade_id=assinatura.id,
+        detalhes=json.dumps({
+            "meses": data.meses, "valor_pago": valor_pago, "forma_pagamento": data.forma_pagamento,
+            "novo_vencimento": assinatura.proximo_vencimento.isoformat(),
+        }),
+    )
+    await db.commit()
+    await db.refresh(assinatura)
+    return assinatura
+
+
+@router.post(
+    "/lojas/{loja_id}/assinatura/suspender",
+    response_model=AssinaturaResponse,
+)
+async def suspender_assinatura_manual(
+    loja_id: str,
+    data: AdminSuspenderAssinaturaRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """Suspende a assinatura (inadimplência/cancelamento manual) — bloqueia módulos premium na hora."""
+    assinatura = await _assinatura_mais_recente(db, loja_id)
+    if not assinatura or assinatura.status != StatusAssinatura.ATIVA:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Loja não tem assinatura ativa para suspender.")
+
+    assinatura.status = StatusAssinatura.SUSPENSA
+
+    await registrar_auditoria(
+        db=db, loja_id=loja_id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="assinatura.suspender_manual", entidade="assinatura", entidade_id=assinatura.id,
+        detalhes=json.dumps({"motivo": data.motivo}),
+    )
+    await db.commit()
+    await db.refresh(assinatura)
+    return assinatura
+
+
+@router.get(
+    "/lojas/{loja_id}/assinatura",
+    response_model=AdminAssinaturaDetalheResponse,
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def get_assinatura_loja(
+    loja_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Estado da assinatura da loja + histórico de pagamentos, para a tela de gestão do admin."""
+    assinatura = await _assinatura_mais_recente(db, loja_id)
+    plano = None
+    pagamentos: List[Pagamento] = []
+    if assinatura:
+        plano = (await db.execute(
+            select(Plano).where(Plano.id == assinatura.plano_id)
+        )).scalar_one_or_none()
+        pagamentos = (await db.execute(
+            select(Pagamento)
+            .where(Pagamento.assinatura_id == assinatura.id)
+            .order_by(Pagamento.created_at.desc())
+        )).scalars().all()
+
+    return AdminAssinaturaDetalheResponse(
+        assinatura=AssinaturaResponse.model_validate(assinatura) if assinatura else None,
+        plano=PlanoResponse.model_validate(plano) if plano else None,
+        pagamentos=[PagamentoResponse.model_validate(p) for p in pagamentos],
+        dias_para_vencer=_dias_para_vencer(assinatura.proximo_vencimento) if assinatura else None,
+    )
+
+
+@router.get(
+    "/assinaturas/vencendo",
+    response_model=List[AdminVencimentoItem],
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def get_assinaturas_vencendo(
+    dias: int = 7,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Lojas com assinatura ativa vencendo nos próximos `dias` (padrão 7) ou já vencidas.
+    Alimenta a revisão semanal de cobrança manual — sem isso, atraso de Pix passa batido.
+    """
+    limite = _now() + timedelta(days=dias)
+    stmt = (
+        select(Assinatura, Loja.nome, Plano.nome)
+        .join(Loja, Loja.id == Assinatura.loja_id)
+        .join(Plano, Plano.id == Assinatura.plano_id)
+        .where(
+            Assinatura.status == StatusAssinatura.ATIVA,
+            Assinatura.proximo_vencimento.isnot(None),
+            Assinatura.proximo_vencimento <= limite,
+        )
+        .order_by(Assinatura.proximo_vencimento.asc())
+    )
+    rows = (await db.execute(stmt)).all()
+
+    return [
+        AdminVencimentoItem(
+            loja_id=assinatura.loja_id,
+            loja_nome=loja_nome,
+            assinatura_id=assinatura.id,
+            plano_nome=plano_nome,
+            status=assinatura.status,
+            valor_mensal=assinatura.valor_mensal,
+            proximo_vencimento=assinatura.proximo_vencimento,
+            dias_para_vencer=_dias_para_vencer(assinatura.proximo_vencimento),
+        )
+        for assinatura, loja_nome, plano_nome in rows
+    ]
 

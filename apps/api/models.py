@@ -754,6 +754,13 @@ class Assinatura(Base):
     status = Column(Enum(StatusAssinatura), default=StatusAssinatura.ATIVA, nullable=False)
     inicio = Column(DateTime, nullable=False, default=_now)
     fim = Column(DateTime, nullable=True)
+    # Cobrança manual (Pix) — sem gateway recorrente ainda
+    valor_mensal = Column(Float, nullable=True)  # valor combinado (pode diferir do preço de tabela do plano)
+    proximo_vencimento = Column(DateTime, nullable=True)
+    contrato_aceito_em = Column(DateTime, nullable=True)
+    contrato_versao = Column(String(20), nullable=True)
+    observacoes = Column(Text, nullable=True)
+    criado_por_admin = Column(Boolean, nullable=False, default=False, server_default="0")
     created_at = Column(DateTime, default=_now)
 
     __table_args__ = (
@@ -769,7 +776,8 @@ class Pagamento(Base):
     assinatura_id = Column(String(36), ForeignKey("assinatura.id", ondelete="CASCADE"), nullable=False)
     valor = Column(Float, nullable=False)
     status = Column(Enum(StatusPagamento), default=StatusPagamento.PENDENTE, nullable=False)
-    referencia = Column(String(200), nullable=True)  # ID externo do gateway
+    referencia = Column(String(200), nullable=True)  # ID externo do gateway ou comprovante Pix
+    metodo = Column(String(30), nullable=True)  # pix_manual | gateway | outro
     data_pagamento = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_now)
 

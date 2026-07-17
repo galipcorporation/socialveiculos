@@ -609,6 +609,25 @@ class AssinaturaResponse(BaseModel):
     status: StatusAssinatura
     inicio: datetime
     fim: Optional[datetime] = None
+    valor_mensal: Optional[float] = None
+    proximo_vencimento: Optional[datetime] = None
+    contrato_aceito_em: Optional[datetime] = None
+    contrato_versao: Optional[str] = None
+    observacoes: Optional[str] = None
+    criado_por_admin: bool = False
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PagamentoResponse(BaseModel):
+    id: str
+    assinatura_id: str
+    valor: float
+    status: StatusPagamento
+    referencia: Optional[str] = None
+    metodo: Optional[str] = None
+    data_pagamento: Optional[datetime] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -795,6 +814,49 @@ class WebhookPagamentoRequest(BaseModel):
     assinatura_id: str = Field(..., max_length=36)
     status: StatusPagamento
     valor: float = Field(..., ge=0)
+
+
+# ── Admin — ativação manual de assinatura (Pix) ─────────────────
+
+class AdminAtivarAssinaturaRequest(BaseModel):
+    plano_id: str = Field(..., max_length=36)
+    valor_mensal: float = Field(..., ge=0)
+    meses: int = Field(default=1, ge=1, le=12)
+    forma_pagamento: str = Field(default="pix_manual", max_length=30)
+    referencia_pagamento: Optional[str] = Field(default=None, max_length=200)
+    contrato_aceito: bool
+    contrato_versao: str = Field(..., max_length=20)
+    observacoes: Optional[str] = None
+
+
+class AdminRenovarAssinaturaRequest(BaseModel):
+    valor_mensal: Optional[float] = Field(default=None, ge=0)
+    meses: int = Field(default=1, ge=1, le=12)
+    forma_pagamento: str = Field(default="pix_manual", max_length=30)
+    referencia_pagamento: Optional[str] = Field(default=None, max_length=200)
+    observacoes: Optional[str] = None
+
+
+class AdminSuspenderAssinaturaRequest(BaseModel):
+    motivo: Optional[str] = None
+
+
+class AdminAssinaturaDetalheResponse(BaseModel):
+    assinatura: Optional[AssinaturaResponse] = None
+    plano: Optional[PlanoResponse] = None
+    pagamentos: List[PagamentoResponse] = []
+    dias_para_vencer: Optional[int] = None
+
+
+class AdminVencimentoItem(BaseModel):
+    loja_id: str
+    loja_nome: str
+    assinatura_id: str
+    plano_nome: str
+    status: StatusAssinatura
+    valor_mensal: Optional[float] = None
+    proximo_vencimento: Optional[datetime] = None
+    dias_para_vencer: Optional[int] = None
 
 
 # ── B2B Social & Feed ──────────────────────────────────────────

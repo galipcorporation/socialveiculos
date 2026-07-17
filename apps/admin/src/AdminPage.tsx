@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit } from 'lucide-react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard } from 'lucide-react'
 import { api } from './lib/api'
 import { capitalizarNome, mascararCNPJ, validarCNPJ } from './lib/mascaras'
 
@@ -383,6 +383,472 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
   )
 }
 
+// ── Assinaturas (ativação manual via Pix) ─────────────────────────
+
+interface AssinaturaItem {
+  id: string
+  loja_id: string
+  plano_id: string
+  status: 'ativa' | 'cancelada' | 'suspensa' | 'expirada'
+  inicio: string
+  fim?: string | null
+  valor_mensal?: number | null
+  proximo_vencimento?: string | null
+  contrato_aceito_em?: string | null
+  contrato_versao?: string | null
+  observacoes?: string | null
+  criado_por_admin: boolean
+  created_at: string
+}
+
+interface PagamentoItem {
+  id: string
+  valor: number
+  status: string
+  referencia?: string | null
+  metodo?: string | null
+  data_pagamento?: string | null
+  created_at: string
+}
+
+interface PlanoItem {
+  id: string
+  nome: string
+  descricao?: string | null
+  preco_mensal: number
+  ativo: boolean
+}
+
+interface AssinaturaDetalhe {
+  assinatura: AssinaturaItem | null
+  plano: PlanoItem | null
+  pagamentos: PagamentoItem[]
+  dias_para_vencer: number | null
+}
+
+interface VencimentoItem {
+  loja_id: string
+  loja_nome: string
+  assinatura_id: string
+  plano_nome: string
+  status: string
+  valor_mensal?: number | null
+  proximo_vencimento?: string | null
+  dias_para_vencer?: number | null
+}
+
+const STATUS_ASSINATURA_LABEL: Record<string, string> = {
+  ativa: 'Ativa', cancelada: 'Cancelada', suspensa: 'Suspensa', expirada: 'Expirada',
+}
+
+function corStatusAssinatura(status: string) {
+  if (status === 'ativa') return 'var(--sv-success)'
+  if (status === 'suspensa' || status === 'expirada') return 'var(--sv-warning)'
+  return 'var(--sv-error)'
+}
+
+function fmtMoeda(v?: number | null) {
+  if (v == null) return '—'
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+function fmtDataHora(iso?: string | null) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function BadgeStatusAssinatura({ status }: { status: string }) {
+  return (
+    <span style={{
+      display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: '12px', fontWeight: 600,
+      background: `color-mix(in srgb, ${corStatusAssinatura(status)} 15%, transparent)`,
+      color: corStatusAssinatura(status),
+    }}>
+      {STATUS_ASSINATURA_LABEL[status] || status}
+    </span>
+  )
+}
+
+interface ModalAssinaturaProps {
+  lojaId: string
+  lojaNome: string
+  onClose: () => void
+  onSaved: () => void
+}
+
+function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinaturaProps) {
+  const [detalhe, setDetalhe] = useState<AssinaturaDetalhe | null>(null)
+  const [planos, setPlanos] = useState<PlanoItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+  const [suspendendo, setSuspendendo] = useState(false)
+
+  const hoje = new Date()
+  const versaoContratoPadrao = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
+
+  const [form, setForm] = useState({
+    plano_id: '',
+    valor_mensal: '99.90',
+    meses: '1',
+    forma_pagamento: 'pix_manual',
+    referencia_pagamento: '',
+    contrato_aceito: false,
+    contrato_versao: versaoContratoPadrao,
+    observacoes: '',
+  })
+
+  const carregar = useCallback(() => {
+    setLoading(true)
+    Promise.all([
+      api.get<AssinaturaDetalhe>(`/admin/lojas/${lojaId}/assinatura`),
+      api.get<PlanoItem[]>('/assinaturas/planos'),
+    ])
+      .then(([det, pl]) => {
+        setDetalhe(det)
+        setPlanos(pl)
+        setForm((f) => ({
+          ...f,
+          plano_id: det.assinatura?.plano_id || pl[0]?.id || '',
+          valor_mensal: String(det.assinatura?.valor_mensal ?? pl[0]?.preco_mensal ?? '99.90'),
+        }))
+      })
+      .catch((err) => setErro(err.message || 'Erro ao carregar assinatura.'))
+      .finally(() => setLoading(false))
+  }, [lojaId])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  const temAssinaturaAtivavel = detalhe?.assinatura && detalhe.assinatura.status !== 'cancelada'
+
+  const ativar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErro(null)
+    if (!form.contrato_aceito) {
+      setErro('Confirme que o cliente aceitou o contrato antes de ativar.')
+      return
+    }
+    setSaving(true)
+    try {
+      await api.post(`/admin/lojas/${lojaId}/assinatura/ativar`, {
+        plano_id: form.plano_id,
+        valor_mensal: parseFloat(form.valor_mensal),
+        meses: parseInt(form.meses, 10),
+        forma_pagamento: form.forma_pagamento,
+        referencia_pagamento: form.referencia_pagamento || null,
+        contrato_aceito: form.contrato_aceito,
+        contrato_versao: form.contrato_versao,
+        observacoes: form.observacoes || null,
+      })
+      onSaved()
+      carregar()
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao ativar assinatura.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const renovar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErro(null)
+    setSaving(true)
+    try {
+      await api.post(`/admin/lojas/${lojaId}/assinatura/renovar`, {
+        valor_mensal: form.valor_mensal ? parseFloat(form.valor_mensal) : null,
+        meses: parseInt(form.meses, 10),
+        forma_pagamento: form.forma_pagamento,
+        referencia_pagamento: form.referencia_pagamento || null,
+        observacoes: form.observacoes || null,
+      })
+      onSaved()
+      carregar()
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao renovar assinatura.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const suspender = async () => {
+    const motivo = window.prompt('Motivo da suspensão (opcional):') || undefined
+    setSuspendendo(true)
+    setErro(null)
+    try {
+      await api.post(`/admin/lojas/${lojaId}/assinatura/suspender`, { motivo })
+      onSaved()
+      carregar()
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao suspender assinatura.')
+    } finally {
+      setSuspendendo(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="modal-overlay">
+        <div className="modal-container glass-card" style={{ maxWidth: 560, padding: 32, textAlign: 'center' }}>
+          <span className="spinner" />
+          <p style={{ marginTop: 12, color: 'var(--sv-text-dim)' }}>Carregando assinatura...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const assinatura = detalhe?.assinatura
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <div className="modal-header">
+          <h3 className="modal-title">Assinatura — {lojaNome}</h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '78vh', overflowY: 'auto' }}>
+          {erro && (
+            <div className="login-error-alert" style={{ margin: 0 }}>
+              <AlertTriangle size={16} />
+              <span>{erro}</span>
+            </div>
+          )}
+
+          {/* Estado atual */}
+          <div style={{ padding: '14px 16px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--sv-border)', borderRadius: 'var(--sv-radius)' }}>
+            {assinatura ? (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontWeight: 600, color: 'var(--sv-text)' }}>{detalhe?.plano?.nome}</span>
+                  <BadgeStatusAssinatura status={assinatura.status} />
+                </div>
+                <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', margin: '2px 0' }}>
+                  Valor combinado: <strong>{fmtMoeda(assinatura.valor_mensal)}</strong>/mês
+                </p>
+                <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', margin: '2px 0' }}>
+                  Vencimento: <strong>{fmtDataHora(assinatura.proximo_vencimento)}</strong>
+                  {detalhe?.dias_para_vencer != null && (
+                    <span style={{ color: detalhe.dias_para_vencer < 0 ? 'var(--sv-error)' : detalhe.dias_para_vencer <= 7 ? 'var(--sv-warning)' : 'var(--sv-text-muted)' }}>
+                      {' '}({detalhe.dias_para_vencer < 0 ? `vencida há ${Math.abs(detalhe.dias_para_vencer)}d` : `em ${detalhe.dias_para_vencer}d`})
+                    </span>
+                  )}
+                </p>
+                <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', margin: '2px 0' }}>
+                  Contrato aceito: {assinatura.contrato_aceito_em
+                    ? <strong>{fmtDataHora(assinatura.contrato_aceito_em)} (v{assinatura.contrato_versao})</strong>
+                    : <span style={{ color: 'var(--sv-error)' }}>não registrado</span>}
+                </p>
+                {assinatura.observacoes && (
+                  <p style={{ fontSize: 13, color: 'var(--sv-text-muted)', margin: '6px 0 0', fontStyle: 'italic' }}>"{assinatura.observacoes}"</p>
+                )}
+                {assinatura.status === 'ativa' && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ marginTop: 10, padding: '4px 10px', fontSize: '12px', color: 'var(--sv-error)' }}
+                    onClick={suspender}
+                    disabled={suspendendo}
+                  >
+                    {suspendendo ? <span className="spinner" /> : 'Suspender assinatura'}
+                  </button>
+                )}
+              </>
+            ) : (
+              <p style={{ fontSize: 13, color: 'var(--sv-text-muted)', margin: 0 }}>Loja ainda não tem assinatura.</p>
+            )}
+          </div>
+
+          {/* Histórico de pagamentos */}
+          {detalhe && detalhe.pagamentos.length > 0 && (
+            <div>
+              <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 8 }}>Histórico de Pagamentos</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {detalhe.pagamentos.map((p) => (
+                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--sv-text-dim)', padding: '6px 8px', background: 'rgba(255,255,255,0.02)', borderRadius: 6 }}>
+                    <span>{fmtDataHora(p.data_pagamento || p.created_at)} · {p.metodo || 'gateway'} {p.referencia ? `(${p.referencia})` : ''}</span>
+                    <span style={{ fontWeight: 600, color: 'var(--sv-text)' }}>{fmtMoeda(p.valor)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '4px 0' }} />
+
+          {/* Formulário: ativar (nova/cancelada) ou renovar (existente) */}
+          <form onSubmit={temAssinaturaAtivavel ? renovar : ativar} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', margin: 0 }}>
+              {temAssinaturaAtivavel ? 'Registrar cobrança / renovar' : 'Ativar assinatura'}
+            </p>
+
+            {!temAssinaturaAtivavel && (
+              <div className="form-group">
+                <label>Plano</label>
+                <select value={form.plano_id} onChange={(e) => setForm((f) => ({ ...f, plano_id: e.target.value }))} required>
+                  {planos.map((p) => (
+                    <option key={p.id} value={p.id}>{p.nome} — {fmtMoeda(p.preco_mensal)}/mês (tabela)</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: '12px' }}>
+              <div className="form-group">
+                <label>Valor combinado (R$/mês)</label>
+                <input type="number" step="0.01" min="0" value={form.valor_mensal} onChange={(e) => setForm((f) => ({ ...f, valor_mensal: e.target.value }))} required={!temAssinaturaAtivavel} placeholder="99.90" />
+              </div>
+              <div className="form-group">
+                <label>Meses pagos</label>
+                <input type="number" min="1" max="12" value={form.meses} onChange={(e) => setForm((f) => ({ ...f, meses: e.target.value }))} required />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-group">
+                <label>Forma de pagamento</label>
+                <select value={form.forma_pagamento} onChange={(e) => setForm((f) => ({ ...f, forma_pagamento: e.target.value }))}>
+                  <option value="pix_manual">Pix manual</option>
+                  <option value="dinheiro">Dinheiro</option>
+                  <option value="boleto">Boleto</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Referência / comprovante</label>
+                <input value={form.referencia_pagamento} onChange={(e) => setForm((f) => ({ ...f, referencia_pagamento: e.target.value }))} placeholder="ID do Pix (opcional)" />
+              </div>
+            </div>
+
+            {!temAssinaturaAtivavel && (
+              <div className="form-group">
+                <label>Versão do contrato aceito</label>
+                <input value={form.contrato_versao} onChange={(e) => setForm((f) => ({ ...f, contrato_versao: e.target.value }))} required placeholder="2026-07" />
+              </div>
+            )}
+
+            <div className="form-group">
+              <label>Observações</label>
+              <textarea
+                value={form.observacoes}
+                onChange={(e) => setForm((f) => ({ ...f, observacoes: e.target.value }))}
+                placeholder="Ex: fundadora 3x R$99,90, depois vai para R$299,90"
+                rows={2}
+                style={{ resize: 'vertical' }}
+              />
+            </div>
+
+            {!temAssinaturaAtivavel && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--sv-text)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={form.contrato_aceito}
+                  onChange={(e) => setForm((f) => ({ ...f, contrato_aceito: e.target.checked }))}
+                />
+                Confirmo que o cliente aceitou os Termos de Uso e o contrato de assinatura.
+              </label>
+            )}
+
+            <div className="modal-footer" style={{ paddingTop: '4px' }}>
+              <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Fechar</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? <span className="spinner" /> : temAssinaturaAtivavel ? 'Registrar pagamento' : 'Ativar assinatura'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Aba Assinaturas (vencimentos) ─────────────────────────────────
+
+function AbaAssinaturas() {
+  const [itens, setItens] = useState<VencimentoItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [janela, setJanela] = useState(30)
+  const [lojaSelecionada, setLojaSelecionada] = useState<{ id: string; nome: string } | null>(null)
+
+  const carregar = useCallback(() => {
+    setLoading(true)
+    api.get<VencimentoItem[]>('/admin/assinaturas/vencendo', { dias: String(janela) })
+      .then(setItens)
+      .finally(() => setLoading(false))
+  }, [janela])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  return (
+    <div style={{ marginTop: '24px' }}>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
+        <p style={{ color: 'var(--sv-text-dim)', fontSize: 14, margin: 0 }}>Janela:</p>
+        {[7, 30, 90].map((d) => (
+          <button
+            key={d}
+            className={`btn ${janela === d ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '4px 12px', fontSize: '12px' }}
+            onClick={() => setJanela(d)}
+          >
+            {d} dias
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+      ) : itens.length === 0 ? (
+        <EmptyState msg="Nenhuma assinatura vencendo ou vencida nessa janela." />
+      ) : (
+        <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
+          <table className="stock-table">
+            <thead>
+              <tr>
+                {['Loja', 'Plano', 'Valor', 'Vencimento', 'Situação', 'Ações'].map((h) => (
+                  <th key={h}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {itens.map((it) => (
+                <tr key={it.assinatura_id}>
+                  <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{it.loja_nome}</td>
+                  <td style={{ color: 'var(--sv-text-dim)' }}>{it.plano_nome}</td>
+                  <td style={{ color: 'var(--sv-text-dim)' }}>{fmtMoeda(it.valor_mensal)}</td>
+                  <td style={{ color: 'var(--sv-text-dim)' }}>{fmtDataHora(it.proximo_vencimento)}</td>
+                  <td>
+                    {it.dias_para_vencer != null && it.dias_para_vencer < 0 ? (
+                      <span style={{ color: 'var(--sv-error)', fontWeight: 600, fontSize: 12 }}>Vencida há {Math.abs(it.dias_para_vencer)}d</span>
+                    ) : (
+                      <span style={{ color: 'var(--sv-warning)', fontWeight: 600, fontSize: 12 }}>Vence em {it.dias_para_vencer}d</span>
+                    )}
+                  </td>
+                  <td>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                      onClick={() => setLojaSelecionada({ id: it.loja_id, nome: it.loja_nome })}
+                    >
+                      <CreditCard size={14} /> Gerenciar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {lojaSelecionada && (
+        <ModalAssinatura
+          lojaId={lojaSelecionada.id}
+          lojaNome={lojaSelecionada.nome}
+          onClose={() => setLojaSelecionada(null)}
+          onSaved={carregar}
+        />
+      )}
+    </div>
+  )
+}
+
 // ── Aba Overview ─────────────────────────────────────────────────
 
 function AbaOverview() {
@@ -415,6 +881,7 @@ function AbaLojas() {
   const [busca, setBusca] = useState('')
   const [modalAberto, setModalAberto] = useState(false)
   const [lojaEditandoId, setLojaEditandoId] = useState<string | null>(null)
+  const [lojaAssinatura, setLojaAssinatura] = useState<{ id: string; nome: string } | null>(null)
   const [toggleLoading, setToggleLoading] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -544,6 +1011,14 @@ function AbaLojas() {
                       <button
                         className="btn btn-secondary"
                         style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => setLojaAssinatura({ id: loja.id, nome: loja.nome })}
+                        title="Ativar, renovar ou suspender assinatura (Pix manual)"
+                      >
+                        <CreditCard size={14} /> Assinatura
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
                         onClick={() => impersonar(loja)}
                         title="Observar como gestor desta loja"
                       >
@@ -560,6 +1035,14 @@ function AbaLojas() {
 
       {modalAberto && <ModalNovaLoja onClose={() => setModalAberto(false)} onSaved={carregar} />}
       {lojaEditandoId && <ModalEditarLoja lojaId={lojaEditandoId} onClose={() => setLojaEditandoId(null)} onSaved={carregar} />}
+      {lojaAssinatura && (
+        <ModalAssinatura
+          lojaId={lojaAssinatura.id}
+          lojaNome={lojaAssinatura.nome}
+          onClose={() => setLojaAssinatura(null)}
+          onSaved={carregar}
+        />
+      )}
     </div>
   )
 }
@@ -1045,11 +1528,12 @@ function AbaErros() {
 
 // ── Página principal ─────────────────────────────────────────────
 
-type Aba = 'overview' | 'lojas' | 'auditoria' | 'erros'
+type Aba = 'overview' | 'lojas' | 'assinaturas' | 'auditoria' | 'erros'
 
 const ABAS: { id: Aba; label: string; Icon: typeof Shield }[] = [
   { id: 'overview', label: 'Overview', Icon: Shield },
   { id: 'lojas', label: 'Lojas', Icon: Building2 },
+  { id: 'assinaturas', label: 'Assinaturas', Icon: CreditCard },
   { id: 'auditoria', label: 'Auditoria', Icon: ClipboardList },
   { id: 'erros', label: 'Erros', Icon: AlertTriangle },
 ]
@@ -1084,6 +1568,7 @@ export function AdminPage() {
 
       {aba === 'overview' && <AbaOverview />}
       {aba === 'lojas' && <AbaLojas />}
+      {aba === 'assinaturas' && <AbaAssinaturas />}
       {aba === 'auditoria' && <AbaAuditoria />}
       {aba === 'erros' && <AbaErros />}
     </div>

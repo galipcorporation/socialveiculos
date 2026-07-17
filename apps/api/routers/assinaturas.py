@@ -5,7 +5,6 @@ módulos e webhook idempotente de pagamento.
 """
 
 import json
-from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
@@ -24,6 +23,7 @@ from models import (
     ModuloHabilitado,
     StatusAssinatura,
     StatusPagamento,
+    utcnow,
 )
 from schemas import (
     PlanoResponse,
@@ -37,9 +37,9 @@ from schemas import (
 
 router = APIRouter(prefix="/v1/assinaturas", tags=["Assinaturas & Módulos"])
 
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
+# Grava sempre naive UTC — colunas são TIMESTAMP WITHOUT TIME ZONE (Postgres
+# rejeita datetime aware nessas colunas; ver ARMADILHAS-PRODUCAO.md #1).
+_now = utcnow
 
 
 async def _assinatura_atual(db: AsyncSession, loja_id: str) -> Optional[Assinatura]:

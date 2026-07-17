@@ -23,6 +23,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def _tem_coluna(tabela: str, coluna: str) -> bool:
     bind = op.get_bind()
+    if bind.dialect.name == 'postgresql':
+        row = bind.execute(
+            sa.text("SELECT 1 FROM information_schema.columns WHERE table_name = :t AND column_name = :c"),
+            {"t": tabela, "c": coluna},
+        ).fetchone()
+        return row is not None
     cols = [r[1] for r in bind.exec_driver_sql(f"PRAGMA table_info({tabela})").fetchall()]
     return coluna in cols
 
