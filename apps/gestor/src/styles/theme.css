@@ -59,6 +59,25 @@
   --sv-scrollbar: rgba(255, 255, 255, 0.1);
   --sv-scrollbar-hover: rgba(255, 255, 255, 0.2);
 
+  /* ── Spacing ── */
+  --sv-space-1: 4px;
+  --sv-space-2: 8px;
+  --sv-space-3: 12px;
+  --sv-space-4: 16px;
+  --sv-space-5: 20px;
+  --sv-space-6: 24px;
+  --sv-space-8: 32px;
+  --sv-space-10: 40px;
+  --sv-space-12: 48px;
+
+  /* ── Text Sizes ── */
+  --sv-text-xs: 0.75rem;
+  --sv-text-sm: 0.875rem;
+  --sv-text-base: 1rem;
+  --sv-text-lg: 1.125rem;
+  --sv-text-xl: 1.25rem;
+  --sv-text-2xl: 1.5rem;
+
   /* ── Sidebar ── */
   --sv-sidebar-width: 260px;
   --sv-sidebar-collapsed: 72px;
