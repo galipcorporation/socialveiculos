@@ -1148,6 +1148,11 @@ a {
   animation: spin 0.8s linear infinite;
 }
 
+/* Quando o spinner é o único conteúdo de um botão flex, centraliza-o */
+.vt-btn > .spinner:only-child {
+  margin: 0 auto;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

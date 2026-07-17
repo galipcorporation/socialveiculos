@@ -25,6 +25,15 @@ export class ApiError extends Error {
 
 let isRefreshing = false
 
+// Sessão inválida (conta desativada ou expirada): limpa o auth e leva ao login.
+// Usa window.location para funcionar mesmo fora do contexto do React Router.
+function forcarLogin(reason: string) {
+  useAuthStore.getState().logout(reason)
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    window.location.assign('/login')
+  }
+}
+
 class ApiClient {
   private baseUrl: string
 
@@ -66,53 +75,62 @@ class ApiClient {
 
     // Se 401, tentar dar refresh transparente
     if (response.status === 401 && !isRefreshing && path !== '/auth/login' && path !== '/auth/refresh') {
-      const { refreshToken, user, login, logout } = useAuthStore.getState()
+      const { refreshToken, user, login } = useAuthStore.getState()
 
-      if (refreshToken && user) {
-        isRefreshing = true
-        try {
-          const refreshRes = await fetch(`${this.baseUrl}/auth/refresh`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: refreshToken }),
+      // Sem refresh token (ou sem usuário): sessão inválida. Expulsa para o login.
+      if (!refreshToken || !user) {
+        forcarLogin('Sua sessão terminou. Faça login novamente.')
+        throw new ApiError('Sessão expirada. Faça login novamente.', {
+          status: 401,
+          path,
+          timestamp: new Date().toISOString(),
+        })
+      }
+
+      isRefreshing = true
+      try {
+        const refreshRes = await fetch(`${this.baseUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        })
+
+        if (refreshRes.ok) {
+          const data = await refreshRes.json()
+          login(data.access_token, data.refresh_token, user)
+          isRefreshing = false
+
+          // Refazer requisição com novo token
+          headers['Authorization'] = `Bearer ${data.access_token}`
+          const retryRes = await fetch(url, {
+            ...fetchOptions,
+            headers,
           })
 
-          if (refreshRes.ok) {
-            const data = await refreshRes.json()
-            login(data.access_token, data.refresh_token, user)
-            isRefreshing = false
-
-            // Refazer requisição com novo token
-            headers['Authorization'] = `Bearer ${data.access_token}`
-            const retryRes = await fetch(url, {
-              ...fetchOptions,
-              headers,
-            })
-
-            if (!retryRes.ok) {
-              const error = await retryRes.json().catch(() => ({}))
-              throw new ApiError(friendlyHttpMessage(retryRes.status, error.error), {
-                status: retryRes.status,
-                path,
-                timestamp: new Date().toISOString(),
-              })
-            }
-
-            return retryRes.json()
-          } else {
-            isRefreshing = false
-            logout()
-            throw new ApiError('Sessão expirada. Faça login novamente.', {
-              status: 401,
+          if (!retryRes.ok) {
+            const error = await retryRes.json().catch(() => ({}))
+            throw new ApiError(friendlyHttpMessage(retryRes.status, error.error), {
+              status: retryRes.status,
               path,
               timestamp: new Date().toISOString(),
             })
           }
-        } catch (err) {
+
+          return retryRes.json()
+        } else {
+          // Refresh também rejeitado: conta desativada ou sessão revogada/expirada.
           isRefreshing = false
-          logout()
-          throw err
+          forcarLogin('Seu acesso foi encerrado. Faça login novamente.')
+          throw new ApiError('Sessão expirada. Faça login novamente.', {
+            status: 401,
+            path,
+            timestamp: new Date().toISOString(),
+          })
         }
+      } catch (err) {
+        isRefreshing = false
+        forcarLogin('Seu acesso foi encerrado. Faça login novamente.')
+        throw err
       }
     }
 

@@ -347,6 +347,25 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Esta conta está inativa."
         )
+
+    # Gestor/Vendedor precisa de um vínculo de loja ATIVO para entrar. Se o membro
+    # foi desativado na Equipe, bloqueia já no login (Usuario.ativo pode ser True).
+    if user.papel not in (PapelUsuario.CLIENTE, PapelUsuario.ADMIN_PLATAFORMA):
+        membro_res = await db.execute(
+            select(MembroLoja).where(MembroLoja.usuario_id == user.id, MembroLoja.ativo == True)
+        )
+        if not membro_res.scalar_one_or_none():
+            await registrar_auditoria(
+                db=db, loja_id=None, ator_id=user.id, ator_nome=user.nome,
+                acao="auth.login_failed", entidade="usuario", entidade_id=user.id,
+                detalhes="Tentativa de login falhou: sem vínculo de loja ativo", ip=client_ip,
+            )
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Seu acesso a esta loja foi desativado. Contate o gestor.",
+            )
+
     if user.mfa_ativo:
         challenge_token = create_access_token(
             data={"sub": user.id, "scope": "mfa_pending"},
@@ -681,13 +700,21 @@ async def get_me(
 ):
     """Retorna o usuário autenticado (inclui avatar_url)."""
     user_resp = UserResponse.model_validate(current_user)
-    if current_user.papel != PapelUsuario.CLIENTE:
+    if current_user.papel not in (PapelUsuario.CLIENTE, PapelUsuario.ADMIN_PLATAFORMA):
+        # Gestor/Vendedor: o acesso depende de um vínculo de loja ATIVO. Se o
+        # membro foi desativado (Equipe), não há vínculo ativo — a sessão está
+        # morta ainda que o Usuario.ativo continue True. Devolve 401 para o front
+        # expulsar ao login em vez de deixar entrar e só falhar com 403 nas rotas.
         stmt = select(MembroLoja).where(MembroLoja.usuario_id == current_user.id, MembroLoja.ativo == True)
         membro_res = await db.execute(stmt)
         membro = membro_res.scalar_one_or_none()
-        if membro:
-            user_resp.loja_id = membro.loja_id
-            user_resp.modulos = membro.modulos
+        if not membro:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Seu acesso a esta loja foi desativado.",
+            )
+        user_resp.loja_id = membro.loja_id
+        user_resp.modulos = membro.modulos
     return user_resp
 
 

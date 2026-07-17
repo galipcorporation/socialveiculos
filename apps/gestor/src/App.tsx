@@ -25,6 +25,7 @@ import { AdminLayout } from './components/AdminLayout'
 import { ImpersonarPage } from './pages/Impersonar'
 import { ExtensionProvider } from './contexts/ExtensionContext'
 import { useAuthStore } from './stores/authStore'
+import { api } from './lib/api'
 import { UIProvider } from './components/UIProvider'
 import { type ReactNode, useEffect } from 'react'
 import { parseModulos, podeAcessarModulo, type ModuloKey } from './lib/modulos'
@@ -39,7 +40,7 @@ function PrivateRoute() {
         if (parts.length === 3) {
           const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
           if (payload.exp && payload.exp < Date.now() / 1000) {
-            logout()
+            logout('Sua sessão expirou. Faça login novamente.')
           }
         }
       } catch {
@@ -47,6 +48,17 @@ function PrivateRoute() {
       }
     }
   }, [token, logout])
+
+  // Revalida contra o backend a cada carga (F5): o JWT pode continuar válido
+  // localmente, mas a conta pode ter sido desativada. /auth/me devolve 401 se o
+  // usuário estiver inativo — o interceptor de api.ts então expulsa para o login.
+  useEffect(() => {
+    if (token) {
+      api.get('/auth/me').catch(() => { /* 401 já tratado no interceptor */ })
+    }
+    // Só na montagem/troca de token — não a cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Aguarda hidratação síncrona do persist antes de redirecionar
   if (user === null && !isAuthenticated) return <Navigate to="/login" replace />

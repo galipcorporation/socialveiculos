@@ -7,6 +7,7 @@ o conteúdo no console em vez de enviar. Assim o fluxo de reset funciona em dev
 sem provedor e em prod com o Resend, sem código condicional espalhado.
 """
 import logging
+from datetime import datetime
 
 import httpx
 
@@ -67,5 +68,31 @@ def render_reset_senha(*, nome: str, link: str) -> str:
   </p>
   <p style="color:#666;font-size:13px">Se você não pediu isso, pode ignorar este e-mail — sua senha continua a mesma.</p>
   <p style="color:#999;font-size:12px;word-break:break-all">Ou copie e cole este endereço no navegador:<br>{link}</p>
+</div>
+"""
+
+
+def render_aviso_vencimento_assinatura(
+    *, loja_nome: str, vencimento: datetime, dias: int, vencida: bool = False
+) -> str:
+    """HTML do aviso de vencimento de assinatura (D-7 ou já vencida)."""
+    data_fmt = vencimento.strftime("%d/%m/%Y")
+    if vencida:
+        titulo = "Assinatura vencida — acesso suspenso"
+        corpo = (
+            f"A assinatura da <strong>{loja_nome}</strong> venceu em {data_fmt} e não foi renovada. "
+            "O acesso ao sistema foi suspenso até a regularização do pagamento."
+        )
+    else:
+        titulo = f"Assinatura vence em {dias} dia(s)"
+        corpo = (
+            f"A assinatura da <strong>{loja_nome}</strong> vence em {data_fmt}. "
+            "Regularize o pagamento para não perder o acesso ao sistema."
+        )
+    return f"""\
+<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">
+  <h2 style="margin:0 0 16px">{titulo}</h2>
+  <p>{corpo}</p>
+  <p style="color:#666;font-size:13px">Em caso de dúvidas sobre o pagamento, entre em contato com o suporte da Social Veículos.</p>
 </div>
 """

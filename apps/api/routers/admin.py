@@ -786,6 +786,8 @@ async def ativar_assinatura_manual(
     loja = (await db.execute(select(Loja).where(Loja.id == loja_id))).scalar_one_or_none()
     if not loja:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loja não encontrada.")
+    if not loja.ativa:
+        loja.ativa = True  # reverte a desativação automática por vencimento (assinatura_worker)
 
     if not data.contrato_aceito:
         raise HTTPException(
@@ -877,6 +879,10 @@ async def renovar_assinatura_manual(
     assinatura.status = StatusAssinatura.ATIVA
     assinatura.fim = None
     assinatura.proximo_vencimento = base + timedelta(days=30 * data.meses)
+
+    loja = (await db.execute(select(Loja).where(Loja.id == loja_id))).scalar_one_or_none()
+    if loja and not loja.ativa:
+        loja.ativa = True  # reverte a desativação automática por vencimento (assinatura_worker)
     if data.valor_mensal is not None:
         assinatura.valor_mensal = data.valor_mensal
     if data.observacoes:

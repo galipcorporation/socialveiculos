@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload } from 'lucide-react'
 import { api } from './lib/api'
 import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda } from './lib/mascaras'
+import { useUIStore } from './stores/uiStore'
 
 // ── Tipos ────────────────────────────────────────────────────────
 
@@ -127,7 +128,7 @@ function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
         <div className="modal-header">
           <h3 className="modal-title">Nova Loja</h3>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
@@ -294,7 +295,7 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
   if (loading) {
     return (
       <div className="modal-overlay">
-        <div className="modal-container glass-card" style={{ maxWidth: 540, padding: 32, textAlign: 'center' }}>
+        <div className="modal-container glass-card" style={{ maxWidth: 560, padding: 32, textAlign: 'center' }}>
           <span className="spinner" />
           <p style={{ marginTop: 12, color: 'var(--sv-text-dim)' }}>Carregando dados da loja...</p>
         </div>
@@ -304,7 +305,7 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
         <div className="modal-header">
           <h3 className="modal-title">Editar Loja & Módulos</h3>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
@@ -375,32 +376,19 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
           <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '8px 0' }} />
           <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 0 }}>Módulos Habilitados</p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div className="modulos-grid">
             {ALL_MODULES.map((m) => {
               const ativo = form.modulos_ativos.includes(m.key)
               return (
                 <div
                   key={m.key}
                   onClick={() => toggleModulo(m.key)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '10px 14px',
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid var(--sv-border)',
-                    borderRadius: 'var(--sv-radius)',
-                    cursor: 'pointer',
-                    userSelect: 'none',
-                    transition: 'all 0.2s',
-                  }}
-                  className="modulo-item-row"
+                  className={`modulo-item-row${ativo ? ' ativo' : ''}`}
                 >
                   <input
                     type="checkbox"
                     checked={ativo}
                     onChange={() => {}} // custom handled by container click
-                    style={{ pointerEvents: 'none' }}
                   />
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--sv-text)', margin: 0 }}>{m.label}</p>
@@ -518,6 +506,7 @@ interface ModalAssinaturaProps {
 }
 
 function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinaturaProps) {
+  const { prompt } = useUIStore()
   const [detalhe, setDetalhe] = useState<AssinaturaDetalhe | null>(null)
   const [planos, setPlanos] = useState<PlanoItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -613,7 +602,12 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
   }
 
   const suspender = async () => {
-    const motivo = window.prompt('Motivo da suspensão (opcional):') || undefined
+    const motivo = await prompt({
+      title: 'Suspender assinatura',
+      label: 'Motivo',
+      placeholder: 'Ex: inadimplência, pedido do cliente...',
+      confirmText: 'Suspender',
+    }) || undefined
     setSuspendendo(true)
     setErro(null)
     try {
@@ -630,7 +624,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
   if (loading) {
     return (
       <div className="modal-overlay">
-        <div className="modal-container glass-card" style={{ maxWidth: 560, padding: 32, textAlign: 'center' }}>
+        <div className="modal-container glass-card" style={{ maxWidth: 680, padding: 32, textAlign: 'center' }}>
           <span className="spinner" />
           <p style={{ marginTop: 12, color: 'var(--sv-text-dim)' }}>Carregando assinatura...</p>
         </div>
@@ -642,7 +636,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
         <div className="modal-header">
           <h3 className="modal-title">Assinatura — {lojaNome}</h3>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
@@ -978,7 +972,7 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
   if (loading) {
     return (
       <div className="modal-overlay">
-        <div className="modal-container glass-card" style={{ maxWidth: 520, padding: 32, textAlign: 'center' }}>
+        <div className="modal-container glass-card" style={{ maxWidth: 620, padding: 32, textAlign: 'center' }}>
           <span className="spinner" />
           <p style={{ marginTop: 12, color: 'var(--sv-text-dim)' }}>Carregando plano...</p>
         </div>
@@ -988,7 +982,7 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 620 }}>
         <div className="modal-header">
           <h3 className="modal-title">{planoId ? 'Editar Plano' : 'Novo Plano'}</h3>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
@@ -1068,6 +1062,7 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
 }
 
 function AbaPlanos() {
+  const { confirm } = useUIStore()
   const [planos, setPlanos] = useState<PlanoItem[]>([])
   const [loading, setLoading] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
@@ -1096,7 +1091,13 @@ function AbaPlanos() {
   }
 
   const excluir = async (plano: PlanoItem) => {
-    if (!window.confirm(`Excluir o plano "${plano.nome}" definitivamente? Só é possível se nenhuma loja estiver vinculada a ele.`)) return
+    const ok = await confirm({
+      title: 'Excluir plano',
+      message: `Excluir o plano "${plano.nome}" definitivamente? Só é possível se nenhuma loja estiver vinculada a ele.`,
+      confirmText: 'Excluir',
+      danger: true,
+    })
+    if (!ok) return
     setAcaoLoading(plano.id)
     try {
       await api.delete(`/admin/planos/${plano.id}`)
@@ -1519,7 +1520,7 @@ function ModalContatoErro({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
         <div className="modal-header">
           <h3 className="modal-title">Entrar em Contato</h3>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
@@ -1599,6 +1600,7 @@ function ModalContatoErro({
 }
 
 function AbaErros() {
+  const { confirm } = useUIStore()
   const [logs, setLogs] = useState<LogItem[]>([])
   const [loading, setLoading] = useState(true)
   const [pagina, setPagina] = useState(1)
@@ -1639,7 +1641,8 @@ function AbaErros() {
   }
 
   const ocultarTodos = async () => {
-    if (!window.confirm("Deseja ocultar todos os erros ativos desta visualização?")) return
+    const ok = await confirm({ title: 'Ocultar erros', message: 'Deseja ocultar todos os erros ativos desta visualização?', confirmText: 'Ocultar' })
+    if (!ok) return
     try {
       await api.post('/admin/erros/ocultar-todos', {})
       setLogs([])
@@ -1649,7 +1652,8 @@ function AbaErros() {
   }
 
   const restaurarTodos = async () => {
-    if (!window.confirm("Deseja restaurar todos os erros ocultados para a visualização ativa?")) return
+    const ok = await confirm({ title: 'Restaurar erros', message: 'Deseja restaurar todos os erros ocultados para a visualização ativa?', confirmText: 'Restaurar' })
+    if (!ok) return
     try {
       await api.post('/admin/erros/restaurar-todos', {})
       setLogs([])

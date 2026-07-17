@@ -688,8 +688,6 @@ function EditorTemplateContent({ template, onClose, onSaved }: {
   const [campos, setCampos] = useState<CampoExtra[]>(template?.campos_extras || [])
   const [conteudoHtml, setConteudoHtml] = useState(template?.conteudo_html || '<p>Digite o texto do contrato aqui…</p>')
   const [usarIdentidade, setUsarIdentidade] = useState(template?.usar_identidade_loja ?? true)
-  const [novoCampoChave, setNovoCampoChave] = useState('')
-  const [novoCampoLabel, setNovoCampoLabel] = useState('')
   const [saving, setSaving] = useState(false)
 
   const toast = (type: 'success' | 'error' | 'info', message: string) => useUIStore.getState().showToast(message, type)
@@ -710,11 +708,9 @@ function EditorTemplateContent({ template, onClose, onSaved }: {
   const labels: Record<string, string> = {}
   for (const g of variaveis) for (const it of g.itens) labels[it.chave] = it.label
 
-  const adicionarCampoExtra = () => {
-    if (!novoCampoChave.trim() || !novoCampoLabel.trim()) return
-    setCampos(prev => [...prev, { chave: novoCampoChave.trim(), label: novoCampoLabel.trim() }])
-    setNovoCampoChave('')
-    setNovoCampoLabel('')
+  const adicionarCampoExtra = (chave: string, label: string) => {
+    if (campos.some(c => c.chave === chave)) return
+    setCampos(prev => [...prev, { chave, label }])
   }
 
   const removerCampoExtra = (chave: string) => {
@@ -765,30 +761,12 @@ function EditorTemplateContent({ template, onClose, onSaved }: {
           labels={labels}
           minHeight={300}
           placeholder="Digite o texto do contrato…"
+          onAddCampoPersonalizado={adicionarCampoExtra}
+          onRemoveCampoPersonalizado={removerCampoExtra}
         />
         <p style={{ fontSize: 12, color: 'var(--sv-text-muted)', marginTop: 8 }}>
-          Use <strong>+ Variável</strong> na barra para inserir dados que serão preenchidos automaticamente ao gerar o contrato.
+          Use <strong>+ Variável</strong> na barra para inserir dados que serão preenchidos automaticamente ao gerar o contrato, ou criar um campo personalizado deste modelo.
         </p>
-      </div>
-
-      {/* Campos personalizados — abaixo do editor */}
-      <div>
-        <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--sv-text-dim)' }}>
-          Campos personalizados <span style={{ fontWeight: 400, color: 'var(--sv-text-muted)' }}>— dados extras que você preenche ao gerar o contrato</span>
-        </label>
-        {campos.map(c => (
-          <div key={c.chave} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--sv-overlay-soft)', border: '1px solid var(--sv-border)', borderRadius: 7, padding: '7px 12px', marginBottom: 6, fontSize: 13 }}>
-            <span style={{ flex: 1 }}>{c.label} <span style={{ color: 'var(--sv-text-muted)', fontFamily: 'monospace', fontSize: 12 }}>{c.chave}</span></span>
-            <button className="action-btn" title="Remover campo" onClick={() => removerCampoExtra(c.chave)} style={{ color: 'var(--sv-error)', flexShrink: 0 }}>
-              <XIcon />
-            </button>
-          </div>
-        ))}
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <input type="text" placeholder="chave (ex: garantia_meses)" value={novoCampoChave} onChange={e => setNovoCampoChave(e.target.value)} style={{ flex: 1 }} />
-          <input type="text" placeholder="rótulo (ex: Meses de garantia)" value={novoCampoLabel} onChange={e => setNovoCampoLabel(e.target.value)} style={{ flex: 1 }} />
-          <button className="btn btn-primary" onClick={adicionarCampoExtra} style={{ height: 42, whiteSpace: 'nowrap' }}>Adicionar</button>
-        </div>
       </div>
 
       {/* Toggle identidade da loja (cabeçalho/rodapé/marca-d'água) */}

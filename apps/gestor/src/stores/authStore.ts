@@ -12,13 +12,31 @@ export interface User {
   loja_id?: string | null
 }
 
+// Motivo do último logout involuntário (conta desativada / sessão expirada).
+// Guardado fora do store persistido para o Login exibir o aviso e limpar em seguida.
+const LOGOUT_REASON_KEY = 'sv-logout-reason'
+
+export function setLogoutReason(reason: string) {
+  try { sessionStorage.setItem(LOGOUT_REASON_KEY, reason) } catch { /* ignore */ }
+}
+
+export function consumeLogoutReason(): string | null {
+  try {
+    const r = sessionStorage.getItem(LOGOUT_REASON_KEY)
+    if (r) sessionStorage.removeItem(LOGOUT_REASON_KEY)
+    return r
+  } catch {
+    return null
+  }
+}
+
 interface AuthState {
   user: User | null
   token: string | null
   refreshToken: string | null
   isAuthenticated: boolean
   login: (token: string, refreshToken: string, user: User) => void
-  logout: () => void
+  logout: (reason?: string) => void
   setToken: (token: string) => void
 }
 
@@ -36,13 +54,15 @@ export const useAuthStore = create<AuthState>()(
           user,
           isAuthenticated: true,
         }),
-      logout: () =>
+      logout: (reason?: string) => {
+        if (reason) setLogoutReason(reason)
         set({
           token: null,
           refreshToken: null,
           user: null,
           isAuthenticated: false,
-        }),
+        })
+      },
       setToken: (token) => set({ token }),
     }),
     {

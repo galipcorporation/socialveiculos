@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../stores/authStore'
+import { useAuthStore, consumeLogoutReason } from '../stores/authStore'
 import { useUIStore } from '../stores/uiStore'
 import { api } from '../lib/api'
 import { LogIn, KeyRound, Mail, AlertCircle, Eye, EyeOff } from 'lucide-react'
@@ -28,6 +28,13 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+
+  // Se o usuário foi deslogado à força (conta desativada / sessão expirada),
+  // exibe o motivo assim que ele cai na tela de login.
+  React.useEffect(() => {
+    const reason = consumeLogoutReason()
+    if (reason) setErro(reason)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

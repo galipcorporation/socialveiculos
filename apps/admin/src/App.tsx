@@ -4,6 +4,7 @@ import { Shield, LogOut, AlertCircle } from 'lucide-react'
 import { useAuthStore } from './stores/authStore'
 import { api, ApiError } from './lib/api'
 import { AdminPage } from './AdminPage'
+import { UIProvider } from './components/UIProvider'
 
 // ── Guard ────────────────────────────────────────────────────────
 
@@ -172,10 +173,13 @@ function AdminLayout() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginAdmin />} />
-      <Route path="/" element={<RequireAdmin><AdminLayout /></RequireAdmin>} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/login" element={<LoginAdmin />} />
+        <Route path="/" element={<RequireAdmin><AdminLayout /></RequireAdmin>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <UIProvider />
+    </>
   )
 }

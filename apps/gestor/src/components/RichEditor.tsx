@@ -11,6 +11,53 @@ import {
   Undo2, Redo2, Plus, X,
 } from 'lucide-react'
 
+/* ── Node custom: imagem com alça de redimensionar ─────────────── */
+
+function ImagemRedimensionavel({ node, updateAttributes, selected }: any) {
+  const startRef = useRef<{ x: number; width: number } | null>(null)
+
+  const onDragStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const wrapper = (e.target as HTMLElement).parentElement
+    const currentWidth = wrapper?.querySelector('img')?.clientWidth || 260
+    startRef.current = { x: e.clientX, width: currentWidth }
+
+    const onMove = (ev: MouseEvent) => {
+      if (!startRef.current) return
+      const delta = ev.clientX - startRef.current.x
+      const next = Math.max(80, Math.min(800, startRef.current.width + delta))
+      updateAttributes({ width: next })
+    }
+    const onUp = () => {
+      startRef.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
+  return (
+    <NodeViewWrapper as="span" className={`re-img-wrap ${selected ? 'is-selected' : ''}`} style={{ width: node.attrs.width ? `${node.attrs.width}px` : '260px' }}>
+      <img src={node.attrs.src} alt={node.attrs.alt || ''} style={{ width: '100%', height: 'auto' }} />
+      <span className="re-img-handle" onMouseDown={onDragStart} />
+    </NodeViewWrapper>
+  )
+}
+
+const ImagemResize = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: { default: 260 },
+    }
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ImagemRedimensionavel)
+  },
+})
+
 /* ── Catálogo de variáveis (mesmo do backend) ─────────────────── */
 
 export interface VarGroup {
@@ -76,10 +123,14 @@ interface RichEditorProps {
   minHeight?: number
   placeholder?: string
   compact?: boolean                   // toolbar reduzida (cabeçalho/rodapé)
+  onAddCampoPersonalizado?: (chave: string, label: string) => void
+  onRemoveCampoPersonalizado?: (chave: string) => void
 }
 
-export function RichEditor({ value, onChange, variaveis, labels, minHeight = 200, placeholder, compact }: RichEditorProps) {
+export function RichEditor({ value, onChange, variaveis, labels, minHeight = 200, placeholder, compact, onAddCampoPersonalizado, onRemoveCampoPersonalizado }: RichEditorProps) {
   const [varMenuOpen, setVarMenuOpen] = useState(false)
+  const [novoChave, setNovoChave] = useState('')
+  const [novoLabel, setNovoLabel] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
   const initialRef = useRef(value)
 
@@ -87,7 +138,7 @@ export function RichEditor({ value, onChange, variaveis, labels, minHeight = 200
     extensions: [
       StarterKit,
       Variavel,
-      Image.configure({ inline: false, allowBase64: true }),
+      ImagemResize.configure({ inline: false, allowBase64: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder: placeholder || 'Digite o texto…' }),
     ],
@@ -119,6 +170,15 @@ export function RichEditor({ value, onChange, variaveis, labels, minHeight = 200
     editor?.chain().focus().insertContent({ type: 'variavel', attrs: { chave, label } }).run()
     setVarMenuOpen(false)
   }, [editor])
+
+  const adicionarCampoPersonalizado = useCallback(() => {
+    const chave = novoChave.trim()
+    const label = novoLabel.trim()
+    if (!chave || !label) return
+    onAddCampoPersonalizado?.(chave, label)
+    setNovoChave('')
+    setNovoLabel('')
+  }, [novoChave, novoLabel, onAddCampoPersonalizado])
 
   const inserirImagem = useCallback(() => {
     const input = document.createElement('input')
@@ -202,18 +262,70 @@ export function RichEditor({ value, onChange, variaveis, labels, minHeight = 200
                 <button type="button" className="re-var-close" onClick={() => setVarMenuOpen(false)}><X size={14} /></button>
               </div>
               <div className="re-var-menu-body">
-                {variaveis.map((g) => (
-                  <div key={g.grupo} className="re-var-group">
-                    <div className="re-var-group-label">{g.grupo}</div>
-                    <div className="re-var-chips">
-                      {g.itens.map((it) => (
-                        <button key={it.chave} type="button" className="re-var-chip" onClick={() => inserirVariavel(it.chave, it.label)}>
-                          {it.label}
-                        </button>
-                      ))}
+                {variaveis.map((g) => {
+                  const isPersonalizado = g.grupo === 'Personalizados deste modelo'
+                  return (
+                    <div key={g.grupo} className="re-var-group">
+                      <div className="re-var-group-label">{g.grupo}</div>
+                      <div className="re-var-chips">
+                        {g.itens.map((it) => (
+                          <button key={it.chave} type="button" className={`re-var-chip ${isPersonalizado ? 'custom' : ''}`} onClick={() => inserirVariavel(it.chave, it.label)}>
+                            {it.label}
+                            {isPersonalizado && onRemoveCampoPersonalizado && (
+                              <span
+                                className="rm"
+                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onRemoveCampoPersonalizado(it.chave) }}
+                              >
+                                <X size={11} />
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      {isPersonalizado && onAddCampoPersonalizado && (
+                        <div className="re-var-add">
+                          <input
+                            type="text"
+                            placeholder="chave (garantia_meses)"
+                            value={novoChave}
+                            onChange={(e) => setNovoChave(e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            placeholder="rótulo (Meses de garantia)"
+                            value={novoLabel}
+                            onChange={(e) => setNovoLabel(e.target.value)}
+                          />
+                          <button type="button" className="re-var-add-btn" onClick={adicionarCampoPersonalizado} title="Adicionar campo">
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                {!variaveis.some((g) => g.grupo === 'Personalizados deste modelo') && onAddCampoPersonalizado && (
+                  <div className="re-var-group">
+                    <div className="re-var-group-label">Personalizados deste modelo</div>
+                    <div className="re-var-add">
+                      <input
+                        type="text"
+                        placeholder="chave (garantia_meses)"
+                        value={novoChave}
+                        onChange={(e) => setNovoChave(e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        placeholder="rótulo (Meses de garantia)"
+                        value={novoLabel}
+                        onChange={(e) => setNovoLabel(e.target.value)}
+                      />
+                      <button type="button" className="re-var-add-btn" onClick={adicionarCampoPersonalizado} title="Adicionar campo">
+                        <Plus size={14} />
+                      </button>
                     </div>
                   </div>
-                ))}
+                )}
               </div>
             </div>
           )}
