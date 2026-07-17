@@ -27,11 +27,14 @@ import { ExtensionProvider } from './contexts/ExtensionContext'
 import { useAuthStore } from './stores/authStore'
 import { api } from './lib/api'
 import { UIProvider } from './components/UIProvider'
-import { type ReactNode, useEffect } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { parseModulos, podeAcessarModulo, type ModuloKey } from './lib/modulos'
 
 function PrivateRoute() {
   const { isAuthenticated, user, token, logout } = useAuthStore()
+  // 'checking' até o backend confirmar a sessão; segura a renderização do painel
+  // para que uma conta desativada NÃO chegue a ver a tela por um instante.
+  const [status, setStatus] = useState<'checking' | 'ok'>('checking')
 
   useEffect(() => {
     if (token) {
@@ -49,19 +52,34 @@ function PrivateRoute() {
     }
   }, [token, logout])
 
-  // Revalida contra o backend a cada carga (F5): o JWT pode continuar válido
-  // localmente, mas a conta pode ter sido desativada. /auth/me devolve 401 se o
-  // usuário estiver inativo — o interceptor de api.ts então expulsa para o login.
+  // Revalida contra o backend a cada carga (F5) ANTES de liberar o painel: o JWT
+  // pode continuar válido localmente, mas a conta / vínculo de loja pode ter sido
+  // desativado. /auth/me devolve 401 nesse caso — o interceptor de api.ts então
+  // expulsa para o login. Enquanto verifica, mostramos um loader (não o painel).
   useEffect(() => {
+    let ativo = true
     if (token) {
-      api.get('/auth/me').catch(() => { /* 401 já tratado no interceptor */ })
+      api.get('/auth/me')
+        .then(() => { if (ativo) setStatus('ok') })
+        .catch(() => { /* 401/403 já expulsa via interceptor; não liberamos o painel */ })
+    } else {
+      setStatus('ok')
     }
+    return () => { ativo = false }
     // Só na montagem/troca de token — não a cada render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [token])
 
   // Aguarda hidratação síncrona do persist antes de redirecionar
   if (user === null && !isAuthenticated) return <Navigate to="/login" replace />
+  // Sessão ainda não confirmada pelo backend: não renderiza o painel.
+  if (status === 'checking') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: 'var(--sv-text-secondary, #94a3b8)', fontSize: '0.9rem' }}>
+        Verificando acesso…
+      </div>
+    )
+  }
   return <Outlet />
 }
 
