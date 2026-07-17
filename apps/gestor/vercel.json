@@ -5,6 +5,6 @@
   "rewrites": [
     { "source": "/v1/:path*", "destination": "https://socialveiculos-api.fly.dev/v1/:path*" },
     { "source": "/static/:path*", "destination": "https://socialveiculos-api.fly.dev/static/:path*" },
-    { "source": "/((?!v1/|static/|assets/|.*\\..*).*)", "destination": "/index.html" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
