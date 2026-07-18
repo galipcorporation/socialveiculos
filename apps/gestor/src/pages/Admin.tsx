@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import DOMPurify from 'dompurify'
 import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, FlaskConical, Play, CheckCircle2, XCircle, Pencil, CreditCard, FileText, Check } from 'lucide-react'
 import { api } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
@@ -721,7 +722,7 @@ function FormAtivarAssinatura({ loja, planos, contratoVigente, verContrato, onVe
           <div
             className="glass-card"
             style={{ marginTop: 8, padding: 'var(--sv-space-3)', maxHeight: 240, overflow: 'auto', fontSize: 'var(--sv-text-sm)' }}
-            dangerouslySetInnerHTML={{ __html: contratoVigente.conteudo_html }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(contratoVigente.conteudo_html) }}
           />
         )}
       </div>
