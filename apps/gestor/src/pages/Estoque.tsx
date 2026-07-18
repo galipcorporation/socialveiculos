@@ -1991,13 +1991,19 @@ export function VenderModal({
 
   // Form de troca
   const [tPlaca, setTPlaca] = useState('')
+  const [tTipo, setTTipo] = useState('carro')
   const [tMarca, setTMarca] = useState('')
   const [tModelo, setTModelo] = useState('')
-  const [tAno, setTAno] = useState('')
+  const [tAnoFab, setTAnoFab] = useState<number | undefined>(undefined)
+  const [tAnoMod, setTAnoMod] = useState<number | undefined>(undefined)
+  const [tFipeMarcaCodigo, setTFipeMarcaCodigo] = useState<string | undefined>(undefined)
+  const [tFipeModeloCodigo, setTFipeModeloCodigo] = useState<string | undefined>(undefined)
+  const [tFipeAnoCodigo, setTFipeAnoCodigo] = useState<string | undefined>(undefined)
   const [tKm, setTKm] = useState('')
   const [tValorStr, setTValorStr] = useState('')
   const [tCor, setTCor] = useState('')
   const [tKeplacaHit, setTKeplacaHit] = useState<string | null>(null)
+  const [tTravado, setTTravado] = useState(false)
   const [buscandoPlaca, setBuscandoPlaca] = useState(false)
 
   // Forms de dinheiro / financiamento
@@ -2030,8 +2036,11 @@ export function VenderModal({
 
   const fecharForm = () => {
     setFormAberto(null)
-    setTPlaca(''); setTMarca(''); setTModelo(''); setTAno(''); setTKm(''); setTValorStr(''); setTCor('')
-    setTKeplacaHit(null)
+    setTPlaca(''); setTTipo('carro'); setTMarca(''); setTModelo('')
+    setTAnoFab(undefined); setTAnoMod(undefined)
+    setTFipeMarcaCodigo(undefined); setTFipeModeloCodigo(undefined); setTFipeAnoCodigo(undefined)
+    setTKm(''); setTValorStr(''); setTCor('')
+    setTKeplacaHit(null); setTTravado(false)
     setDValorStr(''); setFValorStr(''); setFParcelas('')
   }
 
@@ -2049,13 +2058,14 @@ export function VenderModal({
       }
       if (res.marca) setTMarca(res.marca)
       if (res.modelo) setTModelo(res.modelo)
-      if (res.ano_modelo) setTAno(String(res.ano_modelo))
+      if (res.ano_modelo) { setTAnoFab(res.ano_fabricacao || res.ano_modelo); setTAnoMod(res.ano_modelo) }
       if (res.cor) setTCor(res.cor)
       setTKeplacaHit(
         `${res.marca || ''} ${res.modelo || ''}`.trim()
         + (res.ano_modelo ? ` · ${res.ano_fabricacao || res.ano_modelo}/${res.ano_modelo}` : '')
         + (res.cor ? ` · ${res.cor}` : '')
       )
+      setTTravado(true)
     } catch (err) {
       onError(extractErrorDetails(err).message || 'Erro ao consultar a placa.')
     } finally {
@@ -2067,13 +2077,12 @@ export function VenderModal({
     const valor = parseMoeda(tValorStr)
     if (!tMarca.trim() || !tModelo.trim()) { onError('Informe marca e modelo do veículo da troca.'); return }
     if (!valor || valor <= 0) { onError('Informe o valor de avaliação da troca.'); return }
-    const ano = tAno ? parseInt(tAno) : undefined
     setPagamentos([...pagamentos, {
       tipo: 'troca',
       marca: tMarca.trim().toUpperCase(),
       modelo: tModelo.trim().toUpperCase(),
-      ano_fabricacao: ano,
-      ano_modelo: ano,
+      ano_fabricacao: tAnoFab,
+      ano_modelo: tAnoMod,
       placa: tPlaca.trim().toUpperCase() || undefined,
       km: tKm ? parseInt(tKm.replace(/\D/g, '')) : undefined,
       cor: tCor || undefined,
@@ -2311,21 +2320,33 @@ export function VenderModal({
                     </div>
                   </div>
                   {tKeplacaHit && <div className="fv-keplaca-hit">✓ KePlaca: {tKeplacaHit}</div>}
-                  <div className="fv-row">
-                    <div className="fv-field">
-                      <label>Marca *</label>
-                      <input type="text" value={tMarca} onChange={e => setTMarca(e.target.value)} />
-                    </div>
-                    <div className="fv-field">
-                      <label>Modelo *</label>
-                      <input type="text" value={tModelo} onChange={e => setTModelo(e.target.value)} />
-                    </div>
+                  <div className="form-group veic-c12">
+                    <VehicleIdentityFields
+                      modoBusca={tTravado ? 'travado' : 'autocomplete'}
+                      value={{
+                        tipo: tTipo,
+                        marca: tMarca,
+                        modelo: tModelo,
+                        ano_fabricacao: tAnoFab,
+                        ano_modelo: tAnoMod,
+                        fipe_marca_codigo: tFipeMarcaCodigo,
+                        fipe_modelo_codigo: tFipeModeloCodigo,
+                        fipe_ano_codigo: tFipeAnoCodigo,
+                      }}
+                      onChange={(patch) => {
+                        if (patch.tipo !== undefined) setTTipo(patch.tipo)
+                        if (patch.marca !== undefined) setTMarca(patch.marca)
+                        if (patch.modelo !== undefined) setTModelo(patch.modelo)
+                        if (patch.ano_fabricacao !== undefined) setTAnoFab(patch.ano_fabricacao)
+                        if (patch.ano_modelo !== undefined) setTAnoMod(patch.ano_modelo)
+                        if ('fipe_marca_codigo' in patch) setTFipeMarcaCodigo(patch.fipe_marca_codigo)
+                        if ('fipe_modelo_codigo' in patch) setTFipeModeloCodigo(patch.fipe_modelo_codigo)
+                        if ('fipe_ano_codigo' in patch) setTFipeAnoCodigo(patch.fipe_ano_codigo)
+                      }}
+                      onDestravar={() => setTTravado(false)}
+                    />
                   </div>
                   <div className="fv-row">
-                    <div className="fv-field">
-                      <label>Ano</label>
-                      <input type="number" placeholder="2020" value={tAno} onChange={e => setTAno(e.target.value)} />
-                    </div>
                     <div className="fv-field">
                       <label>KM</label>
                       <input type="text" placeholder="0" value={tKm} onChange={e => setTKm(e.target.value)} />
