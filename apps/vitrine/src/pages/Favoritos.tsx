@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useUIStore } from '../stores/uiStore'
 import { LoginModal } from '../components/LoginModal'
 import { whatsappLojaLink } from '../lib/contato'
+import { BottomNav } from '../components/BottomNav'
 
 export function Favoritos() {
   const { isAuthenticated, openLoginModal } = useAuthStore()
@@ -105,6 +106,7 @@ export function Favoritos() {
         <p style={{ color: 'var(--vt-text-dim)', marginBottom: 20 }}>Você precisa estar autenticado para salvar e gerenciar seus veículos favoritos.</p>
         <button className="vt-btn vt-btn-primary" onClick={() => openLoginModal('login')}>Entrar / Cadastrar</button>
         <LoginModal />
+        <BottomNav />
       </div>
     )
   }
@@ -144,6 +146,7 @@ export function Favoritos() {
         </div>
       )}
       <LoginModal />
+      <BottomNav />
     </div>
   )
 }

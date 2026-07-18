@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { fetchLoja, lojaMeta, formatBRL, type LojaPublica } from '../lib/loaders'
 import { getSSGData } from '../lib/ssgData'
+import { BottomNav } from '../components/BottomNav'
 
 interface MidiaItem {
   id: string
@@ -138,6 +139,7 @@ export function Loja({ initialData }: { initialData?: LojaPublica | null }) {
           })}
         </div>
       )}
+      <BottomNav />
     </div>
   )
 }

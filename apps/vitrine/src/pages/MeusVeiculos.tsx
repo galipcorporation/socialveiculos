@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
+import { BottomNav } from '../components/BottomNav'
 
 interface VeiculoDocumento {
   id: string
@@ -55,6 +56,7 @@ export function MeusVeiculos() {
       <div className="vt-empty-state">
         <p>Faça login para ver seus veículos.</p>
         <button className="vt-btn-primary" onClick={() => openLoginModal('login')}>Entrar</button>
+        <BottomNav />
       </div>
     )
   }
@@ -68,6 +70,7 @@ export function MeusVeiculos() {
       <div className="vt-empty-state">
         <h3>Nenhum veículo encontrado</h3>
         <p>Quando você comprar um veículo por uma loja da plataforma, ele aparecerá aqui com os documentos da venda.</p>
+        <BottomNav />
       </div>
     )
   }
@@ -139,6 +142,7 @@ export function MeusVeiculos() {
           </div>
         ))}
       </div>
+      <BottomNav />
     </div>
   )
 }

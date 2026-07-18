@@ -25,7 +25,7 @@ from models import (
     utcnow,
     Contrato, Veiculo, ClientePF, StatusContrato, TipoContrato,
     StatusVeiculo, LancamentoFinanceiro, TipoLancamento,
-    EsteiraPosVenda, OrigemLead, OrigemVeiculo, ComissaoVenda, MembroLoja,
+    EsteiraPosVenda, EstagioPosVenda, OrigemLead, OrigemVeiculo, ComissaoVenda, MembroLoja,
     TemplateContrato, PublicacaoB2B, PropostaRepasse, StatusPropostaRepasse,
     EtapaLead, Lead,
 )
@@ -256,11 +256,60 @@ async def atualizar_contrato(
     if not contrato:
         raise HTTPException(status_code=404, detail="Contrato não encontrado")
 
+    status_anterior = contrato.status
     update_data = body.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(contrato, key, value)
 
     contrato.updated_at = utcnow()
+
+    # Cancelar um contrato de compra e venda desfaz a venda: o veículo volta ao
+    # estoque como disponível, a esteira pós-venda é encerrada e fica o registro
+    # na auditoria de que houve essa venda que acabou cancelada.
+    cancelando = (
+        contrato.status == StatusContrato.CANCELADO
+        and status_anterior != StatusContrato.CANCELADO
+    )
+    if cancelando and contrato.tipo == TipoContrato.COMPRA_VENDA and contrato.veiculo_id:
+        veic_res = await db.execute(
+            select(Veiculo).where(
+                Veiculo.id == contrato.veiculo_id,
+                Veiculo.loja_id == ctx.loja.id,
+            )
+        )
+        veiculo_rev = veic_res.scalar_one_or_none()
+        if veiculo_rev and veiculo_rev.status == StatusVeiculo.VENDIDO:
+            veiculo_rev.status = StatusVeiculo.DISPONIVEL
+            veiculo_rev.comprador_id = None
+            veiculo_rev.updated_at = utcnow()
+
+            # Encerrar a esteira pós-venda desta venda (sem apagar histórico)
+            est_res = await db.execute(
+                select(EsteiraPosVenda).where(
+                    EsteiraPosVenda.contrato_id == contrato.id,
+                    EsteiraPosVenda.concluida_em.is_(None),
+                )
+            )
+            for esteira_rev in est_res.scalars().all():
+                esteira_rev.estagio = EstagioPosVenda.CONCLUIDO
+                esteira_rev.concluida_em = utcnow()
+                esteira_rev.updated_at = utcnow()
+
+            await registrar_auditoria(
+                db=db,
+                loja_id=ctx.loja.id,
+                ator_id=ctx.usuario.id,
+                ator_nome=ctx.usuario.nome,
+                acao="veiculo.venda_cancelada",
+                entidade="veiculo",
+                entidade_id=veiculo_rev.id,
+                detalhes=(
+                    f"Venda cancelada (contrato {contrato.numero}). "
+                    f"{veiculo_rev.marca} {veiculo_rev.modelo} voltou para o estoque "
+                    f"como disponível."
+                ),
+            )
+
     await db.commit()
 
     # Reload with relationships
@@ -519,9 +568,10 @@ async def vender_veiculo(
     parcelas = body.financiamento.parcelas if body.financiamento else body.parcelas
     financiado = bool(body.financiamento) or bool(body.financiado)
     total_trocas = round(sum(t.valor_avaliacao for t in body.trocas), 2)
-    composto = round(total_trocas + dinheiro + fin_valor, 2)
+    total_outros = round(sum(o.valor for o in body.outros), 2)
+    composto = round(total_trocas + dinheiro + fin_valor + total_outros, 2)
     excedente = round(composto - valor_venda, 2) if valor_venda and composto > valor_venda else 0.0
-    entrada_total = round(dinheiro + total_trocas, 2)
+    entrada_total = round(dinheiro + total_trocas + total_outros, 2)
 
     # 2. Marcar veículo como vendido
     veiculo.status = StatusVeiculo.VENDIDO
@@ -560,6 +610,11 @@ async def vender_veiculo(
 
     # 3. Criar contrato de compra e venda (trocas = dação em pagamento)
     observacoes = body.observacoes or ""
+    if body.outros:
+        outros_txt = "\n".join(
+            f"{o.descricao}: R$ {o.valor:,.2f}" for o in body.outros
+        )
+        observacoes = f"{observacoes}\n{outros_txt}".strip() if observacoes else outros_txt
     if body.trocas:
         dacao = "\n".join(
             f"Dação em pagamento: {t.marca} {t.modelo}"
@@ -582,6 +637,7 @@ async def vender_veiculo(
         valor_entrada=entrada_total or None,
         parcelas=parcelas,
         observacoes=observacoes or None,
+        template_id=body.template_id,
     )
     db.add(contrato)
     await db.flush()  # garante contrato.id para vincular as trocas
@@ -611,11 +667,13 @@ async def vender_veiculo(
 
     # 5. Receita = só o que entra de fato em caixa (dinheiro + financiado).
     #    O valor das trocas vira custo de estoque dos veículos criados acima.
-    receita = round(dinheiro + fin_valor, 2)
+    receita = round(dinheiro + fin_valor + total_outros, 2)
     if receita > 0:
         composicao = []
         if dinheiro:
             composicao.append(f"dinheiro/PIX R$ {dinheiro:,.2f}")
+        for o in body.outros:
+            composicao.append(f"{o.descricao} R$ {o.valor:,.2f}")
         if fin_valor:
             composicao.append(f"financiado R$ {fin_valor:,.2f}" + (f" em {parcelas}x" if parcelas else ""))
         if total_trocas:

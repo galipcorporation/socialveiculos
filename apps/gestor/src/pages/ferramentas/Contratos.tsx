@@ -249,9 +249,23 @@ export function ContratosPage() {
   }
 
   const handleStatusChange = async (contrato: ContratoItem, newStatus: string) => {
+    if (
+      newStatus === 'cancelado' &&
+      contrato.status !== 'cancelado' &&
+      contrato.tipo === 'compra_venda'
+    ) {
+      const ok = window.confirm(
+        `Cancelar o contrato ${contrato.numero}?\n\n` +
+        `O veículo${contrato.veiculo_nome ? ` "${contrato.veiculo_nome}"` : ''} volta ao estoque como disponível ` +
+        `e a esteira pós-venda é encerrada. A venda fica registrada no histórico.`
+      )
+      if (!ok) { fetchContratos(); return }
+    }
     try {
       await api.patch(`/contratos/${contrato.id}`, { status: newStatus })
-      toast('success', `Status alterado para "${STATUS_LABELS[newStatus]}"`)
+      toast('success', newStatus === 'cancelado'
+        ? `Contrato cancelado — veículo voltou ao estoque.`
+        : `Status alterado para "${STATUS_LABELS[newStatus]}"`)
       fetchContratos()
     } catch (err) {
       const { message, details } = extractErrorDetails(err)

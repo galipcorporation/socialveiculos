@@ -8,6 +8,10 @@ const STATUS_CONFIG = {
   inativo:    { label: 'Inativo',    color: '#64748b', bg: 'rgba(100,116,139,0.1)',  border: 'rgba(100,116,139,0.2)' },
 } as const
 
+// Rascunho (ex: veículo recebido em troca) não é uma opção selecionável no
+// dropdown — só existe como valor de entrada até o cadastro ser completado.
+const RASCUNHO_CONFIG = { label: 'Rascunho', color: '#facc15', bg: 'rgba(250,204,21,0.12)', border: 'rgba(250,204,21,0.3)' }
+
 type Status = keyof typeof STATUS_CONFIG
 
 interface Props {
@@ -19,7 +23,7 @@ interface Props {
 export function StatusSelect({ value, onChange, disabled }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const current = STATUS_CONFIG[value as Status] ?? STATUS_CONFIG.disponivel
+  const current = value === 'rascunho' ? RASCUNHO_CONFIG : (STATUS_CONFIG[value as Status] ?? STATUS_CONFIG.disponivel)
 
   useEffect(() => {
     if (!open) return

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { StatusSelect } from '../components/StatusSelect'
+import { FilterStatusSelect } from '../components/FilterStatusSelect'
 import { api, extractErrorDetails, type ApiErrorDetails } from '../lib/api'
 import { UploadMidia } from '../components/UploadMidia'
 import { useUIStore } from '../stores/uiStore'
@@ -167,6 +168,7 @@ const STATUS_LABELS: Record<string, string> = {
   vendido: 'Vendido',
   repasse: 'Repasse',
   inativo: 'Inativo',
+  rascunho: 'Rascunho',
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -436,19 +438,10 @@ export function Estoque() {
             onChange={e => handleSearchChange(e.target.value)}
           />
         </div>
-        <select
-          className="filter-select"
+        <FilterStatusSelect
           value={statusFilter}
-          onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
-        >
-          <option value="">Todos os Status</option>
-          <option value="disponivel">Disponível</option>
-          <option value="reservado">Reservado</option>
-          <option value="vendido">Vendido</option>
-          <option value="repasse">Repasse</option>
-          <option value="inativo">Inativo</option>
-          <option value="rascunho">Rascunho (não finalizados)</option>
-        </select>
+          onChange={v => { setStatusFilter(v); setPage(1) }}
+        />
       </div>
 
       {/* ── Tabela ── */}
@@ -1962,6 +1955,7 @@ type PagamentoItem =
   | PagamentoTroca
   | { tipo: 'dinheiro'; valor: number }
   | { tipo: 'financiamento'; valor: number; parcelas?: number }
+  | { tipo: 'outros'; descricao: string; valor: number }
 
 export function VenderModal({
   veiculo,
@@ -1978,6 +1972,8 @@ export function VenderModal({
   const [clienteId, setClienteId] = useState('')
   const [clienteSearch, setClienteSearch] = useState('')
   const [clientes, setClientes] = useState<any[]>([])
+  const [clienteDropRect, setClienteDropRect] = useState<{ top: number; left: number; width: number } | null>(null)
+  const clienteInputRef = useRef<HTMLInputElement>(null)
   const [quickOpen, setQuickOpen] = useState(false)
   const [clienteNovo, setClienteNovo] = useState<{ nome: string; cpf: string; telefone: string } | null>(null)
   const [qNome, setQNome] = useState('')
@@ -1987,7 +1983,7 @@ export function VenderModal({
   // ── Venda e pagamento composto ──
   const [valorStr, setValorStr] = useState(mascararMoeda(veiculo.preco_venda || 0))
   const [pagamentos, setPagamentos] = useState<PagamentoItem[]>([])
-  const [formAberto, setFormAberto] = useState<null | 'troca' | 'dinheiro' | 'financiamento'>(null)
+  const [formAberto, setFormAberto] = useState<null | 'troca' | 'dinheiro' | 'financiamento' | 'outros'>(null)
 
   // Form de troca
   const [tPlaca, setTPlaca] = useState('')
@@ -2010,8 +2006,19 @@ export function VenderModal({
   const [dValorStr, setDValorStr] = useState('')
   const [fValorStr, setFValorStr] = useState('')
   const [fParcelas, setFParcelas] = useState('')
+  const [oDescricao, setODescricao] = useState('')
+  const [oValorStr, setOValorStr] = useState('')
 
   const [saving, setSaving] = useState(false)
+
+  // ── Modelo de contrato ──
+  const [templates, setTemplates] = useState<{ id: string; nome: string }[]>([])
+  const [templateId, setTemplateId] = useState('')
+  useEffect(() => {
+    api.get<{ items: { id: string; nome: string }[] }>('/templates-contrato')
+      .then(res => setTemplates(res.items || []))
+      .catch(() => { /* ignore */ })
+  }, [])
 
   // Fetch clientes
   useEffect(() => {
@@ -2042,6 +2049,7 @@ export function VenderModal({
     setTKm(''); setTValorStr(''); setTCor('')
     setTKeplacaHit(null); setTTravado(false)
     setDValorStr(''); setFValorStr(''); setFParcelas('')
+    setODescricao(''); setOValorStr('')
   }
 
   // ── Buscar dados da placa da troca (KePlaca, server-side) ──
@@ -2106,6 +2114,14 @@ export function VenderModal({
     fecharForm()
   }
 
+  const adicionarOutros = () => {
+    const valor = parseMoeda(oValorStr)
+    if (!oDescricao.trim()) { onError('Descreva a forma de pagamento (ex: Carta de crédito).'); return }
+    if (!valor || valor <= 0) { onError('Informe o valor.'); return }
+    setPagamentos([...pagamentos, { tipo: 'outros', descricao: oDescricao.trim(), valor }])
+    fecharForm()
+  }
+
   const removerPagamento = (idx: number) => setPagamentos(pagamentos.filter((_, i) => i !== idx))
 
   const usarClienteNovo = () => {
@@ -2123,6 +2139,7 @@ export function VenderModal({
     const trocas = pagamentos.filter((p): p is PagamentoTroca => p.tipo === 'troca')
     const dinheiro = pagamentos.filter(p => p.tipo === 'dinheiro').reduce((s, p) => s + p.valor, 0)
     const financiamento = pagamentos.find(p => p.tipo === 'financiamento') as { valor: number; parcelas?: number } | undefined
+    const outros = pagamentos.filter((p): p is { tipo: 'outros'; descricao: string; valor: number } => p.tipo === 'outros')
     setSaving(true)
     try {
       const res = await api.post<{ contrato_id: string; trocas_veiculo_ids: string[] }>(`/veiculos/${veiculo.id}/vender`, {
@@ -2135,6 +2152,7 @@ export function VenderModal({
         valor_venda: valorVenda || null,
         pagamento_dinheiro: dinheiro || null,
         financiamento: financiamento ? { valor: financiamento.valor, parcelas: financiamento.parcelas || null } : null,
+        outros: outros.map(o => ({ descricao: o.descricao, valor: o.valor })),
         trocas: trocas.map(t => ({
           marca: t.marca,
           modelo: t.modelo,
@@ -2146,6 +2164,7 @@ export function VenderModal({
           cor: t.cor || null,
           valor_avaliacao: t.valor,
         })),
+        template_id: templateId || null,
       })
       onSaved(res.contrato_id)
     } catch (err) {
@@ -2212,14 +2231,23 @@ export function VenderModal({
               <>
                 <div className="fv-field">
                   <input
+                    ref={clienteInputRef}
                     type="text"
                     placeholder="Buscar cliente por nome ou CPF..."
                     value={clienteSearch}
-                    onChange={e => setClienteSearch(e.target.value)}
+                    onChange={e => {
+                      setClienteSearch(e.target.value)
+                      const r = clienteInputRef.current?.getBoundingClientRect()
+                      if (r) setClienteDropRect({ top: r.bottom, left: r.left, width: r.width })
+                    }}
+                    onFocus={() => {
+                      const r = clienteInputRef.current?.getBoundingClientRect()
+                      if (r) setClienteDropRect({ top: r.bottom, left: r.left, width: r.width })
+                    }}
                   />
                 </div>
-                {!quickOpen && clienteSearch && clientes.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: 'var(--sv-surface-solid)', border: '1px solid var(--sv-border)', borderRadius: 6, marginTop: 4, maxHeight: 180, overflowY: 'auto' }}>
+                {!quickOpen && clienteSearch && clientes.length > 0 && clienteDropRect && (
+                  <div style={{ position: 'fixed', top: clienteDropRect.top, left: clienteDropRect.left, width: clienteDropRect.width, zIndex: 10000, background: 'var(--sv-surface-solid)', border: '1px solid var(--sv-border)', borderRadius: 6, marginTop: 4, maxHeight: 180, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,.35)' }}>
                     {clientes.map(c => (
                       <div
                         key={c.id}
@@ -2271,12 +2299,13 @@ export function VenderModal({
               <button type="button" className="fv-pay-adder" onClick={() => setFormAberto('troca')}>🚗 Troca</button>
               <button type="button" className="fv-pay-adder" disabled={temDinheiro} onClick={() => setFormAberto('dinheiro')}>💵 Dinheiro</button>
               <button type="button" className="fv-pay-adder" disabled={temFinanciamento} onClick={() => setFormAberto('financiamento')}>🏦 Financiamento</button>
+              <button type="button" className="fv-pay-adder" onClick={() => setFormAberto('outros')}>📄 Outros</button>
             </div>
 
             <div className="fv-pay-list">
               {pagamentos.map((p, idx) => (
                 <div className="fv-pay-card" key={idx}>
-                  <div className="fv-pay-ico">{p.tipo === 'troca' ? '🚗' : p.tipo === 'dinheiro' ? '💵' : '🏦'}</div>
+                  <div className="fv-pay-ico">{p.tipo === 'troca' ? '🚗' : p.tipo === 'dinheiro' ? '💵' : p.tipo === 'financiamento' ? '🏦' : '📄'}</div>
                   <div className="fv-pay-info">
                     {p.tipo === 'troca' ? (
                       <>
@@ -2293,10 +2322,15 @@ export function VenderModal({
                         <div className="fv-t">Dinheiro / PIX</div>
                         <div className="fv-s">Entrada em espécie</div>
                       </>
-                    ) : (
+                    ) : p.tipo === 'financiamento' ? (
                       <>
                         <div className="fv-t">Financiamento</div>
                         <div className="fv-s">{p.parcelas ? `${p.parcelas}× · banco` : 'banco'}</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="fv-t">{p.descricao}</div>
+                        <div className="fv-s">Outra forma de pagamento</div>
                       </>
                     )}
                   </div>
@@ -2397,11 +2431,45 @@ export function VenderModal({
                 </div>
               )}
 
+              {formAberto === 'outros' && (
+                <div className="fv-inline-form" style={{ marginTop: 0 }}>
+                  <div className="fv-form-title">📄 Outros</div>
+                  <div className="fv-field">
+                    <label>Descrição *</label>
+                    <input type="text" placeholder="Ex: Carta de crédito, Consórcio, Cheque..." value={oDescricao} onChange={e => setODescricao(e.target.value)} autoFocus />
+                  </div>
+                  <div className="fv-field">
+                    <label>Valor *</label>
+                    <input type="text" placeholder="R$ 0,00" value={oValorStr} onChange={e => setOValorStr(mascararMoeda(e.target.value))} />
+                  </div>
+                  <div className="fv-form-actions">
+                    <button type="button" className="btn btn-outline btn-sm" onClick={fecharForm}>Cancelar</button>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={adicionarOutros}>Adicionar</button>
+                  </div>
+                </div>
+              )}
+
               {pagamentos.length === 0 && !formAberto && (
                 <div className="fv-pay-empty">Nenhuma forma de pagamento adicionada ainda</div>
               )}
             </div>
           </div>
+        </div>
+
+        {/* Modelo de contrato */}
+        <div style={{ padding: '0 24px' }}>
+          <div className="fv-sec-label">Modelo de Contrato</div>
+          <select
+            className="fv-select"
+            value={templateId}
+            onChange={e => setTemplateId(e.target.value)}
+            style={{ width: '100%' }}
+          >
+            <option value="">Padrão do sistema</option>
+            {templates.map(t => (
+              <option key={t.id} value={t.id}>{t.nome}</option>
+            ))}
+          </select>
         </div>
 
         {/* Rodapé vivo: composto / falta / comissão */}

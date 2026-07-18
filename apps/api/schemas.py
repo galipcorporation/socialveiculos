@@ -674,8 +674,15 @@ class LancamentoResponse(BaseModel):
     observacoes: Optional[str] = None
     status_pagamento: str
     created_at: datetime
+    deletado_em: Optional[datetime] = None
+    deletado_por_nome: Optional[str] = None
+    motivo_exclusao: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LancamentoExcluirRequest(BaseModel):
+    motivo: str = Field(..., min_length=3, max_length=500)
 
 
 class LancamentoCreateRequest(BaseModel):
@@ -726,6 +733,10 @@ class ComissaoResponse(BaseModel):
     valor_comissao: float
     pago: bool
     created_at: datetime
+
+    # Dados expandidos (preenchidos na rota) — "o que é de quem"
+    vendedor_nome: Optional[str] = None
+    veiculo_nome: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1322,6 +1333,12 @@ class FinanciamentoInline(BaseModel):
     parcelas: Optional[int] = Field(None, ge=1, le=120)
 
 
+class OutroPagamentoInline(BaseModel):
+    """Forma de pagamento livre (carta de crédito, consórcio, cheque, etc.)."""
+    descricao: str = Field(..., min_length=1, max_length=120)
+    valor: float = Field(..., gt=0)
+
+
 class VenderVeiculoRequest(BaseModel):
     # Cliente: existente (cliente_id) OU cadastrado na hora (cliente_novo)
     cliente_id: Optional[str] = None
@@ -1330,6 +1347,7 @@ class VenderVeiculoRequest(BaseModel):
     # Pagamento composto
     pagamento_dinheiro: Optional[float] = None
     financiamento: Optional[FinanciamentoInline] = None
+    outros: List[OutroPagamentoInline] = []
     trocas: List[TrocaVendaInline] = []
     # Campos legados (mantidos por compatibilidade)
     valor_entrada: Optional[float] = None
@@ -1338,6 +1356,7 @@ class VenderVeiculoRequest(BaseModel):
     origem: Optional[str] = None       # manual | vitrine | whatsapp | simulador | repasse
     financiado: Optional[bool] = False
     lead_id: Optional[str] = None
+    template_id: Optional[str] = None
 
 
 class VenderVeiculoResponse(BaseModel):
@@ -1532,6 +1551,9 @@ class ItemChecklistUpdate(BaseModel):
     observacao: Optional[str] = None
     prazo_em: Optional[datetime] = None
     doc_id: Optional[str] = None
+    # Valor do lançamento financeiro gerado ao concluir um item financeiro
+    # (débitos, taxa de transferência, entrada). Sem ele o lançamento fica R$ 0.
+    valor: Optional[float] = None
 
 
 class TransferenciaUpdate(BaseModel):

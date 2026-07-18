@@ -28,12 +28,14 @@ from models import (
     EtapaLead,
     EsteiraPosVenda,
     PapelUsuario,
+    Usuario,
 )
 from rbac import exige_permissao, Acao, Recurso
 from schemas import (
     LancamentoResponse,
     LancamentoCreateRequest,
     LancamentoUpdateRequest,
+    LancamentoExcluirRequest,
     CustoVeiculoCreateRequest,
     CustosVeiculoResponse,
     ComissaoResponse,
@@ -75,7 +77,8 @@ async def _calcular_resumo(
         select(LancamentoFinanceiro.tipo, func.coalesce(func.sum(LancamentoFinanceiro.valor), 0.0))
         .where(
             LancamentoFinanceiro.loja_id == loja_id,
-            LancamentoFinanceiro.status_pagamento == StatusPagamento.PAGO
+            LancamentoFinanceiro.status_pagamento == StatusPagamento.PAGO,
+            LancamentoFinanceiro.deletado_em.is_(None),
         )
     )
     if mes is not None and ano is not None:
@@ -233,6 +236,7 @@ async def get_dashboard_kpis(
             LancamentoFinanceiro.tipo == TipoLancamento.RECEITA,
             LancamentoFinanceiro.status_pagamento == StatusPagamento.PAGO,
             LancamentoFinanceiro.data >= inicio_mes,
+            LancamentoFinanceiro.deletado_em.is_(None),
         )
     )
     receita_mes = float((await db.execute(stmt_receita)).scalar() or 0.0)
@@ -354,7 +358,7 @@ async def listar_lancamentos(
     stmt = (
         select(LancamentoFinanceiro, Veiculo.marca, Veiculo.modelo, Veiculo.placa)
         .outerjoin(Veiculo, LancamentoFinanceiro.veiculo_id == Veiculo.id)
-        .where(LancamentoFinanceiro.loja_id == context.loja_id)
+        .where(LancamentoFinanceiro.loja_id == context.loja_id, LancamentoFinanceiro.deletado_em.is_(None))
         .order_by(LancamentoFinanceiro.data.desc())
     )
     if tipo is not None:
@@ -419,7 +423,6 @@ async def criar_lancamento(
 
     lancamento = LancamentoFinanceiro(
         loja_id=context.loja_id,
-        status_pagamento=data.status_pagamento,
         **payload
     )
     db.add(lancamento)
@@ -459,7 +462,9 @@ async def atualizar_lancamento(
     🔒 Isolamento por Tenant: garante que o lançamento pertence à loja.
     """
     stmt = select(LancamentoFinanceiro).where(
-        LancamentoFinanceiro.id == id, LancamentoFinanceiro.loja_id == context.loja_id
+        LancamentoFinanceiro.id == id,
+        LancamentoFinanceiro.loja_id == context.loja_id,
+        LancamentoFinanceiro.deletado_em.is_(None),
     )
     lancamento = (await db.execute(stmt)).scalar_one_or_none()
     if not lancamento:
@@ -487,28 +492,67 @@ async def atualizar_lancamento(
     return lancamento
 
 
+@router.get(
+    "/financeiro/lancamentos/lixeira",
+    response_model=List[LancamentoResponse],
+    dependencies=[Depends(exige_permissao(Acao.EDITAR, Recurso.FINANCEIRO))],
+)
+async def listar_lixeira_lancamentos(
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """
+    Lista os lançamentos financeiros excluídos (soft delete) da loja, para restauração.
+    🔒 Isolamento por Tenant.
+    """
+    stmt = (
+        select(LancamentoFinanceiro)
+        .where(
+            LancamentoFinanceiro.loja_id == context.loja_id,
+            LancamentoFinanceiro.deletado_em.isnot(None),
+        )
+        .order_by(LancamentoFinanceiro.deletado_em.desc())
+    )
+    return (await db.execute(stmt)).scalars().all()
+
+
 @router.delete(
     "/financeiro/lancamentos/{id}",
     dependencies=[Depends(exige_permissao(Acao.EDITAR, Recurso.FINANCEIRO))],
 )
 async def deletar_lancamento(
     id: str,
+    body: LancamentoExcluirRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
     context: B2BContext = Depends(get_current_b2b_user),
 ):
     """
-    Exclui um lançamento financeiro da loja.
+    Exclui (soft delete) um lançamento financeiro da loja. Exige motivo e fica
+    reversível via /financeiro/lancamentos/{id}/restaurar.
     🔒 Isolamento por Tenant.
     """
     stmt = select(LancamentoFinanceiro).where(
-        LancamentoFinanceiro.id == id, LancamentoFinanceiro.loja_id == context.loja_id
+        LancamentoFinanceiro.id == id,
+        LancamentoFinanceiro.loja_id == context.loja_id,
+        LancamentoFinanceiro.deletado_em.is_(None),
     )
     lancamento = (await db.execute(stmt)).scalar_one_or_none()
     if not lancamento:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lançamento não encontrado.")
 
-    await db.delete(lancamento)
+    snapshot = {
+        "tipo": lancamento.tipo.value if hasattr(lancamento.tipo, "value") else lancamento.tipo,
+        "descricao": lancamento.descricao,
+        "valor": lancamento.valor,
+        "veiculo_id": lancamento.veiculo_id,
+        "motivo": body.motivo,
+    }
+
+    lancamento.deletado_em = utcnow()
+    lancamento.deletado_por_id = context.usuario.id
+    lancamento.deletado_por_nome = context.usuario.nome
+    lancamento.motivo_exclusao = body.motivo
     await db.commit()
 
     await registrar_auditoria(
@@ -519,11 +563,60 @@ async def deletar_lancamento(
         acao="lancamento.excluir",
         entidade="lancamento_financeiro",
         entidade_id=id,
+        detalhes=json.dumps(snapshot, default=str),
         ip=request.client.host if request.client else None,
     )
     await db.commit()
 
     return {"message": "Lançamento excluído com sucesso."}
+
+
+@router.post(
+    "/financeiro/lancamentos/{id}/restaurar",
+    response_model=LancamentoResponse,
+    dependencies=[Depends(exige_permissao(Acao.EDITAR, Recurso.FINANCEIRO))],
+)
+async def restaurar_lancamento(
+    id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """
+    Restaura um lançamento financeiro previamente excluído (soft delete).
+    🔒 Isolamento por Tenant.
+    """
+    stmt = select(LancamentoFinanceiro).where(
+        LancamentoFinanceiro.id == id,
+        LancamentoFinanceiro.loja_id == context.loja_id,
+        LancamentoFinanceiro.deletado_em.isnot(None),
+    )
+    lancamento = (await db.execute(stmt)).scalar_one_or_none()
+    if not lancamento:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lançamento não encontrado na lixeira.")
+
+    motivo_anterior = lancamento.motivo_exclusao
+    lancamento.deletado_em = None
+    lancamento.deletado_por_id = None
+    lancamento.deletado_por_nome = None
+    lancamento.motivo_exclusao = None
+    await db.commit()
+    await db.refresh(lancamento)
+
+    await registrar_auditoria(
+        db=db,
+        loja_id=context.loja_id,
+        ator_id=context.usuario.id,
+        ator_nome=context.usuario.nome,
+        acao="lancamento.restaurar",
+        entidade="lancamento_financeiro",
+        entidade_id=id,
+        detalhes=json.dumps({"motivo_exclusao_anterior": motivo_anterior}, default=str),
+        ip=request.client.host if request.client else None,
+    )
+    await db.commit()
+
+    return lancamento
 
 
 # ── Custos de preparação por veículo ────────────────────────────
@@ -536,6 +629,7 @@ async def _montar_custos_veiculo(db: AsyncSession, veiculo: Veiculo) -> CustosVe
             LancamentoFinanceiro.loja_id == veiculo.loja_id,
             LancamentoFinanceiro.veiculo_id == veiculo.id,
             LancamentoFinanceiro.tipo == TipoLancamento.DESPESA,
+            LancamentoFinanceiro.deletado_em.is_(None),
         )
         .order_by(LancamentoFinanceiro.data.desc())
     )
@@ -658,13 +752,17 @@ async def remover_custo_veiculo(
         LancamentoFinanceiro.loja_id == context.loja_id,
         LancamentoFinanceiro.veiculo_id == veiculo_id,
         LancamentoFinanceiro.tipo == TipoLancamento.DESPESA,
+        LancamentoFinanceiro.deletado_em.is_(None),
     )
     lancamento = (await db.execute(stmt_l)).scalar_one_or_none()
     if not lancamento:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custo não encontrado.")
 
     valor = lancamento.valor
-    await db.delete(lancamento)
+    lancamento.deletado_em = utcnow()
+    lancamento.deletado_por_id = context.usuario.id
+    lancamento.deletado_por_nome = context.usuario.nome
+    lancamento.motivo_exclusao = "Remoção de custo de preparação"
     veiculo.preco_custo = round(max(0.0, float(veiculo.preco_custo or 0.0) - valor), 2)
 
     await db.commit()
@@ -703,14 +801,28 @@ async def listar_comissoes(
     🔒 Isolamento por Tenant.
     """
     stmt = (
-        select(ComissaoVenda)
+        select(
+            ComissaoVenda,
+            Usuario.nome.label("vendedor_nome"),
+            Veiculo.marca, Veiculo.modelo, Veiculo.placa,
+        )
+        .outerjoin(Usuario, Usuario.id == ComissaoVenda.vendedor_id)
+        .outerjoin(Veiculo, Veiculo.id == ComissaoVenda.veiculo_id)
         .where(ComissaoVenda.loja_id == context.loja_id)
         .order_by(ComissaoVenda.created_at.desc())
     )
     if pago is not None:
         stmt = stmt.where(ComissaoVenda.pago == pago)
     res = await db.execute(stmt)
-    return res.scalars().all()
+
+    saida = []
+    for comissao, vendedor_nome, marca, modelo, placa in res.all():
+        resp = ComissaoResponse.model_validate(comissao)
+        resp.vendedor_nome = vendedor_nome
+        if marca or modelo:
+            resp.veiculo_nome = f"{marca or ''} {modelo or ''}".strip() + (f" · {placa}" if placa else "")
+        saida.append(resp)
+    return saida
 
 
 @router.post(

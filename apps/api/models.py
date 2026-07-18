@@ -706,9 +706,15 @@ class LancamentoFinanceiro(Base):
     status_pagamento = Column(Enum(StatusPagamento), nullable=False, default=StatusPagamento.PAGO)
     created_at = Column(DateTime, default=_now)
 
+    deletado_em = Column(DateTime, nullable=True)
+    deletado_por_id = Column(String(36), nullable=True)
+    deletado_por_nome = Column(String(200), nullable=True)
+    motivo_exclusao = Column(String(500), nullable=True)
+
     __table_args__ = (
         Index("ix_lancamento_loja", "loja_id"),
         Index("ix_lancamento_data", "data"),
+        Index("ix_lancamento_deletado_em", "deletado_em"),
     )
 
 

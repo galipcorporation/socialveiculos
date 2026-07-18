@@ -342,12 +342,19 @@ async def get_veiculos_b2b(
     Retorna o estoque da Loja (Tenant) com filtros, busca e paginação.
     🔒 Isolamento por Tenant: filtra estritamente por loja_id do contexto.
     """
-    # Base query — rascunhos só aparecem se pedidos explicitamente (status=rascunho)
+    # Base query — rascunhos de formulário abandonado só aparecem se pedidos
+    # explicitamente (status=rascunho). Rascunhos vindos de troca (origem=TROCA)
+    # já são estoque real (o carro existe fisicamente) e aparecem sempre.
     base_where = [
         Veiculo.loja_id == context.loja_id,
     ]
     if status_filter != "rascunho":
-        base_where.append(Veiculo.status != StatusVeiculo.RASCUNHO)
+        base_where.append(
+            or_(
+                Veiculo.status != StatusVeiculo.RASCUNHO,
+                Veiculo.origem == OrigemVeiculo.TROCA,
+            )
+        )
 
     # ── Filtros ──
     if status_filter:

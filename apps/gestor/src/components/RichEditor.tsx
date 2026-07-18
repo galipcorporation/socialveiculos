@@ -5,10 +5,15 @@ import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import TextAlign from '@tiptap/extension-text-align'
 import Placeholder from '@tiptap/extension-placeholder'
+import { Table } from '@tiptap/extension-table'
+import TableRow from '@tiptap/extension-table-row'
+import TableHeader from '@tiptap/extension-table-header'
+import TableCell from '@tiptap/extension-table-cell'
 import {
   Bold, Italic, Underline as UnderlineIcon, List, ListOrdered,
   AlignLeft, AlignCenter, AlignJustify, Image as ImageIcon,
-  Undo2, Redo2, Plus, X,
+  Undo2, Redo2, Plus, X, Table as TableIcon, Trash2,
+  ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine,
 } from 'lucide-react'
 
 /* ── Node custom: imagem com alça de redimensionar ─────────────── */
@@ -141,6 +146,10 @@ export function RichEditor({ value, onChange, variaveis, labels, minHeight = 200
       ImagemResize.configure({ inline: false, allowBase64: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder: placeholder || 'Digite o texto…' }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: toEditorHtml(initialRef.current, labels),
     onUpdate: ({ editor }) => onChange(toSavedHtml(editor.getHTML())),
@@ -244,6 +253,29 @@ export function RichEditor({ value, onChange, variaveis, labels, minHeight = 200
         <Btn on={editor.isActive({ textAlign: 'justify' })} onClick={() => editor.chain().focus().setTextAlign('justify').run()} title="Justificar"><AlignJustify size={15} /></Btn>
         <span className="re-sep" />
         <Btn onClick={inserirImagem} title="Inserir imagem"><ImageIcon size={15} /></Btn>
+        {!compact && (
+          <>
+            <span className="re-sep" />
+            <Btn
+              on={editor.isActive('table')}
+              onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+              title="Inserir tabela"
+            >
+              <TableIcon size={15} />
+            </Btn>
+            {editor.isActive('table') && (
+              <>
+                <Btn onClick={() => editor.chain().focus().addColumnBefore().run()} title="Coluna antes"><ArrowLeftToLine size={15} /></Btn>
+                <Btn onClick={() => editor.chain().focus().addColumnAfter().run()} title="Coluna depois"><ArrowRightToLine size={15} /></Btn>
+                <Btn onClick={() => editor.chain().focus().deleteColumn().run()} title="Excluir coluna"><X size={15} /></Btn>
+                <Btn onClick={() => editor.chain().focus().addRowBefore().run()} title="Linha antes"><ArrowUpToLine size={15} /></Btn>
+                <Btn onClick={() => editor.chain().focus().addRowAfter().run()} title="Linha depois"><ArrowDownToLine size={15} /></Btn>
+                <Btn onClick={() => editor.chain().focus().deleteRow().run()} title="Excluir linha"><X size={15} /></Btn>
+                <Btn onClick={() => editor.chain().focus().deleteTable().run()} title="Excluir tabela"><Trash2 size={15} /></Btn>
+              </>
+            )}
+          </>
+        )}
 
         {/* + Variável (popover) */}
         <div className="re-var-wrap" ref={menuRef}>

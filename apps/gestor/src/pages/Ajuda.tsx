@@ -80,7 +80,7 @@ const TOPICOS: Topico[] = [
     imagem: '/ajuda/crm.png',
     passos: [
       { texto: 'Acesse "CRM" no menu lateral. A página possui duas abas: "Quadro" (Kanban de leads) e "Clientes" (cadastro de pessoas físicas).' },
-      { texto: 'Na aba Quadro, o Kanban mostra 4 colunas: Novo, Em Contato, Proposta e Fechado. Cada card representa um lead (oportunidade de negócio).' },
+      { texto: 'Na aba Quadro, o Kanban mostra 4 colunas: Novo, Em Contato, Proposta Enviada e Fechado. Cada card representa um lead (oportunidade de negócio).' },
       { texto: 'Para criar um novo lead, clique em "Novo Lead". Selecione um cliente existente (ou crie um novo) e opcionalmente vincule um veículo de interesse do estoque.' },
       { texto: 'Arraste os cards entre as colunas para mover o lead pelo funil de vendas. Isso atualiza automaticamente o status no sistema.' },
       { texto: 'Clique em um card para abrir os detalhes do lead. Aqui você pode adicionar propostas de financiamento, anotações e ver o histórico completo da negociação.' },
@@ -116,12 +116,25 @@ const TOPICOS: Topico[] = [
     ],
   },
   {
+    id: 'pos-venda',
+    titulo: 'Pós-venda',
+    icone: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11',
+    descricao: 'Acompanhe pelo quadro de esteira todas as etapas que vêm depois da venda: contrato, pagamento, documentos e transferência.',
+    imagem: '/ajuda/posvenda.png',
+    passos: [
+      { texto: 'Acesse "Pós-venda" no menu lateral. A tela mostra um quadro (Kanban) com quatro estágios: Contrato, Pagamento, Documentos e Transferência. Cada card é a esteira de um veículo vendido.' },
+      { texto: 'Você não cria esteiras manualmente — quando uma venda é registrada no Estoque, a esteira pós-venda correspondente é gerada automaticamente na primeira coluna.' },
+      { texto: 'Clique em um card para abrir a esteira e marcar os itens de checklist de cada etapa. A barra de progresso do card mostra quanto já foi concluído.' },
+      { texto: 'Conforme os itens são concluídos, o card avança de estágio. Ao finalizar a última etapa, a esteira vai para a lista de finalizadas.', dica: 'Gestores e administradores podem personalizar os itens de checklist de cada esteira (adicionar ou remover itens), desde que ela ainda não esteja concluída.' },
+    ],
+  },
+  {
     id: 'simulador',
     titulo: 'Simulador de Crédito',
     modulo: 'simulador' as const,
     icone: 'M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M9 7V4a2 2 0 012-2h9a2 2 0 012 2v9a2 2 0 01-2 2h-3',
     imagem: '/ajuda/simulador.png',
-    descricao: 'Simule financiamentos em múltiplos bancos simultaneamente (BV, PAN) e imprima propostas para o cliente.',
+    descricao: 'Simule financiamentos em múltiplos bancos ao mesmo tempo (BV, C6, Itaú, Santander) e imprima propostas para o cliente.',
     passos: [
       { texto: 'Acesse "Ferramentas → Simulador" no menu lateral. A primeira coisa a fazer é configurar as credenciais dos bancos: clique no botão "Configurar" em cada card de financeira e informe o usuário e senha do portal daquela instituição.' },
       { texto: 'Com as financeiras configuradas, marque os bancos desejados com o checkbox "Selecionar" nos cards do passo 1. Você pode simular em um ou todos os bancos ao mesmo tempo.' },
@@ -199,10 +212,10 @@ const TOPICOS: Topico[] = [
     icone: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z',
     descricao: 'Emita notas fiscais eletrônicas (NF-e) das vendas de veículos direto pelo sistema.',
     passos: [
-      { texto: 'Acesse "Ferramentas → Fiscal" no menu lateral. Cadastre o certificado digital A1 da loja em Configurações antes de emitir a primeira nota.' },
-      { texto: 'Selecione a venda desejada e clique em "Emitir NF-e". Os dados do veículo, cliente e valor são preenchidos automaticamente a partir do cadastro.' },
-      { texto: 'Após a emissão, acompanhe o status do documento (Autorizada, Rejeitada, Cancelada) na listagem.' },
-      { texto: 'Para corrigir uma nota já emitida, use "Cancelar" (dentro do prazo legal) ou "Carta de Correção" para ajustes que não alteram valores.', dica: 'O certificado digital é armazenado de forma criptografada e nunca é exibido novamente após o cadastro.' },
+      { texto: 'Acesse "Ferramentas → Notas Fiscais" no menu lateral. Antes de emitir a primeira nota, cadastre o certificado digital A1 da loja em Configurações → Fiscal.' },
+      { texto: 'Em "Emitir NF-e", use a busca para selecionar um contrato de venda com status "Aguardando". Os dados do veículo, cliente e valor vêm automaticamente do contrato — não é preciso digitá-los.', dica: 'A NF-e é sempre emitida a partir de um contrato. Se a venda ainda não tem contrato, crie-o antes em Ferramentas → Contratos. Você também pode disparar a emissão pelo botão "Emitir NF-e" dentro do próprio contrato.' },
+      { texto: 'Clique em "Emitir NF-e". A nota entra em processamento e, ao concluir, aparece na listagem com o status retornado pela SEFAZ (Autorizada, Rejeitada, Erro ou Cancelada). Notas rejeitadas mostram o motivo.' },
+      { texto: 'Para uma nota autorizada, baixe o XML e o DANFE (PDF) pelos botões da linha. Se precisar desfazer, use "Cancelar" dentro do prazo legal.', dica: 'O certificado digital é armazenado de forma criptografada e nunca é exibido novamente após o cadastro.' },
     ],
   },
   {
@@ -219,18 +232,16 @@ const TOPICOS: Topico[] = [
     ],
   },
   {
-    id: 'ferramentas-planos',
-    titulo: 'Planos & Assinatura',
+    id: 'ferramentas-modulos',
+    titulo: 'Ferramentas & Módulos',
     gestorOnly: true,
     icone: 'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z',
     imagem: '/ajuda/ferramentas-planos.png',
-    descricao: 'Veja os módulos disponíveis, o status da assinatura e como fazer upgrade do plano da sua loja.',
+    descricao: 'Veja quais módulos premium estão habilitados para a sua loja e acesse-os diretamente.',
     passos: [
-      { texto: 'Acesse "Ferramentas" no menu lateral e clique na aba "Módulos". Você verá cards para cada módulo premium: Contratos, Simulador, Marketing e Assistente IA. O badge no canto indica se está Ativo, Bloqueado ou Inadimplente.' },
+      { texto: 'Acesse "Ferramentas" no menu lateral. Você verá um card para cada módulo premium: Simulador, Contratos, Marketing, Assistente IA, Fiscal / NF-e e Meu Site. O badge no canto indica se o módulo está Ativo ou Bloqueado.' },
       { texto: 'Módulos com badge "Ativo" têm o botão "Abrir módulo" disponível — clique para acessar diretamente.' },
-      { texto: 'Módulos com badge "Bloqueado" (não estão no plano atual) ou "Inadimplente" (plano vencido) exibem o botão "Fazer upgrade". Clique nele para ir à aba de Planos.' },
-      { texto: 'Na aba "Planos & Assinatura", veja o plano atual da loja, o status (Ativa, Inadimplente, Expirada) e quantos módulos estão ativos.' },
-      { texto: 'Para mudar de plano, compare os planos disponíveis e clique em "Contratar" no plano desejado. Uma confirmação será exibida com o valor mensal antes de finalizar.', dica: 'Apenas o gestor da loja pode contratar ou alterar planos. Vendedores não veem esta seção.' },
+      { texto: 'Módulos com badge "Bloqueado" não estão habilitados para a sua loja. O card mostra a orientação para contatar o seu consultor ou o suporte, que fazem a liberação.', dica: 'A liberação de módulos é feita pela equipe da plataforma. Apenas gestores e administradores enxergam esta seção — vendedores não veem os módulos premium.' },
     ],
   },
   {
@@ -253,12 +264,12 @@ const TOPICOS: Topico[] = [
     gestorOnly: true,
     imagem: '/ajuda/configuracoes.png',
     icone: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z',
-    descricao: 'Atualize os dados da sua loja: nome, CNPJ, endereço, contato e credenciais de bancos.',
+    descricao: 'Ajuste os dados da loja e todas as credenciais em um só lugar, organizado por abas: Perfil, bancos, IA, redes sociais, DETRAN e Fiscal.',
     passos: [
-      { texto: 'Clique no seu avatar no canto superior direito e selecione "Configurações". Você verá os dados cadastrais da sua loja.' },
-      { texto: 'Edite os campos desejados: Nome da loja, CNPJ, Telefone, WhatsApp, E-mail, Endereço, Cidade, UF e CEP.' },
-      { texto: 'Clique em "Salvar Alterações" para aplicar as mudanças. Os dados serão atualizados em todo o sistema, inclusive na vitrine pública.' },
-      { texto: 'Na seção de Credenciais Bancárias, cadastre as credenciais de acesso das financeiras parceiras para usar o Simulador de Crédito.', dica: 'Os campos de CNPJ, Telefone e CEP possuem máscaras automáticas que formatam o valor conforme você digita.' },
+      { texto: 'Clique no seu avatar no canto superior direito e selecione "Configurações". A tela é dividida em abas: Perfil da Loja, Credenciais Bancárias (Simulador), Inteligência Artificial, Redes Sociais, Consulta DETRAN e Fiscal / NF-e.' },
+      { texto: 'Na aba "Perfil da Loja", edite os dados cadastrais (Nome, CNPJ, Telefone, WhatsApp, E-mail, Endereço, Cidade, UF, CEP) e a comissão padrão de vendas. Clique em "Salvar" para aplicar — os dados refletem em todo o sistema, inclusive na vitrine pública.' },
+      { texto: 'Na aba "Credenciais Bancárias (Simulador)", cadastre usuário e senha dos portais das financeiras parceiras. É isso que habilita a automação do Simulador de Crédito.' },
+      { texto: 'Na aba "Fiscal / NF-e", cadastre o certificado digital A1 da loja, necessário para emitir notas fiscais. Nas abas "Redes Sociais" e "Consulta DETRAN" ficam as conexões usadas pelo Marketing e pela consulta de placas.', dica: 'Os campos de CNPJ, Telefone e CEP têm máscaras automáticas que formatam o valor conforme você digita.' },
     ],
   },
 ]
@@ -308,7 +319,7 @@ const FAQ_ITEMS: FaqItem[] = [
   },
   {
     pergunta: 'O que são módulos premium?',
-    resposta: 'São funcionalidades avançadas (Simulador de Crédito, Contratos, Marketing e Assistente IA) que requerem um plano de assinatura superior. Acesse "Ferramentas" para ver os módulos disponíveis e fazer upgrade.',
+    resposta: 'São funcionalidades avançadas (Simulador de Crédito, Contratos, Marketing, Assistente IA, Fiscal / NF-e e Meu Site) habilitadas conforme o plano da loja. Acesse "Ferramentas" para ver quais estão ativos: os liberados têm o botão "Abrir módulo"; os bloqueados trazem a orientação para contatar o seu consultor ou o suporte, que fazem a liberação.',
   },
 ]
 

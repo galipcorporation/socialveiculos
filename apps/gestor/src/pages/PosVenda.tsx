@@ -2,7 +2,15 @@ import { useState, useEffect, useCallback } from 'react'
 import { api, extractErrorDetails } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
 import { useAuthStore } from '../stores/authStore'
+import { mascararMoeda, parseMoeda } from '../lib/mascaras'
 import { Trash2, Plus, CheckCircle2 } from 'lucide-react'
+
+// Itens do checklist que geram lançamento no Financeiro ao concluir — pedimos o valor.
+const CHAVES_FINANCEIRAS: Record<string, 'despesa' | 'receita'> = {
+  debitos_quitados: 'despesa',
+  taxa_transferencia_paga: 'despesa',
+  entrada_recebida: 'receita',
+}
 
 /* ── Types ───────────────────────────────────────────────────── */
 
@@ -599,6 +607,10 @@ function EsteiraDetalheModal({
   const [novoItemObrigatorio, setNovoItemObrigatorio] = useState(false)
   const [salvandoNovoItem, setSalvandoNovoItem] = useState(false)
 
+  // Modal de valor ao concluir um item financeiro
+  const [modalValor, setModalValor] = useState<{ item: ItemChecklist; tipo: 'despesa' | 'receita' } | null>(null)
+  const [valorStr, setValorStr] = useState('')
+
   const carregar = useCallback(async () => {
     setLoading(true)
     try {
@@ -625,9 +637,20 @@ function EsteiraDetalheModal({
 
   const alternarStatus = async (item: ItemChecklist) => {
     if (!esteira) return
+    // Concluir um item financeiro gera lançamento no Financeiro — pedir o valor antes.
+    const tipoFin = CHAVES_FINANCEIRAS[item.chave]
+    if (tipoFin && item.status !== 'concluido') {
+      setValorStr('')
+      setModalValor({ item, tipo: tipoFin })
+      return
+    }
+    await commitStatus(item, item.status === 'concluido' ? 'pendente' : 'concluido')
+  }
+
+  const commitStatus = async (item: ItemChecklist, novoStatus: StatusItem, valor?: number) => {
+    if (!esteira) return
     const anterior = esteira
-    const novoStatus: StatusItem = item.status === 'concluido' ? 'pendente' : 'concluido'
-    
+
     // Atualização otimista local
     const novosItens = esteira.itens.map((i) => {
       if (i.id === item.id) {
@@ -653,7 +676,7 @@ function EsteiraDetalheModal({
     try {
       const atualizado = await api.patch<EsteiraDetalheResponse>(
         `/esteira/${esteira.id}/itens/${item.id}`,
-        { status: novoStatus }
+        { status: novoStatus, ...(valor != null ? { valor } : {}) }
       )
       setEsteira(atualizado)
       onUpdated()
@@ -665,6 +688,14 @@ function EsteiraDetalheModal({
     } finally {
       setSavingItem(null)
     }
+  }
+
+  const confirmarValorFinanceiro = async () => {
+    if (!modalValor) return
+    const valor = parseMoeda(valorStr) || 0
+    const alvo = modalValor
+    setModalValor(null)
+    await commitStatus(alvo.item, 'concluido', valor)
   }
 
   const handleCriarItem = async (cat: CategoriaItem) => {
@@ -982,6 +1013,37 @@ function EsteiraDetalheModal({
           </div>
         </div>
       </div>
+
+      {/* Modal: valor do lançamento financeiro ao concluir item */}
+      {modalValor && (
+        <div className="modal-overlay" style={{ zIndex: 10001 }} onClick={() => setModalValor(null)}>
+          <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="modal-header">
+              <h3>{modalValor.item.titulo}</h3>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>
+                Valor {modalValor.tipo === 'despesa' ? 'pago (despesa)' : 'recebido (receita)'}
+              </label>
+              <input
+                type="text"
+                placeholder="R$ 0,00"
+                value={valorStr}
+                autoFocus
+                onChange={e => setValorStr(mascararMoeda(e.target.value))}
+                onKeyDown={e => { if (e.key === 'Enter') confirmarValorFinanceiro() }}
+              />
+              <p style={{ fontSize: 12, color: 'var(--sv-text-muted)', margin: 0 }}>
+                Vai para o Financeiro vinculado a este veículo. Deixe R$ 0,00 se ainda não souber o valor — dá para ajustar depois.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setModalValor(null)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={confirmarValorFinanceiro}>Concluir</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

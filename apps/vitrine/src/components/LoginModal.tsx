@@ -300,25 +300,6 @@ export function LoginModal() {
           </form>
         )}
 
-        {!mfaChallengeToken && (
-          <>
-            {/* Divisor */}
-            <div className="vt-modal-divider">
-              <span>ou continue com</span>
-            </div>
-
-            {/* Login Social — Google (OAuth 2.0 real, redireciona ao backend) */}
-            <button
-              type="button"
-              className="vt-btn vt-btn-social"
-              onClick={() => { window.location.href = '/v1/auth/google/login' }}
-              disabled={loading}
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style={{ marginRight: 8 }}><path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.113-5.111 4.113-3.419 0-6.202-2.783-6.202-6.202 0-3.419 2.783-6.202 6.202-6.202 1.481 0 2.836.526 3.902 1.488l3.125-3.125C18.992 2.378 15.82 1 12.016 1c-6.075 0-11 4.925-11 11s4.925 11 11 11c5.787 0 10.373-4.084 10.373-10.428 0-.687-.06-1.3-.173-1.857H12.24z"/></svg>
-              <span>Continuar com Google</span>
-            </button>
-          </>
-        )}
       </div>
     </div>
   )

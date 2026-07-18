@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { createReconnectingSocket, type ReconnectingSocket } from '../lib/ws'
 import { useAuthStore } from '../stores/authStore'
 import { LoginModal } from '../components/LoginModal'
+import { BottomNav } from '../components/BottomNav'
 
 interface Conversa {
   id: string
@@ -187,6 +188,7 @@ export function Mensagens() {
         <p style={{ color: 'var(--vt-text-dim)', fontSize: 14 }}>Converse direto com as lojas sobre os veículos de seu interesse.</p>
         <button className="vt-btn vt-btn-primary" onClick={() => openLoginModal('login')}>Entrar / Cadastrar</button>
         <LoginModal />
+        <BottomNav />
       </div>
     )
   }
@@ -334,6 +336,7 @@ export function Mensagens() {
       </div>
 
       <LoginModal />
+      <BottomNav />
     </div>
   )
 }

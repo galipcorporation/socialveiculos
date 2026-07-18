@@ -155,9 +155,13 @@ _ITENS_DESPESA = {
 _ITEM_RECEITA = {"entrada_recebida": "Entrada"}
 
 
-async def _lancar_financeiro(db: AsyncSession, esteira: EsteiraPosVenda, item: ItemChecklist) -> None:
+async def _lancar_financeiro(
+    db: AsyncSession, esteira: EsteiraPosVenda, item: ItemChecklist,
+    valor: Optional[float] = None,
+) -> None:
     """Ao concluir um item financeiro, gera o LancamentoFinanceiro correspondente,
-    sem duplicar (idempotente pela descrição+veiculo)."""
+    sem duplicar (idempotente pela descrição+veiculo). `valor` vem da tela ao
+    concluir o item; se omitido, lança 0 para o usuário ajustar no financeiro."""
     if item.chave in _ITENS_DESPESA:
         tipo, rotulo, categoria = TipoLancamento.DESPESA, _ITENS_DESPESA[item.chave], "documentacao"
     elif item.chave in _ITEM_RECEITA:
@@ -165,19 +169,33 @@ async def _lancar_financeiro(db: AsyncSession, esteira: EsteiraPosVenda, item: I
     else:
         return
 
-    descricao = f"{rotulo} — esteira {esteira.id[:8]}"
+    # Descrição legível: usa o veículo, não o id técnico da esteira. A
+    # idempotência (não duplicar ao reconcluir o item) passa a filtrar por
+    # veiculo_id + descrição, então o id da esteira não precisa mais aparecer.
+    veic = esteira.veiculo
+    ref_veiculo = (
+        f"{veic.marca} {veic.modelo}".strip()
+        + (f" · {veic.placa}" if veic and veic.placa else "")
+    ) if veic else None
+    descricao = f"{rotulo} — {ref_veiculo}" if ref_veiculo else rotulo
     ja = await db.execute(
         select(LancamentoFinanceiro.id).where(
             LancamentoFinanceiro.loja_id == esteira.loja_id,
+            LancamentoFinanceiro.veiculo_id == esteira.veiculo_id,
             LancamentoFinanceiro.descricao == descricao,
         ).limit(1)
     )
     if ja.first():
         return
+    valor_lanc = round(valor, 2) if valor and valor > 0 else 0.0
     db.add(LancamentoFinanceiro(
         loja_id=esteira.loja_id, tipo=tipo, descricao=descricao,
-        valor=0.0, veiculo_id=esteira.veiculo_id, categoria=categoria,
-        observacoes="Lançado automaticamente pela esteira pós-venda. Ajuste o valor.",
+        valor=valor_lanc, veiculo_id=esteira.veiculo_id, categoria=categoria,
+        observacoes=(
+            "Lançado automaticamente pela esteira pós-venda."
+            if valor_lanc else
+            "Lançado automaticamente pela esteira pós-venda. Ajuste o valor no financeiro."
+        ),
     ))
 
 
@@ -401,7 +419,7 @@ async def atualizar_item(
             item.concluido_em = _now()
             item.concluido_por = ctx.usuario.id
             if item.categoria == CategoriaItem.FINANCEIRO:
-                await _lancar_financeiro(db, e, item)
+                await _lancar_financeiro(db, e, item, valor=body.valor)
         else:
             item.concluido_em = None
             item.concluido_por = None

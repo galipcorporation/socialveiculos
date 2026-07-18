@@ -101,6 +101,9 @@ export function Login() {
                     e.preventDefault();
                   }
                 }}
+                autoComplete="username"
+                autoCapitalize="off"
+                spellCheck={false}
                 required
                 disabled={loading}
               />

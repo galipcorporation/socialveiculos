@@ -1842,6 +1842,39 @@ a:hover {
   color: var(--sv-text);
 }
 
+.filter-select-root {
+  min-width: 200px;
+}
+
+.filter-select-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  background: var(--sv-input-bg);
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius);
+  color: var(--sv-text);
+  font-family: var(--sv-font);
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color var(--sv-transition), box-shadow var(--sv-transition);
+}
+
+.filter-select-btn:hover {
+  border-color: var(--sv-border-hover);
+}
+
+.filter-select-btn:focus-visible {
+  border-color: var(--sv-primary);
+  box-shadow: 0 0 0 3px var(--sv-primary-glow);
+}
+
 /* ═══════════════════════════════════════════════════════════════
    ESTOQUE — Stock Table
    ═══════════════════════════════════════════════════════════════ */
@@ -5042,6 +5075,20 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 .fv-field input:focus { border-color: var(--sv-primary); }
 
+.fv-select {
+  width: 100%;
+  height: 40px;
+  padding: 10px 12px;
+  font-family: var(--sv-font);
+  font-size: 14px;
+  background: var(--sv-input-bg);
+  border: 1px solid var(--sv-border);
+  border-radius: 6px;
+  color: var(--sv-text);
+  outline: none;
+}
+.fv-select:focus { border-color: var(--sv-primary); }
+
 .fv-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* Cliente selecionado */
@@ -5304,10 +5351,11 @@ svg[stroke="currentColor"] {
 /* ═══════════════════════════════════════════════════════════════
    RICH EDITOR (TipTap) — modelos de contrato · cabeçalho/rodapé
    ═══════════════════════════════════════════════════════════════ */
-.rich-editor { border: 1px solid var(--sv-border); border-radius: 8px; overflow: hidden; background: var(--sv-input-bg); }
+.rich-editor { border: 1px solid var(--sv-border); border-radius: 8px; background: var(--sv-input-bg); }
 .re-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 2px;
   background: var(--sv-surface-bright); border-bottom: 1px solid var(--sv-border); padding: 6px 8px;
+  border-radius: 8px 8px 0 0;
 }
 .re-tb {
   min-width: 32px; height: 32px; border: none; background: transparent; color: var(--sv-text-dim);
@@ -5324,8 +5372,10 @@ svg[stroke="currentColor"] {
 .re-var-wrap { position: relative; }
 .re-var-menu {
   position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; width: 400px; max-width: 92vw;
+  max-height: min(480px, 70vh);
   background: var(--sv-surface); border: 1px solid var(--sv-border); border-radius: 10px;
   box-shadow: 0 12px 32px rgba(0,0,0,.4); overflow: hidden;
+  display: flex; flex-direction: column;
 }
 .re-var-menu-head {
   display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
@@ -5334,7 +5384,7 @@ svg[stroke="currentColor"] {
 }
 .re-var-close { background: none; border: none; color: var(--sv-text-muted); cursor: pointer; display: flex; }
 .re-var-close:hover { color: var(--sv-text); }
-.re-var-menu-body { max-height: 420px; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 14px; }
+.re-var-menu-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 14px; }
 .re-var-group-label { font-size: 11px; font-weight: 700; color: var(--sv-text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
 .re-var-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .re-var-chip {
@@ -5362,6 +5412,7 @@ svg[stroke="currentColor"] {
 .re-var-add-btn:hover { background: var(--sv-primary); color: #fff; }
 
 /* área editável */
+.re-content { border-radius: 0 0 8px 8px; overflow: hidden; }
 .re-content .ProseMirror { padding: 12px 14px; outline: none; color: var(--sv-text); font-size: 14px; line-height: 1.6; }
 .re-content .ProseMirror p { margin: 0 0 8px; }
 .re-content .ProseMirror:focus { outline: none; }
@@ -5369,6 +5420,25 @@ svg[stroke="currentColor"] {
 .re-content .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder); float: left; color: var(--sv-text-muted); pointer-events: none; height: 0;
 }
+
+/* tabelas (extension-table) */
+.re-content .ProseMirror { overflow-x: auto; }
+.re-content .ProseMirror table {
+  border-collapse: collapse; table-layout: fixed; width: 100%; margin: 8px 0; overflow: hidden;
+}
+.re-content .ProseMirror td, .re-content .ProseMirror th {
+  border: 1px solid var(--sv-border); padding: 6px 8px; vertical-align: top; position: relative; min-width: 1em;
+}
+.re-content .ProseMirror th {
+  background: var(--sv-surface-bright); font-weight: 700; text-align: left;
+}
+.re-content .ProseMirror .selectedCell {
+  background: var(--sv-primary-glow);
+}
+.re-content .ProseMirror .column-resize-handle {
+  position: absolute; right: -2px; top: 0; bottom: 0; width: 4px; background: var(--sv-primary); pointer-events: none;
+}
+.re-content .ProseMirror.resize-cursor { cursor: col-resize; }
 
 /* imagem redimensionável (NodeView custom) */
 .re-img-wrap { position: relative; display: inline-block; max-width: 100%; vertical-align: top; }

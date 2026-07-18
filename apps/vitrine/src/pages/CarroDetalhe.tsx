@@ -5,6 +5,7 @@ import { fetchVeiculo, carroMeta, formatBRL, type Veiculo, type Midia } from '..
 import { getSSGData } from '../lib/ssgData'
 import { whatsappLojaLink } from '../lib/contato'
 import { api } from '../lib/api'
+import { BottomNav } from '../components/BottomNav'
 
 /** Modal de pré-aprovação de crédito (M017) — captura o interesse do comprador
  *  e encaminha à loja como lead. Não simula parcela (sem parceria com banco). */
@@ -235,6 +236,7 @@ export function CarroDetalhe({ initialData }: { initialData?: Veiculo | null }) 
       </div>
 
       {modalCredito && <PreAprovacaoModal veiculoId={veiculo.id} onClose={() => setModalCredito(false)} />}
+      <BottomNav />
     </div>
   )
 }
