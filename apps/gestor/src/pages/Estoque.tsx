@@ -447,6 +447,7 @@ export function Estoque() {
           <option value="vendido">Vendido</option>
           <option value="repasse">Repasse</option>
           <option value="inativo">Inativo</option>
+          <option value="rascunho">Rascunho (não finalizados)</option>
         </select>
       </div>
 
@@ -1129,6 +1130,19 @@ export function VeiculoModal({
     }
   }
 
+  // ── Fechar sem perder dados: se algo já foi preenchido e ainda não foi salvo, vira rascunho ──
+  const temDadosPreenchidos = !isEditing && (
+    placa.trim() || marca.trim() || modelo.trim() || versao.trim() || cor.trim() ||
+    precoVenda > 0 || precoCusto > 0 || midias.length > 0 || opcionais.length > 0
+  )
+
+  const handleClose = async () => {
+    if (temDadosPreenchidos && !rascunhoId) {
+      await salvarRascunho()
+    }
+    onClose()
+  }
+
   // ── Submit ──
   const handleSubmit = async () => {
     setSubmetido(true)
@@ -1187,11 +1201,11 @@ export function VeiculoModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={handleClose}>
       <div className="modal-glass modal-veiculo" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{isEditing ? 'Editar Veículo' : 'Novo Veículo'}</h3>
-          <button className="modal-close" onClick={onClose}><XIcon /></button>
+          <button className="modal-close" onClick={handleClose}><XIcon /></button>
         </div>
 
         <div className="modal-tabs">
@@ -1913,7 +1927,7 @@ export function VeiculoModal({
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-glass" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-glass" onClick={handleClose}>Cancelar</button>
           <button
             className="btn btn-primary"
             onClick={handleSubmit}
