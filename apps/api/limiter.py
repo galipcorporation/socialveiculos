@@ -31,8 +31,14 @@ def rate_limit(limit: int, period: int = 60):
     - period: Janela de tempo em segundos (padrão 60s).
     """
     async def dependency(request: Request):
-        # Identificar por IP do cliente
-        ip = request.client.host if request.client else "unknown"
+        # Identificar por IP real do cliente. Com uvicorn --proxy-headers o
+        # request.client.host já reflete o X-Forwarded-For; o fallback abaixo
+        # cobre o caso do header presente sem o flag (defesa em profundidade).
+        fwd = request.headers.get("x-forwarded-for")
+        if fwd:
+            ip = fwd.split(",")[0].strip()
+        else:
+            ip = request.client.host if request.client else "unknown"
         path = request.url.path
         key = f"limit:{path}:{ip}"
         

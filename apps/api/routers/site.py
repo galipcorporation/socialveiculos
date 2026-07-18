@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -57,6 +58,28 @@ class SiteLojaRequest(BaseModel):
     og_image_url: Optional[str] = None
     ga4_id: Optional[str] = None
     meta_pixel_id: Optional[str] = None
+
+    @field_validator("ga4_id")
+    @classmethod
+    def _valida_ga4(cls, v: Optional[str]) -> Optional[str]:
+        # Interpolado cru em <script> no site público (apps/site) — restringir ao
+        # formato oficial impede XSS armazenado via este campo (ver B053).
+        if v is None or v.strip() == "":
+            return None
+        v = v.strip()
+        if not re.fullmatch(r"(G|GT|AW|UA|GTM)-[A-Z0-9\-]{4,20}", v):
+            raise ValueError("ID de medição inválido (formato esperado ex.: G-XXXXXXXXXX).")
+        return v
+
+    @field_validator("meta_pixel_id")
+    @classmethod
+    def _valida_pixel(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        v = v.strip()
+        if not re.fullmatch(r"\d{5,20}", v):
+            raise ValueError("Meta Pixel ID inválido (apenas dígitos).")
+        return v
 
 
 class SiteLojaResponse(BaseModel):

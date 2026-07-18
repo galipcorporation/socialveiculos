@@ -80,9 +80,11 @@ app = FastAPI(
     title="Social Veículos API",
     description="API REST para o ecossistema Social Veículos — Gestor B2B + Vitrine B2C",
     version="0.1.0",
-    docs_url="/v1/docs",
-    redoc_url="/v1/redoc",
-    openapi_url="/v1/openapi.json",
+    # Docs interativos só em dev: em produção expõem toda a superfície da API
+    # (rotas admin/fiscal/webhooks) para reconhecimento de ataque (ver B055).
+    docs_url="/v1/docs" if settings.api_debug else None,
+    redoc_url="/v1/redoc" if settings.api_debug else None,
+    openapi_url="/v1/openapi.json" if settings.api_debug else None,
     lifespan=lifespan,
 )
 

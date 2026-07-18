@@ -9,6 +9,7 @@ emissão fica bloqueada — nunca uma nota fake.
 """
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 from datetime import datetime
@@ -527,7 +528,11 @@ async def webhook_focus(
 ):
     """Callback do Focus NFe. Validado por segredo compartilhado configurado
     manualmente no painel do Focus (não é o token da empresa)."""
-    if settings.focus_nfe_webhook_secret and segredo != settings.focus_nfe_webhook_secret:
+    # Fail-closed: sem secret configurado o webhook fica fechado (evita callbacks
+    # fiscais forjados marcando NF-e como autorizada/cancelada — ver B054).
+    if not settings.focus_nfe_webhook_secret:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Webhook fiscal não configurado.")
+    if not segredo or not hmac.compare_digest(segredo, settings.focus_nfe_webhook_secret):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Segredo de webhook inválido.")
 
     ref = payload.get("ref")

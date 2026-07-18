@@ -65,6 +65,16 @@ export default function App() {
   const descricao = dados.site.seo_description || undefined
   const imagem = dados.site.og_image_url || dados.site.logo_url || undefined
 
+  // Defesa em profundidade contra XSS: estes IDs são interpolados crus em
+  // <script> inline; só renderizamos se casarem com o formato oficial. O
+  // backend já valida na escrita (B053), isto cobre dados legados salvos antes.
+  const ga4Id = /^(G|GT|AW|UA|GTM)-[A-Z0-9-]{4,20}$/.test(dados.site.ga4_id || '')
+    ? dados.site.ga4_id
+    : null
+  const metaPixelId = /^\d{5,20}$/.test(dados.site.meta_pixel_id || '')
+    ? dados.site.meta_pixel_id
+    : null
+
   return (
     <>
       <Helmet>
@@ -78,19 +88,19 @@ export default function App() {
         {imagem && <meta property="og:image" content={imagem} />}
         <meta name="twitter:card" content="summary_large_image" />
 
-        {dados.site.ga4_id && (
+        {ga4Id && (
           <script
             type="text/javascript"
             dangerouslySetInnerHTML={{
-              __html: `(function(){var s=document.createElement('script');s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id=${dados.site.ga4_id}';document.head.appendChild(s);})();window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${dados.site.ga4_id}');`,
+              __html: `(function(){var s=document.createElement('script');s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id=${ga4Id}';document.head.appendChild(s);})();window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${ga4Id}');`,
             }}
           />
         )}
-        {dados.site.meta_pixel_id && (
+        {metaPixelId && (
           <script
             type="text/javascript"
             dangerouslySetInnerHTML={{
-              __html: `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${dados.site.meta_pixel_id}');fbq('track','PageView');`,
+              __html: `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${metaPixelId}');fbq('track','PageView');`,
             }}
           />
         )}
