@@ -209,19 +209,31 @@ async def get_marketplace_feed(
         seg_res = await db.execute(seg_stmt)
         lojas_seguidas = set(seg_res.scalars().all())
 
-    for v in vehicles:
-        # Calcular total favoritos
-        count_stmt = select(func.count(Favorito.id)).where(Favorito.veiculo_id == v.id)
-        count_res = await db.execute(count_stmt)
-        v.total_favoritos = count_res.scalar() or 0
+    veiculo_ids = [v.id for v in vehicles]
 
-        # Verificar se está favoritado pelo usuário atual
-        if current_user:
-            check_stmt = select(Favorito).where(Favorito.veiculo_id == v.id, Favorito.usuario_id == current_user.id)
-            check_res = await db.execute(check_stmt)
-            v.favoritado_por_mim = check_res.scalar_one_or_none() is not None
-        else:
-            v.favoritado_por_mim = False
+    # Batch: total de favoritos de todos os veículos numa query só (era 1 por veículo).
+    favoritos_por_veiculo: dict[str, int] = {}
+    if veiculo_ids:
+        count_res = await db.execute(
+            select(Favorito.veiculo_id, func.count(Favorito.id))
+            .where(Favorito.veiculo_id.in_(veiculo_ids))
+            .group_by(Favorito.veiculo_id)
+        )
+        favoritos_por_veiculo = {vid: count for vid, count in count_res.all()}
+
+    # Batch: quais desses veículos o usuário atual favoritou (era 1 query por veículo).
+    favoritados_por_mim: set[str] = set()
+    if current_user and veiculo_ids:
+        meus_fav_res = await db.execute(
+            select(Favorito.veiculo_id).where(
+                Favorito.veiculo_id.in_(veiculo_ids), Favorito.usuario_id == current_user.id
+            )
+        )
+        favoritados_por_mim = set(meus_fav_res.scalars().all())
+
+    for v in vehicles:
+        v.total_favoritos = favoritos_por_veiculo.get(v.id, 0)
+        v.favoritado_por_mim = v.id in favoritados_por_mim
 
         # Dados da loja (vitrine social: feed = carros, mas mostra a loja que anuncia)
         loja = v.loja

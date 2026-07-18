@@ -5,7 +5,6 @@ SQLAlchemy async engine + session factory.
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import NullPool
 from config import settings
 
 
@@ -25,12 +24,25 @@ def _get_async_url() -> str:
 
 is_postgres = "postgresql" in settings.database_url
 
+# Postgres (Supabase via pgbouncer, modo transaction): pool real reaproveita
+# conexões entre requests em vez de abrir handshake TCP+TLS a cada request
+# (era NullPool). statement_cache_size=0 continua obrigatório com pgbouncer.
+_pool_kwargs = (
+    {
+        "pool_size": 10,
+        "max_overflow": 10,
+        "pool_recycle": 1800,
+        "pool_pre_ping": True,
+        "connect_args": {"statement_cache_size": 0},
+    }
+    if is_postgres
+    else {}
+)
+
 engine = create_async_engine(
     _get_async_url(),
     echo=settings.api_debug,
-    poolclass=NullPool if is_postgres else None,
-    pool_pre_ping=True if is_postgres else False,
-    connect_args={"statement_cache_size": 0} if is_postgres else {},
+    **_pool_kwargs,
 )
 
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

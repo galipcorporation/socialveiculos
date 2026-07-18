@@ -154,11 +154,12 @@ async def reordenar_midias_veiculo(
     if not v_res.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Veículo não encontrado nesta loja.")
 
-    # Atualizar ordem de cada mídia recebida
+    # Carrega todas as mídias do veículo numa query só (era 1 SELECT por item recebido)
+    midias_res = await db.execute(select(Midia).where(Midia.veiculo_id == veiculo_id))
+    midias_por_id = {m.id: m for m in midias_res.scalars().all()}
+
     for idx, midia_id in enumerate(ordem_ids):
-        stmt = select(Midia).where(Midia.id == midia_id, Midia.veiculo_id == veiculo_id)
-        res = await db.execute(stmt)
-        midia = res.scalar_one_or_none()
+        midia = midias_por_id.get(midia_id)
         if midia:
             midia.ordem = idx + 1
 

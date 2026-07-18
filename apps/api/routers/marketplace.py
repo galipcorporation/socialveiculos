@@ -43,10 +43,17 @@ class LojaPublicaResponse(BaseModel):
 
 async def _hidratar_favoritos(db: AsyncSession, vehicles: list) -> None:
     """Anexa total_favoritos a cada veículo (B2C público não tem 'favoritado_por_mim')."""
+    if not vehicles:
+        return
+    veiculo_ids = [v.id for v in vehicles]
+    count_res = await db.execute(
+        select(Favorito.veiculo_id, func.count(Favorito.id))
+        .where(Favorito.veiculo_id.in_(veiculo_ids))
+        .group_by(Favorito.veiculo_id)
+    )
+    favoritos_por_veiculo = {vid: count for vid, count in count_res.all()}
     for v in vehicles:
-        count_stmt = select(func.count(Favorito.id)).where(Favorito.veiculo_id == v.id)
-        count_res = await db.execute(count_stmt)
-        v.total_favoritos = count_res.scalar() or 0
+        v.total_favoritos = favoritos_por_veiculo.get(v.id, 0)
         v.favoritado_por_mim = False
 
 

@@ -116,6 +116,8 @@ async def listar_repasses(
     combustivel: Optional[str] = None,
     cidade: Optional[str] = None,
     estado: Optional[str] = None,
+    page: int = 1,
+    per_page: int = 20,
     db: AsyncSession = Depends(get_db),
     context: B2BContext = Depends(get_current_b2b_user)
 ):
@@ -129,7 +131,9 @@ async def listar_repasses(
         .join(Loja, PublicacaoB2B.loja_id == Loja.id)
         .options(
             selectinload(PublicacaoB2B.curtidas),
-            selectinload(PublicacaoB2B.comentarios)
+            selectinload(PublicacaoB2B.comentarios),
+            selectinload(PublicacaoB2B.veiculo).selectinload(Veiculo.midias),
+            selectinload(PublicacaoB2B.loja),
         )
         .where(
             PublicacaoB2B.ativa == True,
@@ -158,67 +162,56 @@ async def listar_repasses(
     if estado:
         stmt = stmt.where(Loja.estado.ilike(f"%{estado}%"))
 
-    stmt = stmt.order_by(PublicacaoB2B.created_at.desc())
+    stmt = (
+        stmt.order_by(PublicacaoB2B.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    )
     res = await db.execute(stmt)
     pubs = res.scalars().all()
+
+    # Batch: nomes de todos os autores (publicações + comentários) numa query só,
+    # em vez de 1 SELECT por publicação + 1 SELECT por comentário.
+    autor_ids = {pub.autor_id for pub in pubs if pub.autor_id}
+    for pub in pubs:
+        autor_ids.update(com.autor_id for com in pub.comentarios if com.autor_id)
+
+    autores_por_id: dict[str, str] = {}
+    if autor_ids:
+        autores_res = await db.execute(select(Usuario.id, Usuario.nome).where(Usuario.id.in_(autor_ids)))
+        autores_por_id = {uid: nome for uid, nome in autores_res.all()}
 
     # Preencher informações extras
     result = []
     for pub in pubs:
-        # Veículo
-        veiculo_stmt = select(Veiculo).options(selectinload(Veiculo.midias)).where(Veiculo.id == pub.veiculo_id)
-        veiculo_res = await db.execute(veiculo_stmt)
-        veiculo_obj = veiculo_res.scalar_one_or_none()
-
-        # Loja
-        loja_stmt = select(Loja).where(Loja.id == pub.loja_id)
-        loja_res = await db.execute(loja_stmt)
-        loja_obj = loja_res.scalar_one_or_none()
-
-        # Autor (Usuario)
-        autor_name = "Lojista"
-        if pub.autor_id:
-            autor_stmt = select(Usuario).where(Usuario.id == pub.autor_id)
-            autor_res = await db.execute(autor_stmt)
-            autor_obj = autor_res.scalar_one_or_none()
-            if autor_obj:
-                autor_name = autor_obj.nome
+        autor_name = autores_por_id.get(pub.autor_id, "Lojista")
 
         # Curtido por mim
         curtido = any(c.usuario_id == context.usuario.id for c in pub.curtidas)
 
         # Comentários detalhados
-        comentarios_response = []
-        for com in pub.comentarios:
-            com_autor_name = "Lojista"
-            if com.autor_id:
-                com_autor_stmt = select(Usuario).where(Usuario.id == com.autor_id)
-                com_autor_res = await db.execute(com_autor_stmt)
-                com_autor_obj = com_autor_res.scalar_one_or_none()
-                if com_autor_obj:
-                    com_autor_name = com_autor_obj.nome
-            
-            comentarios_response.append(
+        comentarios_response = sorted(
+            (
                 ComentarioB2BResponse(
                     id=com.id,
                     publicacao_id=com.publicacao_id,
                     autor_id=com.autor_id,
-                    autor_nome=com_autor_name,
+                    autor_nome=autores_por_id.get(com.autor_id, "Lojista"),
                     conteudo=com.conteudo,
                     created_at=com.created_at
                 )
-            )
-
-        # Ordenar comentários por data crescente
-        comentarios_response.sort(key=lambda x: x.created_at)
+                for com in pub.comentarios
+            ),
+            key=lambda x: x.created_at,
+        )
 
         result.append(
             PublicacaoB2BResponse(
                 id=pub.id,
                 loja_id=pub.loja_id,
-                loja_nome=loja_obj.nome if loja_obj else "Loja Parceira",
+                loja_nome=pub.loja.nome if pub.loja else "Loja Parceira",
                 veiculo_id=pub.veiculo_id,
-                veiculo=veiculo_obj,
+                veiculo=pub.veiculo,
                 autor_id=pub.autor_id,
                 autor_nome=autor_name,
                 conteudo=pub.conteudo,
@@ -685,6 +678,45 @@ async def listar_parceiros(
 # 7.3 — Chat B2B (REST / Polling)
 # ───────────────────────────────────────────────────────────────
 
+@router.get("/chat/unread-count")
+async def contar_nao_lidas(
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user)
+):
+    """
+    Contagem agregada de mensagens não lidas (B2B + B2C) para o badge do sidebar.
+    Só 2 COUNTs — substitui baixar as listas completas de conversas via polling.
+    """
+    b2b_res = await db.execute(
+        select(func.count(Mensagem.id))
+        .select_from(Mensagem)
+        .join(Conversa, Mensagem.conversa_id == Conversa.id)
+        .where(
+            Conversa.tipo == TipoConversa.B2B,
+            Conversa.ativa == True,
+            or_(Conversa.loja_a_id == context.loja_id, Conversa.loja_b_id == context.loja_id),
+            Mensagem.autor_id != context.usuario.id,
+            Mensagem.lida == False,
+        )
+    )
+    unread_b2b = b2b_res.scalar() or 0
+
+    b2c_res = await db.execute(
+        select(func.count(Mensagem.id))
+        .select_from(Mensagem)
+        .join(Conversa, Mensagem.conversa_id == Conversa.id)
+        .where(
+            Conversa.tipo == TipoConversa.B2C,
+            Conversa.loja_id == context.loja_id,
+            Mensagem.autor_id == Conversa.cliente_id,
+            Mensagem.lida == False,
+        )
+    )
+    unread_b2c = b2c_res.scalar() or 0
+
+    return {"unread_b2b": unread_b2b, "unread_b2c": unread_b2c}
+
+
 @router.get("/chat/conversas", response_model=List[ConversaB2BResponse])
 async def listar_conversas_b2b(
     db: AsyncSession = Depends(get_db),
@@ -708,53 +740,65 @@ async def listar_conversas_b2b(
     res = await db.execute(stmt)
     conversas = res.scalars().all()
 
+    if not conversas:
+        return []
+
+    conversa_ids = [c.id for c in conversas]
+    loja_ids = {c.loja_a_id for c in conversas} | {c.loja_b_id for c in conversas}
+
+    # Batch: lojas de todas as conversas numa query só (era 2 por conversa).
+    lojas_res = await db.execute(select(Loja.id, Loja.nome).where(Loja.id.in_(loja_ids)))
+    nomes_loja = {lid: nome for lid, nome in lojas_res.all()}
+
+    # Batch: contagem de não-lidas de todas as conversas, agrupada (era 1 query por conversa).
+    unread_res = await db.execute(
+        select(Mensagem.conversa_id, func.count(Mensagem.id))
+        .where(
+            Mensagem.conversa_id.in_(conversa_ids),
+            Mensagem.autor_id != context.usuario.id,
+            Mensagem.lida == False,
+        )
+        .group_by(Mensagem.conversa_id)
+    )
+    unread_por_conversa = {cid: count for cid, count in unread_res.all()}
+
+    # Batch: última mensagem de cada conversa via subquery de MAX(created_at) + join.
+    ultima_data_sub = (
+        select(Mensagem.conversa_id, func.max(Mensagem.created_at).label("max_data"))
+        .where(Mensagem.conversa_id.in_(conversa_ids))
+        .group_by(Mensagem.conversa_id)
+        .subquery()
+    )
+    ultima_msg_res = await db.execute(
+        select(Mensagem.conversa_id, Mensagem.conteudo, Mensagem.created_at).join(
+            ultima_data_sub,
+            and_(
+                Mensagem.conversa_id == ultima_data_sub.c.conversa_id,
+                Mensagem.created_at == ultima_data_sub.c.max_data,
+            ),
+        )
+    )
+    ultima_msg_por_conversa = {
+        cid: (conteudo, created_at) for cid, conteudo, created_at in ultima_msg_res.all()
+    }
+
     result = []
     for conv in conversas:
-        # Obter lojas
-        stmt_loja_a = select(Loja).where(Loja.id == conv.loja_a_id)
-        res_loja_a = await db.execute(stmt_loja_a)
-        loja_a = res_loja_a.scalar_one_or_none()
-
-        stmt_loja_b = select(Loja).where(Loja.id == conv.loja_b_id)
-        res_loja_b = await db.execute(stmt_loja_b)
-        loja_b = res_loja_b.scalar_one_or_none()
-
-        # Obter última mensagem
-        msg_stmt = (
-            select(Mensagem)
-            .where(Mensagem.conversa_id == conv.id)
-            .order_by(Mensagem.created_at.desc())
-            .limit(1)
-        )
-        msg_res = await db.execute(msg_stmt)
-        last_msg = msg_res.scalar_one_or_none()
-
-        # Obter contagem de mensagens não lidas
-        stmt_unread = (
-            select(func.count(Mensagem.id))
-            .where(
-                Mensagem.conversa_id == conv.id,
-                Mensagem.autor_id != context.usuario.id,
-                Mensagem.lida == False
-            )
-        )
-        res_unread = await db.execute(stmt_unread)
-        unread_count = res_unread.scalar() or 0
-
+        last_msg = ultima_msg_por_conversa.get(conv.id)
         result.append(
             ConversaB2BResponse(
                 id=conv.id,
                 tipo=conv.tipo,
                 loja_a_id=conv.loja_a_id,
-                loja_a_nome=loja_a.nome if loja_a else "Loja Parceira",
+                loja_a_nome=nomes_loja.get(conv.loja_a_id, "Loja Parceira"),
                 loja_b_id=conv.loja_b_id,
-                loja_b_nome=loja_b.nome if loja_b else "Loja Parceira",
+                loja_b_nome=nomes_loja.get(conv.loja_b_id, "Loja Parceira"),
                 ativa=conv.ativa,
                 created_at=conv.created_at,
                 updated_at=conv.updated_at,
-                ultima_mensagem=last_msg.conteudo if last_msg else None,
-                ultima_mensagem_data=last_msg.created_at if last_msg else None,
-                mensagens_nao_lidas=unread_count
+                ultima_mensagem=last_msg[0] if last_msg else None,
+                ultima_mensagem_data=last_msg[1] if last_msg else None,
+                mensagens_nao_lidas=unread_por_conversa.get(conv.id, 0)
             )
         )
 

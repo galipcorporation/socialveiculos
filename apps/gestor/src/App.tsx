@@ -1,34 +1,45 @@
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AppLayout } from './components/AppLayout'
-import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
-import { Aprovacoes } from './pages/Aprovacoes'
-import { Estoque } from './pages/Estoque'
-import { CRM } from './pages/CRM'
-import { Ferramentas } from './pages/Ferramentas'
-import { Financeiro } from './pages/Financeiro'
-import { MinhasComissoes } from './pages/MinhasComissoes'
-import { Equipe } from './pages/Equipe'
-import { Configuracoes } from './pages/Configuracoes'
-import { RedeSocial } from './pages/RedeSocial'
-import { AssistenteIA } from './pages/AssistenteIA'
-import { Ajuda } from './pages/Ajuda'
-import { PosVenda } from './pages/PosVenda'
-import { SimuladorPage } from './pages/ferramentas/Simulador'
-import { ContratosPage } from './pages/ferramentas/Contratos'
-import { MarketingPage } from './pages/ferramentas/Marketing'
-import { FipePage } from './pages/ferramentas/Fipe'
-import { NotasFiscaisPage } from './pages/ferramentas/NotasFiscais'
-import { MeuSitePage } from './pages/ferramentas/MeuSite'
-import { AdminPage } from './pages/Admin'
 import { AdminLayout } from './components/AdminLayout'
 import { ImpersonarPage } from './pages/Impersonar'
 import { ExtensionProvider } from './contexts/ExtensionContext'
 import { useAuthStore } from './stores/authStore'
 import { api } from './lib/api'
 import { UIProvider } from './components/UIProvider'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, lazy, Suspense, useEffect, useState } from 'react'
 import { parseModulos, podeAcessarModulo, type ModuloKey } from './lib/modulos'
+
+// Code-splitting por rota: cada página do painel vira um chunk carregado sob demanda,
+// em vez de todas (TipTap, simulador, marketing…) irem no bundle inicial único.
+const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })))
+const Aprovacoes = lazy(() => import('./pages/Aprovacoes').then(m => ({ default: m.Aprovacoes })))
+const Estoque = lazy(() => import('./pages/Estoque').then(m => ({ default: m.Estoque })))
+const CRM = lazy(() => import('./pages/CRM').then(m => ({ default: m.CRM })))
+const Ferramentas = lazy(() => import('./pages/Ferramentas').then(m => ({ default: m.Ferramentas })))
+const Financeiro = lazy(() => import('./pages/Financeiro').then(m => ({ default: m.Financeiro })))
+const MinhasComissoes = lazy(() => import('./pages/MinhasComissoes').then(m => ({ default: m.MinhasComissoes })))
+const Equipe = lazy(() => import('./pages/Equipe').then(m => ({ default: m.Equipe })))
+const Configuracoes = lazy(() => import('./pages/Configuracoes').then(m => ({ default: m.Configuracoes })))
+const RedeSocial = lazy(() => import('./pages/RedeSocial').then(m => ({ default: m.RedeSocial })))
+const AssistenteIA = lazy(() => import('./pages/AssistenteIA').then(m => ({ default: m.AssistenteIA })))
+const Ajuda = lazy(() => import('./pages/Ajuda').then(m => ({ default: m.Ajuda })))
+const PosVenda = lazy(() => import('./pages/PosVenda').then(m => ({ default: m.PosVenda })))
+const SimuladorPage = lazy(() => import('./pages/ferramentas/Simulador').then(m => ({ default: m.SimuladorPage })))
+const ContratosPage = lazy(() => import('./pages/ferramentas/Contratos').then(m => ({ default: m.ContratosPage })))
+const MarketingPage = lazy(() => import('./pages/ferramentas/Marketing').then(m => ({ default: m.MarketingPage })))
+const FipePage = lazy(() => import('./pages/ferramentas/Fipe').then(m => ({ default: m.FipePage })))
+const NotasFiscaisPage = lazy(() => import('./pages/ferramentas/NotasFiscais').then(m => ({ default: m.NotasFiscaisPage })))
+const MeuSitePage = lazy(() => import('./pages/ferramentas/MeuSite').then(m => ({ default: m.MeuSitePage })))
+const AdminPage = lazy(() => import('./pages/Admin').then(m => ({ default: m.AdminPage })))
+
+function RouteFallback() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: 'var(--sv-text-secondary, #94a3b8)', fontSize: '0.9rem' }}>
+      Carregando…
+    </div>
+  )
+}
 
 function PrivateRoute() {
   const { isAuthenticated, user, token, logout } = useAuthStore()
@@ -118,6 +129,7 @@ export default function App() {
   return (
     <ExtensionProvider>
       <UIProvider />
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
       {/* Rota pública de login */}
       <Route path="login" element={<Login />} />
@@ -172,6 +184,7 @@ export default function App() {
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
     </ExtensionProvider>
   )
 }

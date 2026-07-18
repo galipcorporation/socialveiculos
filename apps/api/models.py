@@ -592,6 +592,8 @@ class PublicacaoB2B(Base):
     # Relationships
     comentarios = relationship("Comentario", back_populates="publicacao", cascade="all, delete-orphan")
     curtidas = relationship("Curtida", back_populates="publicacao", cascade="all, delete-orphan")
+    veiculo = relationship("Veiculo", foreign_keys=[veiculo_id], viewonly=True)
+    loja = relationship("Loja", foreign_keys=[loja_id], viewonly=True)
 
     __table_args__ = (
         Index("ix_pub_b2b_loja", "loja_id"),

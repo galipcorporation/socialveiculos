@@ -132,47 +132,68 @@ async def listar_conversas_cliente(
     """
     stmt = (
         select(Conversa)
-        .options(selectinload(Conversa.mensagens))
         .where(Conversa.cliente_id == current_user.id, Conversa.tipo == TipoConversa.B2C)
         .order_by(Conversa.updated_at.desc())
     )
     res = await db.execute(stmt)
     conversas = res.scalars().all()
 
+    if not conversas:
+        return []
+
+    conversa_ids = [c.id for c in conversas]
+    loja_ids = {c.loja_id for c in conversas}
+    veiculo_ids = {c.veiculo_id for c in conversas if c.veiculo_id}
+
+    lojas_res = await db.execute(select(Loja.id, Loja.nome).where(Loja.id.in_(loja_ids)))
+    nomes_loja = {lid: nome for lid, nome in lojas_res.all()}
+
+    veiculos_por_id: dict[str, Veiculo] = {}
+    if veiculo_ids:
+        veiculos_res = await db.execute(select(Veiculo).where(Veiculo.id.in_(veiculo_ids)))
+        veiculos_por_id = {v.id: v for v in veiculos_res.scalars().all()}
+
+    unread_res = await db.execute(
+        select(Mensagem.conversa_id, func.count(Mensagem.id))
+        .where(
+            Mensagem.conversa_id.in_(conversa_ids),
+            Mensagem.autor_id != current_user.id,
+            Mensagem.lida == False,
+        )
+        .group_by(Mensagem.conversa_id)
+    )
+    unread_por_conversa = {cid: count for cid, count in unread_res.all()}
+
+    ultima_data_sub = (
+        select(Mensagem.conversa_id, func.max(Mensagem.created_at).label("max_data"))
+        .where(Mensagem.conversa_id.in_(conversa_ids))
+        .group_by(Mensagem.conversa_id)
+        .subquery()
+    )
+    ultima_msg_res = await db.execute(
+        select(Mensagem.conversa_id, Mensagem.conteudo, Mensagem.created_at).join(
+            ultima_data_sub,
+            and_(
+                Mensagem.conversa_id == ultima_data_sub.c.conversa_id,
+                Mensagem.created_at == ultima_data_sub.c.max_data,
+            ),
+        )
+    )
+    ultima_msg_por_conversa = {
+        cid: (conteudo, created_at) for cid, conteudo, created_at in ultima_msg_res.all()
+    }
+
     response_data = []
     for c in conversas:
-        # Buscar nome da loja
-        loja_stmt = select(Loja).where(Loja.id == c.loja_id)
-        loja_res = await db.execute(loja_stmt)
-        loja = loja_res.scalar_one_or_none()
-
-        # Buscar veículo se houver
-        veiculo = None
-        if c.veiculo_id:
-            v_stmt = select(Veiculo).where(Veiculo.id == c.veiculo_id)
-            v_res = await db.execute(v_stmt)
-            veiculo = v_res.scalar_one_or_none()
-
-        ultima_msg = c.mensagens[-1] if c.mensagens else None
-
-        # Obter contagem de mensagens não lidas para o cliente
-        stmt_unread = (
-            select(func.count(Mensagem.id))
-            .where(
-                Mensagem.conversa_id == c.id,
-                Mensagem.autor_id != current_user.id,
-                Mensagem.lida == False
-            )
-        )
-        res_unread = await db.execute(stmt_unread)
-        unread_count = res_unread.scalar() or 0
+        veiculo = veiculos_por_id.get(c.veiculo_id) if c.veiculo_id else None
+        last_msg = ultima_msg_por_conversa.get(c.id)
 
         response_data.append(
             ConversaB2CResponse(
                 id=c.id,
                 tipo=c.tipo,
                 loja_id=c.loja_id,
-                loja_nome=loja.nome if loja else "Loja Parceira",
+                loja_nome=nomes_loja.get(c.loja_id, "Loja Parceira"),
                 cliente_id=c.cliente_id,
                 cliente_nome=current_user.nome,
                 veiculo_id=c.veiculo_id,
@@ -181,9 +202,9 @@ async def listar_conversas_cliente(
                 ativa=c.ativa,
                 created_at=c.created_at,
                 updated_at=c.updated_at,
-                ultima_mensagem=ultima_msg.conteudo if ultima_msg else None,
-                ultima_mensagem_data=ultima_msg.created_at if ultima_msg else None,
-                mensagens_nao_lidas=unread_count
+                ultima_mensagem=last_msg[0] if last_msg else None,
+                ultima_mensagem_data=last_msg[1] if last_msg else None,
+                mensagens_nao_lidas=unread_por_conversa.get(c.id, 0)
             )
         )
 
@@ -203,45 +224,74 @@ async def listar_conversas_b2c_loja(
 
     stmt = (
         select(Conversa)
-        .options(selectinload(Conversa.mensagens))
         .where(Conversa.loja_id == ctx.loja_id, Conversa.tipo == TipoConversa.B2C)
         .order_by(Conversa.updated_at.desc())
     )
     res = await db.execute(stmt)
     conversas = res.scalars().all()
 
+    if not conversas:
+        return []
+
+    conversa_ids = [c.id for c in conversas]
+    cliente_ids = {c.cliente_id for c in conversas}
+    veiculo_ids = {c.veiculo_id for c in conversas if c.veiculo_id}
+    cliente_da_conversa = {c.id: c.cliente_id for c in conversas}
+
+    clientes_res = await db.execute(select(Usuario.id, Usuario.nome).where(Usuario.id.in_(cliente_ids)))
+    nomes_cliente = {uid: nome for uid, nome in clientes_res.all()}
+
+    veiculos_por_id: dict[str, Veiculo] = {}
+    if veiculo_ids:
+        veiculos_res = await db.execute(select(Veiculo).where(Veiculo.id.in_(veiculo_ids)))
+        veiculos_por_id = {v.id: v for v in veiculos_res.scalars().all()}
+
+    # Não-lidas = mensagens enviadas pelo cliente de cada conversa (perspectiva do lojista).
+    unread_res = await db.execute(
+        select(Mensagem.conversa_id, Mensagem.autor_id, func.count(Mensagem.id))
+        .where(Mensagem.conversa_id.in_(conversa_ids), Mensagem.lida == False)
+        .group_by(Mensagem.conversa_id, Mensagem.autor_id)
+    )
+    unread_por_conversa: dict[str, int] = {}
+    for cid, autor_id, count in unread_res.all():
+        if autor_id == cliente_da_conversa.get(cid):
+            unread_por_conversa[cid] = unread_por_conversa.get(cid, 0) + count
+
+    ultima_data_sub = (
+        select(Mensagem.conversa_id, func.max(Mensagem.created_at).label("max_data"))
+        .where(Mensagem.conversa_id.in_(conversa_ids))
+        .group_by(Mensagem.conversa_id)
+        .subquery()
+    )
+    ultima_msg_res = await db.execute(
+        select(Mensagem.conversa_id, Mensagem.conteudo, Mensagem.created_at).join(
+            ultima_data_sub,
+            and_(
+                Mensagem.conversa_id == ultima_data_sub.c.conversa_id,
+                Mensagem.created_at == ultima_data_sub.c.max_data,
+            ),
+        )
+    )
+    ultima_msg_por_conversa = {
+        cid: (conteudo, created_at) for cid, conteudo, created_at in ultima_msg_res.all()
+    }
+
     response_data = []
     for c in conversas:
-        cliente_res = await db.execute(select(Usuario).where(Usuario.id == c.cliente_id))
-        cliente = cliente_res.scalar_one_or_none()
-        veiculo = None
-        if c.veiculo_id:
-            v_res = await db.execute(select(Veiculo).where(Veiculo.id == c.veiculo_id))
-            veiculo = v_res.scalar_one_or_none()
-        ultima_msg = c.mensagens[-1] if c.mensagens else None
-        # Obter contagem de mensagens não lidas para o lojista (mensagens do cliente)
-        stmt_unread = (
-            select(func.count(Mensagem.id))
-            .where(
-                Mensagem.conversa_id == c.id,
-                Mensagem.autor_id == c.cliente_id,
-                Mensagem.lida == False
-            )
-        )
-        res_unread = await db.execute(stmt_unread)
-        unread_count = res_unread.scalar() or 0
+        veiculo = veiculos_por_id.get(c.veiculo_id) if c.veiculo_id else None
+        last_msg = ultima_msg_por_conversa.get(c.id)
 
         response_data.append(ConversaB2CResponse(
             id=c.id, tipo=c.tipo,
             loja_id=c.loja_id, loja_nome=ctx.loja.nome if ctx.loja else "",
-            cliente_id=c.cliente_id, cliente_nome=cliente.nome if cliente else "Cliente",
+            cliente_id=c.cliente_id, cliente_nome=nomes_cliente.get(c.cliente_id, "Cliente"),
             veiculo_id=c.veiculo_id,
             veiculo_marca=veiculo.marca if veiculo else None,
             veiculo_modelo=veiculo.modelo if veiculo else None,
             ativa=c.ativa, created_at=c.created_at, updated_at=c.updated_at,
-            ultima_mensagem=ultima_msg.conteudo if ultima_msg else None,
-            ultima_mensagem_data=ultima_msg.created_at if ultima_msg else None,
-            mensagens_nao_lidas=unread_count
+            ultima_mensagem=last_msg[0] if last_msg else None,
+            ultima_mensagem_data=last_msg[1] if last_msg else None,
+            mensagens_nao_lidas=unread_por_conversa.get(c.id, 0)
         ))
     return response_data
 
