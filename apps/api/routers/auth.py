@@ -701,18 +701,25 @@ async def get_me(
     """Retorna o usuário autenticado (inclui avatar_url)."""
     user_resp = UserResponse.model_validate(current_user)
     if current_user.papel not in (PapelUsuario.CLIENTE, PapelUsuario.ADMIN_PLATAFORMA):
-        # Gestor/Vendedor: o acesso depende de um vínculo de loja ATIVO. Se o
-        # membro foi desativado (Equipe), não há vínculo ativo — a sessão está
-        # morta ainda que o Usuario.ativo continue True. Devolve 401 para o front
-        # expulsar ao login em vez de deixar entrar e só falhar com 403 nas rotas.
-        stmt = select(MembroLoja).where(MembroLoja.usuario_id == current_user.id, MembroLoja.ativo == True)
+        # Gestor/Vendedor: o acesso depende de um vínculo de loja ATIVO e da
+        # própria loja estar ATIVA. Se o membro foi desativado (Equipe) ou o
+        # admin de plataforma inativou a loja (Admin > Lojas), não há acesso
+        # válido — a sessão está morta ainda que o Usuario.ativo continue True.
+        # Devolve 401 para o front expulsar ao login em vez de deixar entrar e
+        # só falhar depois, com os cards do dashboard quebrados.
+        stmt = (
+            select(MembroLoja, Loja)
+            .join(Loja, MembroLoja.loja_id == Loja.id)
+            .where(MembroLoja.usuario_id == current_user.id, MembroLoja.ativo == True)
+        )
         membro_res = await db.execute(stmt)
-        membro = membro_res.scalar_one_or_none()
-        if not membro:
+        row = membro_res.first()
+        if not row or not row[1].ativa:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Seu acesso a esta loja foi desativado.",
             )
+        membro, _loja = row
         user_resp.loja_id = membro.loja_id
         user_resp.modulos = membro.modulos
     return user_resp
