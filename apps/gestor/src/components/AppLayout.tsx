@@ -60,9 +60,6 @@ export function AppLayout() {
   // Sem loja escolhida o backend responde 409 em toda rota B2B; aqui abrimos o seletor.
   const papel = useAuthStore((s) => s.user?.papel)
   const lojaId = useLojaAtivaStore((s) => s.lojaId)
-  if (papel === 'admin_plataforma' && !lojaId && !impersonando) {
-    return <SeletorLojaGate />
-  }
 
   // Mobile drawer state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -95,6 +92,10 @@ export function AppLayout() {
     }
     return () => { document.body.style.overflow = '' }
   }, [mobileMenuOpen])
+
+  if (papel === 'admin_plataforma' && !lojaId && !impersonando) {
+    return <SeletorLojaGate />
+  }
 
   return (
     <div className="app-layout" style={impersonando ? { paddingTop: 34 } : undefined}>

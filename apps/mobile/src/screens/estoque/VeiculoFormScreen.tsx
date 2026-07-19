@@ -73,7 +73,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
   const [sheet, setSheet] = useState<'ano' | 'cambio' | 'combustivel' | null>(null)
   const [txtOpcional, setTxtOpcional] = useState('')
   const [consultandoPlaca, setConsultandoPlaca] = useState(false)
-  const [rapido, setRapido] = useState(!editando)
+  const [rapido] = useState(!editando)
   const [secaoAberta, setSecaoAberta] = useState<'detalhes' | 'identificacao' | 'opcionais' | 'descricao' | null>(null)
 
   const consultarPlaca = async () => {

@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from storage import storage_provider
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria, get_optional_user
-from models import Veiculo, Midia, Usuario, SolicitacaoAprovacao, StatusAprovacao, TipoAcaoAprovacao, StatusVeiculo, OrigemVeiculo, Negociacao, PapelUsuario, PublicacaoB2B, Favorito, ClientePF, VeiculoDocumento, TipoDocumentoVeiculo, LojaSeguidora, Loja, utcnow
+from models import Veiculo, Usuario, SolicitacaoAprovacao, StatusAprovacao, TipoAcaoAprovacao, StatusVeiculo, OrigemVeiculo, Negociacao, PublicacaoB2B, Favorito, ClientePF, VeiculoDocumento, TipoDocumentoVeiculo, LojaSeguidora, Loja, utcnow
 from rbac import exige_permissao, Acao, Recurso, can
 from schemas import (
     VeiculoB2BResponse,
@@ -1093,7 +1093,6 @@ async def precificacao_veiculo(
 ):
     """Retorna dados de precificação FIPE + dias no estoque para um veículo."""
     from fipe_api import consultar_preco
-    from datetime import datetime, timezone
 
     stmt = select(Veiculo).where(
         Veiculo.id == veiculo_id,

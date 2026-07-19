@@ -3,7 +3,6 @@ Social Veículos — Credenciais de IA (BYOK) por loja (M024)
 Permite ao gestor cadastrar sua própria chave de API de IA (Anthropic, OpenAI, Gemini).
 """
 
-import json
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession

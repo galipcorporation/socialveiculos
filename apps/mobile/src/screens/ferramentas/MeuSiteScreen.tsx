@@ -15,7 +15,6 @@ import type { SiteLoja, TemplateSite } from '../../services/types'
 import { TEMPLATES_SITE } from '../../services/types'
 
 export default function MeuSiteScreen() {
-  const { colors } = useTheme()
   const queryClient = useQueryClient()
   const toast = useToast()
 

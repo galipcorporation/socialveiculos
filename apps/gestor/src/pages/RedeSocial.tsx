@@ -148,12 +148,6 @@ const HeartIcon = ({ filled }: { filled: boolean }) => (
   </svg>
 )
 
-const CommentIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 18, height: 18 }}>
-    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-  </svg>
-)
-
 const SearchIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16 }}>
     <circle cx="11" cy="11" r="8" />
@@ -1030,7 +1024,7 @@ function ChatTab({ token, user, addToast, initialConversaId, subTab, setSubTab }
           if (!isFromActive) {
             useChatStore.getState().fetchUnreadCounts()
           }
-        } catch {}
+        } catch { /* ignora */ }
       },
     })
     wsRef.current = sock
@@ -1334,7 +1328,7 @@ function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: 
           if (!isFromActive) {
             useChatStore.getState().fetchUnreadCounts()
           }
-        } catch {}
+        } catch { /* ignora */ }
       },
     })
     wsRef.current = sock

@@ -217,7 +217,7 @@ app.post('/session/stop', authenticate, (req, res) => {
   const s = sessions.get(usuario_id);
   s.status = 'disconnected';
   if (s.sock) {
-    try { s.sock.end(); } catch (e) {}
+    try { s.sock.end(); } catch { /* ignora */ }
   }
   sessions.delete(usuario_id);
 

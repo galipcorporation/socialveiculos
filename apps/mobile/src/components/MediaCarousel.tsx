@@ -100,6 +100,11 @@ export function MediaCarousel({ veiculo, width, height, borderRadius = radius.md
   const [indice, setIndice] = useState(0)
   const listRef = useRef<FlatList<Midia>>(null)
 
+  const onViewableChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const primeiro = viewableItems[0]
+    if (primeiro?.index != null) setIndice(primeiro.index)
+  }).current
+
   if (midias.length === 0) {
     return <Placeholder veiculo={veiculo} width={w} height={height} borderRadius={borderRadius} />
   }
@@ -116,11 +121,6 @@ export function MediaCarousel({ veiculo, width, height, borderRadius = radius.md
     listRef.current?.scrollToIndex({ index: alvo, animated: true })
     setIndice(alvo)
   }
-
-  const onViewableChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const primeiro = viewableItems[0]
-    if (primeiro?.index != null) setIndice(primeiro.index)
-  }).current
 
   return (
     <View style={{ width: w, height }}>

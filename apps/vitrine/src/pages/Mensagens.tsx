@@ -117,7 +117,7 @@ export function Mensagens() {
             setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
           }
           fetchConversas()
-        } catch {}
+        } catch { /* ignora */ }
       },
     })
     socketRef.current = sock

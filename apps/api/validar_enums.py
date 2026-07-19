@@ -7,13 +7,11 @@ Uso: python validar_enums.py
 Gera também enums.csv com o catálogo de enums do sistema.
 """
 import csv
-import enum as _enum
 import sqlite3
 import sys
 
 import models
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import inspect as sa_inspect
 
 DB = "socialveiculos.db"
 

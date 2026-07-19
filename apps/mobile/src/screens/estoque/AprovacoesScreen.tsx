@@ -1,6 +1,5 @@
 import React from 'react'
 import { FlatList, View } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing } from '../../theme/tokens'

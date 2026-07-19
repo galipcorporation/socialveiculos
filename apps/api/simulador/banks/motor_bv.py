@@ -1,9 +1,7 @@
 """
 Motor BV Open - Integração via API REST com o Banco BV.
 """
-import os
 import time
-import base64
 import logging
 from typing import Optional, Dict, Any
 

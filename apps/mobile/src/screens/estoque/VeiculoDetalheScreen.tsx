@@ -12,7 +12,7 @@ import {
 } from '../../components/ui'
 import { VehiclePhoto } from '../../components/VehiclePhoto'
 import { RegistrarVendaSheet } from '../../components/RegistrarVendaSheet'
-import { CATEGORIAS_CUSTO, equipeService, veiculosService } from '../../services'
+import { CATEGORIAS_CUSTO, veiculosService } from '../../services'
 import {
   STATUS_VEICULO_LABEL, TIPOS_DOC_VENDA, type CategoriaCusto, type TipoDocumentoVenda,
   type TipoSolicitacao, type Veiculo, type VeiculoStatus,
@@ -299,7 +299,6 @@ function Spec({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; la
 }
 
 function Linha({ label, valor, cor }: { label: string; valor: string; cor?: string }) {
-  const { colors } = useTheme()
   return (
     <View style={styles.linha}>
       <Txt variant="caption" color="textDim">{label}</Txt>

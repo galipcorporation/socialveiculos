@@ -7,7 +7,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { spacing } from '../../theme/tokens'
 import {
   AppHeader, Avatar, Badge, Button, Card, EmptyState, ErrorState, FilterChips, Input, SearchBar,
-  SegmentedControl, Screen, Sheet, SkeletonCard, Txt, useToast,
+  SegmentedControl, Sheet, SkeletonCard, Txt, useToast,
 } from '../../components/ui'
 import { chatService, repassesService } from '../../services'
 import type {

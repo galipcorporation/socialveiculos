@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, extractErrorDetails, type ApiErrorDetails } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
 import { mascararCPF, mascararTelefone, mascararMoeda, parseMoeda, mascararCNPJ, mascararCEP, mascararRG, sanitizarTexto, validarCPF, validarCNPJ, UFS_VALIDAS, capitalizarNome } from '../lib/mascaras'
-import { VeiculoModal } from './Estoque'
+import { VeiculoModal } from './estoque/VeiculoModal'
 import { buscarCEP } from '../lib/cep'
 
 /* ── Types ───────────────────────────────────────────────────── */
@@ -323,7 +323,7 @@ function KanbanTab({ addToast }: { addToast: (type: ToastType, message: string, 
     const leadId = draggedLeadId
 
     // Optimistic Update
-    let oldColumns = [...columns]
+    const oldColumns = [...columns]
     let leadToMove: Lead | null = null
 
     // Encontra e remove da coluna antiga

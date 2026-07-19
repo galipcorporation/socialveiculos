@@ -6,7 +6,7 @@ interface SiteHeroProps {
   onSearchChange?: (q: string) => void
 }
 
-export function SiteHero({ config, onSearchChange }: SiteHeroProps) {
+export function SiteHero({ config }: SiteHeroProps) {
   if (config.tipo === 'marketplace') {
     // Marketplace padrão (manter como estava)
     return (

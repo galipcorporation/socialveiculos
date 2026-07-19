@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import time
 from typing import Dict, List
 
 from .banks.base_motor import SimulationInput, SimulationOutput
@@ -28,7 +27,6 @@ class OrquestradorV2:
         Executa simulações em todos os bancos solicitados em paralelo.
         credentials_map: { bank_code: dict_with_credentials }
         """
-        start = time.time()
         
         bank_codes = [b for b in set(bancos_solicitados) if b in self.AVAILABLE_MOTORS]
         

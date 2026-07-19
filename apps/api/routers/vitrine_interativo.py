@@ -2,21 +2,19 @@
 Social Veículos — Rotas Interativas da Vitrine B2C (Favoritos & Chat)
 """
 
-import json
-from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
-from sqlalchemy import or_, and_, func
+from sqlalchemy import and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from database import get_db, async_session
-from deps import get_current_user, get_optional_user
+from deps import get_current_user
 from models import (
     utcnow,
     Usuario, Veiculo, Favorito, Conversa, Mensagem, Loja,
-    ClientePF, Lead, EtapaLead, OrigemLead, TipoConversa, StatusVeiculo, VeiculoDocumento
+    ClientePF, Lead, EtapaLead, OrigemLead, TipoConversa, StatusVeiculo
 )
 from schemas import (
     FavoritoResponse, FavoritoRequest, VeiculoB2CResponse,

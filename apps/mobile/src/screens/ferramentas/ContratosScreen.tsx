@@ -278,7 +278,6 @@ function Linha({ label, valor }: { label: string; valor: string }) {
 }
 
 function ModelosTab() {
-  const { colors } = useTheme()
   const queryClient = useQueryClient()
   const [selecionado, setSelecionado] = useState<TemplateContrato | null>(null)
   const [novoAberto, setNovoAberto] = useState(false)

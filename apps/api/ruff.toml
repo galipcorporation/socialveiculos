@@ -1,0 +1,20 @@
+# Lint do backend — regras padrão (pyflakes + erros pycodestyle)
+target-version = "py312"
+line-length = 120
+
+exclude = ["alembic/versions", "__pycache__", "backups"]
+
+[lint]
+# E4/E7/E9 = erros reais de pycodestyle; F = pyflakes (imports/vars não usados, redefinições)
+select = ["E4", "E7", "E9", "F"]
+# E712: `Coluna == True` é expressão SQLAlchemy, não comparação Python — trocar por `is` quebraria as queries
+ignore = ["E712"]
+
+[lint.per-file-ignores]
+# seeds e scripts usam import * por conveniência
+"seed.py" = ["F403", "F405"]
+# bootstrap: imports após setup de app/env para evitar import circular
+"main.py" = ["E402"]
+"database.py" = ["E402"]
+"routers/configuracoes.py" = ["E402"]
+"simulador/automation/browser_pool.py" = ["E402"]

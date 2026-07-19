@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useContext } from 'react'
+import { useState, useEffect, useRef, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { mascararCPF, mascararTelefone, mascararMoeda, parseMoeda, mascararData, capitalizarNome } from '../../lib/mascaras'
@@ -7,8 +7,8 @@ import { ExtensionContext, CHROME_STORE_URL } from '../../contexts/ExtensionCont
 import { VehicleIdentityFields } from '../../components/VehicleIdentityFields'
 import { tiposVeiculoFinanciaveis, isTipoFinanciavel } from '../../lib/veiculo'
 import { 
-  Calculator, Loader2, Trash2, Edit, Search, X, Check, AlertCircle, AlertTriangle, 
-  Clock, Send, Smartphone, Download, Gem, ExternalLink, FileText, RefreshCw, Printer, Car, ChevronDown 
+  Calculator, Loader2, Trash2, Edit, Search, X, AlertCircle, AlertTriangle,
+  Smartphone, Gem, ExternalLink, Printer,
 } from 'lucide-react'
 
 // Bancos disponíveis
@@ -69,8 +69,7 @@ interface SimulacaoResponse {
 
 export function SimuladorPage() {
   const showToast = useUIStore((s) => s.showToast)
-  const confirm = useUIStore((s) => s.confirm)
-  const { isInstalled, recheck: recheckExtension } = useContext(ExtensionContext)
+  const { isInstalled } = useContext(ExtensionContext)
   const navigate = useNavigate()
 
   // Módulo liberado (paywall status)
@@ -115,7 +114,7 @@ export function SimuladorPage() {
   // Autocomplete do estoque
   const [veiculosEstoque, setVeiculosEstoque] = useState<Veiculo[]>([])
   const [showPlacaDropdown, setShowPlacaDropdown] = useState(false)
-  const [loadingVeiculos, setLoadingVeiculos] = useState(false)
+  const [, setLoadingVeiculos] = useState(false)
 
   // Resultados
   const [showModalResultados, setShowModalResultados] = useState(false)

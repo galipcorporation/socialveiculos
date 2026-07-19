@@ -78,7 +78,7 @@ function timeAgo(v: Veiculo) {
   return `${v.ano_fabricacao}/${v.ano_modelo}`
 }
 
-export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir, isAuthenticated }: CarCardProps) {
+export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir }: CarCardProps) {
   const navigate = useNavigate()
   const [currentIdx, setCurrentIdx] = useState(0)
   const [imgError, setImgError] = useState(false)

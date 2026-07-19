@@ -7,7 +7,6 @@ import logging
 import threading
 import time
 from queue import Queue, Empty
-from typing import Optional
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.chrome.service import Service

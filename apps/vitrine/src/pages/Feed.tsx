@@ -79,7 +79,7 @@ const CarIcon = () => (
 export function Feed() {
   const navigate = useNavigate()
   const { isAuthenticated, user, openLoginModal, logout, updateUser } = useAuthStore()
-  const { config, lojaId, isWhiteLabel } = useSiteConfig()
+  const { lojaId, isWhiteLabel } = useSiteConfig()
 
   // Tema escuro
   const [darkMode, setDarkMode] = useState(() => {
@@ -355,11 +355,6 @@ export function Feed() {
     window.open(link, '_blank')
   }
 
-
-  function formatCurrency(value?: number) {
-    if (value == null) return '—'
-    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-  }
 
   const handleFiltroRapido = (f: FiltroRapido) => {
     if (!isAuthenticated && f !== 'Todos') { openLoginModal('login'); return }

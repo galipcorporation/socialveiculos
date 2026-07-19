@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { api } from '../lib/api'
-import { useUIStore } from '../stores/uiStore'
 import { mascararCPF, mascararTelefone, mascararMoeda, parseMoeda, mascararData, capitalizarNome } from '../lib/mascaras'
 
 interface SimuladorModalProps {
@@ -26,7 +25,7 @@ export function SimuladorModal({ veiculo, onClose }: SimuladorModalProps) {
   
   const [entrada, setEntrada] = useState(veiculo.preco_venda ? veiculo.preco_venda * 0.2 : 0)
   const [entradaStr, setEntradaStr] = useState(mascararMoeda(veiculo.preco_venda ? veiculo.preco_venda * 0.2 : 0))
-  const [bancos, setBancos] = useState<string[]>(['bv', 'pan'])
+  const [bancos] = useState<string[]>(['bv', 'pan'])
   
   const [loading, setLoading] = useState(false)
   const [resultados, setResultados] = useState<SimulacaoResult[]>([])

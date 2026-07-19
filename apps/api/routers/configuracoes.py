@@ -188,7 +188,7 @@ async def listar_credenciais_banco(
     res = await db.execute(
         select(CredencialBanco).where(
             CredencialBanco.loja_id == context.loja_id,
-            or_(CredencialBanco.usuario_id == None, CredencialBanco.usuario_id == context.usuario.id)
+            or_(CredencialBanco.usuario_id.is_(None), CredencialBanco.usuario_id == context.usuario.id)
         )
     )
     credenciais = res.scalars().all()
@@ -213,7 +213,6 @@ async def salvar_credenciais_banco(
     """
     from models import CredencialBanco, PapelUsuario
     from simulador.crypt import encrypt_credentials, decrypt_credentials
-    from sqlalchemy import or_
 
     usuario_id_alvo: str | None = None
     if data.escopo == "vendedor":
@@ -303,7 +302,7 @@ async def testar_credencial_banco(
             select(CredencialBanco).where(
                 CredencialBanco.loja_id == context.loja_id,
                 CredencialBanco.banco == data.banco,
-                or_(CredencialBanco.usuario_id == context.usuario.id, CredencialBanco.usuario_id == None),
+                or_(CredencialBanco.usuario_id == context.usuario.id, CredencialBanco.usuario_id.is_(None)),
             )
         )
         cred = res.scalars().first()

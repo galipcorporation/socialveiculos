@@ -10,7 +10,7 @@ from typing import Optional, Union
 
 import pyotp
 import qrcode
-from fastapi import APIRouter, Depends, HTTPException, status, Header, Request, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field, model_validator, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +24,7 @@ from auth import (
     decode_access_token,
 )
 from database import get_db
-from deps import get_current_user, credentials_exception, registrar_auditoria
+from deps import get_current_user, registrar_auditoria
 from models import Usuario, Loja, MembroLoja, Sessao, PapelUsuario, utcnow
 from config import settings
 from limiter import rate_limit

@@ -70,7 +70,9 @@ export type RootScreenProps<T extends keyof RootStackParamList> = NativeStackScr
 >
 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace -- padrão documentado do React Navigation
   namespace ReactNavigation {
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- padrão documentado do React Navigation
     interface RootParamList extends RootStackParamList {}
   }
 }

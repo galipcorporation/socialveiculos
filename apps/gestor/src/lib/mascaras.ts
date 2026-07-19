@@ -45,8 +45,9 @@ export function sanitizarTexto(val: string, maxLen = 255): string {
   if (!val) return ''
   return val
     .trim()
+    // eslint-disable-next-line no-control-regex -- remoção intencional de caracteres de controle
     .replace(/[\x00-\x1F\x7F-\x9F]/g, '')
-    .replace(/[​-‍﻿]/g, '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/\s+/g, ' ')
     .substring(0, maxLen)
 }

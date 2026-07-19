@@ -1,6 +1,5 @@
 """Testes de CRUD e isolamento multi-tenant de templates de contrato."""
 import uuid
-import json
 import pytest
 from sqlalchemy import delete
 

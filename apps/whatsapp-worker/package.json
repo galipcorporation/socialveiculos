@@ -5,6 +5,7 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
+    "lint": "eslint .",
     "dev": "node server.js",
     "start": "node server.js"
   },

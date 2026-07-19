@@ -11,7 +11,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { contratosService, modulosService, notasFiscaisService } from '../../services'
 import type { Contrato, NotaFiscal, StatusNota } from '../../services/types'
 import { STATUS_NOTA_LABEL } from '../../services/types'
-import { formatBRL, formatData } from '../../lib/format'
+import { formatBRL } from '../../lib/format'
 import type { RootScreenProps } from '../../navigation/types'
 
 const TONE: Record<StatusNota, 'success' | 'warning' | 'neutral' | 'error' | 'info'> = {

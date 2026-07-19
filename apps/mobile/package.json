@@ -60,7 +60,7 @@
     "web": "expo start --web",
     "dev": "expo start --offline",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint ok'",
+    "lint": "eslint .",
     "build:editor": "node webview-editor/build.js"
   }
 }

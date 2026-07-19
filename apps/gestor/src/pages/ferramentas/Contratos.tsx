@@ -194,6 +194,7 @@ export function ContratosPage() {
 
   const toast = (type: 'success' | 'error' | 'info', message: string) => useUIStore.getState().showToast(message, type)
 
+
   // ── Fetch contratos ──
   const fetchContratos = useCallback(async () => {
     setLoading(true)
@@ -838,7 +839,6 @@ function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const [clienteSearch, setClienteSearch] = useState('')
   const [veiculoSearch, setVeiculoSearch] = useState('')
 
-  const toast = (type: 'success' | 'error' | 'info', message: string) => useUIStore.getState().showToast(message, type)
 
   // Fetch clientes — busca também por CPF (remove máscara antes de enviar)
   useEffect(() => {

@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,7 +6,7 @@ from sqlalchemy import delete
 
 from database import get_db
 from deps import get_current_user, registrar_auditoria
-from models import Usuario, Favorito, Mensagem, Sessao, Conversa, PapelUsuario
+from models import Usuario, Favorito, Mensagem, Sessao, PapelUsuario
 from limiter import rate_limit
 
 router = APIRouter(prefix="/v1/lgpd", tags=["LGPD"])

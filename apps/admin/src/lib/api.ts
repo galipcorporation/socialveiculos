@@ -17,7 +17,7 @@ function parseDetail(detail: any): string {
       const field = d.loc ? d.loc[d.loc.length - 1] : ''
       const fieldLabel = field ? `Campo "${field}": ` : ''
       
-      let msg = d.msg || 'valor inválido'
+      const msg = d.msg || 'valor inválido'
       if (msg.includes('is not among the defined enum values')) {
         return `${fieldLabel}O valor inserido não é uma opção permitida.`
       }

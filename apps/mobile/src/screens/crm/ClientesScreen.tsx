@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { FlatList, View } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing } from '../../theme/tokens'
 import {
-  AppHeader, Avatar, Button, Card, EmptyState, Fab, Input, Screen, SearchBar, Sheet,
+  AppHeader, Avatar, Button, Card, EmptyState, Fab, Input, SearchBar, Sheet,
   SkeletonCard, Txt, useToast,
 } from '../../components/ui'
 import { clientesService, type ClienteInput } from '../../services'

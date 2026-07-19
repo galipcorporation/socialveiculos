@@ -7,7 +7,7 @@ jet, aeronave, reboque, outro) retornam lista vazia e o frontend
 permite digitação livre.
 """
 
-from typing import List, Optional
+from typing import Optional
 from fastapi import APIRouter, Query
 
 from fipe_api import listar_marcas as fipe_listar_marcas, listar_modelos as fipe_listar_modelos

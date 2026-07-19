@@ -1,7 +1,6 @@
 """
 Motor Banco PAN - Integração via API REST.
 """
-import os
 import time
 import logging
 from typing import Optional, Dict, Any

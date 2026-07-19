@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, extractErrorDetails, type ApiErrorDetails } from '../lib/api'
-import { useUIStore } from '../stores/uiStore'
 
 /* ── Types ───────────────────────────────────────────────────── */
 
@@ -10,32 +9,6 @@ interface ModuloStatus {
   contratado: boolean
   liberado: boolean
   cta_upgrade?: string | null
-}
-
-interface Plano {
-  id: string
-  nome: string
-  descricao?: string
-  preco_mensal: number
-  modulos_incluidos?: string // JSON array string
-  ativo: boolean
-}
-
-interface Assinatura {
-  id: string
-  loja_id: string
-  plano_id: string
-  status: 'ativa' | 'cancelada' | 'suspensa' | 'expirada'
-  inicio: string
-  fim?: string
-  created_at: string
-}
-
-interface MinhaAssinatura {
-  assinatura?: Assinatura | null
-  plano?: Plano | null
-  em_dia: boolean
-  modulos_ativos: string[]
 }
 
 /* ── Toast System ────────────────────────────────────────────── */
@@ -72,13 +45,6 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
 const WrenchIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ width: 24, height: 24 }}>
     <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
-  </svg>
-)
-
-const CreditCardIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ width: 24, height: 24 }}>
-    <rect x="1" y="4" width="22" height="16" rx="2" />
-    <line x1="1" y1="10" x2="23" y2="10" />
   </svg>
 )
 
@@ -173,18 +139,6 @@ const MODULO_INFO: Record<string, { titulo: string; desc: string }> = {
     titulo: 'Meu Site / Vitrine',
     desc: 'Crie e personalize um site exclusivo para a sua loja com o seu estoque integrado em tempo real.',
   },
-}
-
-function formatCurrency(value?: number | null) {
-  if (value == null) return '—'
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
-
-const STATUS_ASSINATURA: Record<string, { label: string; cls: string }> = {
-  ativa: { label: 'Ativa', cls: 'success' },
-  suspensa: { label: 'Inadimplente', cls: 'warning' },
-  expirada: { label: 'Expirada', cls: 'error' },
-  cancelada: { label: 'Cancelada', cls: 'error' },
 }
 
 /* ══════════════════════════════════════════════════════════════

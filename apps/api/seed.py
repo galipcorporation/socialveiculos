@@ -8,7 +8,6 @@ Popula o banco com:
 """
 
 import asyncio
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy.future import select

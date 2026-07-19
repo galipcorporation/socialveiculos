@@ -1,15 +1,12 @@
 import os
-import json
 import logging
 from datetime import datetime, timezone
 import httpx
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
-from database import async_session
 from models import (
     Loja,
-    Usuario,
     Lead,
     ClientePF,
     ConversaWhatsapp,
@@ -17,7 +14,6 @@ from models import (
     AssistenteConfig,
     AssistentePermissao,
     AutonomiaAssistente,
-    TomAssistente,
     OrigemLead,
     EtapaLead,
 )
@@ -222,7 +218,7 @@ async def gerar_resposta_ia(
                     contexto_extra += f"- Veículo de Interesse: {veiculo.marca} {veiculo.modelo} {veiculo.versao} ({veiculo.ano_modelo}), Preço R$ {veiculo.preco_venda}\n"
 
             # Buscar simulações ativas
-            from models import Simulacao, SimulacaoResultado
+            from models import Simulacao
             stmt_sim = select(Simulacao).options(selectinload(Simulacao.resultados)).where(
                 Simulacao.loja_id == loja_id,
                 Simulacao.cliente_id == cliente.id
@@ -230,7 +226,7 @@ async def gerar_resposta_ia(
             res_sim = await db.execute(stmt_sim)
             simulacao = res_sim.scalar_one_or_none()
             if simulacao and simulacao.resultados:
-                contexto_extra += f"- Simulação de Crédito recente realizada:\n"
+                contexto_extra += "- Simulação de Crédito recente realizada:\n"
                 contexto_extra += f"  Entrada desejada: R$ {simulacao.entrada}, Prazo: {simulacao.prazo_desejado} meses.\n"
                 for r in simulacao.resultados:
                     if r.status.value == "aprovado":
@@ -443,7 +439,7 @@ async def processar_mensagem_recebida(
                     )
                     db.add(msg_ia)
                     await db.commit()
-                    logger.info(f"[ASSISTENTE] Mensagem respondida automaticamente via IA.")
+                    logger.info("[ASSISTENTE] Mensagem respondida automaticamente via IA.")
             except Exception as e:
                 logger.error(f"[ASSISTENTE ERROR] Falha ao enviar resposta automatica: {e}")
                 # Fallback: salva como sugestao se o envio falhar
@@ -453,4 +449,4 @@ async def processar_mensagem_recebida(
             # Modo COPILOTO: salvar sugestao de resposta no banco
             mensagem.sugestao_ia = resposta_ia
             await db.commit()
-            logger.info(f"[ASSISTENTE] Sugestao de resposta IA salva no banco (modo Copiloto).")
+            logger.info("[ASSISTENTE] Sugestao de resposta IA salva no banco (modo Copiloto).")

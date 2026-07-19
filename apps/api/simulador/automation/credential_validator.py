@@ -7,7 +7,6 @@ import logging
 import json
 import os
 from typing import Dict, Any
-from selenium import webdriver
 
 from simulador.automation.browser_pool import browser_pool
 

@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
 import {
-  AppHeader, Avatar, Badge, Button, Card, ErrorState, Input, OptionSheet, Screen, SelectField,
+  AppHeader, Avatar, Badge, Button, Card, ErrorState, Input, OptionSheet, Screen,
   Sheet, Skeleton, TONE_ETAPA_LEAD, Txt, useToast,
 } from '../../components/ui'
 import { VehiclePhoto } from '../../components/VehiclePhoto'

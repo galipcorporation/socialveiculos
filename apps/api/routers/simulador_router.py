@@ -4,7 +4,7 @@ Protegido por paywall do Módulo SIMULADOR.
 """
 
 import json
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 

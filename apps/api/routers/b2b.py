@@ -152,7 +152,7 @@ async def listar_repasses(
         stmt = stmt.where(
             or_(
                 PublicacaoB2B.valor_repasse <= preco_max,
-                and_(PublicacaoB2B.valor_repasse == None, Veiculo.preco_venda <= preco_max)
+                and_(PublicacaoB2B.valor_repasse.is_(None), Veiculo.preco_venda <= preco_max)
             )
         )
     if combustivel:
@@ -376,8 +376,8 @@ async def criar_proposta_repasse(
     stmt_lojas = select(Loja).where(Loja.id.in_([context.loja_id, veiculo.loja_id]))
     res_lojas = await db.execute(stmt_lojas)
     lojas = res_lojas.scalars().all()
-    loja_prop_nome = next((l.nome for l in lojas if l.id == context.loja_id), "Minha Loja")
-    loja_dest_nome = next((l.nome for l in lojas if l.id == veiculo.loja_id), "Loja Parceira")
+    loja_prop_nome = next((lj.nome for lj in lojas if lj.id == context.loja_id), "Minha Loja")
+    loja_dest_nome = next((lj.nome for lj in lojas if lj.id == veiculo.loja_id), "Loja Parceira")
 
     # Criar Notificação para a loja destino
     try:
@@ -1273,7 +1273,7 @@ async def chat_websocket_endpoint(websocket: WebSocket, token: Optional[str] = N
 
                         # Criar Notificação correspondente
                         try:
-                            from models import Notificacao, MembroLoja
+                            from models import Notificacao
                             from uuid import uuid4
                             
                             if conversa.tipo == "b2b":

@@ -7,7 +7,7 @@ interface SiteFooterProps {
 }
 
 export function SiteFooter({ config }: SiteFooterProps) {
-  const { tipo, paleta, logo, lojaSlug, footerText } = config
+  const { tipo, paleta, logo, footerText } = config
   const currentYear = new Date().getFullYear()
 
   return (
