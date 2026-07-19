@@ -12,26 +12,65 @@ import { parseModulos, podeAcessarModulo, type ModuloKey } from './lib/modulos'
 
 // Code-splitting por rota: cada página do painel vira um chunk carregado sob demanda,
 // em vez de todas (TipTap, simulador, marketing…) irem no bundle inicial único.
-const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })))
-const Aprovacoes = lazy(() => import('./pages/Aprovacoes').then(m => ({ default: m.Aprovacoes })))
-const Estoque = lazy(() => import('./pages/Estoque').then(m => ({ default: m.Estoque })))
-const CRM = lazy(() => import('./pages/CRM').then(m => ({ default: m.CRM })))
-const Ferramentas = lazy(() => import('./pages/Ferramentas').then(m => ({ default: m.Ferramentas })))
-const Financeiro = lazy(() => import('./pages/Financeiro').then(m => ({ default: m.Financeiro })))
-const MinhasComissoes = lazy(() => import('./pages/MinhasComissoes').then(m => ({ default: m.MinhasComissoes })))
-const Equipe = lazy(() => import('./pages/Equipe').then(m => ({ default: m.Equipe })))
-const Configuracoes = lazy(() => import('./pages/Configuracoes').then(m => ({ default: m.Configuracoes })))
-const RedeSocial = lazy(() => import('./pages/RedeSocial').then(m => ({ default: m.RedeSocial })))
-const AssistenteIA = lazy(() => import('./pages/AssistenteIA').then(m => ({ default: m.AssistenteIA })))
-const Ajuda = lazy(() => import('./pages/Ajuda').then(m => ({ default: m.Ajuda })))
-const PosVenda = lazy(() => import('./pages/PosVenda').then(m => ({ default: m.PosVenda })))
-const SimuladorPage = lazy(() => import('./pages/ferramentas/Simulador').then(m => ({ default: m.SimuladorPage })))
-const ContratosPage = lazy(() => import('./pages/ferramentas/Contratos').then(m => ({ default: m.ContratosPage })))
-const MarketingPage = lazy(() => import('./pages/ferramentas/Marketing').then(m => ({ default: m.MarketingPage })))
-const FipePage = lazy(() => import('./pages/ferramentas/Fipe').then(m => ({ default: m.FipePage })))
-const NotasFiscaisPage = lazy(() => import('./pages/ferramentas/NotasFiscais').then(m => ({ default: m.NotasFiscaisPage })))
-const MeuSitePage = lazy(() => import('./pages/ferramentas/MeuSite').then(m => ({ default: m.MeuSitePage })))
-const AdminPage = lazy(() => import('./pages/Admin').then(m => ({ default: m.AdminPage })))
+// Os importers ficam separados para o prefetch pós-login aquecer os chunks.
+const importers = {
+  Dashboard: () => import('./pages/Dashboard'),
+  Aprovacoes: () => import('./pages/Aprovacoes'),
+  Estoque: () => import('./pages/Estoque'),
+  CRM: () => import('./pages/CRM'),
+  Ferramentas: () => import('./pages/Ferramentas'),
+  Financeiro: () => import('./pages/Financeiro'),
+  MinhasComissoes: () => import('./pages/MinhasComissoes'),
+  Equipe: () => import('./pages/Equipe'),
+  Configuracoes: () => import('./pages/Configuracoes'),
+  RedeSocial: () => import('./pages/RedeSocial'),
+  AssistenteIA: () => import('./pages/AssistenteIA'),
+  Ajuda: () => import('./pages/Ajuda'),
+  PosVenda: () => import('./pages/PosVenda'),
+  Simulador: () => import('./pages/ferramentas/Simulador'),
+  Contratos: () => import('./pages/ferramentas/Contratos'),
+  Marketing: () => import('./pages/ferramentas/Marketing'),
+  Fipe: () => import('./pages/ferramentas/Fipe'),
+  NotasFiscais: () => import('./pages/ferramentas/NotasFiscais'),
+  MeuSite: () => import('./pages/ferramentas/MeuSite'),
+  Admin: () => import('./pages/Admin'),
+}
+const Dashboard = lazy(() => importers.Dashboard().then(m => ({ default: m.Dashboard })))
+const Aprovacoes = lazy(() => importers.Aprovacoes().then(m => ({ default: m.Aprovacoes })))
+const Estoque = lazy(() => importers.Estoque().then(m => ({ default: m.Estoque })))
+const CRM = lazy(() => importers.CRM().then(m => ({ default: m.CRM })))
+const Ferramentas = lazy(() => importers.Ferramentas().then(m => ({ default: m.Ferramentas })))
+const Financeiro = lazy(() => importers.Financeiro().then(m => ({ default: m.Financeiro })))
+const MinhasComissoes = lazy(() => importers.MinhasComissoes().then(m => ({ default: m.MinhasComissoes })))
+const Equipe = lazy(() => importers.Equipe().then(m => ({ default: m.Equipe })))
+const Configuracoes = lazy(() => importers.Configuracoes().then(m => ({ default: m.Configuracoes })))
+const RedeSocial = lazy(() => importers.RedeSocial().then(m => ({ default: m.RedeSocial })))
+const AssistenteIA = lazy(() => importers.AssistenteIA().then(m => ({ default: m.AssistenteIA })))
+const Ajuda = lazy(() => importers.Ajuda().then(m => ({ default: m.Ajuda })))
+const PosVenda = lazy(() => importers.PosVenda().then(m => ({ default: m.PosVenda })))
+const SimuladorPage = lazy(() => importers.Simulador().then(m => ({ default: m.SimuladorPage })))
+const ContratosPage = lazy(() => importers.Contratos().then(m => ({ default: m.ContratosPage })))
+const MarketingPage = lazy(() => importers.Marketing().then(m => ({ default: m.MarketingPage })))
+const FipePage = lazy(() => importers.Fipe().then(m => ({ default: m.FipePage })))
+const NotasFiscaisPage = lazy(() => importers.NotasFiscais().then(m => ({ default: m.NotasFiscaisPage })))
+const MeuSitePage = lazy(() => importers.MeuSite().then(m => ({ default: m.MeuSitePage })))
+const AdminPage = lazy(() => importers.Admin().then(m => ({ default: m.AdminPage })))
+
+// Depois do login, aquece os chunks das outras telas em segundo plano:
+// a primeira visita a cada tela deixa de mostrar o "Carregando…".
+function PrefetchRotas() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const t = setTimeout(() => {
+      for (const importar of Object.values(importers)) {
+        void importar().catch(() => { /* offline/deploy novo: a rota carrega normal ao navegar */ })
+      }
+    }, 2500)
+    return () => clearTimeout(t)
+  }, [isAuthenticated])
+  return null
+}
 
 function RouteFallback() {
   return (
@@ -129,6 +168,7 @@ export default function App() {
   return (
     <ExtensionProvider>
       <UIProvider />
+      <PrefetchRotas />
       <Suspense fallback={<RouteFallback />}>
       <Routes>
       {/* Rota pública de login */}

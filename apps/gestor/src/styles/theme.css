@@ -1173,11 +1173,20 @@ a:hover {
   z-index: 0;
   opacity: 0.4;
   animation: aurora-pulse 8s ease-in-out infinite alternate;
+  /* Camada própria de composição: a animação roda na GPU sem repintar a página */
+  will-change: transform, opacity;
 }
 
 @keyframes aurora-pulse {
   0% { transform: translate(0, 0) scale(1); opacity: 0.3; }
   100% { transform: translate(-40px, 30px) scale(1.1); opacity: 0.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-glow {
+    animation: none;
+    will-change: auto;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════

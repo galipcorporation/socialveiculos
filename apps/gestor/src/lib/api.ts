@@ -25,6 +25,22 @@ export class ApiError extends Error {
 
 let isRefreshing = false
 
+// ── Cache curto de GETs ──────────────────────────────────────────
+// Torna a alternação de telas fluida: voltar a uma página dentro do TTL
+// renderiza na hora com os dados já carregados, sem spinner. Segurança:
+// qualquer mutação (POST/PUT/PATCH/DELETE) limpa o cache inteiro, e
+// endpoints "vivos" (polling de notificações, chat, assistente) nunca
+// são cacheados. A chave inclui usuário e loja ativa (multi-loja/admin).
+const GET_CACHE_TTL_MS = 15_000
+const GET_CACHE_MAX = 80
+const CACHE_EXCLUDE = /\/(notificacoes|assistente|chat)\b|unread/
+const getCache = new Map<string, { ts: number; data: unknown }>()
+const inflight = new Map<string, Promise<unknown>>()
+
+function limparCacheGet() {
+  getCache.clear()
+}
+
 // Sessão inválida (conta desativada ou expirada): limpa o auth e leva ao login.
 // Usa window.location para funcionar mesmo fora do contexto do React Router.
 function forcarLogin(reason: string) {
@@ -153,10 +169,43 @@ class ApiClient {
   }
 
   get<T>(path: string, params?: Record<string, string>): Promise<T> {
-    return this.request<T>(path, { method: 'GET', params })
+    if (CACHE_EXCLUDE.test(path)) {
+      return this.request<T>(path, { method: 'GET', params })
+    }
+
+    const { user } = useAuthStore.getState()
+    const { lojaId } = useLojaAtivaStore.getState()
+    const key = `${user?.id ?? ''}|${lojaId ?? ''}|${path}|${params ? new URLSearchParams(params).toString() : ''}`
+
+    const cached = getCache.get(key)
+    if (cached && Date.now() - cached.ts < GET_CACHE_TTL_MS) {
+      return Promise.resolve(cached.data as T)
+    }
+
+    const pending = inflight.get(key)
+    if (pending) {
+      return pending as Promise<T>
+    }
+
+    const req = this.request<T>(path, { method: 'GET', params })
+      .then((data) => {
+        getCache.set(key, { ts: Date.now(), data })
+        // Descarta a entrada mais antiga quando estoura o teto
+        if (getCache.size > GET_CACHE_MAX) {
+          const oldest = getCache.keys().next().value
+          if (oldest !== undefined) getCache.delete(oldest)
+        }
+        return data
+      })
+      .finally(() => {
+        inflight.delete(key)
+      })
+    inflight.set(key, req)
+    return req
   }
 
   post<T>(path: string, body?: unknown, options?: FetchOptions): Promise<T> {
+    limparCacheGet()
     return this.request<T>(path, {
       method: 'POST',
       body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
@@ -165,6 +214,7 @@ class ApiClient {
   }
 
   put<T>(path: string, body?: unknown, options?: FetchOptions): Promise<T> {
+    limparCacheGet()
     return this.request<T>(path, {
       method: 'PUT',
       body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
@@ -173,6 +223,7 @@ class ApiClient {
   }
 
   patch<T>(path: string, body?: unknown, options?: FetchOptions): Promise<T> {
+    limparCacheGet()
     return this.request<T>(path, {
       method: 'PATCH',
       body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
@@ -181,6 +232,7 @@ class ApiClient {
   }
 
   delete<T>(path: string, body?: unknown): Promise<T> {
+    limparCacheGet()
     return this.request<T>(path, {
       method: 'DELETE',
       body: body ? JSON.stringify(body) : undefined,

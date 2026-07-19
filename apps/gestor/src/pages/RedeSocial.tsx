@@ -433,7 +433,7 @@ function FeedTab({ addToast, onStartChat }: { addToast: (t: ToastType, m: string
           <div style={{ display: 'flex', gap: 12, background: 'var(--sv-surface-dim)', padding: 10, borderRadius: 'var(--sv-radius-md)' }}>
             <div style={{ width: 100, height: 75, background: 'var(--sv-surface-dim)', borderRadius: 'var(--sv-radius)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               {pub.veiculo?.midias && pub.veiculo.midias.length > 0 ? (
-                <img src={pub.veiculo.midias[0].url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={pub.veiculo.midias[0].url} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 <CarIcon />
               )}
