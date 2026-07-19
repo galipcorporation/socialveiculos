@@ -23,17 +23,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def _tem_coluna(tabela: str, coluna: str) -> bool:
-    bind = op.get_bind()
-    cols = [r[1] for r in bind.exec_driver_sql(f"PRAGMA table_info({tabela})").fetchall()]
-    return coluna in cols
+    # sa.inspect funciona em SQLite (dev) e Postgres (produção) — nunca usar
+    # PRAGMA/sqlite_master aqui: quebra o `alembic upgrade head` do boot em prod.
+    insp = sa.inspect(op.get_bind())
+    return coluna in [c["name"] for c in insp.get_columns(tabela)]
 
 
 def _tem_tabela(tabela: str) -> bool:
-    bind = op.get_bind()
-    row = bind.exec_driver_sql(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (tabela,)
-    ).fetchone()
-    return row is not None
+    return sa.inspect(op.get_bind()).has_table(tabela)
 
 
 def upgrade() -> None:
