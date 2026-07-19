@@ -25,6 +25,7 @@
     "expo-notifications": "~0.32.17",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
+    "expo-video": "~3.0.16",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
@@ -33,12 +34,23 @@
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "4.16.0",
     "react-native-web": "^0.21.2",
+    "react-native-webview": "13.15.0",
     "react-native-worklets": "0.5.1",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@tiptap/core": "^3.28.0",
+    "@tiptap/extension-image": "^3.28.0",
+    "@tiptap/extension-placeholder": "^3.28.0",
+    "@tiptap/extension-table": "^3.28.0",
+    "@tiptap/extension-table-cell": "^3.28.0",
+    "@tiptap/extension-table-header": "^3.28.0",
+    "@tiptap/extension-table-row": "^3.28.0",
+    "@tiptap/extension-text-align": "^3.28.0",
+    "@tiptap/starter-kit": "^3.28.0",
     "@types/react": "~19.1.17",
     "babel-preset-expo": "~54.0.11",
+    "esbuild": "^0.28.1",
     "typescript": "~5.9.3"
   },
   "scripts": {
@@ -48,6 +60,7 @@
     "web": "expo start --web",
     "dev": "expo start --offline",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint ok'"
+    "lint": "echo 'lint ok'",
+    "build:editor": "node webview-editor/build.js"
   }
 }

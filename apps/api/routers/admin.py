@@ -19,6 +19,7 @@ from deps import get_current_active_user, registrar_auditoria
 from models import (
     Usuario, Loja, Veiculo, LogAuditoria, PapelUsuario, MembroLoja, Lead, ModuloHabilitado,
     Plano, Assinatura, Pagamento, StatusAssinatura, StatusPagamento, ContratoAssinaturaVersao, utcnow,
+    DestaquePagamento,
 )
 from schemas import (
     LojaResponse, LogAuditoriaResponse,
@@ -27,9 +28,12 @@ from schemas import (
     AdminAssinaturaDetalheResponse, AdminVencimentoItem,
     AdminCriarPlanoRequest, AdminEditarPlanoRequest,
     ContratoVersaoResponse, ContratoVersaoCreateRequest,
+    DestaquePagamentoResponse, AdminAtivarDestaqueRequest, AdminDesativarDestaqueRequest,
+    AdminDestaqueDetalheResponse,
 )
 from auth import hash_password, create_access_token
 from storage import storage_provider
+from modulos import assinatura_em_dia
 
 router = APIRouter(prefix="/v1/admin", tags=["Administração Global"])
 
@@ -64,6 +68,7 @@ class LojaDetalheResponse(LojaResponse):
     total_leads: int = 0
     total_usuarios: int = 0
     modulos_ativos: List[str] = []
+    assinatura_em_dia: bool = False
 
 
 class CriarLojaRequest(BaseModel):
@@ -157,6 +162,8 @@ async def get_loja_detalhe(
         .where(ModuloHabilitado.loja_id == loja_id, ModuloHabilitado.ativo == True)
     )).scalars().all()
 
+    em_dia = await assinatura_em_dia(db, loja_id)
+
     return LojaDetalheResponse(
         id=loja.id,
         nome=loja.nome,
@@ -172,11 +179,14 @@ async def get_loja_detalhe(
         cep=loja.cep,
         verificada=loja.verificada,
         ativa=loja.ativa,
+        destaque=loja.destaque,
+        destaque_ate=loja.destaque_ate,
         created_at=loja.created_at,
         total_veiculos=total_veiculos,
         total_leads=total_leads,
         total_usuarios=total_usuarios,
         modulos_ativos=list(modulos_ativos_db),
+        assinatura_em_dia=em_dia,
     )
 
 
@@ -967,6 +977,123 @@ async def get_assinatura_loja(
         plano=PlanoResponse.model_validate(plano) if plano else None,
         pagamentos=[PagamentoResponse.model_validate(p) for p in pagamentos],
         dias_para_vencer=_dias_para_vencer(assinatura.proximo_vencimento) if assinatura else None,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# Destaque pago (patrocínio na vitrine) — cobrança manual (Pix)
+# ═══════════════════════════════════════════════════════════════
+
+@router.post(
+    "/lojas/{loja_id}/destaque/ativar",
+    response_model=DestaquePagamentoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def ativar_destaque_loja(
+    loja_id: str,
+    data: AdminAtivarDestaqueRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """
+    Ativa (ou estende) o destaque pago de uma loja via cobrança manual (Pix).
+    Soma `meses` a partir do vencimento atual do destaque se ainda não expirou,
+    ou a partir de agora se nunca teve destaque ou já expirou — mesma regra de
+    não acumular atraso usada em /assinatura/renovar.
+    """
+    loja = (await db.execute(select(Loja).where(Loja.id == loja_id))).scalar_one_or_none()
+    if not loja:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loja não encontrada.")
+
+    agora = _now()
+    base = loja.destaque_ate if (loja.destaque and loja.destaque_ate and loja.destaque_ate > agora) else agora
+    novo_vencimento = base + timedelta(days=30 * data.meses)
+
+    loja.destaque = True
+    loja.destaque_ate = novo_vencimento
+
+    pagamento = DestaquePagamento(
+        loja_id=loja_id,
+        valor=data.valor,
+        meses=data.meses,
+        status=StatusPagamento.PAGO,
+        referencia=data.referencia_pagamento or f"admin-manual-destaque-{loja_id}-{int(agora.timestamp())}",
+        metodo=data.forma_pagamento,
+        data_pagamento=agora,
+        destaque_ate_resultante=novo_vencimento,
+        observacoes=data.observacoes,
+        criado_por_admin_id=admin.id,
+    )
+    db.add(pagamento)
+
+    await registrar_auditoria(
+        db=db, loja_id=loja_id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="destaque.ativar_manual", entidade="loja", entidade_id=loja_id,
+        detalhes=json.dumps({
+            "valor": data.valor, "meses": data.meses, "forma_pagamento": data.forma_pagamento,
+            "destaque_ate": novo_vencimento.isoformat(),
+        }),
+    )
+    await db.commit()
+    await db.refresh(pagamento)
+    return pagamento
+
+
+@router.post(
+    "/lojas/{loja_id}/destaque/desativar",
+    response_model=LojaResponse,
+)
+async def desativar_destaque_loja(
+    loja_id: str,
+    data: AdminDesativarDestaqueRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """Remove o destaque pago da loja (cancelamento manual, antes do vencimento)."""
+    loja = (await db.execute(select(Loja).where(Loja.id == loja_id))).scalar_one_or_none()
+    if not loja:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loja não encontrada.")
+    if not loja.destaque:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Loja não tem destaque ativo.")
+
+    loja.destaque = False
+    loja.destaque_ate = None
+
+    await registrar_auditoria(
+        db=db, loja_id=loja_id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="destaque.desativar_manual", entidade="loja", entidade_id=loja_id,
+        detalhes=json.dumps({"motivo": data.motivo}),
+    )
+    await db.commit()
+    await db.refresh(loja)
+    return loja
+
+
+@router.get(
+    "/lojas/{loja_id}/destaque",
+    response_model=AdminDestaqueDetalheResponse,
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def get_destaque_loja(
+    loja_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Estado do destaque da loja + histórico de pagamentos, para a tela de gestão do admin."""
+    loja = (await db.execute(select(Loja).where(Loja.id == loja_id))).scalar_one_or_none()
+    if not loja:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loja não encontrada.")
+
+    pagamentos = (await db.execute(
+        select(DestaquePagamento)
+        .where(DestaquePagamento.loja_id == loja_id)
+        .order_by(DestaquePagamento.created_at.desc())
+    )).scalars().all()
+
+    return AdminDestaqueDetalheResponse(
+        destaque=loja.destaque,
+        destaque_ate=loja.destaque_ate,
+        dias_para_vencer=_dias_para_vencer(loja.destaque_ate) if loja.destaque else None,
+        pagamentos=[DestaquePagamentoResponse.model_validate(p) for p in pagamentos],
     )
 
 

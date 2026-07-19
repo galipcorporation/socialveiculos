@@ -1,14 +1,18 @@
 import React, { useState } from 'react'
-import { View } from 'react-native'
+import { Pressable, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing } from '../theme/tokens'
+import { radius, spacing } from '../theme/tokens'
 import { Button, Input, Sheet, Txt } from './ui'
 import { useAuthStore } from '../stores/authStore'
 import { useLoginGateStore } from '../stores/loginGateStore'
+import { authService } from '../services/auth'
 import { vitrineService } from '../services'
+import { extractErrorDetails } from '../lib/api'
 
-/** Cadastro/login leve do comprador — montado uma vez na árvore da Vitrine. */
+type Modo = 'entrar' | 'criar'
+
+/** Login/cadastro do comprador — montado uma vez na árvore da Vitrine. */
 export function LoginSheet() {
   const { colors } = useTheme()
   const visivel = useLoginGateStore((s) => s.visivel)
@@ -17,27 +21,44 @@ export function LoginSheet() {
   const concluir = useLoginGateStore((s) => s.concluir)
   const login = useAuthStore((s) => s.login)
 
+  const [modo, setModo] = useState<Modo>('entrar')
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [entrando, setEntrando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const trocarModo = (novo: Modo) => {
+    setModo(novo)
+    setErro('')
+  }
 
   const finalizar = (res: { access_token: string; refresh_token: string; user: Parameters<typeof login>[2] }) => {
     login(res.access_token, res.refresh_token, res.user)
     setNome('')
     setEmail('')
+    setSenha('')
     concluir() // fecha e executa a ação pendente
   }
 
-  const cadastrar = async () => {
-    if (!nome.trim() || !email.trim() || !senha.trim()) return
+  const confirmar = async () => {
+    if (!email.trim() || !senha.trim()) return
+    if (modo === 'criar' && !nome.trim()) return
     setEntrando(true)
+    setErro('')
     try {
-      finalizar(await vitrineService.cadastrar(nome, email, senha))
+      const res = modo === 'entrar'
+        ? await authService.login(email, senha)
+        : await vitrineService.cadastrar(nome, email, senha)
+      finalizar(res)
+    } catch (e) {
+      setErro(extractErrorDetails(e).message)
     } finally {
       setEntrando(false)
     }
   }
+
+  const desabilitado = !email.trim() || !senha.trim() || (modo === 'criar' && !nome.trim())
 
   return (
     <Sheet visible={visivel} onClose={fechar} title="Entre para continuar">
@@ -47,11 +68,49 @@ export function LoginSheet() {
           <Txt variant="caption" color="primaryText" style={{ flex: 1 }}>{motivo}</Txt>
         </View>
 
-        <Input label="Nome" value={nome} onChangeText={setNome} placeholder="Como quer ser chamado" />
-        <Input label="E-mail" value={email} onChangeText={setEmail} placeholder="voce@email.com" autoCapitalize="none" keyboardType="email-address" />
-        <Input label="Senha" value={senha} onChangeText={setSenha} placeholder="Crie uma senha" secureTextEntry />
+        <View style={{ flexDirection: 'row', backgroundColor: colors.overlay, borderRadius: radius.md, padding: 4, gap: 4 }}>
+          <Pressable
+            onPress={() => trocarModo('entrar')}
+            style={{
+              flex: 1, paddingVertical: spacing.xs, borderRadius: radius.sm, alignItems: 'center',
+              backgroundColor: modo === 'entrar' ? colors.bg : 'transparent',
+            }}
+          >
+            <Txt variant="label" color={modo === 'entrar' ? 'text' : 'textMuted'}>Entrar</Txt>
+          </Pressable>
+          <Pressable
+            onPress={() => trocarModo('criar')}
+            style={{
+              flex: 1, paddingVertical: spacing.xs, borderRadius: radius.sm, alignItems: 'center',
+              backgroundColor: modo === 'criar' ? colors.bg : 'transparent',
+            }}
+          >
+            <Txt variant="label" color={modo === 'criar' ? 'text' : 'textMuted'}>Criar conta</Txt>
+          </Pressable>
+        </View>
 
-        <Button title="Criar conta e continuar" icon="person-add-outline" loading={entrando} onPress={cadastrar} full disabled={!nome.trim() || !email.trim() || !senha.trim()} />
+        {modo === 'criar' && (
+          <Input label="Nome" value={nome} onChangeText={setNome} placeholder="Como quer ser chamado" />
+        )}
+        <Input label="E-mail" value={email} onChangeText={setEmail} placeholder="voce@email.com" autoCapitalize="none" keyboardType="email-address" />
+        <Input
+          label="Senha"
+          value={senha}
+          onChangeText={setSenha}
+          placeholder={modo === 'entrar' ? 'Sua senha' : 'Crie uma senha'}
+          secureTextEntry
+        />
+
+        {!!erro && <Txt variant="caption" color="error">{erro}</Txt>}
+
+        <Button
+          title={modo === 'entrar' ? 'Entrar' : 'Criar conta e continuar'}
+          icon={modo === 'entrar' ? 'log-in-outline' : 'person-add-outline'}
+          loading={entrando}
+          onPress={confirmar}
+          full
+          disabled={desabilitado}
+        />
       </View>
     </Sheet>
   )

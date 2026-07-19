@@ -82,6 +82,7 @@ class VeiculoB2CResponse(BaseModel):
     loja_estado: Optional[str] = None
     loja_whatsapp: Optional[str] = None
     loja_verificada: bool = False
+    loja_destaque: bool = False
     seguindo_loja: bool = False
     marca: str
     modelo: str
@@ -378,6 +379,8 @@ class LojaResponse(BaseModel):
     percentual_comissao_padrao: float = 0.0
     verificada: bool
     ativa: bool
+    destaque: bool = False
+    destaque_ate: Optional[datetime] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -880,6 +883,43 @@ class AdminAssinaturaDetalheResponse(BaseModel):
     plano: Optional[PlanoResponse] = None
     pagamentos: List[PagamentoResponse] = []
     dias_para_vencer: Optional[int] = None
+
+
+# ── Admin — destaque pago (patrocínio na vitrine) ────────────────
+
+class DestaquePagamentoResponse(BaseModel):
+    id: str
+    loja_id: str
+    valor: float
+    meses: int
+    status: StatusPagamento
+    referencia: Optional[str] = None
+    metodo: Optional[str] = None
+    data_pagamento: Optional[datetime] = None
+    destaque_ate_resultante: Optional[datetime] = None
+    observacoes: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminAtivarDestaqueRequest(BaseModel):
+    valor: float = Field(..., ge=0)
+    meses: int = Field(default=1, ge=1, le=12)
+    forma_pagamento: str = Field(default="pix_manual", max_length=30)
+    referencia_pagamento: Optional[str] = Field(default=None, max_length=200)
+    observacoes: Optional[str] = None
+
+
+class AdminDesativarDestaqueRequest(BaseModel):
+    motivo: Optional[str] = None
+
+
+class AdminDestaqueDetalheResponse(BaseModel):
+    destaque: bool
+    destaque_ate: Optional[datetime] = None
+    dias_para_vencer: Optional[int] = None
+    pagamentos: List[DestaquePagamentoResponse] = []
 
 
 class ContratoVersaoResponse(BaseModel):

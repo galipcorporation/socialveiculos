@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<style>
+  :root {
+    --bg: #1c1d20;
+    --input-bg: #26282c;
+    --text: #e8e9ea;
+    --text-dim: #a1a3a8;
+    --text-muted: #888a90;
+    --border: #33353a;
+    --primary: #6ee7b7;
+    --primary-text: #34d399;
+    --primary-glow: rgba(52, 211, 153, 0.16);
+    --overlay-soft: rgba(255,255,255,0.04);
+    --error: #f43f5e;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: transparent; font-family: -apple-system, Roboto, sans-serif; }
+  .rich-editor { border: 1px solid var(--border); border-radius: 10px; background: var(--input-bg); overflow: hidden; }
+  .re-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 6px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .re-tb {
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    min-width: 30px; height: 30px; padding: 0 8px; border: none; border-radius: 6px;
+    background: transparent; color: var(--text-dim); font-size: 13px; cursor: pointer;
+  }
+  .re-tb.on { background: var(--primary-glow); color: var(--primary-text); }
+  .re-sep { width: 1px; height: 18px; background: var(--border); margin: 0 3px; }
+  .re-var-btn { font-weight: 600; color: var(--primary-text); }
+  .re-var-wrap { position: relative; }
+  .re-var-menu {
+    display: none; position: fixed; left: 8px; right: 8px; top: 44px; bottom: 8px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    z-index: 50; flex-direction: column; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .re-var-menu.open { display: flex; }
+  .re-var-menu-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--text); }
+  #var-close { background: none; border: none; color: var(--text-muted); font-size: 18px; }
+  .re-var-menu-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+  .re-var-group-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .re-var-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .re-var-chip {
+    display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 10px; font-size: 12px; color: var(--text-dim); background: var(--input-bg);
+  }
+  .re-var-chip.custom { border-style: dashed; }
+  .re-var-chip .rm { margin-left: 6px; opacity: .7; }
+  .re-var-add { display: flex; gap: 6px; margin-top: 8px; }
+  .re-var-add input {
+    flex: 1; min-width: 0; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-size: 12px; padding: 6px 8px;
+  }
+  .re-var-add-btn { background: var(--overlay-soft); border: 1px solid var(--border); border-radius: 6px; color: var(--text); width: 30px; }
+  .re-content { min-height: 220px; }
+  .re-content .ProseMirror { padding: 12px 14px; outline: none; color: var(--text); font-size: 15px; line-height: 1.6; }
+  .re-content .ProseMirror p { margin: 0 0 8px; }
+  .re-content .ProseMirror img { max-width: 100%; border-radius: 4px; }
+  .re-content .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder); color: var(--text-muted); float: left; height: 0; pointer-events: none;
+  }
+  .re-content .ProseMirror table { border-collapse: collapse; width: 100%; }
+  .re-content .ProseMirror td, .re-content .ProseMirror th { border: 1px solid var(--border); padding: 6px 8px; }
+  .re-content .ProseMirror th { background: var(--overlay-soft); }
+  .rich-var {
+    display: inline-flex; align-items: center; background: var(--primary-glow); color: var(--primary-text);
+    border-radius: 4px; padding: 1px 4px; font-size: 0.95em; font-weight: 600;
+  }
+  .rich-var::before { content: "{"; opacity: .5; margin-right: 1px; }
+  .rich-var::after { content: "}"; opacity: .5; margin-left: 1px; }
+</style>
+</head>
+<body>
+  <div class="rich-editor">
+    <div class="re-toolbar">
+      <button type="button" class="re-tb" data-cmd="bold">B</button>
+      <button type="button" class="re-tb" data-cmd="italic"><i>I</i></button>
+      <button type="button" class="re-tb" data-cmd="strike"><s>S</s></button>
+      <span class="re-sep" data-compact-hide></span>
+      <button type="button" class="re-tb" data-cmd="bulletList" data-compact-hide>•—</button>
+      <button type="button" class="re-tb" data-cmd="orderedList" data-compact-hide>1.—</button>
+      <span class="re-sep"></span>
+      <button type="button" class="re-tb" data-cmd="alignLeft">⟵</button>
+      <button type="button" class="re-tb" data-cmd="alignCenter">↔</button>
+      <button type="button" class="re-tb" data-cmd="alignJustify">☰</button>
+      <span class="re-sep" data-compact-hide></span>
+      <button type="button" class="re-tb" data-cmd="table" data-compact-hide>▦</button>
+      <div class="re-var-wrap">
+        <button type="button" id="var-btn" class="re-tb re-var-btn">+ Variável</button>
+        <div class="re-var-menu" id="var-menu">
+          <div class="re-var-menu-head">
+            Inserir variável
+            <button type="button" id="var-close">×</button>
+          </div>
+          <div class="re-var-menu-body" id="var-menu-body"></div>
+        </div>
+      </div>
+      <span class="re-sep" data-compact-hide></span>
+      <button type="button" class="re-tb" data-cmd="undo" data-compact-hide>↶</button>
+      <button type="button" class="re-tb" data-cmd="redo" data-compact-hide>↷</button>
+    </div>
+    <div class="re-content" id="editor"></div>
+  </div>
+  <script src="./bundle.js"></script>
+</body>
+</html>

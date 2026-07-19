@@ -63,15 +63,18 @@ async def lifespan(app: FastAPI):
     from marketing_worker import worker_loop
     from esteira_worker import worker_loop as esteira_worker_loop
     from assinatura_worker import worker_loop as assinatura_worker_loop
+    from destaque_worker import worker_loop as destaque_worker_loop
     worker_task = asyncio.create_task(worker_loop())
     esteira_task = asyncio.create_task(esteira_worker_loop())
     assinatura_task = asyncio.create_task(assinatura_worker_loop())
+    destaque_task = asyncio.create_task(destaque_worker_loop())
 
     yield
 
     worker_task.cancel()
     esteira_task.cancel()
     assinatura_task.cancel()
+    destaque_task.cancel()
     await engine.dispose()
 
 

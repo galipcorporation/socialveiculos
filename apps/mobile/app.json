@@ -38,7 +38,8 @@
             "backgroundColor": "#121315"
           }
         }
-      ]
+      ],
+      "expo-video"
     ],
     "extra": {
       "eas": {

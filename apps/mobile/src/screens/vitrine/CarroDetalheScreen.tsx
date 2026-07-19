@@ -9,7 +9,7 @@ import { fonts, radius, spacing } from '../../theme/tokens'
 import {
   AppHeader, Avatar, Badge, Button, Card, EmptyState, Screen, SkeletonCard, Txt, useToast,
 } from '../../components/ui'
-import { VehiclePhoto } from '../../components/VehiclePhoto'
+import { MediaCarousel } from '../../components/MediaCarousel'
 import { vitrineService } from '../../services'
 import { useGateLogin } from '../../hooks/useGateLogin'
 import { formatBRL, formatKm } from '../../lib/format'
@@ -26,6 +26,14 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
 
   const q = useQuery({ queryKey: ['vitrine', 'detalhe', id], queryFn: () => vitrineService.detalhe(id) })
   const a = q.data
+
+  const opcionais: string[] = (() => {
+    try {
+      return a?.opcionais ? JSON.parse(a.opcionais) : []
+    } catch {
+      return []
+    }
+  })()
 
   const favoritar = () =>
     comLogin('Entre para salvar seus favoritos.', async () => {
@@ -61,7 +69,7 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
         <>
           <Screen padded={false} style={{ paddingBottom: 0 }}>
             <View>
-              <VehiclePhoto veiculo={a} height={260} borderRadius={0} />
+              <MediaCarousel veiculo={a} height={260} borderRadius={0} />
               <Pressable onPress={favoritar} hitSlop={10} style={[styles.fav, { backgroundColor: colors.backdrop }]}>
                 <Ionicons name={a.favoritado_por_mim ? 'heart' : 'heart-outline'} size={22} color={a.favoritado_por_mim ? colors.error : '#fff'} />
               </Pressable>
@@ -76,7 +84,7 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
                 <Txt style={{ fontFamily: fonts.displayBold, fontSize: 22, color: colors.text }}>{a.marca} {a.modelo}</Txt>
                 {a.versao ? <Txt variant="body" color="textDim">{a.versao}</Txt> : null}
                 <Txt style={{ fontFamily: fonts.displayExtraBold, fontSize: 26, color: colors.primaryText, marginTop: 6 }}>
-                  {formatBRL(a.preco_venda)}
+                  {a.preco_venda != null ? formatBRL(a.preco_venda) : 'Sob consulta'}
                 </Txt>
               </View>
 
@@ -96,6 +104,19 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
                   <Txt variant="body" color="textDim">{a.descricao}</Txt>
                 </Card>
               ) : null}
+
+              {opcionais.length > 0 && (
+                <Card>
+                  <Txt variant="label" color="textMuted" style={{ textTransform: 'uppercase', marginBottom: spacing.xs }}>Opcionais</Txt>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {opcionais.map((o) => (
+                      <View key={o} style={{ backgroundColor: colors.overlay, borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 5 }}>
+                        <Txt variant="caption" color="textDim">{o}</Txt>
+                      </View>
+                    ))}
+                  </View>
+                </Card>
+              )}
 
               {/* Loja */}
               <Card onPress={() => navigation.navigate('PerfilLoja', { id: a.loja_id })}>

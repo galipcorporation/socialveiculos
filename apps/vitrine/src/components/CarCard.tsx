@@ -17,6 +17,7 @@ export interface Veiculo {
   loja_estado?: string
   loja_whatsapp?: string
   loja_verificada?: boolean
+  loja_destaque?: boolean
   seguindo_loja?: boolean
   marca: string
   modelo: string
@@ -117,6 +118,9 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
             </h4>
             <span>{localidade || 'Brasil'}</span>
           </div>
+          {veiculo.loja_destaque && (
+            <span className="vt-badge-patrocinado">Patrocinado</span>
+          )}
         </div>
 
         <button

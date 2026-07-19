@@ -214,6 +214,7 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
   const [erro, setErro] = useState<string | null>(null)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [enviandoLogo, setEnviandoLogo] = useState(false)
+  const [assinaturaEmDia, setAssinaturaEmDia] = useState(true)
 
   useEffect(() => {
     api.get<any>(`/admin/lojas/${lojaId}`)
@@ -228,6 +229,7 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
           modulos_ativos: data.modulos_ativos || [],
         })
         setLogoUrl(data.logo_url || null)
+        setAssinaturaEmDia(data.assinatura_em_dia !== false)
       })
       .catch((err) => setErro(err.message || 'Erro ao carregar detalhes da loja.'))
       .finally(() => setLoading(false))
@@ -379,6 +381,7 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
           <div className="modulos-grid">
             {ALL_MODULES.map((m) => {
               const ativo = form.modulos_ativos.includes(m.key)
+              const bloqueadoPorAssinatura = ativo && !assinaturaEmDia
               return (
                 <div
                   key={m.key}
@@ -391,13 +394,29 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
                     onChange={() => {}} // custom handled by container click
                   />
                   <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--sv-text)', margin: 0 }}>{m.label}</p>
+                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--sv-text)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {m.label}
+                      {bloqueadoPorAssinatura && (
+                        <span style={{
+                          fontSize: '11px', fontWeight: 600, color: 'var(--sv-warning, #d97706)',
+                          background: 'rgba(217, 119, 6, 0.12)', border: '1px solid rgba(217, 119, 6, 0.3)',
+                          borderRadius: 4, padding: '1px 6px', textTransform: 'none',
+                        }}>
+                          contratado · inativo por assinatura
+                        </span>
+                      )}
+                    </p>
                     <p style={{ fontSize: '12px', color: 'var(--sv-text-muted)', margin: 0 }}>{m.desc}</p>
                   </div>
                 </div>
               )
             })}
           </div>
+          {!assinaturaEmDia && (
+            <p style={{ fontSize: '12px', color: 'var(--sv-warning, #d97706)', margin: 0 }}>
+              Assinatura da loja não está em dia — módulos marcados acima ficam contratados mas indisponíveis para o gestor até a regularização.
+            </p>
+          )}
 
           <div className="modal-footer" style={{ paddingTop: '16px' }}>
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>

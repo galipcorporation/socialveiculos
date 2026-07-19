@@ -13,24 +13,84 @@ export interface ContratoInput {
   observacoes?: string
 }
 
+export interface CampoExtraTemplate {
+  chave: string
+  label: string
+}
+
 export interface TemplateContrato {
   id: string
   nome: string
   corpo: string
+  camposExtras: CampoExtraTemplate[]
+  usarIdentidadeLoja: boolean
   created_at: string
 }
 
-export const VARIAVEIS_CONTRATO: { chave: string; label: string }[] = [
-  { chave: '{{cliente_nome}}', label: 'Nome do cliente' },
-  { chave: '{{cliente_cpf}}', label: 'CPF do cliente' },
-  { chave: '{{veiculo}}', label: 'Veículo (marca/modelo)' },
-  { chave: '{{placa}}', label: 'Placa' },
-  { chave: '{{valor}}', label: 'Valor da venda' },
-  { chave: '{{entrada}}', label: 'Entrada' },
-  { chave: '{{parcelas}}', label: 'Nº de parcelas' },
-  { chave: '{{loja_nome}}', label: 'Nome da loja' },
-  { chave: '{{data}}', label: 'Data' },
+export interface VarGroup {
+  grupo: string
+  itens: { chave: string; label: string }[]
+}
+
+/** Catálogo de variáveis do sistema — espelha o contexto Jinja2 resolvido em
+ *  apps/api/routers/contratos.py (_render_template_contrato). Chaves com ponto,
+ *  igual ao catálogo do apps/gestor (variaveisContrato.ts). */
+export const CATALOGO_VARIAVEIS: VarGroup[] = [
+  {
+    grupo: 'Cliente',
+    itens: [
+      { chave: 'cliente.nome', label: 'Nome' },
+      { chave: 'cliente.cpf', label: 'CPF' },
+      { chave: 'cliente.rg', label: 'RG' },
+      { chave: 'cliente.telefone', label: 'Telefone' },
+      { chave: 'cliente.endereco', label: 'Endereço' },
+      { chave: 'cliente.cidade', label: 'Cidade' },
+      { chave: 'cliente.estado', label: 'Estado' },
+    ],
+  },
+  {
+    grupo: 'Veículo',
+    itens: [
+      { chave: 'veiculo.marca', label: 'Marca' },
+      { chave: 'veiculo.modelo', label: 'Modelo' },
+      { chave: 'veiculo.versao', label: 'Versão' },
+      { chave: 'veiculo.ano_fabricacao', label: 'Ano fabricação' },
+      { chave: 'veiculo.ano_modelo', label: 'Ano modelo' },
+      { chave: 'veiculo.placa', label: 'Placa' },
+      { chave: 'veiculo.cor', label: 'Cor' },
+      { chave: 'veiculo.km', label: 'KM' },
+      { chave: 'veiculo.combustivel', label: 'Combustível' },
+    ],
+  },
+  {
+    grupo: 'Loja',
+    itens: [
+      { chave: 'loja.nome', label: 'Razão social' },
+      { chave: 'loja.cnpj', label: 'CNPJ' },
+      { chave: 'loja.endereco', label: 'Endereço' },
+      { chave: 'loja.cidade', label: 'Cidade' },
+      { chave: 'loja.estado', label: 'Estado' },
+      { chave: 'loja.telefone', label: 'Telefone' },
+    ],
+  },
+  {
+    grupo: 'Contrato / Valores',
+    itens: [
+      { chave: 'contrato.numero', label: 'Número' },
+      { chave: 'contrato.data', label: 'Data' },
+      { chave: 'contrato.valor_venda', label: 'Valor da venda' },
+      { chave: 'contrato.valor_entrada', label: 'Entrada' },
+      { chave: 'contrato.parcelas', label: 'Parcelas' },
+      { chave: 'contrato.observacoes', label: 'Observações' },
+    ],
+  },
 ]
+
+export function labelsDe(groups: VarGroup[]): Record<string, string> {
+  const m: Record<string, string> = {}
+  for (const g of groups) for (const it of g.itens) m[it.chave] = it.label
+  return m
+}
 
 interface ContratoDTO {
   id: string
@@ -49,6 +109,8 @@ interface TemplateDTO {
   id: string
   nome: string
   conteudo_html: string
+  campos_extras: CampoExtraTemplate[]
+  usar_identidade_loja: boolean
   created_at: string
 }
 
@@ -69,7 +131,14 @@ function mapContrato(c: ContratoDTO): Contrato {
 }
 
 function mapTemplate(t: TemplateDTO): TemplateContrato {
-  return { id: t.id, nome: t.nome, corpo: t.conteudo_html, created_at: t.created_at }
+  return {
+    id: t.id,
+    nome: t.nome,
+    corpo: t.conteudo_html,
+    camposExtras: t.campos_extras ?? [],
+    usarIdentidadeLoja: t.usar_identidade_loja,
+    created_at: t.created_at,
+  }
 }
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000/v1'
@@ -117,8 +186,19 @@ export const contratosService = {
     return (data.items ?? []).map(mapTemplate).sort((a, b) => b.created_at.localeCompare(a.created_at))
   },
 
-  async salvarTemplate(input: { id?: string; nome: string; corpo: string }): Promise<TemplateContrato> {
-    const payload = { nome: input.nome.trim(), conteudo_html: input.corpo }
+  async salvarTemplate(input: {
+    id?: string
+    nome: string
+    corpo: string
+    camposExtras?: CampoExtraTemplate[]
+    usarIdentidadeLoja?: boolean
+  }): Promise<TemplateContrato> {
+    const payload = {
+      nome: input.nome.trim(),
+      conteudo_html: input.corpo,
+      campos_extras: input.camposExtras ?? [],
+      usar_identidade_loja: input.usarIdentidadeLoja ?? true,
+    }
     const t = input.id
       ? await api.patch<TemplateDTO>(`/templates-contrato/${input.id}`, payload)
       : await api.post<TemplateDTO>('/templates-contrato', payload)

@@ -399,6 +399,20 @@ a {
 .vt-verified { color: var(--vt-primary); display: flex; }
 .vt-verified svg { width: 14px; height: 14px; }
 
+/* Selo de loja patrocinada (destaque pago) */
+.vt-badge-patrocinado {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  background: color-mix(in srgb, var(--vt-warning) 15%, transparent);
+  color: var(--vt-warning);
+  white-space: nowrap;
+}
+
 .vt-car-card-more {
   background: none;
   border: none;

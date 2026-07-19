@@ -261,6 +261,9 @@ class Loja(Base):
     percentual_comissao_padrao = Column(Float, nullable=False, default=0.0, server_default="0")
     verificada = Column(Boolean, default=False)
     ativa = Column(Boolean, default=True)
+    # Destaque pago: loja aparece priorizada no feed da vitrine pública
+    destaque = Column(Boolean, default=False, nullable=False, server_default="0")
+    destaque_ate = Column(DateTime, nullable=True)  # expiração opcional do destaque; nulo = sem prazo
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
@@ -796,6 +799,28 @@ class Pagamento(Base):
 
     __table_args__ = (
         Index("ix_pagamento_assinatura", "assinatura_id"),
+    )
+
+
+class DestaquePagamento(Base):
+    """Registro de cobrança manual (Pix) do destaque pago de uma loja na vitrine."""
+    __tablename__ = "destaque_pagamento"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
+    valor = Column(Float, nullable=False)
+    meses = Column(Integer, nullable=False)
+    status = Column(Enum(StatusPagamento), default=StatusPagamento.PAGO, nullable=False)
+    referencia = Column(String(200), nullable=True)  # ID externo ou comprovante Pix
+    metodo = Column(String(30), nullable=True)  # pix_manual | gateway | outro
+    data_pagamento = Column(DateTime, nullable=True)
+    destaque_ate_resultante = Column(DateTime, nullable=True)  # snapshot da expiração calculada nesta ativação
+    observacoes = Column(Text, nullable=True)
+    criado_por_admin_id = Column(String(36), ForeignKey("usuario.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=_now)
+
+    __table_args__ = (
+        Index("ix_destaque_pagamento_loja", "loja_id"),
     )
 
 

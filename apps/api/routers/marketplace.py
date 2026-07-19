@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict
 from config import settings
 from database import get_db
 from limiter import rate_limit
-from models import Veiculo, Loja, Favorito, StatusVeiculo, ClientePF, Lead, EtapaLead, OrigemLead
+from models import Veiculo, Loja, Favorito, StatusVeiculo, ClientePF, Lead, EtapaLead, OrigemLead, Notificacao
 from schemas import VeiculoB2CResponse
 from pydantic import Field
 
@@ -209,5 +209,14 @@ async def solicitar_pre_aprovacao(data: PreAprovacaoRequest, db: AsyncSession = 
         observacoes=" ".join(partes),
     )
     db.add(lead)
+    await db.flush()
+
+    db.add(Notificacao(
+        loja_id=veiculo.loja_id,
+        titulo="Novo interessado em financiamento",
+        conteudo=f"{cliente.nome} demonstrou interesse em financiar {veiculo.marca} {veiculo.modelo}. Entre em contato para dar sequência.",
+        tipo="lead",
+        link=f"lead:{lead.id}",
+    ))
     await db.commit()
     return {"ok": True, "mensagem": "Recebemos seu pedido! A loja entrará em contato para dar sequência ao financiamento."}

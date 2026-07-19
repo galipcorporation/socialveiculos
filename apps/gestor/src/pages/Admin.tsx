@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import DOMPurify from 'dompurify'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, FlaskConical, Play, CheckCircle2, XCircle, Pencil, CreditCard, FileText, Check } from 'lucide-react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, FlaskConical, Play, CheckCircle2, XCircle, Pencil, CreditCard, FileText, Check, Star, StarOff } from 'lucide-react'
 import { api } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
 import { mascararTelefone, mascararMoeda, parseMoeda } from '../lib/mascaras'
@@ -19,6 +19,8 @@ interface LojaItem {
   whatsapp_pareado?: string | null
   whatsapp_divergente?: boolean
   ativa: boolean
+  destaque: boolean
+  destaque_ate?: string | null
   created_at: string
 }
 
@@ -196,6 +198,7 @@ function AbaLojas() {
   const [toggleLoading, setToggleLoading] = useState<string | null>(null)
   const [lojaEditando, setLojaEditando] = useState<LojaItem | null>(null)
   const [lojaAssinatura, setLojaAssinatura] = useState<LojaItem | null>(null)
+  const [lojaDestaque, setLojaDestaque] = useState<LojaItem | null>(null)
 
   const carregar = useCallback(() => {
     setLoading(true)
@@ -213,6 +216,7 @@ function AbaLojas() {
       setToggleLoading(null)
     }
   }
+
 
   const impersonar = async (loja: LojaItem) => {
     try {
@@ -255,7 +259,7 @@ function AbaLojas() {
           <table style={{ width: '100%', minWidth: 680, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--sv-border)' }}>
-                {['Nome', 'Cidade / UF', 'WhatsApp', 'Status', 'Criado em', 'Ações'].map((h) => (
+                {['Nome', 'Cidade / UF', 'WhatsApp', 'Status', 'Destaque', 'Criado em', 'Ações'].map((h) => (
                   <th key={h} style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', textAlign: 'left', color: 'var(--sv-text-muted)', fontWeight: 500 }}>{h}</th>
                 ))}
               </tr>
@@ -299,9 +303,26 @@ function AbaLojas() {
                       {loja.ativa ? 'Ativa' : 'Inativa'}
                     </span>
                   </td>
+                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
+                    {loja.destaque ? (
+                      <span
+                        title={loja.destaque_ate ? `Vence em ${fmtData(loja.destaque_ate)}` : 'Sem prazo definido'}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '2px 10px', borderRadius: 999,
+                          fontSize: 'var(--sv-text-xs)', fontWeight: 600,
+                          background: 'color-mix(in srgb, #f5a623 15%, transparent)',
+                          color: '#f5a623',
+                        }}>
+                        <Star size={11} /> Patrocinada
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--sv-text-muted)', fontSize: 'var(--sv-text-xs)' }}>—</span>
+                    )}
+                  </td>
                   <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>{fmtData(loja.created_at)}</td>
                   <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
-                    <div style={{ display: 'flex', gap: 'var(--sv-space-2)' }}>
+                    <div style={{ display: 'flex', gap: 'var(--sv-space-2)', flexWrap: 'wrap' }}>
                       <button
                         className="btn btn-secondary"
                         style={{ padding: '4px 10px', fontSize: 'var(--sv-text-xs)', display: 'flex', alignItems: 'center', gap: 4 }}
@@ -319,6 +340,15 @@ function AbaLojas() {
                       >
                         {loja.ativa ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
                         {loja.ativa ? 'Desativar' : 'Ativar'}
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: 'var(--sv-text-xs)', display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => setLojaDestaque(loja)}
+                        title="Gerenciar destaque (patrocínio) desta loja na vitrine"
+                      >
+                        {loja.destaque ? <StarOff size={14} /> : <Star size={14} />}
+                        Destaque
                       </button>
                       <button
                         className="btn btn-secondary"
@@ -357,6 +387,13 @@ function AbaLojas() {
         <ModalAssinaturaLoja
           loja={lojaAssinatura}
           onClose={() => setLojaAssinatura(null)}
+        />
+      )}
+      {lojaDestaque && (
+        <ModalDestaqueLoja
+          loja={lojaDestaque}
+          onClose={() => setLojaDestaque(null)}
+          onSaved={carregar}
         />
       )}
     </div>
@@ -843,6 +880,243 @@ function FormSuspenderAssinatura({ loja, onCancel, onSaved, onErro }: {
         <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>Cancelar</button>
         <button type="submit" className="btn btn-primary" disabled={loading} style={{ background: 'var(--sv-danger)' }}>
           {loading ? <span className="spinner" /> : 'Suspender'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ── Modal Destaque (patrocínio na vitrine) ────────────────────────
+
+interface DestaquePagamentoItem {
+  id: string
+  valor: number
+  meses: number
+  status: string
+  metodo?: string | null
+  data_pagamento?: string | null
+  destaque_ate_resultante?: string | null
+  created_at: string
+}
+
+interface DestaqueDetalhe {
+  destaque: boolean
+  destaque_ate?: string | null
+  dias_para_vencer: number | null
+  pagamentos: DestaquePagamentoItem[]
+}
+
+function ModalDestaqueLoja({ loja, onClose, onSaved }: { loja: LojaItem; onClose: () => void; onSaved: () => void }) {
+  const [detalhe, setDetalhe] = useState<DestaqueDetalhe | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+  const [modo, setModo] = useState<'ativar' | 'desativar' | null>(null)
+
+  const carregar = useCallback(async () => {
+    setLoading(true)
+    try {
+      const det = await api.get<DestaqueDetalhe>(`/admin/lojas/${loja.id}/destaque`)
+      setDetalhe(det)
+    } finally {
+      setLoading(false)
+    }
+  }, [loja.id])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <div className="modal-header">
+          <h3 className="modal-title">Destaque na vitrine — {loja.nome}</h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-4)' }}>
+          {loading ? (
+            <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+          ) : (
+            <>
+              {erro && <p style={{ color: 'var(--sv-danger)', fontSize: 'var(--sv-text-sm)' }}>{erro}</p>}
+
+              {detalhe?.destaque ? (
+                <div className="glass-card" style={{ padding: 'var(--sv-space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-2)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Star size={14} color="#f5a623" /> Patrocinada</strong>
+                    <span style={{
+                      padding: '2px 10px', borderRadius: 999, fontSize: 'var(--sv-text-xs)', fontWeight: 600,
+                      background: 'color-mix(in srgb, #f5a623 15%, transparent)', color: '#f5a623',
+                    }}>
+                      Ativo
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 'var(--sv-text-sm)', color: 'var(--sv-text-secondary)' }}>
+                    {detalhe.destaque_ate ? `Vence em ${fmtData(detalhe.destaque_ate)}` : 'Sem prazo definido'}
+                    {detalhe.dias_para_vencer != null && ` (${detalhe.dias_para_vencer >= 0 ? `${detalhe.dias_para_vencer} dias` : 'vencido'})`}
+                  </p>
+
+                  {detalhe.pagamentos.length > 0 && (
+                    <div style={{ marginTop: 'var(--sv-space-2)' }}>
+                      <p style={{ fontSize: 'var(--sv-text-xs)', color: 'var(--sv-text-muted)', marginBottom: 4 }}>Histórico de pagamentos</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {detalhe.pagamentos.slice(0, 5).map((p) => (
+                          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--sv-text-xs)', color: 'var(--sv-text-secondary)' }}>
+                            <span>{fmtData(p.data_pagamento || p.created_at)} · {p.metodo || '—'} · {p.meses}m</span>
+                            <span>R$ {mascararMoeda(p.valor)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p style={{ color: 'var(--sv-text-muted)', fontSize: 'var(--sv-text-sm)' }}>Esta loja não tem destaque ativo no momento.</p>
+              )}
+
+              {!modo && (
+                <div style={{ display: 'flex', gap: 'var(--sv-space-2)' }}>
+                  <button className="btn btn-primary" onClick={() => setModo('ativar')}>
+                    {detalhe?.destaque ? 'Estender destaque' : 'Ativar destaque'}
+                  </button>
+                  {detalhe?.destaque && (
+                    <button className="btn btn-secondary" onClick={() => setModo('desativar')}>Remover destaque</button>
+                  )}
+                </div>
+              )}
+
+              {modo === 'ativar' && (
+                <FormAtivarDestaque
+                  loja={loja}
+                  onCancel={() => setModo(null)}
+                  onSaved={() => { setModo(null); carregar(); onSaved() }}
+                  onErro={setErro}
+                />
+              )}
+              {modo === 'desativar' && (
+                <FormDesativarDestaque
+                  loja={loja}
+                  onCancel={() => setModo(null)}
+                  onSaved={() => { setModo(null); carregar(); onSaved() }}
+                  onErro={setErro}
+                />
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FormAtivarDestaque({ loja, onCancel, onSaved, onErro }: {
+  loja: LojaItem
+  onCancel: () => void
+  onSaved: () => void
+  onErro: (msg: string) => void
+}) {
+  const [valorStr, setValorStr] = useState(mascararMoeda(0))
+  const [meses, setMeses] = useState(1)
+  const [formaPagamento, setFormaPagamento] = useState('pix_manual')
+  const [referencia, setReferencia] = useState('')
+  const [observacoes, setObservacoes] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    onErro('')
+    try {
+      await api.post(`/admin/lojas/${loja.id}/destaque/ativar`, {
+        valor: parseMoeda(valorStr),
+        meses,
+        forma_pagamento: formaPagamento,
+        referencia_pagamento: referencia || undefined,
+        observacoes: observacoes || undefined,
+      })
+      onSaved()
+    } catch (err: any) {
+      onErro(err.message || 'Erro ao ativar destaque.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="glass-card" style={{ padding: 'var(--sv-space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-3)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 'var(--sv-space-3)' }}>
+        <div className="form-group">
+          <label>Valor cobrado (R$)</label>
+          <input className="form-input" value={valorStr} onChange={(e) => setValorStr(mascararMoeda(e.target.value))} required />
+        </div>
+        <div className="form-group">
+          <label>Meses</label>
+          <input type="number" className="form-input" min={1} max={12} value={meses} onChange={(e) => setMeses(Number(e.target.value))} required />
+        </div>
+      </div>
+      <div className="form-group">
+        <label>Forma de pagamento</label>
+        <select className="form-input" value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)}>
+          <option value="pix_manual">Pix manual</option>
+          <option value="gateway">Gateway</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div className="form-group">
+        <label>Referência do pagamento (opcional)</label>
+        <input className="form-input" value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="ID do comprovante Pix, etc." />
+      </div>
+      <div className="form-group">
+        <label>Observações (opcional)</label>
+        <input className="form-input" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
+      </div>
+      <p style={{ fontSize: 'var(--sv-text-xs)', color: 'var(--sv-text-muted)' }}>
+        O prazo é somado a partir do vencimento atual (se ainda não expirou) ou de hoje. Os veículos da loja passam a aparecer priorizados no feed público imediatamente.
+      </p>
+      <div className="modal-footer" style={{ paddingTop: 'var(--sv-space-2)' }}>
+        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>Cancelar</button>
+        <button type="submit" className="btn btn-primary" disabled={loading}>
+          {loading ? <span className="spinner" /> : 'Confirmar cobrança e ativar'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function FormDesativarDestaque({ loja, onCancel, onSaved, onErro }: {
+  loja: LojaItem
+  onCancel: () => void
+  onSaved: () => void
+  onErro: (msg: string) => void
+}) {
+  const [motivo, setMotivo] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    onErro('')
+    try {
+      await api.post(`/admin/lojas/${loja.id}/destaque/desativar`, { motivo: motivo || undefined })
+      onSaved()
+    } catch (err: any) {
+      onErro(err.message || 'Erro ao remover destaque.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="glass-card" style={{ padding: 'var(--sv-space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-3)' }}>
+      <p style={{ fontSize: 'var(--sv-text-sm)', color: 'var(--sv-text-secondary)' }}>
+        A loja perde a priorização no feed público imediatamente. Use para cancelamento antes do vencimento.
+      </p>
+      <div className="form-group">
+        <label>Motivo (opcional)</label>
+        <input className="form-input" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex: cancelamento a pedido…" />
+      </div>
+      <div className="modal-footer" style={{ paddingTop: 'var(--sv-space-2)' }}>
+        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>Cancelar</button>
+        <button type="submit" className="btn btn-primary" disabled={loading} style={{ background: 'var(--sv-danger)' }}>
+          {loading ? <span className="spinner" /> : 'Remover destaque'}
         </button>
       </div>
     </form>

@@ -70,7 +70,7 @@ function PreAprovacaoModal({ veiculoId, onClose }: { veiculoId: string; onClose:
             </div>
             {erro && <p style={{ color: 'var(--vt-error, #dc2626)', fontSize: 13, marginTop: 10 }}>{erro}</p>}
             <button className="vt-btn vt-btn-primary vt-btn-block" type="submit" disabled={enviando} style={{ marginTop: 16 }}>
-              {enviando ? 'Enviando…' : 'Quero pré-aprovação'}
+              {enviando ? 'Enviando…' : 'Quero simular financiamento'}
             </button>
           </form>
         )}

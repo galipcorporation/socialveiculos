@@ -178,12 +178,23 @@ async def get_marketplace_feed(
     if carroceria:
         stmt = stmt.where(Veiculo.carroceria.ilike(carroceria))
 
+    # Lojas patrocinadas (destaque) entram sempre priorizadas no topo do feed,
+    # respeitando entre si a ordenação escolhida pelo usuário.
+    destaque_prioridade = case(
+        (
+            (Loja.destaque == True)
+            & ((Loja.destaque_ate.is_(None)) | (Loja.destaque_ate > utcnow())),
+            0,
+        ),
+        else_=1,
+    )
+
     if ordenacao == "ofertas":
-        stmt = stmt.order_by(Veiculo.preco_venda.asc())
+        stmt = stmt.order_by(destaque_prioridade, Veiculo.preco_venda.asc())
     elif ordenacao == "novidades":
-        stmt = stmt.order_by(Veiculo.created_at.desc())
+        stmt = stmt.order_by(destaque_prioridade, Veiculo.created_at.desc())
     else:
-        stmt = stmt.order_by(Veiculo.created_at.desc())
+        stmt = stmt.order_by(destaque_prioridade, Veiculo.created_at.desc())
 
     offset = (page - 1) * per_page
     # Query more items if needed to allow deduplication and still satisfy per_page limit
@@ -243,6 +254,9 @@ async def get_marketplace_feed(
         v.loja_estado = loja.estado if loja else None
         v.loja_whatsapp = loja.whatsapp if loja else None
         v.loja_verificada = bool(loja.verificada) if loja else False
+        v.loja_destaque = bool(
+            loja and loja.destaque and (loja.destaque_ate is None or loja.destaque_ate > utcnow())
+        )
         v.seguindo_loja = v.loja_id in lojas_seguidas
 
     return vehicles

@@ -26,7 +26,7 @@ from config import settings
 from database import get_db
 from deps import get_current_b2b_user, B2BContext
 from limiter import rate_limit
-from models import SiteLoja, Loja, Veiculo, ClientePF, Lead, OrigemLead, EtapaLead, StatusVeiculo
+from models import SiteLoja, Loja, Veiculo, ClientePF, Lead, OrigemLead, EtapaLead, StatusVeiculo, Notificacao
 from modulos import Modulo, exige_modulo
 from rbac import exige_permissao, Acao, Recurso
 
@@ -475,6 +475,15 @@ async def criar_lead_site(data: LeadSiteRequest, db: AsyncSession = Depends(get_
         observacoes=f"Lead gerado via site próprio. Mensagem: {data.mensagem}" if data.mensagem else "Lead gerado via site próprio.",
     )
     db.add(lead)
+    await db.flush()
+
+    db.add(Notificacao(
+        loja_id=site.loja_id,
+        titulo="Novo lead pelo site",
+        conteudo=f"{cliente.nome} entrou em contato pelo seu site.",
+        tipo="lead",
+        link=f"lead:{lead.id}",
+    ))
     await db.commit()
     return {"ok": True}
 

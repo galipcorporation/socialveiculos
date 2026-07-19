@@ -130,7 +130,7 @@ export const vitrineService = {
     const params: Record<string, string> = {}
     if (busca.trim()) params.q = busca.trim()
     if (filtro === 'carro' || filtro === 'moto') params.tipo = filtro
-    const data = await api.get<VeiculoB2CDTO[]>('/veiculos/marketplace/feed', params)
+    const data = await api.get<VeiculoB2CDTO[]>('/marketplace/feed', params)
     let lista = data.map(mapAnuncio)
     if (filtro === 'ofertas') lista = lista.filter((a) => a.oferta)
     else if (filtro === 'novidades') lista = lista.filter((a) => a.novidade)
@@ -165,7 +165,7 @@ export const vitrineService = {
   // ── Lojas ────────────────────────────────────────────────
   async loja(id: string): Promise<LojaVitrine | undefined> {
     // O feed já carrega os dados da loja em cada anúncio; derivamos a partir dele.
-    const anuncios = await api.get<VeiculoB2CDTO[]>('/veiculos/marketplace/feed').catch(() => [])
+    const anuncios = await api.get<VeiculoB2CDTO[]>('/marketplace/feed').catch(() => [])
     const daLoja = anuncios.filter((a) => a.loja_id === id)
     const ref = daLoja[0]
     if (!ref) return undefined
@@ -181,7 +181,7 @@ export const vitrineService = {
   },
 
   async veiculosDaLoja(lojaId: string): Promise<AnuncioVitrine[]> {
-    const anuncios = await api.get<VeiculoB2CDTO[]>('/veiculos/marketplace/feed')
+    const anuncios = await api.get<VeiculoB2CDTO[]>('/marketplace/feed')
     return anuncios.filter((a) => a.loja_id === lojaId).map(mapAnuncio)
   },
 

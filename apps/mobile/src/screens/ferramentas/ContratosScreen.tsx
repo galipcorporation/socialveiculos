@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { FlatList, Linking, View } from 'react-native'
+import { FlatList, Linking, Switch, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -10,8 +10,9 @@ import {
   SegmentedControl, SelectField, Sheet, SkeletonCard, Txt, useToast,
 } from '../../components/ui'
 import { contratosService } from '../../services'
-import type { ContratoInput, TemplateContrato } from '../../services/contratos'
-import { VARIAVEIS_CONTRATO } from '../../services/contratos'
+import type { CampoExtraTemplate, ContratoInput, TemplateContrato } from '../../services/contratos'
+import { CATALOGO_VARIAVEIS, labelsDe } from '../../services/contratos'
+import { RichEditor } from '../../components/RichEditor'
 import type { Contrato, StatusContrato } from '../../services/types'
 import { STATUS_CONTRATO_LABEL } from '../../services/types'
 import { formatBRL, formatData, maskMoedaInput, parseMoedaInput } from '../../lib/format'
@@ -348,7 +349,7 @@ function ModelosTab() {
               <View style={{ flex: 1 }}>
                 <Txt variant="bodySemibold">{item.nome}</Txt>
                 <Txt variant="caption" color="textDim" numberOfLines={2}>
-                  {item.corpo}
+                  {item.corpo.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}
                 </Txt>
               </View>
               <View style={{ flexDirection: 'row', gap: spacing.xs }}>
@@ -392,8 +393,14 @@ function EditorModeloSheet({ template, onClose }: { template?: TemplateContrato;
   const toast = useToast()
   const [nome, setNome] = useState(template?.nome || '')
   const [corpo, setCorpo] = useState(template?.corpo || '')
-  const [selection, setSelection] = useState({ start: 0, end: 0 })
+  const [camposExtras, setCamposExtras] = useState<CampoExtraTemplate[]>(template?.camposExtras ?? [])
+  const [usarIdentidadeLoja, setUsarIdentidadeLoja] = useState(template?.usarIdentidadeLoja ?? true)
   const [salvando, setSalvando] = useState(false)
+
+  const grupos = camposExtras.length > 0
+    ? [...CATALOGO_VARIAVEIS, { grupo: 'Personalizados deste modelo', itens: camposExtras }]
+    : CATALOGO_VARIAVEIS
+  const labels = labelsDe(grupos)
 
   const salvar = async () => {
     if (!nome.trim() || !corpo.trim()) {
@@ -405,7 +412,9 @@ function EditorModeloSheet({ template, onClose }: { template?: TemplateContrato;
       await contratosService.salvarTemplate({
         id: template?.id,
         nome: nome.trim(),
-        corpo: corpo,
+        corpo,
+        camposExtras,
+        usarIdentidadeLoja,
       })
       queryClient.invalidateQueries({ queryKey: ['templates'] })
       toast.show('success', 'Modelo salvo.')
@@ -417,11 +426,13 @@ function EditorModeloSheet({ template, onClose }: { template?: TemplateContrato;
     }
   }
 
-  const inserirVariavel = (chave: string) => {
-    const start = selection.start
-    const end = selection.end
-    const novoCorpo = corpo.substring(0, start) + chave + corpo.substring(end)
-    setCorpo(novoCorpo)
+  const adicionarCampoPersonalizado = (chave: string, label: string) => {
+    if (camposExtras.some((c) => c.chave === chave)) return
+    setCamposExtras((prev) => [...prev, { chave, label }])
+  }
+
+  const removerCampoPersonalizado = (chave: string) => {
+    setCamposExtras((prev) => prev.filter((c) => c.chave !== chave))
   }
 
   return (
@@ -433,30 +444,25 @@ function EditorModeloSheet({ template, onClose }: { template?: TemplateContrato;
           onChangeText={setNome}
           placeholder="Ex: Compra e venda padrão"
         />
-        <Input
-          label="Texto do contrato"
+
+        <Txt variant="captionMedium" color="textDim">Texto do contrato</Txt>
+        <RichEditor
           value={corpo}
-          onChangeText={setCorpo}
-          multiline
-          style={{ minHeight: 180, textAlignVertical: 'top' }}
-          placeholder="Digite o corpo do contrato..."
-          onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
+          onChange={setCorpo}
+          variaveis={grupos}
+          labels={labels}
+          minHeight={220}
+          placeholder="Digite o corpo do contrato…"
+          onAddCampoPersonalizado={adicionarCampoPersonalizado}
+          onRemoveCampoPersonalizado={removerCampoPersonalizado}
         />
 
-        <Txt variant="caption" color="textDim" style={{ marginTop: spacing.xs }}>
-          Variáveis de Sistema (Toque para inserir no cursor):
-        </Txt>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginVertical: spacing.xs }}>
-          {VARIAVEIS_CONTRATO.map((v) => (
-            <Button
-              key={v.chave}
-              title={v.label}
-              variant="tonal"
-              size="sm"
-              onPress={() => inserirVariavel(v.chave)}
-              style={{ paddingHorizontal: spacing.sm, height: 32 }}
-            />
-          ))}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.xs }}>
+          <View style={{ flex: 1 }}>
+            <Txt variant="captionMedium">Usar identidade da loja</Txt>
+            <Txt variant="caption" color="textMuted">Aplica cabeçalho, rodapé e marca-d'água configurados nas Configurações da loja.</Txt>
+          </View>
+          <Switch value={usarIdentidadeLoja} onValueChange={setUsarIdentidadeLoja} />
         </View>
 
         <Button
