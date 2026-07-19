@@ -99,8 +99,9 @@ export default function ComissoesScreen() {
 }
 
 function percentual(v: MinhaVenda): string {
-  if (!v.valor_venda || !v.comissao_valor) return '—'
-  return `${Math.round((v.comissao_valor / v.valor_venda) * 10000) / 100}%`
+  if (v.comissao_percentual) return `${v.comissao_percentual}%`
+  if (v.comissao_valor) return 'excedente da troca'
+  return '—'
 }
 
 function VendaCard({ venda, onPress }: { venda: MinhaVenda; onPress: () => void }) {

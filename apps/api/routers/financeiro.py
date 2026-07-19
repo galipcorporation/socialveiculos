@@ -1015,6 +1015,7 @@ async def minhas_vendas(
             veiculo_nome=f"{v.marca} {v.modelo}" if v else None,
             valor_venda=c.valor_venda if c else None,
             comissao_valor=c.valor_comissao if c else None,
+            comissao_percentual=c.percentual if c else None,
             comissao_paga=c.pago if c else None,
             estagio=e.estagio.value,
             aberta_em=e.aberta_em,

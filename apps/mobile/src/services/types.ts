@@ -677,6 +677,7 @@ export interface MinhaVenda {
   veiculo_nome?: string
   valor_venda?: number
   comissao_valor?: number
+  comissao_percentual?: number
   comissao_paga?: boolean | null
   estagio: EstagioEsteira
   aberta_em: string

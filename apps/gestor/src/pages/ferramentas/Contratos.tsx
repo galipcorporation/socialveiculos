@@ -8,7 +8,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { SearchSelect } from '../../components/SearchSelect'
 import { RichEditor, type VarGroup } from '../../components/RichEditor'
 import { CATALOGO_VARIAVEIS } from '../../lib/variaveisContrato'
-import { FileSignature } from 'lucide-react'
+import { Receipt } from 'lucide-react'
 
 /* ── Types ───────────────────────────────────────────────────── */
 
@@ -37,6 +37,14 @@ interface ContratoListResponse {
   page: number
   per_page: number
   pages: number
+}
+
+interface LojaIdentidade {
+  logo_url?: string
+  contrato_cabecalho?: string
+  contrato_rodape?: string
+  contrato_marca_dagua_url?: string
+  contrato_marca_dagua_ativa?: boolean
 }
 
 interface ClienteItem {
@@ -188,8 +196,9 @@ export function ContratosPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
 
-  // Modal novo contrato
+  // Modal novo contrato / edição
   const [showModal, setShowModal] = useState(false)
+  const [editingContrato, setEditingContrato] = useState<ContratoItem | null>(null)
   const [aba, setAba] = useState<'contratos' | 'modelos'>('contratos')
 
   const toast = (type: 'success' | 'error' | 'info', message: string) => useUIStore.getState().showToast(message, type)
@@ -319,6 +328,7 @@ export function ContratosPage() {
           handleDownloadPdf={handleDownloadPdf}
           handleShareWhatsApp={handleShareWhatsApp}
           handleStatusChange={handleStatusChange}
+          handleEdit={setEditingContrato}
           navigate={navigate}
         />
       )}
@@ -334,6 +344,19 @@ export function ContratosPage() {
           }}
         />
       )}
+
+      {/* ── Modal Editar Contrato ── */}
+      {editingContrato && (
+        <NovoContratoModal
+          contrato={editingContrato}
+          onClose={() => setEditingContrato(null)}
+          onSaved={() => {
+            setEditingContrato(null)
+            toast('success', 'Contrato atualizado com sucesso!')
+            fetchContratos()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -345,7 +368,7 @@ export function ContratosPage() {
 
 function ContratosTabContent({
   contratos, total, loading, statusFilter, setStatusFilter, setPage,
-  search, setSearch, handleDownloadPdf, handleShareWhatsApp, handleStatusChange, navigate,
+  search, setSearch, handleDownloadPdf, handleShareWhatsApp, handleStatusChange, handleEdit, navigate,
 }: {
   contratos: ContratoItem[]
   total: number
@@ -358,6 +381,7 @@ function ContratosTabContent({
   handleDownloadPdf: (c: ContratoItem) => void
   handleShareWhatsApp: (c: ContratoItem) => void
   handleStatusChange: (c: ContratoItem, status: string) => void
+  handleEdit: (c: ContratoItem) => void
   navigate: (path: string) => void
 }) {
   return (
@@ -486,6 +510,13 @@ function ContratosTabContent({
                   <div className="actions-cell">
                     <button
                       className="action-btn"
+                      title="Editar Contrato"
+                      onClick={() => handleEdit(c)}
+                    >
+                      <EditIcon />
+                    </button>
+                    <button
+                      className="action-btn"
                       title="Baixar / Imprimir"
                       onClick={() => handleDownloadPdf(c)}
                     >
@@ -505,7 +536,7 @@ function ContratosTabContent({
                         title="Emitir NF-e"
                         onClick={() => navigate(`/ferramentas/notas-fiscais?contrato=${c.id}`)}
                       >
-                        <FileSignature style={{ width: 18, height: 18 }} />
+                        <Receipt style={{ width: 18, height: 18 }} />
                       </button>
                     )}
                   </div>
@@ -704,8 +735,15 @@ function EditorTemplateContent({ template, onClose, onSaved }: {
   const [conteudoHtml, setConteudoHtml] = useState(template?.conteudo_html || '<p>Digite o texto do contrato aqui…</p>')
   const [usarIdentidade, setUsarIdentidade] = useState(template?.usar_identidade_loja ?? true)
   const [saving, setSaving] = useState(false)
+  const [loja, setLoja] = useState<LojaIdentidade | null>(null)
 
   const toast = (type: 'success' | 'error' | 'info', message: string) => useUIStore.getState().showToast(message, type)
+
+  useEffect(() => {
+    api.get<LojaIdentidade>('/configuracoes/loja')
+      .then(setLoja)
+      .catch(() => { /* sem permissão de configurações — prévia fica oculta */ })
+  }, [])
 
   useEffect(() => {
     setNome(template?.nome || '')
@@ -795,6 +833,39 @@ function EditorTemplateContent({ template, onClose, onSaved }: {
         <input type="checkbox" checked={usarIdentidade} onChange={e => setUsarIdentidade(e.target.checked)} style={{ width: 18, height: 18, flexShrink: 0, accentColor: 'var(--sv-primary)' }} />
       </label>
 
+      {usarIdentidade && loja && (loja.contrato_cabecalho || loja.contrato_rodape || (loja.contrato_marca_dagua_ativa && (loja.contrato_marca_dagua_url || loja.logo_url))) && (
+        <div>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--sv-text-dim)' }}>Prévia do cabeçalho e rodapé</label>
+          <div style={{ position: 'relative', border: '1px dashed var(--sv-border)', borderRadius: 8, overflow: 'hidden', background: 'var(--sv-surface)' }}>
+            {loja.contrato_marca_dagua_ativa && (loja.contrato_marca_dagua_url || loja.logo_url) && (
+              <img
+                src={loja.contrato_marca_dagua_url || loja.logo_url}
+                alt=""
+                style={{ position: 'absolute', inset: 0, margin: 'auto', width: '55%', maxWidth: 240, opacity: 0.06, pointerEvents: 'none' }}
+              />
+            )}
+            {loja.contrato_cabecalho && (
+              <div
+                style={{ padding: '10px 14px', fontSize: 12, textAlign: 'center', borderBottom: '1px dashed var(--sv-border)', position: 'relative' }}
+                dangerouslySetInnerHTML={{ __html: loja.contrato_cabecalho }}
+              />
+            )}
+            <div style={{ padding: '18px 14px', fontSize: 11, color: 'var(--sv-text-muted)', textAlign: 'center', position: 'relative' }}>
+              O texto do contrato começa aqui
+            </div>
+            {loja.contrato_rodape && (
+              <div
+                style={{ padding: '10px 14px', fontSize: 11, color: 'var(--sv-text-muted)', textAlign: 'center', borderTop: '1px dashed var(--sv-border)', position: 'relative' }}
+                dangerouslySetInnerHTML={{ __html: loja.contrato_rodape }}
+              />
+            )}
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--sv-text-muted)', marginTop: 4 }}>
+            Configurados em Configurações › Perfil da Loja — repetem em todas as páginas do PDF gerado.
+          </p>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 4, borderTop: '1px solid var(--sv-border)', paddingTop: 16 }}>
         <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
         <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
@@ -810,16 +881,17 @@ function EditorTemplateContent({ template, onClose, onSaved }: {
    MODAL — Novo Contrato
    ══════════════════════════════════════════════════════════════ */
 
-function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [tipo, setTipo] = useState('compra_venda')
-  const [clienteId, setClienteId] = useState('')
-  const [clienteDisplay, setClienteDisplay] = useState('')
-  const [veiculoId, setVeiculoId] = useState('')
-  const [veiculoDisplay, setVeiculoDisplay] = useState('')
-  const [valorStr, setValorStr] = useState('')
-  const [entradaStr, setEntradaStr] = useState('')
-  const [parcelas, setParcelas] = useState('')
-  const [observacoes, setObservacoes] = useState('')
+function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: ContratoItem; onClose: () => void; onSaved: () => void }) {
+  const isEditing = !!contrato
+  const [tipo, setTipo] = useState(contrato?.tipo || 'compra_venda')
+  const [clienteId, setClienteId] = useState(contrato?.cliente_id || '')
+  const [clienteDisplay, setClienteDisplay] = useState(contrato?.cliente_nome || '')
+  const [veiculoId, setVeiculoId] = useState(contrato?.veiculo_id || '')
+  const [veiculoDisplay, setVeiculoDisplay] = useState(contrato?.veiculo_nome || '')
+  const [valorStr, setValorStr] = useState(contrato?.valor_venda ? mascararMoeda(contrato.valor_venda) : '')
+  const [entradaStr, setEntradaStr] = useState(contrato?.valor_entrada ? mascararMoeda(contrato.valor_entrada) : '')
+  const [parcelas, setParcelas] = useState(contrato?.parcelas ? String(contrato.parcelas) : '')
+  const [observacoes, setObservacoes] = useState(contrato?.observacoes || '')
   const [saving, setSaving] = useState(false)
   const [templates, setTemplates] = useState<TemplateItem[]>([])
   const [templateId, setTemplateId] = useState('')
@@ -869,21 +941,33 @@ function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const handleSubmit = async () => {
     setSaving(true)
     try {
-      await api.post('/contratos', {
-        tipo,
-        cliente_id: clienteId || null,
-        veiculo_id: veiculoId || null,
-        valor_venda: parseMoeda(valorStr) || null,
-        valor_entrada: parseMoeda(entradaStr) || null,
-        parcelas: parcelas ? parseInt(parcelas) : null,
-        observacoes: observacoes || null,
-        template_id: templateId || null,
-        dados_extras: Object.keys(valoresExtras).length > 0 ? valoresExtras : null,
-      })
+      if (isEditing) {
+        await api.patch(`/contratos/${contrato!.id}`, {
+          tipo,
+          cliente_id: clienteId || null,
+          veiculo_id: veiculoId || null,
+          valor_venda: parseMoeda(valorStr) || null,
+          valor_entrada: parseMoeda(entradaStr) || null,
+          parcelas: parcelas ? parseInt(parcelas) : null,
+          observacoes: observacoes || null,
+        })
+      } else {
+        await api.post('/contratos', {
+          tipo,
+          cliente_id: clienteId || null,
+          veiculo_id: veiculoId || null,
+          valor_venda: parseMoeda(valorStr) || null,
+          valor_entrada: parseMoeda(entradaStr) || null,
+          parcelas: parcelas ? parseInt(parcelas) : null,
+          observacoes: observacoes || null,
+          template_id: templateId || null,
+          dados_extras: Object.keys(valoresExtras).length > 0 ? valoresExtras : null,
+        })
+      }
       onSaved()
     } catch (err) {
       const { message, details } = extractErrorDetails(err)
-      useUIStore.getState().showError(message || 'Erro ao criar contrato', details)
+      useUIStore.getState().showError(message || `Erro ao ${isEditing ? 'atualizar' : 'criar'} contrato`, details)
     } finally {
       setSaving(false)
     }
@@ -893,7 +977,7 @@ function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved:
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
         <div className="modal-header">
-          <h3>Novo Contrato</h3>
+          <h3>{isEditing ? `Editar Contrato ${contrato!.numero}` : 'Novo Contrato'}</h3>
           <button className="modal-close" onClick={onClose}><XIcon /></button>
         </div>
 
@@ -909,31 +993,35 @@ function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved:
               </select>
             </div>
 
-            {/* Modelo */}
-            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-              <label>Modelo de Contrato</label>
-              <select value={templateId} onChange={e => { setTemplateId(e.target.value); setValoresExtras({}) }}>
-                <option value="">Nenhum (usar layout padrão do sistema)</option>
-                {templates.map(t => (
-                  <option key={t.id} value={t.id}>{t.nome}</option>
-                ))}
-              </select>
-            </div>
+            {/* Modelo — só na criação; edição altera os dados do contrato já existente */}
+            {!isEditing && (
+              <>
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label>Modelo de Contrato</label>
+                  <select value={templateId} onChange={e => { setTemplateId(e.target.value); setValoresExtras({}) }}>
+                    <option value="">Nenhum (usar layout padrão do sistema)</option>
+                    {templates.map(t => (
+                      <option key={t.id} value={t.id}>{t.nome}</option>
+                    ))}
+                  </select>
+                </div>
 
-            {templateSelecionado && templateSelecionado.campos_extras.length > 0 && (
-              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label>Campos do modelo "{templateSelecionado.nome}"</label>
-                {templateSelecionado.campos_extras.map(campo => (
-                  <input
-                    key={campo.chave}
-                    type="text"
-                    placeholder={campo.label}
-                    value={valoresExtras[campo.chave] || ''}
-                    onChange={e => setValoresExtras(prev => ({ ...prev, [campo.chave]: e.target.value }))}
-                    style={{ marginBottom: 8 }}
-                  />
-                ))}
-              </div>
+                {templateSelecionado && templateSelecionado.campos_extras.length > 0 && (
+                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label>Campos do modelo "{templateSelecionado.nome}"</label>
+                    {templateSelecionado.campos_extras.map(campo => (
+                      <input
+                        key={campo.chave}
+                        type="text"
+                        placeholder={campo.label}
+                        value={valoresExtras[campo.chave] || ''}
+                        onChange={e => setValoresExtras(prev => ({ ...prev, [campo.chave]: e.target.value }))}
+                        style={{ marginBottom: 8 }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
 
             {/* Cliente */}
@@ -1013,7 +1101,9 @@ function NovoContratoModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {saving ? 'Criando...' : 'Criar Contrato'}
+            {isEditing
+              ? (saving ? 'Salvando...' : 'Salvar Alterações')
+              : (saving ? 'Criando...' : 'Criar Contrato')}
           </button>
         </div>
       </div>

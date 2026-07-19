@@ -50,6 +50,7 @@ interface MinhaVendaDTO {
   veiculo_nome?: string | null
   valor_venda?: number | null
   comissao_valor?: number | null
+  comissao_percentual?: number | null
   comissao_paga?: boolean | null
   estagio: string
   aberta_em: string
@@ -195,6 +196,7 @@ export const comissoesService = {
       veiculo_nome: v.veiculo_nome ?? undefined,
       valor_venda: v.valor_venda ?? undefined,
       comissao_valor: v.comissao_valor ?? undefined,
+      comissao_percentual: v.comissao_percentual ?? undefined,
       comissao_paga: v.comissao_paga ?? null,
       estagio: v.estagio as EstagioEsteira,
       aberta_em: v.aberta_em,

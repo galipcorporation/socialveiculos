@@ -256,6 +256,41 @@ export function Financeiro() {
     }
   }
 
+  const [editandoValorId, setEditandoValorId] = useState<string | null>(null)
+  const [valorEditado, setValorEditado] = useState('')
+  const [salvandoValor, setSalvandoValor] = useState(false)
+
+  const abrirEdicaoValor = (l: Lancamento) => {
+    setEditandoValorId(l.id)
+    setValorEditado(mascararMoeda(l.valor))
+  }
+
+  const salvarValorEditado = async (lancamento: Lancamento) => {
+    const novoValor = parseMoeda(valorEditado)
+    if (!novoValor || novoValor <= 0) {
+      showToast('Informe um valor válido.', 'error')
+      return
+    }
+    setSalvandoValor(true)
+    try {
+      await api.patch(`/financeiro/lancamentos/${lancamento.id}`, { valor: novoValor })
+      setLancamentos(prev => prev.map(l => l.id === lancamento.id ? { ...l, valor: novoValor } : l))
+      setEditandoValorId(null)
+      showToast('Valor atualizado.', 'success')
+      const params: any = {}
+      if (filtroMes && filtroAno) {
+        params.mes = filtroMes
+        params.ano = filtroAno
+      }
+      const r = await api.get<ResumoFinanceiro>('/financeiro/resumo', params)
+      setResumo(r)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Erro ao atualizar valor.', 'error')
+    } finally {
+      setSalvandoValor(false)
+    }
+  }
+
   const toggleStatusPagamento = async (lancamento: Lancamento) => {
     const novoStatus = lancamento.status_pagamento === 'pago' ? 'pendente' : 'pago'
     const statusAntigo = lancamento.status_pagamento
@@ -507,7 +542,45 @@ export function Financeiro() {
                     {new Date(l.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: TIPO_COR[l.tipo] }}>
-                    {l.tipo === 'receita' ? '+' : '−'} {formatBRL(l.valor)}
+                    {editandoValorId === l.id ? (
+                      <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <input
+                          autoFocus
+                          value={valorEditado}
+                          onChange={(e) => setValorEditado(mascararMoeda(e.target.value))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') salvarValorEditado(l)
+                            if (e.key === 'Escape') setEditandoValorId(null)
+                          }}
+                          disabled={salvandoValor}
+                          style={{ width: '110px', fontSize: '13px', padding: '4px 6px', textAlign: 'right' }}
+                        />
+                        <button
+                          className="btn btn-glass"
+                          onClick={() => salvarValorEditado(l)}
+                          disabled={salvandoValor}
+                          style={{ padding: '4px 8px', fontSize: '12px' }}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          className="btn btn-glass"
+                          onClick={() => setEditandoValorId(null)}
+                          disabled={salvandoValor}
+                          style={{ padding: '4px 8px', fontSize: '12px' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => abrirEdicaoValor(l)}
+                        title="Clique para editar o valor"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', color: 'inherit', padding: 0 }}
+                      >
+                        {l.tipo === 'receita' ? '+' : '−'} {formatBRL(l.valor)}
+                      </button>
+                    )}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                     <button
@@ -546,7 +619,8 @@ export function Financeiro() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{c.vendedor_nome || 'Vendedor não identificado'}</div>
                         <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>
-                          {c.veiculo_nome || 'Veículo —'} · venda {formatBRL(c.valor_venda)} · {c.percentual}%
+                          {c.veiculo_nome || 'Veículo —'} · venda {formatBRL(c.valor_venda)} ·{' '}
+                          {c.percentual > 0 ? `${c.percentual}%` : 'excedente da troca'}
                         </div>
                       </div>
                       <div style={{ fontWeight: 700, color: 'var(--sv-warning)', whiteSpace: 'nowrap' }}>{formatBRL(c.valor_comissao)}</div>

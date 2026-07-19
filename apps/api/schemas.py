@@ -752,6 +752,7 @@ class MinhaVendaResponse(BaseModel):
     veiculo_nome: Optional[str] = None
     valor_venda: Optional[float] = None
     comissao_valor: Optional[float] = None
+    comissao_percentual: Optional[float] = None
     comissao_paga: Optional[bool] = None
     estagio: str
     aberta_em: datetime

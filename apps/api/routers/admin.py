@@ -200,11 +200,32 @@ async def criar_loja(
     db: AsyncSession = Depends(get_db),
     _admin: Usuario = Depends(exige_admin_plataforma),
 ):
-    """Cria nova loja com gestor inicial."""
+    """Cria nova loja com gestor inicial. Se o e-mail já existir e a pessoa não
+    tiver vínculo ativo com nenhuma loja (ex: ex-vendedor removido da equipe),
+    reaproveita o usuário existente como gestor da nova loja."""
     # Verificar se e-mail já existe
     res_email = await db.execute(select(Usuario).where(Usuario.email == data.gestor_email))
-    if res_email.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="E-mail do gestor já cadastrado.")
+    usuario_existente = res_email.scalar_one_or_none()
+
+    reaproveitar_usuario = False
+    if usuario_existente:
+        if usuario_existente.papel == PapelUsuario.ADMIN_PLATAFORMA:
+            raise HTTPException(
+                status_code=400,
+                detail="Este e-mail pertence a um admin da plataforma e não pode virar gestor de loja.",
+            )
+        res_vinc_ativo = await db.execute(
+            select(MembroLoja).where(
+                MembroLoja.usuario_id == usuario_existente.id,
+                MembroLoja.ativo.is_(True),
+            )
+        )
+        if res_vinc_ativo.scalar_one_or_none():
+            raise HTTPException(
+                status_code=400,
+                detail="E-mail do gestor já cadastrado e vinculado ativamente a outra loja.",
+            )
+        reaproveitar_usuario = True
 
     # Gerar slug único
     base_slug = _slugify(data.nome)
@@ -232,16 +253,23 @@ async def criar_loja(
     db.add(nova_loja)
     await db.flush()
 
-    # Criar gestor
-    gestor = Usuario(
-        id=_uuid(),
-        nome=data.gestor_nome,
-        email=data.gestor_email,
-        senha_hash=hash_password(data.gestor_senha),
-        papel=PapelUsuario.GESTOR,
-        ativo=True,
-    )
-    db.add(gestor)
+    # Criar ou reaproveitar gestor
+    if reaproveitar_usuario:
+        gestor = usuario_existente
+        gestor.nome = data.gestor_nome
+        gestor.senha_hash = hash_password(data.gestor_senha)
+        gestor.papel = PapelUsuario.GESTOR
+        gestor.ativo = True
+    else:
+        gestor = Usuario(
+            id=_uuid(),
+            nome=data.gestor_nome,
+            email=data.gestor_email,
+            senha_hash=hash_password(data.gestor_senha),
+            papel=PapelUsuario.GESTOR,
+            ativo=True,
+        )
+        db.add(gestor)
     await db.flush()
 
     # Vincular gestor à loja

@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
-import { FlatList, Linking, Pressable, View } from 'react-native'
+import { FlatList, Image, Linking, Pressable, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing } from '../../theme/tokens'
+import { radius, spacing } from '../../theme/tokens'
 import {
   AppHeader, Avatar, Badge, Button, Card, EmptyState, ErrorState, FilterChips, Input, SearchBar,
   SegmentedControl, Sheet, SkeletonCard, Txt, useToast,
@@ -121,11 +121,20 @@ function FeedTab() {
               )}
             </View>
 
-            <View style={{ borderRadius: 10, backgroundColor: colors.overlaySoft, padding: spacing.sm }}>
-              <Txt variant="bodyMedium" numberOfLines={1}>{item.veiculo_nome}</Txt>
-              <Txt variant="caption" color="textDim">
-                {[item.veiculo_ano, item.veiculo_km != null ? formatKm(item.veiculo_km) : null].filter(Boolean).join(' · ')}
-              </Txt>
+            <View style={{ flexDirection: 'row', gap: spacing.sm, borderRadius: 10, backgroundColor: colors.overlaySoft, padding: spacing.sm }}>
+              {item.foto_url ? (
+                <Image source={{ uri: item.foto_url }} style={{ width: 72, height: 72, borderRadius: radius.md }} />
+              ) : (
+                <View style={{ width: 72, height: 72, borderRadius: radius.md, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="car-outline" size={28} color={colors.textMuted} />
+                </View>
+              )}
+              <View style={{ flex: 1, justifyContent: 'center' }}>
+                <Txt variant="bodyMedium" numberOfLines={1}>{item.veiculo_nome}</Txt>
+                <Txt variant="caption" color="textDim">
+                  {[item.veiculo_ano, item.veiculo_km != null ? formatKm(item.veiculo_km) : null].filter(Boolean).join(' · ')}
+                </Txt>
+              </View>
             </View>
 
             {item.conteudo ? <Txt variant="caption" color="textDim">{item.conteudo}</Txt> : null}
