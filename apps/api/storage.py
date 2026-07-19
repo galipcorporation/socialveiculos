@@ -1,9 +1,44 @@
+import asyncio
+import io
 import os
 import uuid
 import boto3
 from botocore.exceptions import ClientError
 
 from config import settings
+
+# Thumbnail das fotos de veículo: WebP com no máximo THUMB_MAX_WIDTH de largura.
+# 640px cobre os cards das listas (Estoque, feed, vitrine) inclusive em telas 2x;
+# o original continua sendo servido nas telas de detalhe.
+THUMB_MAX_WIDTH = 640
+THUMB_WEBP_QUALITY = 75
+
+
+def gerar_thumbnail(conteudo: bytes) -> bytes | None:
+    """
+    Gera um thumbnail WebP a partir dos bytes de uma imagem.
+    Retorna None se o conteúdo não for uma imagem decodificável — o chamador
+    segue sem thumb (o front faz fallback para a URL original).
+    CPU-bound: chamar via asyncio.to_thread para não travar o event loop.
+    """
+    try:
+        from PIL import Image, ImageOps
+
+        img = Image.open(io.BytesIO(conteudo))
+        img = ImageOps.exif_transpose(img) or img
+        if img.mode == "P":
+            img = img.convert("RGBA")
+        elif img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGB")
+        if img.width > THUMB_MAX_WIDTH:
+            altura = max(1, round(img.height * THUMB_MAX_WIDTH / img.width))
+            img = img.resize((THUMB_MAX_WIDTH, altura), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="WEBP", quality=THUMB_WEBP_QUALITY)
+        return buf.getvalue()
+    except Exception:
+        return None
+
 
 class StorageProvider:
     def __init__(self):
@@ -74,32 +109,57 @@ class StorageProvider:
         e exclusão em lote (LGPD). Vazio = raiz do bucket.
         """
         unique_filename = self._build_key(prefixo, self.generate_filename(filename, content_type))
+        return await self._put(unique_filename, file_content, content_type)
 
+    async def _put(self, key: str, content: bytes, content_type: str) -> str:
+        """Grava bytes numa Key do storage ativo e retorna a URL pública."""
         if self.use_s3:
             try:
-                # Fazer upload para o S3
                 self.s3_client.put_object(
                     Bucket=self.bucket_name,
-                    Key=unique_filename,
-                    Body=file_content,
+                    Key=key,
+                    Body=content,
                     ContentType=content_type
                 )
                 if settings.s3_public_url:
-                    return f"{settings.s3_public_url.rstrip('/')}/{unique_filename}"
+                    return f"{settings.s3_public_url.rstrip('/')}/{key}"
                 else:
                     endpoint = settings.s3_endpoint_url or f"https://s3.{settings.s3_region}.amazonaws.com"
-                    return f"{endpoint.rstrip('/')}/{self.bucket_name}/{unique_filename}"
+                    return f"{endpoint.rstrip('/')}/{self.bucket_name}/{key}"
             except ClientError as e:
                 print(f"[Storage] Erro ao fazer upload para S3: {e}")
                 raise e
         else:
-            # Salvar localmente
-            file_path = os.path.join(self.local_dir, unique_filename)
+            # Salvar localmente (criando as "pastas" do prefixo, ex.: lojas/<id>/veiculos)
+            file_path = os.path.join(self.local_dir, *key.split("/"))
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "wb") as f:
-                f.write(file_content)
-            
-            # Retornar URL local
-            return f"/static/uploads/{unique_filename}"
+                f.write(content)
+            return f"/static/uploads/{key}"
+
+    async def upload_imagem_com_thumb(
+        self, file_content: bytes, filename: str, content_type: str, prefixo: str = ""
+    ) -> tuple[str, str | None]:
+        """
+        Sobe a imagem original e um thumbnail WebP (subpasta thumbs/, mesmo nome).
+        Retorna (url, thumb_url). thumb_url é None se a geração falhar — o
+        upload do original nunca é bloqueado pelo thumb.
+        """
+        unique = self.generate_filename(filename, content_type)
+        url = await self._put(self._build_key(prefixo, unique), file_content, content_type)
+
+        thumb_url = None
+        thumb_bytes = await asyncio.to_thread(gerar_thumbnail, file_content)
+        if thumb_bytes:
+            base = os.path.splitext(unique)[0]
+            prefixo_thumbs = f"{prefixo.strip('/')}/thumbs" if prefixo.strip("/") else "thumbs"
+            try:
+                thumb_url = await self._put(
+                    self._build_key(prefixo_thumbs, f"{base}.webp"), thumb_bytes, "image/webp"
+                )
+            except Exception as e:
+                print(f"[Storage] Thumb falhou (original ok): {e}")
+        return url, thumb_url
 
     def _key_from_url(self, file_url: str) -> str:
         # A Key pode ter prefixo (ex.: "lojas/<id>/veiculos/<uuid>.jpg"), então

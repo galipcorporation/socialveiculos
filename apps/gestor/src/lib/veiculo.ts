@@ -3,7 +3,7 @@
    Estoque (VeiculoModal) e Simulador. Não duplicar estas listas.
    ══════════════════════════════════════════════════════════════ */
 
-export interface Midia { id: string; tipo: string; url: string; ordem: number }
+export interface Midia { id: string; tipo: string; url: string; thumb_url?: string | null; ordem: number }
 
 export interface Veiculo {
   id: string

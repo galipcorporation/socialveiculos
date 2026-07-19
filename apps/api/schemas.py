@@ -65,6 +65,7 @@ class MidiaResponse(BaseModel):
     id: str
     tipo: TipoMidia
     url: str
+    thumb_url: Optional[str] = None
     ordem: int
 
     model_config = ConfigDict(from_attributes=True)

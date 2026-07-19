@@ -415,7 +415,7 @@ export function Estoque() {
                     <div className="vehicle-info-cell">
                       {v.midias && v.midias.length > 0 ? (
                         <div className="vehicle-thumb">
-                          <img src={v.midias[0].url} alt={`${v.marca} ${v.modelo}`} loading="lazy" decoding="async" />
+                          <img src={v.midias[0].thumb_url || v.midias[0].url} alt={`${v.marca} ${v.modelo}`} loading="lazy" decoding="async" />
                         </div>
                       ) : (
                         <div className="vehicle-thumb-placeholder">
@@ -535,7 +535,7 @@ export function Estoque() {
                 <div className="mobile-vehicle-card-header">
                   {v.midias && v.midias.length > 0 ? (
                     <div className="vehicle-thumb">
-                      <img src={v.midias[0].url} alt={`${v.marca} ${v.modelo}`} loading="lazy" decoding="async" />
+                      <img src={v.midias[0].thumb_url || v.midias[0].url} alt={`${v.marca} ${v.modelo}`} loading="lazy" decoding="async" />
                     </div>
                   ) : (
                     <div className="vehicle-thumb-placeholder">

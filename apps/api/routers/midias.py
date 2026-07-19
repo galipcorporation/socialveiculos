@@ -1,6 +1,6 @@
 import logging
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
@@ -23,22 +23,8 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
 ALLOWED_VIDEO_TYPES = {"video/mp4", "video/mpeg", "video/quicktime", "video/webm"}
 
 
-async def process_media_in_background(file_url: str, mime_type: str):
-    """
-    Background Task para processamento assíncrono.
-    Em produção, aqui poderíamos otimizar imagens (Pillow) e extrair o poster de vídeos (ffmpeg).
-    Faremos isso de forma segura e resiliente (try/except) para evitar quebras se bibliotecas externas faltarem.
-    """
-    try:
-        # Stub / Placeholder para processamento
-        pass
-    except Exception as e:
-        logger.error("Erro no processamento de mídia em background: %s", e)
-
-
 @router.post("/midias/upload", status_code=status.HTTP_201_CREATED)
 async def upload_midia(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: B2BContext = Depends(get_current_b2b_user)
 ):
@@ -74,23 +60,27 @@ async def upload_midia(
             detail=f"Vídeo muito grande. Limite máximo: {MAX_FILE_SIZE_VIDEO // (1024*1024)}MB."
         )
 
-    # 2. Upload
+    # 2. Upload — fotos ganham thumbnail WebP para as listas; vídeos não
+    prefixo = f"lojas/{current_user.loja_id}/veiculos"
     try:
-        url = await storage_provider.upload_file(
-            content, file.filename or "file", content_type,
-            prefixo=f"lojas/{current_user.loja_id}/veiculos",
-        )
+        if is_image:
+            url, thumb_url = await storage_provider.upload_imagem_com_thumb(
+                content, file.filename or "file", content_type, prefixo=prefixo,
+            )
+        else:
+            url = await storage_provider.upload_file(
+                content, file.filename or "file", content_type, prefixo=prefixo,
+            )
+            thumb_url = None
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Falha ao enviar arquivo ao storage: {str(e)}"
         )
 
-    # 3. Adicionar processamento em background
-    background_tasks.add_task(process_media_in_background, url, content_type)
-
     return {
         "url": url,
+        "thumb_url": thumb_url,
         "tipo": "foto" if is_image else "video",
         "nome": file.filename
     }
@@ -124,6 +114,7 @@ async def associar_midia_veiculo(
         veiculo_id=veiculo_id,
         tipo=tipo_enum,
         url=midia_data.get("url"),
+        thumb_url=midia_data.get("thumb_url"),
         ordem=proxima_ordem
     )
     db.add(nova_midia)
@@ -182,14 +173,16 @@ async def deletar_midia(
     if not midia:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mídia não encontrada ou não pertence à sua loja.")
 
-    # Apagar arquivo físico
+    # Apagar arquivo físico (original + thumb, se houver)
     url = midia.url
+    thumb_url = midia.thumb_url
     await db.delete(midia)
     await db.commit()
 
-    # Deletar em background ou imediatamente
     try:
         await storage_provider.delete_file(url)
+        if thumb_url:
+            await storage_provider.delete_file(thumb_url)
     except Exception as e:
         logger.error("Erro ao deletar arquivo físico: %s", e)
 

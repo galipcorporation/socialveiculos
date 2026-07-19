@@ -444,6 +444,9 @@ class Midia(Base):
     veiculo_id = Column(String(36), ForeignKey("veiculo.id", ondelete="CASCADE"), nullable=False)
     tipo = Column(Enum(TipoMidia), nullable=False)
     url = Column(String(500), nullable=False)
+    # Thumbnail WebP (~640px) gerado no upload; nulo em mídias antigas e vídeos —
+    # o front faz fallback para url. Backfill: backfill_thumbs.py
+    thumb_url = Column(String(500), nullable=True)
     ordem = Column(Integer, default=0)
     created_at = Column(DateTime, default=_now)
 

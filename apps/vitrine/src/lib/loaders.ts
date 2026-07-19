@@ -7,6 +7,7 @@ export interface Midia {
   id: string
   tipo: 'foto' | 'video'
   url: string
+  thumb_url?: string | null
   ordem: number
 }
 

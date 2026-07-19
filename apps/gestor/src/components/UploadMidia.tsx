@@ -6,6 +6,7 @@ export interface Midia {
   id: string
   tipo: 'foto' | 'video'
   url: string
+  thumb_url?: string | null
   ordem: number
 }
 
@@ -75,6 +76,7 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
           },
           body: JSON.stringify({
             url: uploadResult.url,
+            thumb_url: uploadResult.thumb_url ?? null,
             tipo: uploadResult.tipo
           })
         })
@@ -267,7 +269,7 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
             {m.tipo === 'video' ? (
               <video src={m.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
-              <img src={m.url} alt="Mídia" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src={m.thumb_url || m.url} alt="Mídia" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 4px', background: 'rgba(0,0,0,0.6)', alignItems: 'center', position: 'absolute', bottom: 0, left: 0, right: 0 }}>

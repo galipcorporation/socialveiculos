@@ -5,6 +5,7 @@ export interface Midia {
   id: string
   tipo: 'foto' | 'video'
   url: string
+  thumb_url?: string | null
   ordem: number
 }
 
@@ -136,7 +137,7 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
         {currentMidia && !imgError ? (
           currentMidia.tipo === 'video'
             ? <video src={currentMidia.url} controls muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <img src={currentMidia.url} alt={`${veiculo.marca} ${veiculo.modelo}`} loading="lazy" decoding="async" onError={() => setImgError(true)} />
+            : <img src={currentMidia.thumb_url || currentMidia.url} alt={`${veiculo.marca} ${veiculo.modelo}`} loading="lazy" decoding="async" onError={() => setImgError(true)} />
         ) : (
           <div className="vt-car-card-placeholder">
             <CarIcon />
