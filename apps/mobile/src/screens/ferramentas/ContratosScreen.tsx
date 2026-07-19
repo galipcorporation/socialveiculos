@@ -114,11 +114,36 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
   const navigation = useNavigation<any>()
   const [abrindoPdf, setAbrindoPdf] = useState(false)
   const [statusSheet, setStatusSheet] = useState(false)
+  const [confirmarCancelamento, setConfirmarCancelamento] = useState(false)
 
   const statusMut = useMutation({
     mutationFn: (s: StatusContrato) => contratosService.alterarStatus(contrato.id, s),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['contratos'] }); toast.show('success', 'Status atualizado.'); onClose() },
+    onSuccess: (_data, s) => {
+      // Cancelar compra e venda desfaz a venda no backend: além dos contratos,
+      // invalida estoque, esteiras, financeiro e dashboard.
+      queryClient.invalidateQueries()
+      setConfirmarCancelamento(false)
+      toast.show(
+        'success',
+        s === 'cancelado' && contrato.tipo === 'compra_venda'
+          ? 'Contrato cancelado — veículo voltou ao estoque.'
+          : 'Status atualizado.',
+      )
+      onClose()
+    },
+    onError: () => toast.show('error', 'Não foi possível alterar o status.'),
   })
+
+  // Cancelar um contrato de compra e venda desfaz a venda — pede confirmação.
+  const escolherStatus = (s: StatusContrato) => {
+    if (s === contrato.status) { setStatusSheet(false); return }
+    if (s === 'cancelado' && contrato.tipo === 'compra_venda') {
+      setStatusSheet(false)
+      setConfirmarCancelamento(true)
+      return
+    }
+    statusMut.mutate(s)
+  }
 
   const abrirPdf = async () => {
     setAbrindoPdf(true)
@@ -159,8 +184,28 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
         title="Status do contrato"
         selected={contrato.status}
         options={(Object.keys(STATUS_CONTRATO_LABEL) as StatusContrato[]).map((s) => ({ value: s, label: STATUS_CONTRATO_LABEL[s] }))}
-        onSelect={(s) => statusMut.mutate(s as StatusContrato)}
+        onSelect={(s) => escolherStatus(s as StatusContrato)}
       />
+
+      {/* Confirmação: cancelar compra e venda desfaz a venda */}
+      <Sheet visible={confirmarCancelamento} onClose={() => setConfirmarCancelamento(false)} title="Cancelar contrato" scrollable={false}>
+        <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
+          <Txt variant="body">Cancelar o contrato {contrato.numero}?</Txt>
+          <Txt variant="caption" color="textDim">
+            O veículo{contrato.veiculo_nome ? ` "${contrato.veiculo_nome}"` : ''} volta ao estoque como disponível e a esteira
+            pós-venda é encerrada. A venda continua registrada no histórico.
+          </Txt>
+          <Button
+            title="Cancelar contrato e desfazer a venda"
+            variant="danger"
+            icon="close-circle-outline"
+            loading={statusMut.isPending}
+            onPress={() => statusMut.mutate('cancelado')}
+            full
+          />
+          <Button title="Voltar" variant="ghost" onPress={() => setConfirmarCancelamento(false)} full />
+        </View>
+      </Sheet>
     </Sheet>
   )
 }

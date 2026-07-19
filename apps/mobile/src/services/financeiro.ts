@@ -24,6 +24,9 @@ interface LancamentoDTO {
   veiculo_nome?: string | null
   status_pagamento: string
   created_at: string
+  deletado_em?: string | null
+  deletado_por_nome?: string | null
+  motivo_exclusao?: string | null
 }
 interface ResumoDTO {
   receitas: number
@@ -51,6 +54,9 @@ function mapLancamento(l: LancamentoDTO): Lancamento {
     veiculo_nome: l.veiculo_nome ?? undefined,
     status_pagamento: l.status_pagamento === 'pago' ? 'pago' : 'pendente',
     created_at: l.created_at,
+    deletado_em: l.deletado_em ?? undefined,
+    deletado_por_nome: l.deletado_por_nome ?? undefined,
+    motivo_exclusao: l.motivo_exclusao ?? undefined,
   }
 }
 
@@ -75,8 +81,22 @@ export const financeiroService = {
     return lista.map(mapLancamento).sort((a, b) => b.data.localeCompare(a.data))
   },
 
-  async excluir(idLancamento: string): Promise<void> {
-    await api.delete(`/financeiro/lancamentos/${idLancamento}`)
+  /** Exclui (soft delete) um lançamento. O motivo é obrigatório (mín. 3 chars)
+   *  e fica registrado na auditoria; o lançamento vai para a lixeira. */
+  async excluir(idLancamento: string, motivo: string): Promise<void> {
+    await api.delete(`/financeiro/lancamentos/${idLancamento}`, { motivo: motivo.trim() })
+  },
+
+  /** Lista os lançamentos excluídos (lixeira), para restauração. */
+  async lixeira(): Promise<Lancamento[]> {
+    const data = await api.get<LancamentoDTO[]>('/financeiro/lancamentos/lixeira')
+    return (Array.isArray(data) ? data : []).map(mapLancamento)
+  },
+
+  /** Restaura um lançamento previamente excluído. */
+  async restaurar(idLancamento: string): Promise<Lancamento> {
+    const l = await api.post<LancamentoDTO>(`/financeiro/lancamentos/${idLancamento}/restaurar`, {})
+    return mapLancamento(l)
   },
 
   async criar(input: LancamentoInput): Promise<Lancamento> {

@@ -1588,6 +1588,24 @@ class Notificacao(Base):
     )
 
 
+class DispositivoPush(Base):
+    """Token de push (Expo) de um dispositivo do usuário, para notificações
+    remotas. Um usuário pode ter vários (celular + tablet). O token é único:
+    reassociado ao usuário atual se o mesmo aparelho trocar de conta."""
+    __tablename__ = "dispositivo_push"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    usuario_id = Column(String(36), nullable=False)
+    token = Column(String(255), nullable=False, unique=True)
+    plataforma = Column(String(20), nullable=True)  # "ios" | "android" | "web"
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+    __table_args__ = (
+        Index("ix_dispositivo_push_usuario", "usuario_id"),
+    )
+
+
 # ═══════════════════════════════════════════════════════════════
 # ESTEIRA PÓS-VENDA (ESTEIRA-POS-VENDA.md §6.2)
 # ═══════════════════════════════════════════════════════════════

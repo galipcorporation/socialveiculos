@@ -31,6 +31,9 @@ export default function FinanceiroScreen() {
   const [periodo, setPeriodo] = useState<PeriodoFinanceiro>({ mes: new Date().getMonth(), ano: new Date().getFullYear() })
   const [periodoSheet, setPeriodoSheet] = useState(false)
   const [acaoLanc, setAcaoLanc] = useState<Lancamento | null>(null)
+  const [excluindo, setExcluindo] = useState<Lancamento | null>(null)
+  const [motivo, setMotivo] = useState('')
+  const [lixeiraAberta, setLixeiraAberta] = useState(false)
 
   const chave = `${periodo.ano}-${periodo.mes}`
   const resumoQ = useQuery({ queryKey: ['financeiro', 'resumo', chave], queryFn: () => financeiroService.resumo(periodo) })
@@ -44,9 +47,31 @@ export default function FinanceiroScreen() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['financeiro'] }); setAcaoLanc(null); toast.show('success', 'Status atualizado.') },
   })
   const excluirMut = useMutation({
-    mutationFn: (idL: string) => financeiroService.excluir(idL),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['financeiro'] }); setAcaoLanc(null); toast.show('success', 'Lançamento excluído.') },
+    mutationFn: (p: { id: string; motivo: string }) => financeiroService.excluir(p.id, p.motivo),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['financeiro'] })
+      setExcluindo(null); setMotivo(''); setAcaoLanc(null)
+      toast.show('success', 'Lançamento movido para a lixeira.')
+    },
+    onError: () => toast.show('error', 'Não foi possível excluir o lançamento.'),
   })
+
+  const lixeiraQ = useQuery({
+    queryKey: ['financeiro', 'lixeira'],
+    queryFn: () => financeiroService.lixeira(),
+    enabled: lixeiraAberta,
+  })
+  const restaurarMut = useMutation({
+    mutationFn: (idL: string) => financeiroService.restaurar(idL),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['financeiro'] }); toast.show('success', 'Lançamento restaurado.') },
+    onError: () => toast.show('error', 'Não foi possível restaurar o lançamento.'),
+  })
+
+  const confirmarExclusao = () => {
+    if (!excluindo) return
+    if (motivo.trim().length < 3) { toast.show('info', 'Informe o motivo da exclusão (mín. 3 caracteres).'); return }
+    excluirMut.mutate({ id: excluindo.id, motivo: motivo.trim() })
+  }
 
   const periodoLabel = periodo.mes === 'todos' ? `${periodo.ano}` : `${MESES[periodo.mes as number]} ${periodo.ano}`
   const r = resumoQ.data
@@ -69,7 +94,12 @@ export default function FinanceiroScreen() {
           keyExtractor={(l) => l.id}
           ListHeaderComponent={
             <View style={{ gap: spacing.md, marginBottom: spacing.md }}>
-              <SelectField label="Período" value={periodoLabel} icon="calendar-outline" onPress={() => setPeriodoSheet(true)} />
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm }}>
+                <View style={{ flex: 1 }}>
+                  <SelectField label="Período" value={periodoLabel} icon="calendar-outline" onPress={() => setPeriodoSheet(true)} />
+                </View>
+                <Button title="Lixeira" size="sm" variant="ghost" icon="trash-outline" onPress={() => setLixeiraAberta(true)} />
+              </View>
               {/* Saldo do período */}
               <Card>
                 <Txt variant="label" color="textMuted" style={{ textTransform: 'uppercase' }}>
@@ -148,10 +178,58 @@ export default function FinanceiroScreen() {
               loading={togglePagMut.isPending}
               onPress={() => togglePagMut.mutate(acaoLanc.id)}
             />
-            <Button title="Excluir lançamento" variant="danger" icon="trash-outline" loading={excluirMut.isPending} onPress={() => excluirMut.mutate(acaoLanc.id)} />
+            <Button title="Excluir lançamento" variant="danger" icon="trash-outline" onPress={() => { setExcluindo(acaoLanc); setMotivo(''); setAcaoLanc(null) }} />
             <Button title="Cancelar" variant="ghost" onPress={() => setAcaoLanc(null)} />
           </View>
         )}
+      </Sheet>
+
+      {/* Excluir: motivo obrigatório (soft delete) */}
+      <Sheet visible={excluindo !== null} onClose={() => { setExcluindo(null); setMotivo('') }} title="Excluir lançamento" scrollable={false}>
+        {excluindo && (
+          <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
+            <Txt variant="caption" color="textDim">
+              {excluindo.descricao} · {formatBRL(excluindo.valor)}. O lançamento vai para a lixeira e pode ser restaurado.
+            </Txt>
+            <Input
+              label="Motivo da exclusão"
+              placeholder="Ex.: lançamento duplicado"
+              value={motivo}
+              onChangeText={setMotivo}
+              multiline
+            />
+            <Button title="Confirmar exclusão" variant="danger" icon="trash-outline" loading={excluirMut.isPending} disabled={motivo.trim().length < 3} onPress={confirmarExclusao} />
+            <Button title="Cancelar" variant="ghost" onPress={() => { setExcluindo(null); setMotivo('') }} />
+          </View>
+        )}
+      </Sheet>
+
+      {/* Lixeira: lançamentos excluídos + restaurar */}
+      <Sheet visible={lixeiraAberta} onClose={() => setLixeiraAberta(false)} title="Lixeira">
+        <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+          {lixeiraQ.isLoading ? (
+            <Txt variant="caption" color="textDim">Carregando…</Txt>
+          ) : (lixeiraQ.data ?? []).length === 0 ? (
+            <EmptyState icon="trash-outline" title="Lixeira vazia" subtitle="Lançamentos excluídos aparecem aqui e podem ser restaurados." />
+          ) : (
+            (lixeiraQ.data ?? []).map((l) => (
+              <Card key={l.id}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="bodyMedium" numberOfLines={1}>{l.descricao}</Txt>
+                    <Txt variant="caption" color="textMuted">
+                      {formatBRL(l.valor)} · excluído por {l.deletado_por_nome ?? '—'}
+                    </Txt>
+                    {l.motivo_exclusao && (
+                      <Txt variant="caption" color="textDim" numberOfLines={2}>Motivo: {l.motivo_exclusao}</Txt>
+                    )}
+                  </View>
+                  <Button title="Restaurar" size="sm" variant="tonal" icon="refresh-outline" loading={restaurarMut.isPending && restaurarMut.variables === l.id} onPress={() => restaurarMut.mutate(l.id)} />
+                </View>
+              </Card>
+            ))
+          )}
+        </View>
       </Sheet>
     </View>
   )

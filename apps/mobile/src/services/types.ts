@@ -2,8 +2,9 @@
 // Quando o backend for plugado, estes tipos permanecem; troca-se só o adapter.
 
 // ── Veículo ────────────────────────────────────────────────
-export type VeiculoStatus = 'disponivel' | 'reservado' | 'vendido' | 'repasse' | 'inativo'
+export type VeiculoStatus = 'disponivel' | 'reservado' | 'vendido' | 'repasse' | 'inativo' | 'rascunho'
 export type TipoVeiculo = 'carro' | 'moto' | 'caminhao' | 'barco' | 'jet' | 'aeronave' | 'reboque' | 'outro'
+export type OrigemVeiculo = 'compra' | 'troca'
 
 export interface Midia {
   id: string
@@ -30,6 +31,7 @@ export interface Veiculo {
   preco_venda?: number
   preco_custo?: number
   status: VeiculoStatus
+  origem?: OrigemVeiculo
   publicado_marketplace?: boolean
   publicar_rede_social?: boolean
   descricao?: string
@@ -45,6 +47,7 @@ export const STATUS_VEICULO_LABEL: Record<VeiculoStatus, string> = {
   vendido: 'Vendido',
   repasse: 'Repasse',
   inativo: 'Inativo',
+  rascunho: 'Rascunho',
 }
 
 export const TIPOS_VEICULO: { value: TipoVeiculo; label: string }[] = [
@@ -300,6 +303,10 @@ export interface Lancamento {
   veiculo_nome?: string
   status_pagamento: 'pago' | 'pendente'
   created_at: string
+  // Soft delete (lixeira)
+  deletado_em?: string
+  deletado_por_nome?: string
+  motivo_exclusao?: string
 }
 
 export interface ResumoFinanceiro {

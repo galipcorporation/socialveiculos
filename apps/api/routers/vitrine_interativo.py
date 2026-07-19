@@ -515,6 +515,14 @@ async def iniciar_conversa_b2c(
         )
         db.add(notif)
         await db.commit()
+        # Push remoto para os membros da loja (não notifica o próprio cliente)
+        from push import enviar_push_loja
+        await enviar_push_loja(
+            db, conversa.loja_id,
+            titulo="Nova mensagem de cliente",
+            corpo=f"{current_user.nome}: {nova_msg.conteudo[:60]}",
+            link=f"chat:{conversa.id}", tipo="chat_b2c",
+        )
     except Exception as e:
         print(f"[ERRO Notificacao B2C REST] {e}")
 

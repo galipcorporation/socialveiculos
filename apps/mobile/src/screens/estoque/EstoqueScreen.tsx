@@ -73,6 +73,7 @@ export default function EstoqueScreen() {
     { value: 'reservado' as const, label: 'Reservados', count: contagem('reservado') },
     { value: 'vendido' as const, label: 'Vendidos', count: contagem('vendido') },
     { value: 'repasse' as const, label: 'Repasse', count: contagem('repasse') },
+    { value: 'rascunho' as const, label: 'Avaliação', count: contagem('rascunho') },
     { value: 'inativo' as const, label: 'Inativos', count: contagem('inativo') },
   ]
 

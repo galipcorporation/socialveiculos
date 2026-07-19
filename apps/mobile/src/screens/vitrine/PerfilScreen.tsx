@@ -1,12 +1,15 @@
 import React, { useState } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { Pressable, Share, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useMutation } from '@tanstack/react-query'
 import { useTheme, type ThemeMode } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
-import { AppHeader, Avatar, Badge, Button, Card, ListRow, Screen, Sheet, Txt } from '../../components/ui'
+import { AppHeader, Avatar, Badge, Button, Card, ListRow, Screen, Sheet, Txt, useToast } from '../../components/ui'
 import { useAuthStore } from '../../stores/authStore'
 import { useExperienciaStore } from '../../stores/experienciaStore'
 import { useLoginGateStore } from '../../stores/loginGateStore'
+import { lgpdService } from '../../services'
+import { unregisterPush } from '../../lib/push'
 
 const MODOS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: 'system', label: 'Sistema', icon: 'phone-portrait-outline' },
@@ -16,13 +19,42 @@ const MODOS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyp
 
 export default function PerfilScreen() {
   const { colors, mode, setMode } = useTheme()
+  const toast = useToast()
   const user = useAuthStore((s) => s.user)
   const isAuth = useAuthStore((s) => s.isAuthenticated)
-  const logout = useAuthStore((s) => s.logout)
+  const logoutStore = useAuthStore((s) => s.logout)
+  const logout = async () => { await unregisterPush(); logoutStore() }
   const abrirLogin = useLoginGateStore((s) => s.abrir)
   const trocarExperiencia = useExperienciaStore((s) => s.trocar)
   const [sairAberto, setSairAberto] = useState(false)
   const [trocarAberto, setTrocarAberto] = useState(false)
+  const [excluirAberto, setExcluirAberto] = useState(false)
+
+  const exportarMut = useMutation({
+    mutationFn: () => lgpdService.exportar(),
+    onSuccess: async (dados) => {
+      try {
+        await Share.share({
+          title: 'Meus dados — Social Veículos',
+          message: JSON.stringify(dados, null, 2),
+        })
+      } catch {
+        toast.show('info', 'Não foi possível abrir o compartilhamento.')
+      }
+    },
+    onError: () => toast.show('error', 'Não foi possível exportar seus dados.'),
+  })
+
+  const excluirMut = useMutation({
+    mutationFn: () => lgpdService.excluirConta(),
+    onSuccess: async () => {
+      setExcluirAberto(false)
+      await unregisterPush()
+      toast.show('success', 'Conta excluída. Seus dados foram anonimizados.')
+      logoutStore()
+    },
+    onError: () => toast.show('error', 'Não foi possível excluir a conta.'),
+  })
 
   return (
     <Screen scroll={false} padded={false}>
@@ -75,6 +107,29 @@ export default function PerfilScreen() {
           </View>
         </Card>
 
+        {/* Privacidade e dados (LGPD) */}
+        {isAuth && (
+          <Card padded={false}>
+            <ListRow
+              icon="download-outline"
+              iconColor={colors.info}
+              title="Exportar meus dados"
+              subtitle="Baixe tudo o que guardamos sobre você"
+              chevron
+              onPress={() => exportarMut.mutate()}
+            />
+            <ListRow
+              icon="trash-outline"
+              iconColor={colors.error}
+              title="Excluir minha conta"
+              subtitle="Apaga e anonimiza seus dados. Irreversível."
+              chevron
+              onPress={() => setExcluirAberto(true)}
+              style={{ borderTopWidth: 1, borderTopColor: colors.border }}
+            />
+          </Card>
+        )}
+
         {/* Ações */}
         <Card padded={false}>
           <ListRow icon="business-outline" iconColor={colors.info} title="Sou lojista" subtitle="Acessar o painel de gestão da loja" chevron onPress={() => setTrocarAberto(true)} />
@@ -91,6 +146,22 @@ export default function PerfilScreen() {
           <Txt variant="body" color="textDim">Você continuará navegando no feed, mas perderá acesso aos favoritos e às conversas até entrar de novo.</Txt>
           <Button title="Sair" variant="danger" icon="log-out-outline" onPress={() => { logout(); setSairAberto(false) }} />
           <Button title="Cancelar" variant="ghost" onPress={() => setSairAberto(false)} />
+        </View>
+      </Sheet>
+
+      <Sheet visible={excluirAberto} onClose={() => setExcluirAberto(false)} title="Excluir minha conta" scrollable={false}>
+        <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+          <Txt variant="body" color="textDim">
+            Isto apaga seus favoritos, conversas e sessões, e anonimiza seu cadastro de forma permanente. Não dá para desfazer.
+          </Txt>
+          <Button
+            title="Excluir conta definitivamente"
+            variant="danger"
+            icon="trash-outline"
+            loading={excluirMut.isPending}
+            onPress={() => excluirMut.mutate()}
+          />
+          <Button title="Cancelar" variant="ghost" onPress={() => setExcluirAberto(false)} />
         </View>
       </Sheet>
 

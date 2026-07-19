@@ -17,6 +17,7 @@ export { equipeService } from './equipe'
 export type { MembroInput } from './equipe'
 export { dashboardService } from './dashboard'
 export { configService } from './config'
+export { lgpdService } from './lgpd'
 export type {
   PerfilInput, CredencialBancoInput, CredencialIAInput, DetranInput, FiscalInput,
 } from './config'

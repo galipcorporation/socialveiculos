@@ -179,6 +179,7 @@
 html,
 body {
   height: 100%;
+  overflow-x: hidden;
   font-family: var(--sv-font);
   font-size: 16px;
   line-height: 1.5;
@@ -425,6 +426,9 @@ a:hover {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Flex child must be allowed to shrink below its content, or a wide
+     descendant pushes the whole layout past the viewport (h-scroll on body). */
+  min-width: 0;
 }
 
 /* ── Topbar ──────────────────────────────────────────────────── */
@@ -685,7 +689,11 @@ a:hover {
 
 .page-content {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
+  /* Contain horizontal overflow here so it never reaches the page body.
+     Wide widgets (tables) opt into their own .table-scroll container. */
+  overflow-x: hidden;
   padding: 32px;
 }
 
@@ -747,7 +755,11 @@ a:hover {
   align-items: flex-start;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: border-color var(--sv-transition), box-shadow var(--sv-transition);
+  gap: 12px;
 }
+
+/* Text column must be allowed to shrink, or a long value pushes the card wider. */
+.kpi-card > div:first-child { min-width: 0; }
 
 .kpi-card:hover {
   border-color: var(--sv-border-hover);
@@ -764,11 +776,15 @@ a:hover {
 }
 
 .kpi-value {
-  font-size: 32px;
+  /* Fluid: scales with viewport so long currency strings (R$ 109.000,00)
+     never overflow the card between breakpoints. */
+  font-size: clamp(20px, 5vw, 32px);
   font-weight: 700;
   color: var(--sv-text);
   line-height: 1;
   letter-spacing: -0.02em;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .kpi-change {
@@ -1415,7 +1431,6 @@ a:hover {
   /* KPI grid */
   .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .kpi-card { padding: 14px 16px; }
-  .kpi-value { font-size: 26px; }
   .kpi-label { font-size: 11px; }
   .kpi-icon { width: 40px; height: 40px; }
   .kpi-icon svg { width: 20px; height: 20px; }
@@ -1473,7 +1488,6 @@ a:hover {
   /* KPI: 1 column on very small screens */
   .kpi-grid { grid-template-columns: 1fr; gap: 8px; }
   .kpi-card { padding: 12px 14px; }
-  .kpi-value { font-size: 24px; }
 
   /* Page header */
   .page-header h2 { font-size: 20px; }
@@ -1882,13 +1896,10 @@ a:hover {
 .table-scroll {
   width: 100%;
   border-radius: var(--sv-radius-lg);
-}
-
-@media (max-width: 1024px) {
-  .table-scroll {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
+  /* Always scroll internally: the shell now clips h-overflow at .page-content,
+     so a wide table must own its scrollbar at every width, not just ≤1024px. */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .stock-table {

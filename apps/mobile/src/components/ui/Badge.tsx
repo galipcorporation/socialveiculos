@@ -60,6 +60,7 @@ export const TONE_STATUS_VEICULO: Record<VeiculoStatus, Tone> = {
   vendido: 'primary',
   repasse: 'info',
   inativo: 'neutral',
+  rascunho: 'neutral',
 }
 
 export const TONE_ETAPA_LEAD: Record<EtapaLead, Tone> = {

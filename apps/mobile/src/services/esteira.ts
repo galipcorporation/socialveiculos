@@ -130,13 +130,16 @@ export const esteiraService = {
     return mapDetalhe(d)
   },
 
-  async alternarItem(idEsteira: string, idItem: string): Promise<Esteira> {
+  /** Alterna o status de um item. Ao CONCLUIR um item financeiro (débitos, taxa
+   *  de transferência, entrada), passe `valor` — o backend gera o lançamento
+   *  financeiro com esse valor; sem ele, o lançamento fica R$ 0 para ajuste. */
+  async alternarItem(idEsteira: string, idItem: string, valor?: number): Promise<Esteira> {
     const atual = await api.get<EsteiraDetalheDTO>(`/esteira/${idEsteira}`)
     const item = atual.itens.find((i) => i.id === idItem)
     const novoStatus = item?.status === 'concluido' ? 'pendente' : 'concluido'
-    const d = await api.patch<EsteiraDetalheDTO>(`/esteira/${idEsteira}/itens/${idItem}`, {
-      status: novoStatus,
-    })
+    const body: { status: StatusItemEsteira; valor?: number } = { status: novoStatus }
+    if (novoStatus === 'concluido' && valor && valor > 0) body.valor = valor
+    const d = await api.patch<EsteiraDetalheDTO>(`/esteira/${idEsteira}/itens/${idItem}`, body)
     return mapDetalhe(d)
   },
 

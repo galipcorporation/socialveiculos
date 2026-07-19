@@ -11,12 +11,14 @@ import { useAuthStore } from '../../stores/authStore'
 import { useLojaAtivaStore } from '../../stores/lojaAtivaStore'
 import { useExperienciaStore } from '../../stores/experienciaStore'
 import { parseModulos } from '../../lib/modulos'
+import { unregisterPush } from '../../lib/push'
 
 export default function MaisScreen() {
   const { colors } = useTheme()
   const navigation = useNavigation()
   const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
+  const logoutStore = useAuthStore((s) => s.logout)
+  const logout = async () => { await unregisterPush(); logoutStore() }
   const lojaNome = useLojaAtivaStore((s) => s.lojaNome)
   const trocarExperiencia = useExperienciaStore((s) => s.trocar)
   const [sairAberto, setSairAberto] = useState(false)

@@ -7,8 +7,11 @@ import { useTheme } from '../theme/ThemeContext'
 import {
   Button, Input, OptionSheet, SelectField, Sheet, Txt, useToast,
 } from './ui'
-import { equipeService, veiculosService } from '../services'
+import { contratosService, equipeService, veiculosService } from '../services'
+import type { OutroPagamento } from '../services/veiculos'
 import type { Veiculo } from '../services/types'
+import { Ionicons } from '@expo/vector-icons'
+import { Pressable } from 'react-native'
 import { formatBRL, maskMoedaInput, parseMoedaInput } from '../lib/format'
 import { useAuthStore } from '../stores/authStore'
 
@@ -46,10 +49,30 @@ export function RegistrarVendaSheet({
   const [troca, setTroca] = useState('')
   const [trocaDesc, setTrocaDesc] = useState('')
 
+  // Outras formas de pagamento (carta de crédito, consórcio, cheque, etc.)
+  const [outros, setOutros] = useState<OutroPagamento[]>([])
+  const [outroDesc, setOutroDesc] = useState('')
+  const [outroValor, setOutroValor] = useState('')
+
+  // Modelo de contrato
+  const [templateId, setTemplateId] = useState('')
+  const [templateAberto, setTemplateAberto] = useState(false)
+
   const equipeQ = useQuery({ queryKey: ['equipe'], queryFn: () => equipeService.listar(), enabled: visible })
+  const templatesQ = useQuery({ queryKey: ['contratos', 'templates'], queryFn: () => contratosService.templates(), enabled: visible })
+
+  const adicionarOutro = () => {
+    const v = parseMoedaInput(outroValor)
+    if (outroDesc.trim().length < 2 || v <= 0) return
+    setOutros((prev) => [...prev, { descricao: outroDesc.trim(), valor: v }])
+    setOutroDesc('')
+    setOutroValor('')
+  }
+  const removerOutro = (i: number) => setOutros((prev) => prev.filter((_, idx) => idx !== i))
+  const totalOutros = outros.reduce((s, o) => s + o.valor, 0)
 
   const vTotal = parseMoedaInput(valor)
-  const composto = parseMoedaInput(dinheiro) + parseMoedaInput(financiado) + parseMoedaInput(troca)
+  const composto = parseMoedaInput(dinheiro) + parseMoedaInput(financiado) + parseMoedaInput(troca) + totalOutros
   const falta = vTotal - composto
   const fecha = vTotal > 0 && Math.abs(falta) < 1
 
@@ -64,6 +87,8 @@ export function RegistrarVendaSheet({
         valor_financiado: parseMoedaInput(financiado) || undefined,
         valor_troca: parseMoedaInput(troca) || undefined,
         troca_descricao: trocaDesc.trim() || undefined,
+        outros: outros.length ? outros : undefined,
+        template_id: templateId || undefined,
         lead_id: leadId,
       })
     },
@@ -111,6 +136,28 @@ export function RegistrarVendaSheet({
           {parseMoedaInput(troca) > 0 && (
             <Input label="Veículo da troca" placeholder="Ex.: Chevrolet Onix 2019" value={trocaDesc} onChangeText={setTrocaDesc} icon="car-outline" hint="Entra no estoque como rascunho (inativo) para avaliação." />
           )}
+
+          {/* Outras formas de pagamento */}
+          {outros.map((o, i) => (
+            <View key={`${o.descricao}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 4 }}>
+              <Ionicons name="document-text-outline" size={16} color={colors.textDim} />
+              <Txt variant="caption" style={{ flex: 1 }} numberOfLines={1}>{o.descricao}</Txt>
+              <Txt variant="captionMedium">{formatBRL(o.valor)}</Txt>
+              <Pressable onPress={() => removerOutro(i)} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={colors.error} />
+              </Pressable>
+            </View>
+          ))}
+          <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-end' }}>
+            <View style={{ flex: 1.4 }}>
+              <Input label="Outra forma (opcional)" placeholder="Ex.: Carta de crédito" value={outroDesc} onChangeText={setOutroDesc} icon="document-text-outline" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Input label="Valor" placeholder="0,00" keyboardType="numeric" value={outroValor} onChangeText={(t) => setOutroValor(maskMoedaInput(t))} />
+            </View>
+            <Button title="Add" icon="add" variant="tonal" onPress={adicionarOutro} disabled={outroDesc.trim().length < 2 || parseMoedaInput(outroValor) <= 0} />
+          </View>
+
           {composto > 0 && (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: spacing.sm, borderRadius: radius.md, backgroundColor: fecha ? colors.success + '14' : colors.warning + '14' }}>
               <Txt variant="caption" color={fecha ? 'success' : 'warning'}>
@@ -120,6 +167,16 @@ export function RegistrarVendaSheet({
             </View>
           )}
         </View>
+
+        {(templatesQ.data ?? []).length > 0 && (
+          <SelectField
+            label="Modelo de contrato (opcional)"
+            value={(templatesQ.data ?? []).find((t) => t.id === templateId)?.nome ?? ''}
+            placeholder="Padrão da loja"
+            onPress={() => setTemplateAberto(true)}
+            icon="document-outline"
+          />
+        )}
 
         <SelectField label="Vendedor responsável" value={vendedor} onPress={() => setVendedorAberto(true)} icon="people-outline" />
         {comissaoPrev != null && vTotal > 0 && (
@@ -135,6 +192,17 @@ export function RegistrarVendaSheet({
         selected={vendedor}
         options={(equipeQ.data ?? []).filter((m) => m.ativo).map((m) => ({ value: m.nome, label: m.nome, sublabel: m.papel === 'gestor' ? 'Gestor' : 'Vendedor' }))}
         onSelect={setVendedor}
+      />
+      <OptionSheet
+        visible={templateAberto}
+        onClose={() => setTemplateAberto(false)}
+        title="Modelo de contrato"
+        selected={templateId}
+        options={[
+          { value: '', label: 'Padrão da loja' },
+          ...(templatesQ.data ?? []).map((t) => ({ value: t.id, label: t.nome })),
+        ]}
+        onSelect={(v) => setTemplateId(v)}
       />
       {!veiculo && (
         <OptionSheet

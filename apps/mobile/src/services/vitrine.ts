@@ -185,9 +185,20 @@ export const vitrineService = {
     return anuncios.filter((a) => a.loja_id === lojaId).map(mapAnuncio)
   },
 
-  async seguirLoja(_lojaId: string): Promise<boolean> {
-    // Seguir loja no B2C ainda não é exposto pela API; no-op estável.
-    return false
+  /** Retorna se o usuário logado segue a loja. */
+  async checarSeguindo(lojaId: string): Promise<boolean> {
+    const r = await api.get<{ seguindo: boolean; loja_id: string }>(`/vitrine/lojas/${lojaId}/seguindo`)
+    return !!r.seguindo
+  },
+
+  /** Alterna seguir/deixar de seguir a loja. Retorna o novo estado. */
+  async alternarSeguir(lojaId: string, seguindoAgora: boolean): Promise<boolean> {
+    if (seguindoAgora) {
+      const r = await api.delete<{ seguindo: boolean }>(`/vitrine/lojas/${lojaId}/seguir`)
+      return !!r.seguindo
+    }
+    const r = await api.post<{ seguindo: boolean }>(`/vitrine/lojas/${lojaId}/seguir`)
+    return !!r.seguindo
   },
 
   // ── Chat B2C (comprador ↔ loja) ──────────────────────────

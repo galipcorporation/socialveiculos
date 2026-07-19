@@ -14,7 +14,7 @@ import { esteiraService } from '../../services'
 import {
   CATEGORIA_ITEM_LABEL, type CategoriaItemEsteira, type EstagioEsteira, type ItemChecklist,
 } from '../../services/types'
-import { formatBRL, formatData } from '../../lib/format'
+import { formatBRL, formatData, maskMoedaInput, parseMoedaInput } from '../../lib/format'
 import { useAuthStore } from '../../stores/authStore'
 import type { RootScreenProps } from '../../navigation/types'
 
@@ -41,16 +41,29 @@ export default function EsteiraDetalheScreen({ route }: RootScreenProps<'Esteira
   const e = q.data
 
   const toggleMut = useMutation({
-    mutationFn: (itemId: string) => esteiraService.alternarItem(id, itemId),
+    mutationFn: (p: { itemId: string; valor?: number }) => esteiraService.alternarItem(id, p.itemId, p.valor),
     onSuccess: (nova) => {
       queryClient.invalidateQueries({ queryKey: ['esteiras'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['financeiro'] })
+      setValorItem(null)
       if (nova.estagio === 'concluido') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
         toast.show('success', 'Pós-venda concluído! 🎉')
       }
     },
   })
+
+  // Ao concluir um item financeiro, pede o valor para lançar no financeiro.
+  const [valorItem, setValorItem] = useState<ItemChecklist | null>(null)
+  const onToggleItem = (item: ItemChecklist) => {
+    const concluindo = item.status !== 'concluido'
+    if (concluindo && item.categoria === 'financeiro') {
+      setValorItem(item)
+      return
+    }
+    toggleMut.mutate({ itemId: item.id })
+  }
 
   const comissaoMut = useMutation({
     mutationFn: () => esteiraService.marcarComissaoPaga(id),
@@ -193,7 +206,7 @@ export default function EsteiraDetalheScreen({ route }: RootScreenProps<'Esteira
                     key={item.id}
                     item={item}
                     gestor={gestor}
-                    onToggle={() => toggleMut.mutate(item.id)}
+                    onToggle={() => onToggleItem(item)}
                     onAnexar={() => setAnexarItem(item)}
                     onRemover={() => removeItemMut.mutate(item.id)}
                     disabled={toggleMut.isPending}
@@ -256,7 +269,42 @@ export default function EsteiraDetalheScreen({ route }: RootScreenProps<'Esteira
           onConfirm={(titulo, obrigatorio) => { addItemMut.mutate({ titulo, categoria: addCat, obrigatorio }); setAddCat(null) }}
         />
       )}
+      {/* Valor do lançamento ao concluir item financeiro */}
+      {valorItem && (
+        <ValorItemSheet
+          item={valorItem}
+          loading={toggleMut.isPending}
+          onClose={() => setValorItem(null)}
+          onConfirm={(valor) => toggleMut.mutate({ itemId: valorItem.id, valor })}
+        />
+      )}
     </Screen>
+  )
+}
+
+function ValorItemSheet({
+  item, loading, onClose, onConfirm,
+}: { item: ItemChecklist; loading: boolean; onClose: () => void; onConfirm: (valor?: number) => void }) {
+  const [valor, setValor] = useState('')
+  const v = parseMoedaInput(valor)
+  return (
+    <Sheet visible onClose={onClose} title={item.titulo} scrollable={false}>
+      <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
+        <Txt variant="caption" color="textDim">
+          Ao concluir este item, um lançamento é criado no financeiro. Informe o valor (ou pule para lançar R$ 0 e ajustar depois).
+        </Txt>
+        <Input
+          label="Valor"
+          placeholder="0,00"
+          keyboardType="numeric"
+          icon="cash-outline"
+          value={valor}
+          onChangeText={(t) => setValor(maskMoedaInput(t))}
+        />
+        <Button title="Concluir e lançar" icon="checkmark" loading={loading} onPress={() => onConfirm(v > 0 ? v : undefined)} />
+        <Button title="Concluir sem valor" variant="ghost" onPress={() => onConfirm(undefined)} />
+      </View>
+    </Sheet>
   )
 }
 

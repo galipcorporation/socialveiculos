@@ -30,6 +30,11 @@ export interface VeiculoInput {
   publicado_marketplace?: boolean
 }
 
+export interface OutroPagamento {
+  descricao: string
+  valor: number
+}
+
 export interface RegistrarVendaInput {
   comprador_nome: string
   valor_venda: number
@@ -38,6 +43,10 @@ export interface RegistrarVendaInput {
   valor_financiado?: number
   valor_troca?: number
   troca_descricao?: string
+  /** Formas de pagamento livres: carta de crédito, consórcio, cheque, etc. */
+  outros?: OutroPagamento[]
+  /** Modelo de contrato usado para gerar o contrato da venda. */
+  template_id?: string
   lead_id?: string
 }
 
@@ -70,6 +79,7 @@ interface VeiculoDTO {
   preco_venda?: number | null
   preco_custo?: number | null
   status: VeiculoStatus
+  origem?: string | null
   publicado_marketplace?: boolean
   descricao?: string | null
   opcionais?: string | null
@@ -149,6 +159,7 @@ function mapVeiculo(v: VeiculoDTO): Veiculo {
     preco_venda: v.preco_venda ?? undefined,
     preco_custo: v.preco_custo ?? undefined,
     status: v.status,
+    origem: (v.origem as Veiculo['origem']) ?? undefined,
     publicado_marketplace: v.publicado_marketplace ?? false,
     descricao: v.descricao ?? undefined,
     opcionais: v.opcionais ?? undefined,
@@ -290,7 +301,9 @@ export const veiculosService = {
       valor_venda: input.valor_venda || null,
       pagamento_dinheiro: input.valor_dinheiro || null,
       financiamento: input.valor_financiado ? { valor: input.valor_financiado, parcelas: null } : null,
+      outros: (input.outros ?? []).map((o) => ({ descricao: o.descricao, valor: o.valor })),
       trocas,
+      template_id: input.template_id || null,
       lead_id: input.lead_id || null,
     })
     if (resp.esteira_id) {

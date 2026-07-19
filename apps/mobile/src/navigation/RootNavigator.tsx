@@ -1,8 +1,10 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { View } from 'react-native'
-import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native'
+import { DarkTheme, DefaultTheme, NavigationContainer, createNavigationContainerRef } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
+import * as Notifications from 'expo-notifications'
 import { useAuthStore } from '../stores/authStore'
+import { registerForPush } from '../lib/push'
 import { useExperienciaStore } from '../stores/experienciaStore'
 import { useTheme } from '../theme/ThemeContext'
 import { fonts } from '../theme/tokens'
@@ -42,6 +44,16 @@ import AssistenteConfigScreen from '../screens/ferramentas/AssistenteConfigScree
 import RedeSocialScreen from '../screens/rede/RedeSocialScreen'
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
+export const navigationRef = createNavigationContainerRef<RootStackParamList>()
+
+/** Ao tocar numa notificação (link "chat:{conversaId}"), abre a conversa. */
+function abrirDeepLink(link?: unknown) {
+  if (typeof link !== 'string' || !navigationRef.isReady()) return
+  if (link.startsWith('chat:')) {
+    const id = link.slice('chat:'.length)
+    if (id) navigationRef.navigate('Conversa', { id })
+  }
+}
 
 export default function RootNavigator() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -52,6 +64,24 @@ export default function RootNavigator() {
 
   // Lojista só entra no painel se autenticado como gestor/vendedor (não cliente).
   const lojistaLogado = isAuthenticated && papel !== 'cliente'
+
+  // Push: registra o token quando o usuário fica autenticado. O unregister no
+  // logout é disparado pela tela de configurações (onde a ação existe).
+  useEffect(() => {
+    if (isAuthenticated) registerForPush()
+  }, [isAuthenticated])
+
+  // Tap numa notificação → abre a conversa (funciona com o app aberto e ao
+  // ser aberto por um push com o app fechado, via getLastNotificationResponse).
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((resp) => {
+      abrirDeepLink(resp.notification.request.content.data?.link)
+    })
+    Notifications.getLastNotificationResponseAsync().then((resp) => {
+      if (resp) abrirDeepLink(resp.notification.request.content.data?.link)
+    })
+    return () => sub.remove()
+  }, [])
 
   const navTheme = {
     ...(dark ? DarkTheme : DefaultTheme),
@@ -79,7 +109,7 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={navigationRef} theme={navTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         {experiencia === null ? (
           <Stack.Screen name="EscolhaExperiencia" component={EscolhaExperienciaScreen} options={{ animation: 'fade' }} />

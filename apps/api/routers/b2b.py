@@ -1172,6 +1172,14 @@ async def enviar_mensagem_b2b(
         )
         db.add(notif)
         await db.flush()
+        # Push remoto para os membros da loja de destino
+        from push import enviar_push_loja
+        await enviar_push_loja(
+            db, dest_loja_id,
+            titulo=f"Mensagem de {loja_nome}",
+            corpo=f"{context.usuario.nome}: {nova_msg.conteudo[:60]}",
+            link=f"chat:{conversa.id}", tipo="chat_b2b",
+        )
     except Exception as e:
         print(f"[ERRO Notificacao] Falha ao criar notificacao: {e}")
 
