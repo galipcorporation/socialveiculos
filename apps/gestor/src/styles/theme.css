@@ -5461,9 +5461,10 @@ svg[stroke="currentColor"] {
 .re-content .ProseMirror.resize-cursor { cursor: col-resize; }
 
 /* imagem redimensionável (NodeView custom) */
-.re-img-wrap { position: relative; display: inline-block; max-width: 100%; vertical-align: top; }
-.re-img-wrap img { display: block; width: 100%; height: auto; border-radius: 4px; }
-.re-img-wrap.is-selected { outline: 2px solid var(--sv-primary); outline-offset: 2px; }
+.re-img-wrap { display: block; }
+.re-img-inner { position: relative; display: inline-block; max-width: 100%; vertical-align: top; }
+.re-img-inner img { display: block; width: 100%; height: auto; border-radius: 4px; }
+.re-img-wrap.is-selected .re-img-inner { outline: 2px solid var(--sv-primary); outline-offset: 2px; }
 .re-img-handle {
   position: absolute; width: 12px; height: 12px; background: var(--sv-primary); border: 2px solid var(--sv-surface);
   border-radius: 3px; bottom: -6px; right: -6px; cursor: nwse-resize;

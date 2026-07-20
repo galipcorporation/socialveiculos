@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload } from 'lucide-react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload, KeyRound } from 'lucide-react'
 import { api } from './lib/api'
 import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda } from './lib/mascaras'
 import { useUIStore } from './stores/uiStore'
@@ -605,6 +605,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
     setSaving(true)
     try {
       await api.post(`/admin/lojas/${lojaId}/assinatura/renovar`, {
+        plano_id: form.plano_id || null,
         valor_mensal: form.valor_mensal ? parseMoeda(form.valor_mensal) : null,
         meses: parseInt(form.meses, 10),
         forma_pagamento: form.forma_pagamento,
@@ -735,16 +736,14 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
               {temAssinaturaAtivavel ? 'Registrar cobrança / renovar' : 'Ativar assinatura'}
             </p>
 
-            {!temAssinaturaAtivavel && (
-              <div className="form-group">
-                <label>Plano</label>
-                <select value={form.plano_id} onChange={(e) => setForm((f) => ({ ...f, plano_id: e.target.value }))} required>
-                  {planos.map((p) => (
-                    <option key={p.id} value={p.id}>{p.nome} — {fmtMoeda(p.preco_mensal)}/mês (tabela)</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div className="form-group">
+              <label>Plano</label>
+              <select value={form.plano_id} onChange={(e) => setForm((f) => ({ ...f, plano_id: e.target.value }))} required>
+                {planos.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nome} — {fmtMoeda(p.preco_mensal)}/mês (tabela)</option>
+                ))}
+              </select>
+            </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: '12px' }}>
               <div className="form-group">
@@ -1908,13 +1907,231 @@ function AbaErros() {
   )
 }
 
+// ── Aba Usuários (reset de senha) ────────────────────────────────
+
+interface UsuarioItem {
+  id: string
+  nome: string
+  email: string
+  papel: string
+  ativo: boolean
+  lojas: string[]
+}
+
+const PAPEL_LABELS: Record<string, string> = {
+  admin_plataforma: 'Admin',
+  gestor: 'Gestor',
+  vendedor: 'Vendedor',
+  cliente: 'Cliente',
+}
+
+function ModalResetSenha({ usuario, onClose }: { usuario: UsuarioItem; onClose: () => void }) {
+  const [senha, setSenha] = useState('')
+  const [confirmar, setConfirmar] = useState('')
+  const [mostrar, setMostrar] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+  const [sucesso, setSucesso] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (senha !== confirmar) {
+      setErro('As senhas não conferem.')
+      return
+    }
+    setLoading(true)
+    setErro(null)
+    try {
+      await api.post(`/admin/usuarios/${usuario.id}/reset-senha`, { nova_senha: senha })
+      setSucesso(true)
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao redefinir senha.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+        <div className="modal-header">
+          <h3 className="modal-title">Redefinir senha</h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        {sucesso ? (
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '32px 24px', textAlign: 'center' }}>
+            <CheckCircle size={40} style={{ color: 'var(--sv-success)' }} />
+            <p style={{ color: 'var(--sv-text)', fontWeight: 600 }}>Senha redefinida</p>
+            <p style={{ color: 'var(--sv-text-dim)', fontSize: '14px' }}>
+              A senha de <strong>{usuario.email}</strong> foi alterada. Repasse a nova senha ao usuário e oriente a troca no primeiro acesso.
+            </p>
+            <button className="btn btn-primary" onClick={onClose} style={{ marginTop: '8px' }}>Fechar</button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {erro && (
+              <div className="login-error-alert" style={{ margin: 0 }}>
+                <AlertTriangle size={16} />
+                <span>{erro}</span>
+              </div>
+            )}
+            <p style={{ fontSize: '14px', color: 'var(--sv-text-dim)', margin: 0 }}>
+              Nova senha para <strong style={{ color: 'var(--sv-text)' }}>{usuario.nome}</strong> ({usuario.email})
+            </p>
+            <div className="form-group">
+              <label>Nova senha</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={mostrar ? 'text' : 'password'}
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  required
+                  minLength={6}
+                  placeholder="••••••••"
+                  style={{ width: '100%', paddingRight: '40px' }}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setMostrar((m) => !m)}
+                  title={mostrar ? 'Ocultar senha' : 'Mostrar senha'}
+                  style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--sv-text-muted)', display: 'flex' }}
+                >
+                  {mostrar ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Confirmar senha</label>
+              <input
+                type={mostrar ? 'text' : 'password'}
+                value={confirmar}
+                onChange={(e) => setConfirmar(e.target.value)}
+                required
+                minLength={6}
+                placeholder="••••••••"
+              />
+            </div>
+            <div className="modal-footer" style={{ paddingTop: '8px' }}>
+              <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? <span className="spinner" /> : 'Redefinir senha'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AbaUsuarios() {
+  const [usuarios, setUsuarios] = useState<UsuarioItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busca, setBusca] = useState('')
+  const [usuarioReset, setUsuarioReset] = useState<UsuarioItem | null>(null)
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setLoading(true)
+      api.get<UsuarioItem[]>(`/admin/usuarios?busca=${encodeURIComponent(busca)}`)
+        .then(setUsuarios)
+        .finally(() => setLoading(false))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [busca])
+
+  return (
+    <div style={{ marginTop: '24px' }}>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
+          <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--sv-text-muted)' }} />
+          <input
+            style={{
+              width: '100%',
+              height: '40px',
+              padding: '0 16px 0 36px',
+              background: 'rgba(255, 255, 255, 0.02)',
+              border: '1px solid var(--sv-border)',
+              borderRadius: 'var(--sv-radius)',
+              color: 'var(--sv-text)',
+              fontSize: '14px',
+              outline: 'none',
+            }}
+            placeholder="Buscar por nome ou e-mail…"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+      ) : usuarios.length === 0 ? (
+        <EmptyState msg={busca ? 'Nenhum usuário encontrado para essa busca.' : 'Nenhum usuário cadastrado.'} />
+      ) : (
+        <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
+          <table className="stock-table">
+            <thead>
+              <tr>
+                {['Nome', 'E-mail', 'Papel', 'Lojas', 'Status', 'Ações'].map((h) => (
+                  <th key={h}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {usuarios.map((u) => (
+                <tr key={u.id}>
+                  <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{u.nome}</td>
+                  <td style={{ color: 'var(--sv-text-dim)' }}>{u.email}</td>
+                  <td style={{ color: 'var(--sv-text-dim)' }}>{PAPEL_LABELS[u.papel] || u.papel}</td>
+                  <td style={{ color: 'var(--sv-text-dim)' }}>{u.lojas.length > 0 ? u.lojas.join(', ') : '—'}</td>
+                  <td>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '2px 10px',
+                      borderRadius: 999,
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      background: u.ativo ? 'color-mix(in srgb, var(--sv-success) 15%, transparent)' : 'color-mix(in srgb, var(--sv-error) 15%, transparent)',
+                      color: u.ativo ? 'var(--sv-success)' : 'var(--sv-error)',
+                    }}>
+                      {u.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                      onClick={() => setUsuarioReset(u)}
+                      title="Redefinir a senha deste usuário"
+                    >
+                      <KeyRound size={14} />
+                      Resetar senha
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {usuarioReset && (
+        <ModalResetSenha usuario={usuarioReset} onClose={() => setUsuarioReset(null)} />
+      )}
+    </div>
+  )
+}
+
 // ── Página principal ─────────────────────────────────────────────
 
-type Aba = 'overview' | 'lojas' | 'assinaturas' | 'planos' | 'auditoria' | 'erros'
+type Aba = 'overview' | 'lojas' | 'assinaturas' | 'planos' | 'auditoria' | 'erros' | 'usuarios'
 
 const ABAS: { id: Aba; label: string; Icon: typeof Shield }[] = [
   { id: 'overview', label: 'Overview', Icon: Shield },
   { id: 'lojas', label: 'Lojas', Icon: Building2 },
+  { id: 'usuarios', label: 'Usuários', Icon: Users },
   { id: 'assinaturas', label: 'Assinaturas', Icon: CreditCard },
   { id: 'planos', label: 'Planos', Icon: Package },
   { id: 'auditoria', label: 'Auditoria', Icon: ClipboardList },
@@ -1951,6 +2168,7 @@ export function AdminPage() {
 
       {aba === 'overview' && <AbaOverview />}
       {aba === 'lojas' && <AbaLojas />}
+      {aba === 'usuarios' && <AbaUsuarios />}
       {aba === 'assinaturas' && <AbaAssinaturas />}
       {aba === 'planos' && <AbaPlanos />}
       {aba === 'auditoria' && <AbaAuditoria />}

@@ -851,6 +851,7 @@ class AdminAtivarAssinaturaRequest(BaseModel):
 
 
 class AdminRenovarAssinaturaRequest(BaseModel):
+    plano_id: Optional[str] = Field(default=None, max_length=36)
     valor_mensal: Optional[float] = Field(default=None, ge=0)
     meses: int = Field(default=1, ge=1, le=12)
     forma_pagamento: str = Field(default="pix_manual", max_length=30)
@@ -949,6 +950,21 @@ class AdminVencimentoItem(BaseModel):
     valor_mensal: Optional[float] = None
     proximo_vencimento: Optional[datetime] = None
     dias_para_vencer: Optional[int] = None
+
+
+# ── Admin — usuários e reset de senha ────────────────────────────
+
+class AdminUsuarioItem(BaseModel):
+    id: str
+    nome: str
+    email: str
+    papel: str
+    ativo: bool
+    lojas: List[str] = []
+
+
+class AdminResetSenhaRequest(BaseModel):
+    nova_senha: str = Field(..., min_length=6, max_length=128)
 
 
 # ── B2B Social & Feed ──────────────────────────────────────────

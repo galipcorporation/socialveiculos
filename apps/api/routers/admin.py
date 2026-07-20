@@ -30,6 +30,7 @@ from schemas import (
     ContratoVersaoResponse, ContratoVersaoCreateRequest,
     DestaquePagamentoResponse, AdminAtivarDestaqueRequest, AdminDesativarDestaqueRequest,
     AdminDestaqueDetalheResponse,
+    AdminUsuarioItem, AdminResetSenhaRequest,
 )
 from auth import hash_password, create_access_token
 from storage import storage_provider
@@ -450,6 +451,80 @@ async def impersonar_loja(
     )
 
     return ImpersonarResponse(access_token=token, loja_nome=loja.nome)
+
+
+# ── Usuários — busca e reset de senha ────────────────────────────
+
+@router.get(
+    "/usuarios",
+    response_model=List[AdminUsuarioItem],
+)
+async def buscar_usuarios(
+    busca: str = "",
+    db: AsyncSession = Depends(get_db),
+    _admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """
+    Lista usuários da plataforma (admin, gestores, vendedores, clientes)
+    para administração de contas — ex.: redefinir senha de quem esqueceu.
+    """
+    stmt = select(Usuario).order_by(Usuario.nome).limit(30)
+    termo = busca.strip().lower()
+    if termo:
+        like = f"%{termo}%"
+        stmt = stmt.where(func.lower(Usuario.email).like(like) | func.lower(Usuario.nome).like(like))
+    usuarios = (await db.execute(stmt)).scalars().all()
+
+    lojas_por_usuario: Dict[str, List[str]] = {}
+    ids = [u.id for u in usuarios]
+    if ids:
+        res_lojas = await db.execute(
+            select(MembroLoja.usuario_id, Loja.nome)
+            .join(Loja, Loja.id == MembroLoja.loja_id)
+            .where(MembroLoja.usuario_id.in_(ids))
+        )
+        for usuario_id, loja_nome in res_lojas.all():
+            lojas_por_usuario.setdefault(usuario_id, []).append(loja_nome)
+
+    return [
+        AdminUsuarioItem(
+            id=u.id,
+            nome=u.nome,
+            email=u.email,
+            papel=u.papel.value,
+            ativo=bool(u.ativo),
+            lojas=lojas_por_usuario.get(u.id, []),
+        )
+        for u in usuarios
+    ]
+
+
+@router.post(
+    "/usuarios/{usuario_id}/reset-senha",
+)
+async def resetar_senha_usuario(
+    usuario_id: str,
+    data: AdminResetSenhaRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """
+    Define nova senha para o usuário (fluxo "esqueci a senha" resolvido
+    pelo admin da plataforma). Ação registrada na auditoria.
+    """
+    res = await db.execute(select(Usuario).where(Usuario.id == usuario_id))
+    usuario = res.scalar_one_or_none()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    usuario.senha_hash = hash_password(data.nova_senha)
+    await registrar_auditoria(
+        db=db, loja_id=None, ator_id=admin.id, ator_nome=admin.nome,
+        acao="usuario.reset_senha", entidade="usuario", entidade_id=usuario.id,
+        detalhes=json.dumps({"email": usuario.email}),
+    )
+    await db.commit()
+    return {"ok": True, "mensagem": f"Senha de {usuario.email} redefinida com sucesso."}
 
 
 @router.get(
@@ -909,6 +984,16 @@ async def renovar_assinatura_manual(
             detail="Assinatura cancelada — use /assinatura/ativar para iniciar uma nova.",
         )
 
+    plano_trocado_de = None
+    if data.plano_id is not None and data.plano_id != assinatura.plano_id:
+        novo_plano = (await db.execute(
+            select(Plano).where(Plano.id == data.plano_id, Plano.ativo == True)
+        )).scalar_one_or_none()
+        if not novo_plano:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plano não encontrado ou inativo.")
+        plano_trocado_de = assinatura.plano_id
+        assinatura.plano_id = novo_plano.id
+
     agora = _now()
     base = assinatura.proximo_vencimento or agora
     if base < agora:
@@ -943,6 +1028,7 @@ async def renovar_assinatura_manual(
         detalhes=json.dumps({
             "meses": data.meses, "valor_pago": valor_pago, "forma_pagamento": data.forma_pagamento,
             "novo_vencimento": assinatura.proximo_vencimento.isoformat(),
+            **({"plano_id_anterior": plano_trocado_de, "plano_id_novo": assinatura.plano_id} if plano_trocado_de is not None else {}),
         }),
     )
     await db.commit()

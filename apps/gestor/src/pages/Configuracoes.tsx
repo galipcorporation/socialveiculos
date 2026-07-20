@@ -82,7 +82,7 @@ export function Configuracoes() {
 
   const location = useLocation()
   const abaInicial = (location.state as { aba?: string } | null)?.aba
-  const [abaAtual, setAbaAtual] = useState<'perfil' | 'credenciais' | 'ia' | 'redes' | 'detran' | 'fiscal'>(
+  const [abaAtual, setAbaAtual] = useState<'perfil' | 'credenciais' | 'ia' | 'redes' | 'detran' | 'fiscal' | 'contratos'>(
     escolherNonce ? 'redes' : (['redes', 'fiscal'] as const).includes(abaInicial as any) ? (abaInicial as 'redes' | 'fiscal') : 'perfil'
   )
 
@@ -674,6 +674,19 @@ export function Configuracoes() {
           }}>
           Fiscal / NF-e
         </button>
+        <button
+          onClick={() => setAbaAtual('contratos')}
+          style={{
+            background: abaAtual === 'contratos' ? 'var(--sv-primary)' : 'transparent',
+            color: abaAtual === 'contratos' ? '#fff' : 'var(--sv-text-dim)',
+            border: 'none',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 600
+          }}>
+          Identidade nos Contratos
+        </button>
       </div>
 
       {error && (
@@ -748,71 +761,78 @@ export function Configuracoes() {
                 </div>
               </div>
 
-              {/* ── Identidade nos contratos ── */}
-              <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--sv-border)' }}>
-                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>Identidade nos contratos</div>
-                <p style={{ fontSize: '12px', color: 'var(--sv-text-muted)', margin: '0 0 16px', maxWidth: '620px' }}>
-                  Cabeçalho, rodapé e marca d'água aplicados a todos os contratos. Repetem no topo e no rodapé de cada página impressa.
-                  Cada modelo pode desativá-los individualmente. Você pode misturar texto, imagem e variáveis (ex: <code style={{ fontFamily: 'monospace', fontSize: 11 }}>&#123;&#123;loja.cnpj&#125;&#125;</code>).
-                </p>
-
-                <div className="form-group" style={{ marginBottom: 16 }}>
-                  <label>Cabeçalho do documento</label>
-                  <RichEditor
-                    value={cabecalho}
-                    onChange={setCabecalho}
-                    variaveis={CATALOGO_VARIAVEIS}
-                    labels={labelsDe(CATALOGO_VARIAVEIS)}
-                    minHeight={80}
-                    compact
-                    placeholder="Ex: logo, nome da loja, endereço…"
-                  />
-                </div>
-
-                <div className="form-group" style={{ marginBottom: 16 }}>
-                  <label>Rodapé do documento</label>
-                  <RichEditor
-                    value={rodape}
-                    onChange={setRodape}
-                    variaveis={CATALOGO_VARIAVEIS}
-                    labels={labelsDe(CATALOGO_VARIAVEIS)}
-                    minHeight={60}
-                    compact
-                    placeholder="Ex: Documento gerado em {{contrato.data}}"
-                  />
-                </div>
-
-                {/* Marca d'água */}
-                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 14px', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)', borderRadius: 8, cursor: 'pointer', marginBottom: 12 }}>
-                  <div>
-                    <strong style={{ fontSize: 13 }}>Exibir marca d'água ao fundo</strong>
-                    <div style={{ fontSize: 12, color: 'var(--sv-text-muted)', marginTop: 2 }}>Imagem clara e centralizada em cada página. Sem imagem própria, usa a logo da loja.</div>
-                  </div>
-                  <input type="checkbox" checked={marcaDaguaAtiva} onChange={(e) => setMarcaDaguaAtiva(e.target.checked)} style={{ width: 18, height: 18, flexShrink: 0, accentColor: 'var(--sv-primary)' }} />
-                </label>
-
-                {marcaDaguaAtiva && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    {marcaDaguaUrl && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--sv-overlay-soft)', border: '1px solid var(--sv-border)', borderRadius: 8, padding: '8px 12px' }}>
-                        <img src={marcaDaguaUrl} alt="marca d'água" style={{ width: 44, height: 44, objectFit: 'contain', background: '#fff', borderRadius: 6, padding: 4 }} />
-                        <span style={{ fontSize: 12, color: 'var(--sv-text-dim)' }}>Imagem atual</span>
-                      </div>
-                    )}
-                    <label className="btn btn-outline" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Upload style={{ width: 15, height: 15 }} />
-                      {enviandoMarca ? 'Enviando…' : (marcaDaguaUrl ? 'Trocar imagem' : 'Enviar imagem específica')}
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        hidden
-                        disabled={enviandoMarca}
-                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadMarcaDagua(f); e.target.value = '' }}
-                      />
-                    </label>
-                  </div>
-                )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
+                <button className="btn btn-primary" type="submit" disabled={salvando}>
+                  {salvando ? 'Salvando...' : 'Salvar alterações'}
+                </button>
               </div>
+            </form>
+          )}
+
+          {abaAtual === 'contratos' && (
+            <form className="glass-card" onSubmit={handleSalvarPerfil}>
+              <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>Identidade nos contratos</div>
+              <p style={{ fontSize: '12px', color: 'var(--sv-text-muted)', margin: '0 0 16px', maxWidth: '620px' }}>
+                Cabeçalho, rodapé e marca d'água aplicados a todos os contratos. Repetem no topo e no rodapé de cada página impressa.
+                Cada modelo pode desativá-los individualmente. Você pode misturar texto, imagem e variáveis (ex: <code style={{ fontFamily: 'monospace', fontSize: 11 }}>&#123;&#123;loja.cnpj&#125;&#125;</code>).
+              </p>
+
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label>Cabeçalho do documento</label>
+                <RichEditor
+                  value={cabecalho}
+                  onChange={setCabecalho}
+                  variaveis={CATALOGO_VARIAVEIS}
+                  labels={labelsDe(CATALOGO_VARIAVEIS)}
+                  minHeight={80}
+                  compact
+                  placeholder="Ex: logo, nome da loja, endereço…"
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label>Rodapé do documento</label>
+                <RichEditor
+                  value={rodape}
+                  onChange={setRodape}
+                  variaveis={CATALOGO_VARIAVEIS}
+                  labels={labelsDe(CATALOGO_VARIAVEIS)}
+                  minHeight={60}
+                  compact
+                  placeholder="Ex: Documento gerado em {{contrato.data}}"
+                />
+              </div>
+
+              {/* Marca d'água */}
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 14px', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)', borderRadius: 8, cursor: 'pointer', marginBottom: 12 }}>
+                <div>
+                  <strong style={{ fontSize: 13 }}>Exibir marca d'água ao fundo</strong>
+                  <div style={{ fontSize: 12, color: 'var(--sv-text-muted)', marginTop: 2 }}>Imagem clara e centralizada em cada página. Sem imagem própria, usa a logo da loja.</div>
+                </div>
+                <input type="checkbox" checked={marcaDaguaAtiva} onChange={(e) => setMarcaDaguaAtiva(e.target.checked)} style={{ width: 18, height: 18, flexShrink: 0, accentColor: 'var(--sv-primary)' }} />
+              </label>
+
+              {marcaDaguaAtiva && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  {marcaDaguaUrl && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--sv-overlay-soft)', border: '1px solid var(--sv-border)', borderRadius: 8, padding: '8px 12px' }}>
+                      <img src={marcaDaguaUrl} alt="marca d'água" style={{ width: 44, height: 44, objectFit: 'contain', background: '#fff', borderRadius: 6, padding: 4 }} />
+                      <span style={{ fontSize: 12, color: 'var(--sv-text-dim)' }}>Imagem atual</span>
+                    </div>
+                  )}
+                  <label className="btn btn-outline" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Upload style={{ width: 15, height: 15 }} />
+                    {enviandoMarca ? 'Enviando…' : (marcaDaguaUrl ? 'Trocar imagem' : 'Enviar imagem específica')}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      hidden
+                      disabled={enviandoMarca}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadMarcaDagua(f); e.target.value = '' }}
+                    />
+                  </label>
+                </div>
+              )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
                 <button className="btn btn-primary" type="submit" disabled={salvando}>

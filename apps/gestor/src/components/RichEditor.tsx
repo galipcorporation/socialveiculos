@@ -44,9 +44,15 @@ function ImagemRedimensionavel({ node, updateAttributes, selected }: any) {
   }
 
   return (
-    <NodeViewWrapper as="span" className={`re-img-wrap ${selected ? 'is-selected' : ''}`} style={{ width: node.attrs.width ? `${node.attrs.width}px` : '260px' }}>
-      <img src={node.attrs.src} alt={node.attrs.alt || ''} style={{ width: '100%', height: 'auto' }} />
-      <span className="re-img-handle" onMouseDown={onDragStart} />
+    <NodeViewWrapper
+      as="div"
+      className={`re-img-wrap ${selected ? 'is-selected' : ''}`}
+      style={{ textAlign: node.attrs.textAlign || 'left' }}
+    >
+      <span className="re-img-inner" style={{ width: node.attrs.width ? `${node.attrs.width}px` : '260px' }}>
+        <img src={node.attrs.src} alt={node.attrs.alt || ''} style={{ width: '100%', height: 'auto' }} />
+        <span className="re-img-handle" onMouseDown={onDragStart} />
+      </span>
     </NodeViewWrapper>
   )
 }
@@ -144,7 +150,7 @@ export function RichEditor({ value, onChange, variaveis, labels, minHeight = 200
       StarterKit,
       Variavel,
       ImagemResize.configure({ inline: false, allowBase64: true }),
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      TextAlign.configure({ types: ['heading', 'paragraph', 'image'] }),
       Placeholder.configure({ placeholder: placeholder || 'Digite o texto…' }),
       Table.configure({ resizable: true }),
       TableRow,

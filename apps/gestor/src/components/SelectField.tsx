@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 interface Option {
   value: string
@@ -16,16 +17,28 @@ interface Props {
 
 export function SelectField({ label, value, options, onChange, placeholder, minWidth }: Props) {
   const [open, setOpen] = useState(false)
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 })
   const ref = useRef<HTMLDivElement>(null)
   const current = options.find(o => o.value === value)
 
   useEffect(() => {
     if (!open) return
+    const updateCoords = () => {
+      const rect = ref.current?.getBoundingClientRect()
+      if (rect) setCoords({ top: rect.bottom + 6, left: rect.left, width: rect.width })
+    }
+    updateCoords()
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    window.addEventListener('scroll', updateCoords, true)
+    window.addEventListener('resize', updateCoords)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      window.removeEventListener('scroll', updateCoords, true)
+      window.removeEventListener('resize', updateCoords)
+    }
   }, [open])
 
   return (
@@ -51,8 +64,20 @@ export function SelectField({ label, value, options, onChange, placeholder, minW
           </svg>
         </button>
 
-        {open && (
-          <div className="status-dropdown" style={{ left: 0, right: 'auto', minWidth: '100%', maxHeight: '260px', overflowY: 'auto' }}>
+        {open && createPortal(
+          <div
+            className="status-dropdown"
+            style={{
+              position: 'fixed',
+              top: coords.top,
+              left: coords.left,
+              right: 'auto',
+              minWidth: coords.width,
+              maxHeight: '260px',
+              overflowY: 'auto',
+              zIndex: 1000,
+            }}
+          >
             {options.map(opt => (
               <button
                 key={opt.value || '__empty'}
@@ -68,7 +93,8 @@ export function SelectField({ label, value, options, onChange, placeholder, minW
                 )}
               </button>
             ))}
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </div>
