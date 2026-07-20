@@ -2115,14 +2115,21 @@ a:hover {
 .toggle-publish.is-on .toggle-slider        { background: #16a34a; }
 .toggle-publish.is-on:hover .toggle-slider  { background: #15803d; }
 
+/* is-hidden: publicado no banco mas OCULTO do feed (sem foto ou status≠disponível) — âmbar de alerta */
+.toggle-publish.is-hidden .toggle-slider        { background: #f59e0b; }
+.toggle-publish.is-hidden:hover .toggle-slider  { background: #d97706; }
+
 /* dark mode — is-off mais sutil */
 [data-theme='dark'] .toggle-publish.is-off .toggle-slider       { background: rgba(255, 255, 255, 0.28); }
 [data-theme='dark'] .toggle-publish.is-off:hover .toggle-slider { background: rgba(255, 255, 255, 0.4); }
 [data-theme='dark'] .toggle-publish.is-on .toggle-slider        { background: var(--sv-success, #4ade80); }
 [data-theme='dark'] .toggle-publish.is-on:hover .toggle-slider  { background: #22c55e; }
+[data-theme='dark'] .toggle-publish.is-hidden .toggle-slider        { background: #fbbf24; }
+[data-theme='dark'] .toggle-publish.is-hidden:hover .toggle-slider  { background: #f59e0b; }
 
 .toggle-publish input:checked + .toggle-slider::before,
-.toggle-publish.is-on .toggle-slider::before {
+.toggle-publish.is-on .toggle-slider::before,
+.toggle-publish.is-hidden .toggle-slider::before {
   transform: translateX(20px);
 }
 
@@ -2291,7 +2298,7 @@ a:hover {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  z-index: 200;
+  z-index: 10050;
   background: var(--sv-surface-elevated);
   border: 1px solid var(--sv-border-hover);
   border-radius: var(--sv-radius-md);
@@ -3032,7 +3039,7 @@ a:hover {
   top: 100%;
   left: 0;
   right: 0;
-  z-index: 50;
+  z-index: 10050;
   background: var(--sv-surface-solid);
   border: 1px solid var(--sv-border);
   border-radius: var(--sv-radius);
@@ -3516,7 +3523,7 @@ a:hover {
   top: 100%;
   left: 0;
   right: 0;
-  z-index: 100;
+  z-index: 10050;
 }
 
 .autocomplete-search-item {
@@ -5391,7 +5398,7 @@ svg[stroke="currentColor"] {
 .re-var-btn { gap: 4px; font-size: 13px; font-weight: 600; color: var(--sv-primary-text); }
 .re-var-wrap { position: relative; }
 .re-var-menu {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; width: 400px; max-width: 92vw;
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 10050; width: 400px; max-width: 92vw;
   max-height: min(480px, 70vh);
   background: var(--sv-surface); border: 1px solid var(--sv-border); border-radius: 10px;
   box-shadow: 0 12px 32px rgba(0,0,0,.4); overflow: hidden;

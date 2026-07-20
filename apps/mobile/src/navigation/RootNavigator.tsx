@@ -12,7 +12,6 @@ import type { RootStackParamList } from './types'
 import MainTabs from './MainTabs'
 import VitrineNavigator from './VitrineNavigator'
 import LoginScreen from '../screens/auth/LoginScreen'
-import EscolhaExperienciaScreen from '../screens/auth/EscolhaExperienciaScreen'
 import VeiculoDetalheScreen from '../screens/estoque/VeiculoDetalheScreen'
 import VeiculoFormScreen from '../screens/estoque/VeiculoFormScreen'
 import LeadDetalheScreen from '../screens/crm/LeadDetalheScreen'
@@ -102,8 +101,8 @@ export default function RootNavigator() {
     },
   }
 
-  // Aguarda a hidratação do modo de experiência (AsyncStorage) para não piscar
-  // a tela de escolha em quem já escolheu. Splash neutro no ínterim.
+  // Aguarda a hidratação do modo de experiência (AsyncStorage) antes de decidir
+  // a rota inicial (padrão: Vitrine). Splash neutro no ínterim.
   if (!hidratado) {
     return <View style={{ flex: 1, backgroundColor: colors.bg }} />
   }
@@ -111,9 +110,7 @@ export default function RootNavigator() {
   return (
     <NavigationContainer ref={navigationRef} theme={navTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-        {experiencia === null ? (
-          <Stack.Screen name="EscolhaExperiencia" component={EscolhaExperienciaScreen} options={{ animation: 'fade' }} />
-        ) : experiencia === 'comprador' ? (
+        {experiencia === 'comprador' ? (
           <Stack.Screen name="Vitrine" component={VitrineNavigator} />
         ) : lojistaLogado ? (
           <>

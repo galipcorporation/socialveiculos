@@ -11,7 +11,7 @@ export const TIPOS_FIPE: { value: TipoFipe; label: string }[] = [
 ]
 
 interface FipeItemDTO {
-  codigo: string
+  codigo: string | number
   nome: string
 }
 interface FipeConsultaDTO {
@@ -22,12 +22,12 @@ interface FipeConsultaDTO {
 export const fipeService = {
   async marcas(tipo: TipoFipe): Promise<FipeItem[]> {
     const data = await api.get<FipeItemDTO[]>('/veiculos/fipe/marcas', { tipo })
-    return data.map((m) => ({ codigo: m.codigo, nome: m.nome }))
+    return data.map((m) => ({ codigo: String(m.codigo), nome: m.nome }))
   },
 
   async modelos(tipo: TipoFipe, marcaCod: string): Promise<FipeItem[]> {
     const data = await api.get<FipeItemDTO[]>(`/veiculos/fipe/marcas/${marcaCod}/modelos`, { tipo })
-    return data.map((m) => ({ codigo: m.codigo, nome: m.nome }))
+    return data.map((m) => ({ codigo: String(m.codigo), nome: m.nome }))
   },
 
   async anos(tipo: TipoFipe, marcaCod: string, modeloCod: string): Promise<FipeItem[]> {
@@ -35,7 +35,7 @@ export const fipeService = {
       `/veiculos/fipe/marcas/${marcaCod}/modelos/${modeloCod}/anos`,
       { tipo },
     )
-    return data.map((a) => ({ codigo: a.codigo, nome: a.nome }))
+    return data.map((a) => ({ codigo: String(a.codigo), nome: a.nome }))
   },
 
   async consultar(input: { tipo: TipoFipe; marcaCod: string; modeloCod: string; anoCod: string }): Promise<FipeResultado> {

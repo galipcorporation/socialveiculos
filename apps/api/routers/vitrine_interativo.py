@@ -330,6 +330,7 @@ async def listar_mensagens_b2c_loja(
         MensagemB2CResponse(
             id=m.id, conversa_id=m.conversa_id,
             autor_id=m.autor_id, conteudo=m.conteudo,
+            autor_tipo="cliente" if m.autor_id == conv.cliente_id else "loja",
             lida=m.lida, created_at=m.created_at,
         )
         for m in mensagens
@@ -389,6 +390,7 @@ async def enviar_mensagem_b2c_loja(
         conversa_id=nova_msg.conversa_id,
         autor_id=nova_msg.autor_id,
         autor_nome=current_user.nome,
+        autor_tipo="loja",
         conteudo=nova_msg.conteudo,
         lida=nova_msg.lida,
         created_at=nova_msg.created_at
@@ -598,6 +600,7 @@ async def listar_mensagens_conversa(
                 conversa_id=m.conversa_id,
                 autor_id=m.autor_id,
                 autor_nome=autor_nome,
+                autor_tipo="cliente" if m.autor_id == current_user.id else "loja",
                 conteudo=m.conteudo,
                 lida=m.lida,
                 created_at=m.created_at
@@ -650,6 +653,7 @@ async def enviar_mensagem_conversa(
         conversa_id=nova_msg.conversa_id,
         autor_id=nova_msg.autor_id,
         autor_nome=current_user.nome,
+        autor_tipo="cliente",
         conteudo=nova_msg.conteudo,
         lida=nova_msg.lida,
         created_at=nova_msg.created_at

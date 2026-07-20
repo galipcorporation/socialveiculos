@@ -873,8 +873,11 @@ async def trocar_status_veiculo(
     status_anterior = veiculo.status
     veiculo.status = data.status
 
-    # Auto-despublicar se status virar vendido ou inativo
-    if data.status in (StatusVeiculo.VENDIDO, StatusVeiculo.INATIVO):
+    # Auto-despublicar da vitrine B2C sempre que o status deixar de ser 'disponível'.
+    # O feed público exige status DISPONIVEL, então repasse/reservado/vendido/inativo
+    # devem sair da vitrine — senão o carro fica publicado_marketplace=True mas oculto,
+    # e o toggle do gestor mostra "publicado" mentindo.
+    if data.status != StatusVeiculo.DISPONIVEL:
         veiculo.publicado_marketplace = False
 
     await db.commit()

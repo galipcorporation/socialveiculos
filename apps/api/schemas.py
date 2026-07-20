@@ -5,7 +5,7 @@ Garante o não-vazamento de dados confidenciais para o feed B2C da Vitrine.
 
 import re
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 from models import StatusVeiculo, OrigemVeiculo, TipoCambio, TipoCombustivel, TipoMidia, StatusAprovacao, TipoAcaoAprovacao, PapelUsuario, TipoLancamento, EtapaLead, OrigemLead, StatusAssinatura, StatusPagamento, StatusPropostaRepasse, TipoConversa, BancoSimulador, StatusSimulacao, StatusResultadoBanco, TipoContrato, StatusContrato
@@ -1066,6 +1066,7 @@ class MensagemB2BResponse(BaseModel):
     conversa_id: str
     autor_id: Optional[str] = None
     autor_nome: Optional[str] = None
+    minha: bool
     conteudo: str
     lida: bool
     created_at: datetime
@@ -1176,6 +1177,7 @@ class MensagemB2CResponse(BaseModel):
     conversa_id: str
     autor_id: Optional[str] = None
     autor_nome: Optional[str] = None
+    autor_tipo: Literal["loja", "cliente"]
     conteudo: str
     lida: bool
     created_at: datetime
@@ -1592,6 +1594,10 @@ class EsteiraDetalheResponse(BaseModel):
     comprador: Optional[CompradorResumo] = None
     contrato_id: Optional[str] = None
     vendedor_id: Optional[str] = None
+    vendedor_nome: Optional[str] = None
+    valor_venda: Optional[float] = None
+    comissao_valor: Optional[float] = None
+    comissao_percentual: Optional[float] = None
     comunicacao_venda_em: Optional[datetime] = None
     transferencia_em: Optional[datetime] = None
     aberta_em: Optional[datetime] = None

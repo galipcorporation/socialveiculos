@@ -33,6 +33,7 @@ from models import (
     TipoLancamento,
     ComissaoVenda,
     PapelUsuario,
+    Usuario,
 )
 from schemas import (
     EsteiraResumoResponse,
@@ -210,6 +211,31 @@ async def _comissao_paga(db: AsyncSession, esteira: EsteiraPosVenda) -> Optional
     return bool(row[0]) if row else None
 
 
+async def _venda_info(db: AsyncSession, esteira: EsteiraPosVenda) -> dict:
+    """Nome do vendedor + valores da venda/comissão, para exibir no detalhe."""
+    info: dict = {
+        "vendedor_nome": None,
+        "valor_venda": None,
+        "comissao_valor": None,
+        "comissao_percentual": None,
+    }
+    if esteira.vendedor_id:
+        res = await db.execute(select(Usuario.nome).where(Usuario.id == esteira.vendedor_id))
+        row = res.first()
+        if row:
+            info["vendedor_nome"] = row[0]
+    if esteira.veiculo_id:
+        res = await db.execute(
+            select(ComissaoVenda.valor_venda, ComissaoVenda.valor_comissao, ComissaoVenda.percentual)
+            .where(ComissaoVenda.veiculo_id == esteira.veiculo_id)
+            .limit(1)
+        )
+        row = res.first()
+        if row:
+            info["valor_venda"], info["comissao_valor"], info["comissao_percentual"] = row
+    return info
+
+
 async def _carregar_esteira(db: AsyncSession, esteira_id: str, loja_id: str) -> EsteiraPosVenda:
     stmt = (
         select(EsteiraPosVenda)
@@ -368,12 +394,14 @@ async def detalhe(
         itens_resp.append(r)
     aplicaveis = [i for i in e.itens if i.status != StatusItemChecklist.NAO_APLICAVEL]
     concluidos = sum(1 for i in aplicaveis if i.status == StatusItemChecklist.CONCLUIDO)
+    venda_info = await _venda_info(db, e)
 
     return EsteiraDetalheResponse(
         id=e.id, estagio=e.estagio, origem=e.origem,
         veiculo=_veiculo_resumo(e.veiculo),
         comprador=_comprador_resumo(e.comprador),
         contrato_id=e.contrato_id, vendedor_id=e.vendedor_id,
+        **venda_info,
         comunicacao_venda_em=e.comunicacao_venda_em,
         transferencia_em=e.transferencia_em,
         aberta_em=e.aberta_em, concluida_em=e.concluida_em,

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { Dimensions, FlatList, Pressable, StyleSheet, View, type ViewToken } from 'react-native'
+import { Dimensions, FlatList, LayoutChangeEvent, Pressable, StyleSheet, View, type ViewToken } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
@@ -95,7 +95,15 @@ interface MediaCarouselProps {
 /** Carrossel de fotos/vídeos do veículo — setas, bolinhas e contador "N/M". */
 export function MediaCarousel({ veiculo, width, height, borderRadius = radius.md }: MediaCarouselProps) {
   const larguraTela = Dimensions.get('window').width
-  const w = width ?? larguraTela
+  // Sem `width` explícito, mede o container real via onLayout — herdar a
+  // largura da tela cheia estoura cards com padding lateral (corta a mídia
+  // e some com a seta "próximo").
+  const [larguraMedida, setLarguraMedida] = useState(width ?? larguraTela)
+  const w = width ?? larguraMedida
+  const onLayoutContainer = (e: LayoutChangeEvent) => {
+    if (!width) setLarguraMedida(e.nativeEvent.layout.width)
+  }
+
   const midias: Midia[] = [...(veiculo.midias ?? [])].sort((a, b) => a.ordem - b.ordem)
   const [indice, setIndice] = useState(0)
   const listRef = useRef<FlatList<Midia>>(null)
@@ -106,14 +114,18 @@ export function MediaCarousel({ veiculo, width, height, borderRadius = radius.md
   }).current
 
   if (midias.length === 0) {
-    return <Placeholder veiculo={veiculo} width={w} height={height} borderRadius={borderRadius} />
+    return <View onLayout={onLayoutContainer}><Placeholder veiculo={veiculo} width={w} height={height} borderRadius={borderRadius} /></View>
   }
 
   if (midias.length === 1) {
     const m = midias[0]
-    return m.tipo === 'video'
-      ? <VideoSlide url={m.url} width={w} height={height} borderRadius={borderRadius} ativo />
-      : <Image source={{ uri: m.url }} style={{ width: w, height, borderRadius, backgroundColor: '#2d3748' }} contentFit="cover" transition={200} />
+    return (
+      <View onLayout={onLayoutContainer}>
+        {m.tipo === 'video'
+          ? <VideoSlide url={m.url} width={w} height={height} borderRadius={borderRadius} ativo />
+          : <Image source={{ uri: m.url }} style={{ width: w, height, borderRadius, backgroundColor: '#2d3748' }} contentFit="cover" transition={200} />}
+      </View>
+    )
   }
 
   const irPara = (i: number) => {
@@ -123,7 +135,7 @@ export function MediaCarousel({ veiculo, width, height, borderRadius = radius.md
   }
 
   return (
-    <View style={{ width: w, height }}>
+    <View style={{ width: w, height }} onLayout={onLayoutContainer}>
       <FlatList
         ref={listRef}
         data={midias}

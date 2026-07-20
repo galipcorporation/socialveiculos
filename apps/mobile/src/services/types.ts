@@ -270,6 +270,7 @@ export interface Esteira {
   vendedor_nome?: string
   valor_venda?: number
   comissao_valor?: number
+  comissao_percentual?: number
   comissao_paga?: boolean | null
   itens: ItemChecklist[]
   aberta_em: string

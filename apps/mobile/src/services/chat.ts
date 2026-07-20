@@ -29,6 +29,10 @@ interface MensagemDTO {
   conversa_id: string
   autor_id?: string | null
   autor_nome?: string | null
+  // B2C (/vitrine/chat) informa quem é o autor de fato; B2B (/b2b/chat) informa
+  // apenas se a mensagem é minha (não há "loja"/"cliente" entre lojas parceiras).
+  autor_tipo?: 'loja' | 'cliente'
+  minha?: boolean
   conteudo: string
   lida: boolean
   created_at: string
@@ -43,12 +47,14 @@ function basePath(conversaId: string): string {
 }
 
 function mapMensagem(m: MensagemDTO): Mensagem {
+  // No painel da loja, "minha" (do lado direito) é sempre a própria loja —
+  // tanto no B2C (autor_tipo já vem calculado pelo backend) quanto no B2B
+  // (minha === true quando o autor é o usuário logado).
+  const autor: 'loja' | 'cliente' = m.autor_tipo ?? (m.minha ? 'loja' : 'cliente')
   return {
     id: m.id,
     conversa_id: m.conversa_id,
-    // No backend a autoria é por usuário; consideramos a loja como autor quando
-    // a mensagem tem autor_id (usuário logado da loja); senão é o cliente.
-    autor: m.autor_id ? 'loja' : 'cliente',
+    autor,
     texto: m.conteudo,
     created_at: m.created_at,
     lida: m.lida,

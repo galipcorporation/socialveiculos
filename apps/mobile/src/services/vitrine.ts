@@ -56,6 +56,7 @@ interface MensagemB2CDTO {
   id: string
   conversa_id: string
   autor_id?: string | null
+  autor_tipo: 'loja' | 'cliente'
   conteudo: string
   lida: boolean
   created_at: string
@@ -111,7 +112,7 @@ function mapMensagem(m: MensagemB2CDTO): Mensagem {
   return {
     id: m.id,
     conversa_id: m.conversa_id,
-    autor: m.autor_id ? 'cliente' : 'loja',
+    autor: m.autor_tipo,
     texto: m.conteudo,
     created_at: m.created_at,
     lida: m.lida,

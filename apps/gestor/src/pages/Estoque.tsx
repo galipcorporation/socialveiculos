@@ -449,18 +449,32 @@ export function Estoque() {
                     />
                   </td>
                   <td className="col-secondary">
-                    <label
-                      className={`toggle-publish ${v.publicado_marketplace ? 'is-on' : 'is-off'}`}
-                      title={!v.publicado_marketplace && (!v.midias || v.midias.length === 0) ? 'Adicione pelo menos 1 foto para publicar' : undefined}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={v.publicado_marketplace}
-                        disabled={!v.publicado_marketplace && (v.status !== 'disponivel' || !v.midias || v.midias.length === 0)}
-                        onChange={() => handlePublishToggle(v)}
-                      />
-                      <span className="toggle-slider" />
-                    </label>
+                    {(() => {
+                      const semFoto = !v.midias || v.midias.length === 0
+                      const naoDisponivel = v.status !== 'disponivel'
+                      // Publicado no banco mas o feed não mostra (exige status=disponível + foto).
+                      const oculto = !!v.publicado_marketplace && (semFoto || naoDisponivel)
+                      const motivoOculto = naoDisponivel
+                        ? 'Publicado, mas oculto na vitrine: só aparece com status "disponível".'
+                        : 'Publicado, mas oculto na vitrine: adicione pelo menos 1 foto.'
+                      const estado = oculto ? 'is-hidden' : v.publicado_marketplace ? 'is-on' : 'is-off'
+                      const title = oculto
+                        ? motivoOculto
+                        : !v.publicado_marketplace && semFoto
+                          ? 'Adicione pelo menos 1 foto para publicar'
+                          : undefined
+                      return (
+                        <label className={`toggle-publish ${estado}`} title={title}>
+                          <input
+                            type="checkbox"
+                            checked={!!v.publicado_marketplace}
+                            disabled={!v.publicado_marketplace && (naoDisponivel || semFoto)}
+                            onChange={() => handlePublishToggle(v)}
+                          />
+                          <span className="toggle-slider" />
+                        </label>
+                      )
+                    })()}
                   </td>
                   <td>
                     <div className="actions-cell">

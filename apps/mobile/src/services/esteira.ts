@@ -40,6 +40,10 @@ interface EsteiraResumoDTO {
 }
 interface EsteiraDetalheDTO extends EsteiraResumoDTO {
   vendedor_id?: string | null
+  vendedor_nome?: string | null
+  valor_venda?: number | null
+  comissao_valor?: number | null
+  comissao_percentual?: number | null
   contrato_id?: string | null
   concluida_em?: string | null
   itens: ItemChecklistDTO[]
@@ -93,9 +97,10 @@ function mapDetalhe(d: EsteiraDetalheDTO): Esteira {
     veiculo_id: d.veiculo?.id,
     contrato_id: d.contrato_id ?? undefined,
     comprador_nome: d.comprador?.nome ?? '—',
-    vendedor_nome: undefined,
-    valor_venda: undefined,
-    comissao_valor: undefined,
+    vendedor_nome: d.vendedor_nome ?? undefined,
+    valor_venda: d.valor_venda ?? undefined,
+    comissao_valor: d.comissao_valor ?? undefined,
+    comissao_percentual: d.comissao_percentual ?? undefined,
     comissao_paga: comissaoPaga(itens),
     itens,
     aberta_em: d.aberta_em ?? new Date().toISOString(),
@@ -144,12 +149,32 @@ export const esteiraService = {
     return mapDetalhe(d)
   },
 
-  // Anexa documento: sobe o arquivo no veículo e vincula ao item da esteira.
-  // A tela mobile passa apenas o nome; sem o arquivo real, marca o item como concluído.
-  async anexarDocumento(idEsteira: string, idItem: string, _nomeArquivo: string): Promise<Esteira> {
-    const d = await api.patch<EsteiraDetalheDTO>(`/esteira/${idEsteira}/itens/${idItem}`, {
-      status: 'concluido',
-    })
+  // Anexa documento: sobe o PDF real no veículo e vincula ao item da esteira.
+  async anexarDocumento(
+    idEsteira: string,
+    idItem: string,
+    veiculoId: string,
+    arquivo: { uri: string; nome: string; mimeType?: string },
+  ): Promise<Esteira> {
+    const fd = new FormData()
+    fd.append('file', {
+      uri: arquivo.uri,
+      name: arquivo.nome,
+      type: arquivo.mimeType || 'application/pdf',
+    } as unknown as Blob)
+    fd.append('tipo', 'outro')
+    fd.append('visivel_comprador', 'true')
+    const item = await api.get<EsteiraDetalheDTO>(`/esteira/${idEsteira}`)
+    const chave = item.itens.find((i) => i.id === idItem)?.chave
+    const doc = await api.post<{ id: string; url: string; nome: string }>(
+      `/veiculos/${veiculoId}/documentos/upload`,
+      fd,
+    )
+    const d = await api.post<EsteiraDetalheDTO>(
+      `/esteira/${idEsteira}/documentos`,
+      undefined,
+      { params: { item_chave: chave, nome: doc.nome, url: doc.url } },
+    )
     return mapDetalhe(d)
   },
 

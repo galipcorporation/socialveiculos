@@ -944,6 +944,7 @@ async def listar_mensagens_b2b(
                         conversa_id=m.get("conversa_id"),
                         autor_id=m.get("autor_id"),
                         autor_nome=m.get("autor_nome", "Lojista"),
+                        minha=m.get("autor_id") == context.usuario.id,
                         conteudo=m.get("conteudo"),
                         lida=m.get("lida", True),
                         created_at=datetime.fromisoformat(m.get("created_at")) if m.get("created_at") else datetime.now(timezone.utc)
@@ -989,6 +990,7 @@ async def listar_mensagens_b2b(
                 conversa_id=msg.conversa_id,
                 autor_id=msg.autor_id,
                 autor_nome=autor_name,
+                minha=msg.autor_id == context.usuario.id,
                 conteudo=msg.conteudo,
                 lida=msg.lida,
                 created_at=msg.created_at
@@ -1201,6 +1203,7 @@ async def enviar_mensagem_b2b(
         conversa_id=nova_msg.conversa_id,
         autor_id=nova_msg.autor_id,
         autor_nome=context.usuario.nome,
+        minha=True,
         conteudo=nova_msg.conteudo,
         lida=nova_msg.lida,
         created_at=nova_msg.created_at

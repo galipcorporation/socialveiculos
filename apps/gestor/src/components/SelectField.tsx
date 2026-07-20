@@ -75,7 +75,7 @@ export function SelectField({ label, value, options, onChange, placeholder, minW
               minWidth: coords.width,
               maxHeight: '260px',
               overflowY: 'auto',
-              zIndex: 1000,
+              zIndex: 10050,
             }}
           >
             {options.map(opt => (

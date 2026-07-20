@@ -26,7 +26,51 @@ export class ApiError extends Error {
   }
 }
 
-let isRefreshing = false
+// Promise compartilhada do refresh em andamento — requisições 401 concorrentes
+// aguardam a mesma renovação em vez de cada uma tentar (e invalidar) o refresh
+// token rotativo (single-use) uma por vez.
+let refreshPromise: Promise<string> | null = null
+
+function renovarToken(): Promise<string> {
+  if (refreshPromise) return refreshPromise
+
+  refreshPromise = (async () => {
+    const { refreshToken, user, login, logout } = useAuthStore.getState()
+    if (!refreshToken || !user) {
+      logout()
+      throw new ApiError('Sessão expirada. Faça login novamente.', {
+        status: 401,
+        path: '/auth/refresh',
+        timestamp: new Date().toISOString(),
+      })
+    }
+
+    const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    })
+
+    if (!refreshRes.ok) {
+      logout()
+      throw new ApiError('Sessão expirada. Faça login novamente.', {
+        status: 401,
+        path: '/auth/refresh',
+        timestamp: new Date().toISOString(),
+      })
+    }
+
+    const data = await refreshRes.json()
+    login(data.access_token, data.refresh_token, user)
+    return data.access_token as string
+  })()
+
+  refreshPromise.finally(() => {
+    refreshPromise = null
+  })
+
+  return refreshPromise
+}
 
 class ApiClient {
   private baseUrl: string
@@ -64,50 +108,25 @@ class ApiClient {
 
     const response = await fetch(url, { ...fetchOptions, headers })
 
-    if (response.status === 401 && !isRefreshing && path !== '/auth/login' && path !== '/auth/refresh') {
-      const { refreshToken, user, login, logout } = useAuthStore.getState()
+    if (response.status === 401 && path !== '/auth/login' && path !== '/auth/refresh') {
+      const { refreshToken, user } = useAuthStore.getState()
 
       if (refreshToken && user) {
-        isRefreshing = true
-        try {
-          const refreshRes = await fetch(`${this.baseUrl}/auth/refresh`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: refreshToken }),
+        const novoToken = await renovarToken()
+
+        headers['Authorization'] = `Bearer ${novoToken}`
+        const retryRes = await fetch(url, { ...fetchOptions, headers })
+
+        if (!retryRes.ok) {
+          const error = await retryRes.json().catch(() => ({}))
+          throw new ApiError(friendlyHttpMessage(retryRes.status, error.error), {
+            status: retryRes.status,
+            path,
+            timestamp: new Date().toISOString(),
           })
-
-          if (refreshRes.ok) {
-            const data = await refreshRes.json()
-            login(data.access_token, data.refresh_token, user)
-            isRefreshing = false
-
-            headers['Authorization'] = `Bearer ${data.access_token}`
-            const retryRes = await fetch(url, { ...fetchOptions, headers })
-
-            if (!retryRes.ok) {
-              const error = await retryRes.json().catch(() => ({}))
-              throw new ApiError(friendlyHttpMessage(retryRes.status, error.error), {
-                status: retryRes.status,
-                path,
-                timestamp: new Date().toISOString(),
-              })
-            }
-
-            return retryRes.status === 204 ? (undefined as T) : retryRes.json()
-          } else {
-            isRefreshing = false
-            logout()
-            throw new ApiError('Sessão expirada. Faça login novamente.', {
-              status: 401,
-              path,
-              timestamp: new Date().toISOString(),
-            })
-          }
-        } catch (err) {
-          isRefreshing = false
-          logout()
-          throw err
         }
+
+        return retryRes.status === 204 ? (undefined as T) : retryRes.json()
       }
     }
 

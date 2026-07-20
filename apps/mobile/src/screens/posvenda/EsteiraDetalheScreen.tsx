@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import * as DocumentPicker from 'expo-document-picker'
 import * as Haptics from 'expo-haptics'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
@@ -84,8 +85,10 @@ export default function EsteiraDetalheScreen({ route }: RootScreenProps<'Esteira
   })
 
   const anexarMut = useMutation({
-    mutationFn: (p: { itemId: string; nome: string }) => esteiraService.anexarDocumento(id, p.itemId, p.nome),
+    mutationFn: (p: { itemId: string; uri: string; nome: string; mimeType?: string }) =>
+      esteiraService.anexarDocumento(id, p.itemId, e!.veiculo_id!, { uri: p.uri, nome: p.nome, mimeType: p.mimeType }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['esteiras'] }); toast.show('success', 'Documento anexado.') },
+    onError: (err) => toast.show('error', err instanceof Error ? err.message : 'Não foi possível anexar.'),
   })
   const addItemMut = useMutation({
     mutationFn: (p: { titulo: string; categoria: CategoriaItemEsteira; obrigatorio: boolean }) => esteiraService.adicionarItem(id, p),
@@ -257,8 +260,9 @@ export default function EsteiraDetalheScreen({ route }: RootScreenProps<'Esteira
       {anexarItem && (
         <AnexarSheet
           item={anexarItem}
+          loading={anexarMut.isPending}
           onClose={() => setAnexarItem(null)}
-          onConfirm={(nome) => { anexarMut.mutate({ itemId: anexarItem.id, nome }); setAnexarItem(null) }}
+          onConfirm={(arq) => { anexarMut.mutate({ itemId: anexarItem.id, ...arq }); setAnexarItem(null) }}
         />
       )}
       {/* Adicionar item */}
@@ -308,14 +312,43 @@ function ValorItemSheet({
   )
 }
 
-function AnexarSheet({ item, onClose, onConfirm }: { item: ItemChecklist; onClose: () => void; onConfirm: (nome: string) => void }) {
-  const [nome, setNome] = useState(item.documento_nome ?? '')
+function AnexarSheet({ item, loading, onClose, onConfirm }: {
+  item: ItemChecklist
+  loading: boolean
+  onClose: () => void
+  onConfirm: (arquivo: { uri: string; nome: string; mimeType?: string }) => void
+}) {
+  const [arquivo, setArquivo] = useState<{ uri: string; nome: string; mimeType?: string } | null>(null)
+  const toast = useToast()
+
+  const escolherArquivo = async () => {
+    const res = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true })
+    if (res.canceled || !res.assets?.[0]) return
+    const a = res.assets[0]
+    if (a.size && a.size > 20 * 1024 * 1024) {
+      toast.show('error', 'Arquivo muito grande. Máximo 20MB.')
+      return
+    }
+    setArquivo({ uri: a.uri, nome: a.name, mimeType: a.mimeType })
+  }
+
   return (
-    <Sheet visible onClose={onClose} title="Anexar documento">
+    <Sheet visible onClose={onClose} title="Anexar documento" scrollable={false}>
       <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
         <Txt variant="caption" color="textDim">{item.titulo}</Txt>
-        <Input label="Nome do arquivo (PDF)" value={nome} onChangeText={setNome} placeholder="ex.: crlv-assinado.pdf" autoCapitalize="none" hint="No app real, aqui abre o seletor de arquivos." />
-        <Button title="Anexar e concluir item" icon="document-attach-outline" disabled={nome.trim().length < 3} onPress={() => onConfirm(nome.trim())} />
+        <Button
+          title={arquivo ? arquivo.nome : 'Escolher PDF'}
+          variant="outline"
+          icon="document-attach-outline"
+          onPress={escolherArquivo}
+        />
+        <Button
+          title="Anexar e concluir item"
+          icon="checkmark"
+          loading={loading}
+          disabled={!arquivo}
+          onPress={() => arquivo && onConfirm(arquivo)}
+        />
       </View>
     </Sheet>
   )

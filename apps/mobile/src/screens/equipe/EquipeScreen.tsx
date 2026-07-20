@@ -8,7 +8,7 @@ import {
   AppHeader, Avatar, Badge, Button, Card, EmptyState, ErrorState, Fab, Input,
   SegmentedControl, Sheet, SkeletonCard, Txt, useToast,
 } from '../../components/ui'
-import { equipeService } from '../../services'
+import { equipeService, configService } from '../../services'
 import type { Membro, Papel } from '../../services/types'
 import { formatTelefone, maskTelefoneInput } from '../../lib/format'
 import { MODULOS, TODOS_MODULOS, parseModulos, type ModuloKey } from '../../lib/modulos'
@@ -20,6 +20,10 @@ export default function EquipeScreen() {
 
   const q = useQuery({ queryKey: ['equipe'], queryFn: () => equipeService.listar() })
   const membros = q.data ?? []
+  // Sem override individual, a comissão do vendedor é o % padrão da loja
+  // (mesma regra usada pelo backend ao fechar a venda) — não zero.
+  const perfilQ = useQuery({ queryKey: ['configuracoes', 'loja'], queryFn: () => configService.perfil() })
+  const comissaoPadrao = perfilQ.data?.percentual_comissao_padrao ?? 0
 
   return (
     <View style={{ flex: 1 }}>
@@ -41,6 +45,7 @@ export default function EquipeScreen() {
           renderItem={({ item }) => (
             <MembroCard
               membro={item}
+              comissaoPadrao={comissaoPadrao}
               onPress={() => {
                 setEditando(item)
                 setFormAberto(true)
@@ -74,6 +79,7 @@ export default function EquipeScreen() {
       <MembroFormSheet
         visible={formAberto}
         membro={editando}
+        comissaoPadrao={comissaoPadrao}
         onClose={() => {
           setFormAberto(false)
           setEditando(null)
@@ -83,7 +89,7 @@ export default function EquipeScreen() {
   )
 }
 
-function MembroCard({ membro, onPress }: { membro: Membro; onPress: () => void }) {
+function MembroCard({ membro, comissaoPadrao, onPress }: { membro: Membro; comissaoPadrao: number; onPress: () => void }) {
   const queryClient = useQueryClient()
   const { colors } = useTheme()
   const toast = useToast()
@@ -112,7 +118,15 @@ function MembroCard({ membro, onPress }: { membro: Membro; onPress: () => void }
               size="sm"
             />
             {membro.papel === 'vendedor' && (
-              <Badge label={`Comissão ${membro.percentual_comissao ?? 0}%`} tone="warning" size="sm" />
+              <Badge
+                label={
+                  membro.percentual_comissao != null
+                    ? `Comissão ${membro.percentual_comissao}%`
+                    : `Comissão ${comissaoPadrao}% (padrão)`
+                }
+                tone="warning"
+                size="sm"
+              />
             )}
             {!membro.ativo && <Badge label="Inativo" tone="neutral" size="sm" />}
           </View>
@@ -129,7 +143,7 @@ function MembroCard({ membro, onPress }: { membro: Membro; onPress: () => void }
   )
 }
 
-function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membro: Membro | null; onClose: () => void }) {
+function MembroFormSheet({ visible, membro, comissaoPadrao, onClose }: { visible: boolean; membro: Membro | null; comissaoPadrao: number; onClose: () => void }) {
   const queryClient = useQueryClient()
   const toast = useToast()
   const { colors } = useTheme()
@@ -151,13 +165,13 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
       setEmail(membro?.email ?? '')
       setTelefone(membro?.telefone ?? '')
       setPapel(membro?.papel ?? 'vendedor')
-      setComissao(membro?.percentual_comissao != null ? String(membro.percentual_comissao) : '2')
+      setComissao(String(membro?.percentual_comissao ?? comissaoPadrao))
       setModulos(parseModulos(membro?.modulos))
       setSenha('')
       setIaAtivo(membro?.assistente_ativo ?? false)
       setIaAutonomia(membro?.assistente_autonomia ?? 'copiloto')
     }
-  }, [visible, membro])
+  }, [visible, membro, comissaoPadrao])
 
   const toggleModulo = (key: ModuloKey) =>
     setModulos((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
@@ -239,12 +253,12 @@ function MembroFormSheet({ visible, membro, onClose }: { visible: boolean; membr
         {papel === 'vendedor' && (
           <Input
             label="Percentual de comissão (%)"
-            placeholder="2"
+            placeholder={String(comissaoPadrao)}
             keyboardType="decimal-pad"
             icon="ribbon-outline"
             value={comissao}
             onChangeText={setComissao}
-            hint="Aplicado automaticamente ao registrar vendas deste vendedor"
+            hint={`Padrão da loja: ${comissaoPadrao}%. Altere para um valor individual só para este vendedor.`}
           />
         )}
 
