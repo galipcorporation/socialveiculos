@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, FilterChips, SearchBar, SkeletonCard, Txt } fro
 import { AnuncioCard } from './AnuncioCard'
 import { vitrineService, FILTROS_FEED, type FiltroFeed } from '../../services'
 import { useGateLogin } from '../../hooks/useGateLogin'
+import { useToggleFavorito } from '../../hooks/useToggleFavorito'
 import { useDebounce } from '../../hooks/useDebounce'
 import type { AnuncioVitrine } from '../../services/types'
 
@@ -18,6 +19,7 @@ export default function FeedScreen() {
   const navigation = useNavigation<any>()
   const queryClient = useQueryClient()
   const comLogin = useGateLogin()
+  const favoritar = useToggleFavorito()
   const [filtro, setFiltro] = useState<FiltroFeed>('todos')
   const [busca, setBusca] = useState('')
   const buscaDebounced = useDebounce(busca, 400)
@@ -26,12 +28,6 @@ export default function FeedScreen() {
     queryKey: ['vitrine', 'feed', filtro, buscaDebounced],
     queryFn: () => vitrineService.feed(filtro, buscaDebounced),
   })
-
-  const favoritar = (id: string) =>
-    comLogin('Entre para salvar seus favoritos.', async () => {
-      await vitrineService.alternarFavorito(id)
-      queryClient.invalidateQueries({ queryKey: ['vitrine'] })
-    })
 
   const seguirLoja = (lojaId: string, seguindoAgora: boolean) =>
     comLogin('Entre para seguir lojas.', async () => {
@@ -76,7 +72,7 @@ export default function FeedScreen() {
               anuncio={item}
               onPress={() => navigation.navigate('CarroDetalhe', { id: item.id })}
               onLojaPress={() => navigation.navigate('PerfilLoja', { id: item.loja_id })}
-              onFavorito={() => favoritar(item.id)}
+              onFavorito={() => favoritar(item.id, item.favoritado_por_mim)}
               onSeguirLoja={() => seguirLoja(item.loja_id, false)}
               onWhatsapp={item.loja_whatsapp ? () => whatsapp(item) : undefined}
             />

@@ -11,6 +11,7 @@ import {
 import { AnuncioCard } from './AnuncioCard'
 import { vitrineService } from '../../services'
 import { useGateLogin } from '../../hooks/useGateLogin'
+import { useToggleFavorito } from '../../hooks/useToggleFavorito'
 import { useAuthStore } from '../../stores/authStore'
 import type { VitrineScreenProps } from '../../navigation/types'
 
@@ -21,6 +22,7 @@ export default function PerfilLojaScreen({ route }: VitrineScreenProps<'PerfilLo
   const queryClient = useQueryClient()
   const toast = useToast()
   const comLogin = useGateLogin()
+  const favoritar = useToggleFavorito()
 
   const isAuth = useAuthStore((s) => s.isAuthenticated)
 
@@ -45,12 +47,6 @@ export default function PerfilLojaScreen({ route }: VitrineScreenProps<'PerfilLo
 
   const alternarSeguir = () =>
     comLogin('Entre para seguir lojas.', () => seguirMut.mutateAsync())
-
-  const favoritar = (anuncioId: string) =>
-    comLogin('Entre para salvar seus favoritos.', async () => {
-      await vitrineService.alternarFavorito(anuncioId)
-      queryClient.invalidateQueries({ queryKey: ['vitrine'] })
-    })
 
   const whatsapp = async () => {
     if (!loja?.whatsapp) { toast.show('info', 'Loja sem WhatsApp cadastrado.'); return }
@@ -110,7 +106,7 @@ export default function PerfilLojaScreen({ route }: VitrineScreenProps<'PerfilLo
             <AnuncioCard
               anuncio={item}
               onPress={() => navigation.navigate('CarroDetalhe', { id: item.id })}
-              onFavorito={() => favoritar(item.id)}
+              onFavorito={() => favoritar(item.id, item.favoritado_por_mim)}
             />
           )}
         />

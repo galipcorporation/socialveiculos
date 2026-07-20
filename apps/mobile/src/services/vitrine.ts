@@ -152,10 +152,9 @@ export const vitrineService = {
     return data.map(mapAnuncio)
   },
 
-  async alternarFavorito(id: string): Promise<boolean> {
-    // Descobre o estado atual pelo detalhe e alterna.
-    const atual = await this.detalhe(id)
-    if (atual?.favoritado_por_mim) {
+  async alternarFavorito(id: string, favoritadoAgora: boolean): Promise<boolean> {
+    // O estado atual já vem do card/detalhe — não busca de novo.
+    if (favoritadoAgora) {
       await api.delete(`/vitrine/favoritos/${id}`)
       return false
     }

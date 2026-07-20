@@ -12,6 +12,7 @@ import {
 import { MediaCarousel } from '../../components/MediaCarousel'
 import { vitrineService } from '../../services'
 import { useGateLogin } from '../../hooks/useGateLogin'
+import { useToggleFavorito } from '../../hooks/useToggleFavorito'
 import { formatBRL, formatKm } from '../../lib/format'
 import type { VitrineScreenProps } from '../../navigation/types'
 
@@ -23,6 +24,7 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
   const queryClient = useQueryClient()
   const toast = useToast()
   const comLogin = useGateLogin()
+  const favoritar = useToggleFavorito()
 
   const q = useQuery({ queryKey: ['vitrine', 'detalhe', id], queryFn: () => vitrineService.detalhe(id) })
   const a = q.data
@@ -34,12 +36,6 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
       return []
     }
   })()
-
-  const favoritar = () =>
-    comLogin('Entre para salvar seus favoritos.', async () => {
-      await vitrineService.alternarFavorito(id)
-      queryClient.invalidateQueries({ queryKey: ['vitrine'] })
-    })
 
   const conversar = () =>
     comLogin('Entre para conversar com a loja.', async () => {
@@ -70,7 +66,7 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
           <Screen padded={false} style={{ paddingBottom: 0 }}>
             <View>
               <MediaCarousel veiculo={a} height={260} borderRadius={0} />
-              <Pressable onPress={favoritar} hitSlop={10} style={[styles.fav, { backgroundColor: colors.backdrop }]}>
+              <Pressable onPress={() => favoritar(id, a.favoritado_por_mim)} hitSlop={10} style={[styles.fav, { backgroundColor: colors.backdrop }]}>
                 <Ionicons name={a.favoritado_por_mim ? 'heart' : 'heart-outline'} size={22} color={a.favoritado_por_mim ? colors.error : '#fff'} />
               </Pressable>
               <View style={styles.badges}>

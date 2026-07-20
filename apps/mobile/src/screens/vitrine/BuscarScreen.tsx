@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { FlatList, View } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { spacing } from '../../theme/tokens'
 import { EmptyState, SearchBar, SegmentedControl, SkeletonCard, Button } from '../../components/ui'
@@ -9,13 +9,13 @@ import { AnuncioCard } from './AnuncioCard'
 import { vitrineService } from '../../services'
 import { useAuthStore } from '../../stores/authStore'
 import { useGateLogin } from '../../hooks/useGateLogin'
+import { useToggleFavorito } from '../../hooks/useToggleFavorito'
 
 type Modo = 'buscar' | 'favoritos'
 
 export default function BuscarScreen() {
   const insets = useSafeAreaInsets()
   const navigation = useNavigation<any>()
-  const queryClient = useQueryClient()
   const comLogin = useGateLogin()
   const isAuth = useAuthStore((s) => s.isAuthenticated)
   const [modo, setModo] = useState<Modo>('buscar')
@@ -32,11 +32,7 @@ export default function BuscarScreen() {
     enabled: modo === 'favoritos' && isAuth,
   })
 
-  const favoritar = (id: string) =>
-    comLogin('Entre para salvar seus favoritos.', async () => {
-      await vitrineService.alternarFavorito(id)
-      queryClient.invalidateQueries({ queryKey: ['vitrine'] })
-    })
+  const favoritar = useToggleFavorito()
 
   const dados = modo === 'buscar' ? buscaQ.data ?? [] : favQ.data ?? []
   const carregando = modo === 'buscar' ? buscaQ.isLoading : favQ.isLoading
@@ -77,7 +73,7 @@ export default function BuscarScreen() {
               anuncio={item}
               onPress={() => navigation.navigate('CarroDetalhe', { id: item.id })}
               onLojaPress={() => navigation.navigate('PerfilLoja', { id: item.loja_id })}
-              onFavorito={() => favoritar(item.id)}
+              onFavorito={() => favoritar(item.id, item.favoritado_por_mim)}
             />
           )}
         />
