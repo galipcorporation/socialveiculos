@@ -23,6 +23,9 @@ interface ConversaB2BDTO {
   ultima_mensagem?: string | null
   ultima_mensagem_data?: string | null
   mensagens_nao_lidas?: number
+  proposta_id?: string | null
+  veiculo?: { marca?: string | null; modelo?: string | null; ano_modelo?: number | null } | null
+  status_negociacao?: string | null
 }
 interface MensagemDTO {
   id: string
@@ -79,15 +82,22 @@ function mapConversaB2B(c: ConversaB2BDTO, lojaPropriaNome?: string): Conversa {
   // O nome do parceiro é a "outra" loja da dupla.
   const parceira =
     c.loja_a_nome && c.loja_a_nome !== lojaPropriaNome ? c.loja_a_nome : c.loja_b_nome
+  const veiculo = c.veiculo
+    ? [c.veiculo.marca, c.veiculo.modelo].filter(Boolean).join(' ') +
+      (c.veiculo.ano_modelo ? ` · ${c.veiculo.ano_modelo}` : '')
+    : undefined
   return {
     id: c.id,
     tipo: 'parceiro',
     cliente_nome: parceira ?? 'Parceiro',
     loja_parceira_nome: parceira ?? undefined,
+    veiculo_interesse: veiculo || undefined,
     canal: 'chat',
     ultima_mensagem: c.ultima_mensagem ?? '',
     ultima_mensagem_em: c.ultima_mensagem_data ?? new Date(0).toISOString(),
     nao_lidas: c.mensagens_nao_lidas ?? 0,
+    status_negociacao: (c.status_negociacao as any) ?? null,
+    tem_proposta_vinculada: !!c.proposta_id,
   }
 }
 
@@ -149,5 +159,13 @@ export const chatService = {
     const conv = await api.post<{ id: string }>('/b2b/chat/conversas', { outra_loja_id: outraLojaId })
     tipoPorConversa.set(conv.id, 'parceiro')
     return conv.id
+  },
+
+  /** Marca (ou limpa) o status manual de uma conversa B2B sem proposta vinculada. */
+  async marcarStatusNegociacao(conversaId: string, status: string | null): Promise<Conversa> {
+    const c = await api.patch<ConversaB2BDTO>(`/b2b/chat/conversas/${conversaId}/status`, {
+      status_manual: status,
+    })
+    return mapConversaB2B(c)
   },
 }

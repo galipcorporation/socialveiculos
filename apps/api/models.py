@@ -138,6 +138,13 @@ class TipoConversa(str, enum.Enum):
     B2B = "b2b"  # loja ↔ loja
 
 
+class StatusNegociacaoConversa(str, enum.Enum):
+    """Status manual de uma conversa B2B sem proposta formal vinculada."""
+    EM_NEGOCIACAO = "em_negociacao"
+    FECHOU = "fechou"
+    NAO_FECHOU = "nao_fechou"
+
+
 class TipoLancamento(str, enum.Enum):
     RECEITA = "receita"
     DESPESA = "despesa"
@@ -660,6 +667,12 @@ class Conversa(Base):
     loja_a_id = Column(String(36), ForeignKey("loja.id", ondelete="SET NULL"), nullable=True)
     loja_b_id = Column(String(36), ForeignKey("loja.id", ondelete="SET NULL"), nullable=True)
 
+    # B2B: vínculo opcional com a proposta de repasse que originou/acompanha a conversa.
+    # Quando presente, o status exibido na UI herda de PropostaRepasse.status; quando
+    # ausente, o vendedor pode marcar `status_manual` (conversa sem proposta formal).
+    proposta_id = Column(String(36), ForeignKey("proposta_repasse.id", ondelete="SET NULL"), nullable=True)
+    status_manual = Column(Enum(StatusNegociacaoConversa), nullable=True)
+
     ativa = Column(Boolean, default=True)
     backup_url = Column(String(512), nullable=True)
     created_at = Column(DateTime, default=_now)
@@ -670,6 +683,7 @@ class Conversa(Base):
     __table_args__ = (
         Index("ix_conversa_loja", "loja_id"),
         Index("ix_conversa_cliente", "cliente_id"),
+        Index("ix_conversa_proposta", "proposta_id"),
     )
 
 

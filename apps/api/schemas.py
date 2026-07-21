@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional, List, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
-from models import StatusVeiculo, OrigemVeiculo, TipoCambio, TipoCombustivel, TipoMidia, StatusAprovacao, TipoAcaoAprovacao, PapelUsuario, TipoLancamento, EtapaLead, OrigemLead, StatusAssinatura, StatusPagamento, StatusPropostaRepasse, TipoConversa, BancoSimulador, StatusSimulacao, StatusResultadoBanco, TipoContrato, StatusContrato
+from models import StatusVeiculo, OrigemVeiculo, TipoCambio, TipoCombustivel, TipoMidia, StatusAprovacao, TipoAcaoAprovacao, PapelUsuario, TipoLancamento, EtapaLead, OrigemLead, StatusAssinatura, StatusPagamento, StatusPropostaRepasse, TipoConversa, StatusNegociacaoConversa, BancoSimulador, StatusSimulacao, StatusResultadoBanco, TipoContrato, StatusContrato
 
 
 # ── Validação e sanitização (CRM Clientes) ─────────────────────
@@ -106,6 +106,15 @@ class VeiculoB2CResponse(BaseModel):
     favoritado_por_mim: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class VeiculoResumo(BaseModel):
+    id: str
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    ano_modelo: Optional[int] = None
+    placa: Optional[str] = None
+    foto: Optional[str] = None
 
 
 # ── Veículo B2B (Gestor Privado) ──────────────────────────────
@@ -1058,7 +1067,19 @@ class ConversaB2BResponse(BaseModel):
     ultima_mensagem_data: Optional[datetime] = None
     mensagens_nao_lidas: int = 0
 
+    # Contexto de negociação (M081): veículo/status vêm da proposta vinculada
+    # quando existir; senão, status_negociacao reflete o status_manual da conversa.
+    proposta_id: Optional[str] = None
+    veiculo: Optional[VeiculoResumo] = None
+    # String livre (não enum único): carrega o value de StatusPropostaRepasse
+    # quando há proposta_id, ou de StatusNegociacaoConversa quando é manual.
+    status_negociacao: Optional[str] = None
+
     model_config = ConfigDict(from_attributes=True)
+
+
+class ConversaStatusManualRequest(BaseModel):
+    status_manual: Optional[StatusNegociacaoConversa] = None
 
 
 class MensagemB2BResponse(BaseModel):
@@ -1552,14 +1573,6 @@ class ItemChecklistResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-
-class VeiculoResumo(BaseModel):
-    id: str
-    marca: Optional[str] = None
-    modelo: Optional[str] = None
-    ano_modelo: Optional[int] = None
-    placa: Optional[str] = None
-    foto: Optional[str] = None
 
 
 class CompradorResumo(BaseModel):

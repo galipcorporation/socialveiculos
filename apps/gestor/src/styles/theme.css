@@ -4793,6 +4793,35 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .gc-chat-vehicle-info strong { display: block; font-size: 13px; color: var(--sv-text); }
 .gc-chat-vehicle-info span { font-size: 11px; color: var(--sv-primary); cursor: pointer; }
 
+/* M081 — contexto de veículo/status na conversa B2B */
+.gc-conv-veiculo-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--sv-primary-text);
+  margin-top: 2px;
+}
+.gc-conv-veiculo-chip svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+.gc-chat-head-status { display: flex; align-items: center; gap: 8px; }
+.gc-conv-status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.gc-conv-status-select {
+  font-size: 12px;
+  background: var(--sv-surface-bright);
+  color: var(--sv-text);
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius);
+  padding: 4px 8px;
+}
+
 /* Messages area */
 .gc-chat-messages {
   flex: 1;

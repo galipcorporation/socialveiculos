@@ -13,6 +13,22 @@ import { chatService } from '../../services'
 import type { Conversa, TipoConversa } from '../../services/types'
 import { formatRelativo } from '../../lib/format'
 
+const STATUS_NEGOCIACAO_LABEL: Record<string, string> = {
+  pendente: 'Pendente',
+  aceita: 'Aceita',
+  rejeitada: 'Rejeitada',
+  cancelada: 'Cancelada',
+  em_negociacao: 'Em negociação',
+  fechou: 'Fechou',
+  nao_fechou: 'Não fechou',
+}
+
+function corStatusNegociacao(status: string, colors: any): string {
+  if (status === 'aceita' || status === 'fechou') return colors.success
+  if (status === 'rejeitada' || status === 'cancelada' || status === 'nao_fechou') return colors.error
+  return colors.warning
+}
+
 export default function ChatScreen() {
   const navigation = useNavigation()
   const queryClient = useQueryClient()
@@ -68,6 +84,10 @@ export default function ChatScreen() {
                 navigation.navigate('Conversa', {
                   id: item.id,
                   nome: item.tipo === 'parceiro' ? item.loja_parceira_nome ?? item.cliente_nome : item.cliente_nome,
+                  tipo: item.tipo,
+                  veiculoInteresse: item.veiculo_interesse,
+                  statusNegociacao: item.status_negociacao,
+                  temPropostaVinculada: item.tem_proposta_vinculada,
                 })
               }
             />
@@ -127,13 +147,13 @@ function ConversaCard({ conversa, onPress }: { conversa: Conversa; onPress: () =
               {formatRelativo(conversa.ultima_mensagem_em)}
             </Txt>
           </View>
-          {parceiro ? (
-            <Txt variant="caption" color="textDim" numberOfLines={1}>
-              👤 {conversa.cliente_nome}
-            </Txt>
-          ) : conversa.veiculo_interesse ? (
+          {conversa.veiculo_interesse ? (
             <Txt variant="caption" color="textDim" numberOfLines={1}>
               🚗 {conversa.veiculo_interesse}
+            </Txt>
+          ) : parceiro ? (
+            <Txt variant="caption" color="textDim" numberOfLines={1}>
+              👤 {conversa.cliente_nome}
             </Txt>
           ) : null}
           <View style={styles.topo}>
@@ -153,6 +173,25 @@ function ConversaCard({ conversa, onPress }: { conversa: Conversa; onPress: () =
               </View>
             )}
           </View>
+          {parceiro && conversa.status_negociacao ? (
+            <View
+              style={[
+                styles.statusBadge,
+                { borderColor: corStatusNegociacao(conversa.status_negociacao, colors) },
+              ]}
+            >
+              <Txt
+                variant="caption"
+                style={{
+                  fontSize: 10,
+                  fontFamily: fonts.bold,
+                  color: corStatusNegociacao(conversa.status_negociacao, colors),
+                }}
+              >
+                {STATUS_NEGOCIACAO_LABEL[conversa.status_negociacao] ?? conversa.status_negociacao}
+              </Txt>
+            </View>
+          ) : null}
         </View>
       </View>
     </Card>
@@ -180,5 +219,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 5,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginTop: spacing.xs / 2,
   },
 })

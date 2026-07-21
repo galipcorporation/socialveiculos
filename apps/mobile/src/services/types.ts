@@ -227,6 +227,10 @@ export interface Mensagem {
 
 export type TipoConversa = 'cliente' | 'parceiro'
 
+export type StatusNegociacaoConversa =
+  | 'pendente' | 'aceita' | 'rejeitada' | 'cancelada'
+  | 'em_negociacao' | 'fechou' | 'nao_fechou'
+
 export interface Conversa {
   id: string
   tipo: TipoConversa
@@ -239,6 +243,10 @@ export interface Conversa {
   ultima_mensagem: string
   ultima_mensagem_em: string
   nao_lidas: number
+  /** Para tipo 'parceiro' (B2B): status herdado da proposta vinculada, ou marcado manualmente. */
+  status_negociacao?: StatusNegociacaoConversa | null
+  /** Para tipo 'parceiro' (B2B): true se há PropostaRepasse vinculada (status não é editável manualmente). */
+  tem_proposta_vinculada?: boolean
 }
 
 // ── Pós-venda (esteira) ────────────────────────────────────

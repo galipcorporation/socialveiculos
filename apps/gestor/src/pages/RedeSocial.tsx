@@ -86,6 +86,17 @@ interface LojaParceira {
   verificada: boolean
 }
 
+interface VeiculoResumoConversa {
+  id: string
+  marca?: string
+  modelo?: string
+  ano_modelo?: number
+  placa?: string
+  foto?: string
+}
+
+type StatusNegociacao = 'pendente' | 'aceita' | 'rejeitada' | 'cancelada' | 'em_negociacao' | 'fechou' | 'nao_fechou'
+
 interface Conversa {
   id: string
   tipo: 'b2c' | 'b2b'
@@ -99,6 +110,29 @@ interface Conversa {
   ultima_mensagem?: string
   ultima_mensagem_data?: string
   mensagens_nao_lidas?: number
+  proposta_id?: string | null
+  veiculo?: VeiculoResumoConversa | null
+  status_negociacao?: StatusNegociacao | null
+}
+
+const STATUS_NEGOCIACAO_LABEL: Record<StatusNegociacao, string> = {
+  pendente: 'Proposta pendente',
+  aceita: 'Proposta aceita',
+  rejeitada: 'Proposta rejeitada',
+  cancelada: 'Proposta cancelada',
+  em_negociacao: 'Em negociação',
+  fechou: 'Fechou',
+  nao_fechou: 'Não fechou',
+}
+
+const STATUS_NEGOCIACAO_COR: Record<StatusNegociacao, string> = {
+  pendente: 'var(--sv-warning)',
+  aceita: 'var(--sv-success)',
+  rejeitada: 'var(--sv-error)',
+  cancelada: 'var(--sv-text-dim)',
+  em_negociacao: 'var(--sv-warning)',
+  fechou: 'var(--sv-success)',
+  nao_fechou: 'var(--sv-error)',
 }
 
 interface Mensagem {
@@ -1077,6 +1111,17 @@ function ChatTab({ token, user, addToast, initialConversaId, subTab, setSubTab }
     }
   }
 
+  const handleMarcarStatusManual = async (convId: string, statusManual: string | null) => {
+    try {
+      const res = await api.patch<Conversa>(`/b2b/chat/conversas/${convId}/status`, { status_manual: statusManual })
+      setConversas(prev => prev.map(c => c.id === convId ? { ...c, status_negociacao: res.status_negociacao } : c))
+      setFiltered(prev => prev.map(c => c.id === convId ? { ...c, status_negociacao: res.status_negociacao } : c))
+      setActiveConversa(prev => prev && prev.id === convId ? { ...prev, status_negociacao: res.status_negociacao } : prev)
+    } catch (err: any) {
+      addToast('error', err.message || 'Erro ao atualizar status')
+    }
+  }
+
   const destName = (conv: Conversa) =>
     conv.loja_a_id === user?.loja_id ? conv.loja_b_nome : conv.loja_a_nome
 
@@ -1149,6 +1194,12 @@ function ChatTab({ token, user, addToast, initialConversaId, subTab, setSubTab }
               <div className="gc-conv-avatar">{gcInitials(destName(conv))}</div>
               <div className="gc-conv-info">
                 <div className="gc-conv-name">{destName(conv)}</div>
+                {conv.veiculo ? (
+                  <div className="gc-conv-veiculo-chip">
+                    <CarIcon />
+                    <span>{conv.veiculo.marca} {conv.veiculo.modelo}{conv.veiculo.ano_modelo ? ` · ${conv.veiculo.ano_modelo}` : ''}</span>
+                  </div>
+                ) : null}
                 <div className="gc-conv-preview">{conv.ultima_mensagem || 'Sem mensagens.'}</div>
               </div>
               <div className="gc-conv-meta">
@@ -1171,8 +1222,34 @@ function ChatTab({ token, user, addToast, initialConversaId, subTab, setSubTab }
                 <div className="gc-chat-head-avatar">{gcInitials(destName(activeConversa))}</div>
                 <div className="gc-chat-head-info">
                   <h4>{destName(activeConversa)}</h4>
-                  <span>Parceiro</span>
+                  {activeConversa.veiculo ? (
+                    <span>{activeConversa.veiculo.marca} {activeConversa.veiculo.modelo}{activeConversa.veiculo.ano_modelo ? ` · ${activeConversa.veiculo.ano_modelo}` : ''}</span>
+                  ) : (
+                    <span>Parceiro</span>
+                  )}
                 </div>
+              </div>
+              <div className="gc-chat-head-status">
+                {activeConversa.status_negociacao ? (
+                  <span
+                    className="gc-conv-status-badge"
+                    style={{ color: STATUS_NEGOCIACAO_COR[activeConversa.status_negociacao], borderColor: STATUS_NEGOCIACAO_COR[activeConversa.status_negociacao] }}
+                  >
+                    {STATUS_NEGOCIACAO_LABEL[activeConversa.status_negociacao]}
+                  </span>
+                ) : null}
+                {!activeConversa.proposta_id ? (
+                  <select
+                    className="gc-conv-status-select"
+                    value={activeConversa.status_negociacao ?? ''}
+                    onChange={e => handleMarcarStatusManual(activeConversa.id, e.target.value || null)}
+                  >
+                    <option value="">Marcar status…</option>
+                    <option value="em_negociacao">Em negociação</option>
+                    <option value="fechou">Fechou</option>
+                    <option value="nao_fechou">Não fechou</option>
+                  </select>
+                ) : null}
               </div>
             </div>
 

@@ -18,12 +18,13 @@ from models import (
     utcnow,
     PublicacaoB2B, Comentario, Curtida, PropostaRepasse,
     Conversa, Mensagem, Loja, Veiculo, StatusVeiculo,
-    StatusPropostaRepasse, TipoConversa, Usuario, MembroLoja
+    StatusPropostaRepasse, TipoConversa, StatusNegociacaoConversa, Usuario, MembroLoja
 )
 from schemas import (
     PublicacaoB2BResponse, ComentarioB2BResponse, ComentarioB2BCreateRequest,
     PropostaRepasseResponse, PropostaRepasseCreateRequest, PropostaRepasseStatusRequest,
     ConversaB2BResponse, MensagemB2BResponse, MensagemB2BCreateRequest,
+    ConversaStatusManualRequest, VeiculoResumo,
     LojaResponse
 )
 from auth import decode_access_token
@@ -310,6 +311,25 @@ async def comentar_repasse(
     )
 
 
+async def _obter_ou_criar_conversa_b2b(db: AsyncSession, loja_a_id: str, loja_b_id: str) -> Conversa:
+    """Busca a conversa B2B existente entre duas lojas ou cria uma nova."""
+    stmt_existente = select(Conversa).where(
+        Conversa.tipo == TipoConversa.B2B,
+        or_(
+            and_(Conversa.loja_a_id == loja_a_id, Conversa.loja_b_id == loja_b_id),
+            and_(Conversa.loja_a_id == loja_b_id, Conversa.loja_b_id == loja_a_id),
+        ),
+    )
+    res_existente = await db.execute(stmt_existente)
+    conversa = res_existente.scalar_one_or_none()
+    if not conversa:
+        conversa = Conversa(tipo=TipoConversa.B2B, loja_a_id=loja_a_id, loja_b_id=loja_b_id, ativa=True)
+        db.add(conversa)
+        await db.commit()
+        await db.refresh(conversa)
+    return conversa
+
+
 # ───────────────────────────────────────────────────────────────
 # 7.2 — Propostas de Repasse
 # ───────────────────────────────────────────────────────────────
@@ -358,6 +378,14 @@ async def criar_proposta_repasse(
     db.add(nova_proposta)
     await db.commit()
     await db.refresh(nova_proposta)
+
+    # M081: vincula a proposta à conversa entre as duas lojas, dando contexto de
+    # veículo/negociação ao chat B2B. Só assume a conversa se ela ainda não tiver
+    # outra proposta vinculada (não sobrescreve negociação em andamento de outro veículo).
+    conversa_vinculada = await _obter_ou_criar_conversa_b2b(db, context.loja_id, veiculo.loja_id)
+    if not conversa_vinculada.proposta_id:
+        conversa_vinculada.proposta_id = nova_proposta.id
+        await db.commit()
 
     await registrar_auditoria(
         db=db,
@@ -678,6 +706,40 @@ async def listar_parceiros(
 # 7.3 — Chat B2B (REST / Polling)
 # ───────────────────────────────────────────────────────────────
 
+async def _contexto_negociacao_conversas(db: AsyncSession, conversas: list) -> dict:
+    """
+    Batch: para um lote de conversas B2B, retorna {conversa_id: (VeiculoResumo|None, status_negociacao|None)}.
+    Prioriza o vínculo com PropostaRepasse (proposta_id); sem vínculo, cai no status_manual da própria conversa.
+    """
+    proposta_ids = [c.proposta_id for c in conversas if c.proposta_id]
+    propostas_por_id = {}
+    if proposta_ids:
+        res = await db.execute(
+            select(PropostaRepasse)
+            .options(selectinload(PropostaRepasse.veiculo).selectinload(Veiculo.midias))
+            .where(PropostaRepasse.id.in_(proposta_ids))
+        )
+        propostas_por_id = {p.id: p for p in res.scalars().all()}
+
+    contexto = {}
+    for conv in conversas:
+        proposta = propostas_por_id.get(conv.proposta_id) if conv.proposta_id else None
+        if proposta:
+            veiculo_resumo = None
+            if proposta.veiculo:
+                v = proposta.veiculo
+                veiculo_resumo = VeiculoResumo(
+                    id=v.id, marca=v.marca, modelo=v.modelo,
+                    ano_modelo=v.ano_modelo, placa=v.placa,
+                    foto=v.midias[0].url if getattr(v, "midias", None) else None,
+                )
+            contexto[conv.id] = (veiculo_resumo, proposta.status.value)
+        elif conv.status_manual:
+            contexto[conv.id] = (None, conv.status_manual.value)
+        else:
+            contexto[conv.id] = (None, None)
+    return contexto
+
 @router.get("/chat/unread-count")
 async def contar_nao_lidas(
     db: AsyncSession = Depends(get_db),
@@ -782,9 +844,12 @@ async def listar_conversas_b2b(
         cid: (conteudo, created_at) for cid, conteudo, created_at in ultima_msg_res.all()
     }
 
+    contexto_negociacao = await _contexto_negociacao_conversas(db, conversas)
+
     result = []
     for conv in conversas:
         last_msg = ultima_msg_por_conversa.get(conv.id)
+        veiculo_resumo, status_negociacao = contexto_negociacao.get(conv.id, (None, None))
         result.append(
             ConversaB2BResponse(
                 id=conv.id,
@@ -798,7 +863,10 @@ async def listar_conversas_b2b(
                 updated_at=conv.updated_at,
                 ultima_mensagem=last_msg[0] if last_msg else None,
                 ultima_mensagem_data=last_msg[1] if last_msg else None,
-                mensagens_nao_lidas=unread_por_conversa.get(conv.id, 0)
+                mensagens_nao_lidas=unread_por_conversa.get(conv.id, 0),
+                proposta_id=conv.proposta_id,
+                veiculo=veiculo_resumo,
+                status_negociacao=status_negociacao,
             )
         )
 
@@ -842,28 +910,7 @@ async def iniciar_conversa_b2b(
             detail="Outra loja não encontrada ou inativa."
         )
 
-    # Verificar se já existe uma conversa B2B entre elas
-    stmt_existente = select(Conversa).where(
-        Conversa.tipo == TipoConversa.B2B,
-        or_(
-            and_(Conversa.loja_a_id == context.loja_id, Conversa.loja_b_id == outra_loja_id),
-            and_(Conversa.loja_a_id == outra_loja_id, Conversa.loja_b_id == context.loja_id)
-        )
-    )
-    res_existente = await db.execute(stmt_existente)
-    conversa = res_existente.scalar_one_or_none()
-
-    if not conversa:
-        # Criar nova conversa B2B
-        conversa = Conversa(
-            tipo=TipoConversa.B2B,
-            loja_a_id=context.loja_id,
-            loja_b_id=outra_loja_id,
-            ativa=True
-        )
-        db.add(conversa)
-        await db.commit()
-        await db.refresh(conversa)
+    conversa = await _obter_ou_criar_conversa_b2b(db, context.loja_id, outra_loja_id)
 
     # Carregar dados para resposta
     stmt_loja_a = select(Loja).where(Loja.id == conversa.loja_a_id)
@@ -886,6 +933,10 @@ async def iniciar_conversa_b2b(
     res_unread = await db.execute(stmt_unread)
     unread_count = res_unread.scalar() or 0
 
+    veiculo_resumo, status_negociacao = (await _contexto_negociacao_conversas(db, [conversa])).get(
+        conversa.id, (None, None)
+    )
+
     return ConversaB2BResponse(
         id=conversa.id,
         tipo=conversa.tipo,
@@ -896,7 +947,64 @@ async def iniciar_conversa_b2b(
         ativa=conversa.ativa,
         created_at=conversa.created_at,
         updated_at=conversa.updated_at,
-        mensagens_nao_lidas=unread_count
+        mensagens_nao_lidas=unread_count,
+        proposta_id=conversa.proposta_id,
+        veiculo=veiculo_resumo,
+        status_negociacao=status_negociacao,
+    )
+
+
+@router.patch("/chat/conversas/{id}/status", response_model=ConversaB2BResponse)
+async def marcar_status_manual_conversa(
+    id: str,
+    data: ConversaStatusManualRequest,
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user)
+):
+    """
+    Marca (ou limpa) o status manual de desfecho de uma conversa B2B sem proposta
+    formal vinculada. Se a conversa já tem proposta_id, o status é o da proposta
+    e não pode ser sobrescrito manualmente aqui.
+    """
+    stmt_conv = select(Conversa).where(
+        Conversa.id == id,
+        Conversa.tipo == TipoConversa.B2B,
+        or_(Conversa.loja_a_id == context.loja_id, Conversa.loja_b_id == context.loja_id),
+    )
+    res_conv = await db.execute(stmt_conv)
+    conversa = res_conv.scalar_one_or_none()
+    if not conversa:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversa não encontrada.")
+
+    if conversa.proposta_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta conversa tem uma proposta vinculada; o status é herdado dela.",
+        )
+
+    conversa.status_manual = data.status_manual
+    conversa.updated_at = utcnow()
+    await db.commit()
+    await db.refresh(conversa)
+
+    stmt_lojas = select(Loja).where(Loja.id.in_([conversa.loja_a_id, conversa.loja_b_id]))
+    res_lojas = await db.execute(stmt_lojas)
+    nomes_loja = {lj.id: lj.nome for lj in res_lojas.scalars().all()}
+
+    return ConversaB2BResponse(
+        id=conversa.id,
+        tipo=conversa.tipo,
+        loja_a_id=conversa.loja_a_id,
+        loja_a_nome=nomes_loja.get(conversa.loja_a_id, "Loja Parceira"),
+        loja_b_id=conversa.loja_b_id,
+        loja_b_nome=nomes_loja.get(conversa.loja_b_id, "Loja Parceira"),
+        ativa=conversa.ativa,
+        created_at=conversa.created_at,
+        updated_at=conversa.updated_at,
+        mensagens_nao_lidas=0,
+        proposta_id=None,
+        veiculo=None,
+        status_negociacao=conversa.status_manual.value if conversa.status_manual else None,
     )
 
 
