@@ -9,7 +9,7 @@ import {
   AppHeader, Badge, Button, Card, EmptyState, ErrorState, Fab, Input, OptionSheet, Screen,
   SegmentedControl, SelectField, Sheet, SkeletonCard, Txt, useToast,
 } from '../../components/ui'
-import { contratosService } from '../../services'
+import { clientesService, contratosService, veiculosService } from '../../services'
 import type { CampoExtraTemplate, ContratoInput, TemplateContrato } from '../../services/contratos'
 import { CATALOGO_VARIAVEIS, labelsDe } from '../../services/contratos'
 import { RichEditor } from '../../components/RichEditor'
@@ -83,16 +83,16 @@ export default function ContratosScreen({ route }: RootScreenProps<'Contratos'>)
               style={item.id === contratoId ? { borderWidth: 2, borderColor: colors.primary } : undefined}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                    <Txt variant="bodySemibold">{item.numero}</Txt>
-                    <Badge label={STATUS_CONTRATO_LABEL[item.status]} tone={TONE[item.status]} size="sm" />
-                  </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Txt variant="bodySemibold" numberOfLines={1}>{item.numero}</Txt>
                   <Txt variant="caption" color="textDim" numberOfLines={1}>{item.veiculo_nome}</Txt>
                   <Txt variant="caption" color="textMuted" numberOfLines={1}>{item.cliente_nome}</Txt>
+                  <View style={{ flexDirection: 'row', marginTop: spacing.xs }}>
+                    <Badge label={STATUS_CONTRATO_LABEL[item.status]} tone={TONE[item.status]} size="sm" />
+                  </View>
                 </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Txt variant="bodyMedium">{formatBRL(item.valor_venda)}</Txt>
+                <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                  <Txt variant="bodyMedium" numberOfLines={1}>{formatBRL(item.valor_venda)}</Txt>
                   <Txt variant="caption" color="textMuted">{formatData(item.created_at)}</Txt>
                 </View>
                 <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
@@ -222,6 +222,19 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
   const [parcelas, setParcelas] = useState('')
   const [obs, setObs] = useState('')
   const [salvando, setSalvando] = useState(false)
+  const [veiculoSheet, setVeiculoSheet] = useState(false)
+  const [clienteSheet, setClienteSheet] = useState(false)
+
+  const veiculosQ = useQuery({
+    queryKey: ['veiculos', 'contratos'],
+    queryFn: () => veiculosService.listar({ status: 'disponivel' }),
+    enabled: visible,
+  })
+  const clientesQ = useQuery({
+    queryKey: ['clientes', 'contratos'],
+    queryFn: () => clientesService.listar(),
+    enabled: visible,
+  })
 
   const salvar = async () => {
     if (!veiculo.trim() || !cliente.trim()) { toast.show('error', 'Informe veículo e cliente.'); return }
@@ -254,8 +267,20 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
           selected={tipo}
           onSelect={(v) => setTipo(v as 'compra_venda' | 'compra')}
         />
-        <Input label="Veículo" value={veiculo} onChangeText={setVeiculo} placeholder="Ex.: Toyota Corolla Cross" />
-        <Input label="Cliente" value={cliente} onChangeText={setCliente} placeholder="Nome do cliente" />
+        <SelectField
+          label="Veículo"
+          value={veiculo || undefined}
+          placeholder={veiculosQ.isLoading ? 'Carregando…' : 'Escolher do estoque'}
+          icon="car-sport-outline"
+          onPress={() => setVeiculoSheet(true)}
+        />
+        <SelectField
+          label="Cliente"
+          value={cliente || undefined}
+          placeholder={clientesQ.isLoading ? 'Carregando…' : 'Escolher cliente'}
+          icon="person-outline"
+          onPress={() => setClienteSheet(true)}
+        />
         <Input label="Valor" value={valor} onChangeText={(t) => setValor(maskMoedaInput(t))} keyboardType="numeric" placeholder="0,00" icon="cash-outline" />
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           <Input label="Entrada" value={entrada} onChangeText={(t) => setEntrada(maskMoedaInput(t))} keyboardType="numeric" placeholder="0,00" containerStyle={{ flex: 1 }} />
@@ -264,6 +289,38 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
         <Input label="Observações" value={obs} onChangeText={setObs} multiline style={{ minHeight: 56, textAlignVertical: 'top' }} />
         <Button title="Criar contrato" icon="checkmark" loading={salvando} onPress={salvar} full />
       </View>
+
+      <OptionSheet
+        visible={veiculoSheet}
+        onClose={() => setVeiculoSheet(false)}
+        title="Veículo do estoque"
+        options={(veiculosQ.data ?? []).map((v) => ({
+          value: v.id,
+          label: `${v.marca} ${v.modelo}${v.versao ? ` ${v.versao}` : ''}`,
+          sublabel: [v.placa, formatBRL(v.preco_venda)].filter(Boolean).join(' · '),
+        }))}
+        onSelect={(id) => {
+          const v = (veiculosQ.data ?? []).find((x) => x.id === id)
+          if (!v) return
+          setVeiculo(`${v.marca} ${v.modelo}${v.versao ? ` ${v.versao}` : ''}`)
+          if (!valor && v.preco_venda) setValor(maskMoedaInput(String(Math.round(v.preco_venda * 100))))
+        }}
+      />
+
+      <OptionSheet
+        visible={clienteSheet}
+        onClose={() => setClienteSheet(false)}
+        title="Cliente"
+        options={(clientesQ.data ?? []).map((c) => ({
+          value: c.id,
+          label: c.nome,
+          sublabel: [c.telefone, c.cpf].filter(Boolean).join(' · '),
+        }))}
+        onSelect={(id) => {
+          const c = (clientesQ.data ?? []).find((x) => x.id === id)
+          if (c) setCliente(c.nome)
+        }}
+      />
     </Sheet>
   )
 }

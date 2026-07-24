@@ -53,8 +53,10 @@
     color: var(--text); font-size: 12px; padding: 6px 8px;
   }
   .re-var-add-btn { background: var(--overlay-soft); border: 1px solid var(--border); border-radius: 6px; color: var(--text); width: 30px; }
-  .re-content { min-height: 220px; }
-  .re-content .ProseMirror { padding: 12px 14px; outline: none; color: var(--text); font-size: 15px; line-height: 1.6; }
+  /* O container nativo se ajusta à altura real (mensagem `height`), então o
+     mínimo aqui é só o piso do editor vazio. */
+  .re-content { min-height: var(--min-content, 200px); display: flex; }
+  .re-content .ProseMirror { flex: 1; padding: 12px 14px; outline: none; color: var(--text); font-size: 15px; line-height: 1.6; }
   .re-content .ProseMirror p { margin: 0 0 8px; }
   .re-content .ProseMirror img { max-width: 100%; border-radius: 4px; }
   .re-content .ProseMirror p.is-editor-empty:first-child::before {

@@ -36,8 +36,12 @@ export default function MaisScreen() {
         { icon: 'sparkles-outline', label: 'Marketing', onPress: () => navigation.navigate('Marketing') },
       ]
     : [
-        { icon: 'calculator-outline', label: 'Simulador', onPress: () => navigation.navigate('Simulador') },
-        { icon: 'chatbubble-ellipses-outline', label: 'Assistente IA', onPress: () => navigation.navigate('AssistenteIA') },
+        ...(liberado('simulador')
+          ? [{ icon: 'calculator-outline' as const, label: 'Simulador', onPress: () => navigation.navigate('Simulador') }]
+          : []),
+        ...(liberado('assistente')
+          ? [{ icon: 'chatbubble-ellipses-outline' as const, label: 'Assistente IA', onPress: () => navigation.navigate('AssistenteIA') }]
+          : []),
         { icon: 'ribbon-outline', label: 'Comissões', onPress: () => navigation.navigate('Comissoes') },
         { icon: 'pricetags-outline', label: 'FIPE', onPress: () => navigation.navigate('Fipe') },
       ]

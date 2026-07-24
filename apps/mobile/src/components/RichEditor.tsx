@@ -30,6 +30,9 @@ export function RichEditor({
 }: RichEditorProps) {
   const webviewRef = useRef<WebView>(null)
   const [pronto, setPronto] = useState(false)
+  // A toolbar quebra em 2 linhas em telas estreitas: assumir altura fixa cortava
+  // o editor e o toque caía fora da área editável (teclado não subia).
+  const [alturaConteudo, setAlturaConteudo] = useState(minHeight + 46)
   const valorInicial = useRef(value)
   const ultimoEnviado = useRef(value)
 
@@ -38,6 +41,8 @@ export function RichEditor({
       const msg = JSON.parse(e.nativeEvent.data)
       if (msg.type === 'ready') {
         setPronto(true)
+      } else if (msg.type === 'height') {
+        setAlturaConteudo(msg.height)
       } else if (msg.type === 'change') {
         ultimoEnviado.current = msg.html
         onChange(msg.html)
@@ -54,7 +59,7 @@ export function RichEditor({
   useEffect(() => {
     if (!pronto) return
     webviewRef.current?.postMessage(JSON.stringify({
-      type: 'init', value: valorInicial.current, labels, variaveis, placeholder, compact,
+      type: 'init', value: valorInicial.current, labels, variaveis, placeholder, compact, minHeight,
     }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pronto])
@@ -76,15 +81,21 @@ export function RichEditor({
   }, [value, pronto])
 
   return (
-    <View style={{ height: minHeight + 46, borderRadius: radius.md, overflow: 'hidden' }}>
+    <View style={{ height: alturaConteudo, borderRadius: radius.md, overflow: 'hidden' }}>
       <WebView
         ref={webviewRef}
         originWhitelist={['*']}
         source={{ html: RICH_EDITOR_HTML }}
         onMessage={onMessage}
         style={{ backgroundColor: 'transparent' }}
-        scrollEnabled
+        // A WebView cresce junto com o conteúdo; quem rola é o Sheet. Scroll
+        // interno aqui disputava o gesto com o ScrollView pai e escondia o
+        // fim do editor.
+        scrollEnabled={false}
+        nestedScrollEnabled={false}
         hideKeyboardAccessoryView
+        // iOS: permite que `editor.commands.focus()` abra o teclado sem um
+        // toque direto no contenteditable.
         keyboardDisplayRequiresUserAction={false}
       />
     </View>

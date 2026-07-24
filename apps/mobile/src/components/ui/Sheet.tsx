@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import {
-  Animated, Dimensions, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View,
+  Animated, Dimensions, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -22,7 +22,9 @@ interface SheetProps {
 export function Sheet({ visible, onClose, title, children, maxHeight = 0.85, scrollable = true }: SheetProps) {
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
+  const { height: alturaJanela } = useWindowDimensions()
   const slide = useRef(new Animated.Value(0)).current
+  const [alturaTeclado, setAlturaTeclado] = React.useState(0)
 
   useEffect(() => {
     if (visible) {
@@ -30,6 +32,24 @@ export function Sheet({ visible, onClose, title, children, maxHeight = 0.85, scr
       Animated.spring(slide, { toValue: 1, useNativeDriver: true, speed: 18, bounciness: 4 }).start()
     }
   }, [visible, slide])
+
+  // `statusBarTranslucent` desliga o adjustResize do Android dentro do Modal, então
+  // medimos o teclado na mão e encolhemos só o teto do painel — o conteúdo continua
+  // rolável em vez de ser esmagado (era o que sumia com o editor de contrato).
+  useEffect(() => {
+    const mostrar = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setAlturaTeclado(e.endCoordinates.height),
+    )
+    const esconder = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setAlturaTeclado(0),
+    )
+    return () => {
+      mostrar.remove()
+      esconder.remove()
+    }
+  }, [])
 
   const translateY = slide.interpolate({
     inputRange: [0, 1],
@@ -40,12 +60,6 @@ export function Sheet({ visible, onClose, title, children, maxHeight = 0.85, scr
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        // `statusBarTranslucent` no Modal tira o resize automático do Android, então
-        // sem `height` o teclado cobre os campos do fim do formulário.
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
       <Pressable style={[styles.backdrop, { backgroundColor: colors.backdrop }]} onPress={onClose}>
         <Pressable onPress={(e) => e.stopPropagation()} style={{ width: '100%' }}>
           <Animated.View
@@ -53,8 +67,10 @@ export function Sheet({ visible, onClose, title, children, maxHeight = 0.85, scr
               styles.panel,
               {
                 backgroundColor: colors.surfaceElevated,
-                paddingBottom: insets.bottom + spacing.md,
-                maxHeight: Dimensions.get('window').height * maxHeight,
+                // Com teclado aberto o safe-area de baixo já está coberto por ele.
+                paddingBottom: (alturaTeclado > 0 ? 0 : insets.bottom) + spacing.md,
+                marginBottom: alturaTeclado,
+                maxHeight: (alturaJanela - alturaTeclado) * (alturaTeclado > 0 ? 1 : maxHeight),
                 transform: [{ translateY }],
               },
             ]}
@@ -89,7 +105,6 @@ export function Sheet({ visible, onClose, title, children, maxHeight = 0.85, scr
           </Animated.View>
         </Pressable>
       </Pressable>
-      </KeyboardAvoidingView>
     </Modal>
   )
 }

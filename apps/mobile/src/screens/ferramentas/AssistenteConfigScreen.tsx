@@ -4,8 +4,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing } from '../../theme/tokens'
-import { AppHeader, Button, FilterChips, Screen, SkeletonCard, Txt, useToast } from '../../components/ui'
-import { assistenteService, TONS_ASSISTENTE } from '../../services'
+import { AppHeader, Button, FilterChips, Paywall, Screen, SkeletonCard, Txt, useToast } from '../../components/ui'
+import { assistenteService, modulosService, TONS_ASSISTENTE } from '../../services'
 import type { TomAssistente } from '../../services/assistente'
 import { formatData } from '../../lib/format'
 import type { RootScreenProps } from '../../navigation/types'
@@ -15,7 +15,14 @@ export default function AssistenteConfigScreen({ navigation }: RootScreenProps<'
   const queryClient = useQueryClient()
   const toast = useToast()
 
-  const q = useQuery({ queryKey: ['assistente', 'config'], queryFn: () => assistenteService.config() })
+  const gateQ = useQuery({ queryKey: ['modulo', 'assistente'], queryFn: () => modulosService.liberado('assistente') })
+  const liberado = gateQ.data === true
+
+  const q = useQuery({
+    queryKey: ['assistente', 'config'],
+    queryFn: () => assistenteService.config(),
+    enabled: liberado,
+  })
 
   const [tom, setTom] = useState<TomAssistente>('amigavel')
   const [voz, setVoz] = useState(false)
@@ -35,6 +42,29 @@ export default function AssistenteConfigScreen({ navigation }: RootScreenProps<'
   })
 
   const vozConfigurada = !!q.data?.audio_url && voz
+
+  if (gateQ.isLoading) {
+    return (
+      <Screen padded={false}>
+        <AppHeader title="Configurar IA" large={false} back />
+        <View style={{ padding: spacing.md }}><SkeletonCard withImage={false} /></View>
+      </Screen>
+    )
+  }
+
+  if (gateQ.data === false) {
+    return (
+      <Screen padded={false}>
+        <AppHeader title="Configurar IA" large={false} back />
+        <Screen padded>
+          <Paywall
+            titulo="Assistente do Vendedor (IA)"
+            descricao="Copiloto de WhatsApp: a IA lê as conversas dos seus leads e sugere respostas prontas para você aprovar e enviar — inclusive por áudio na sua voz. Módulo não incluído no plano atual."
+          />
+        </Screen>
+      </Screen>
+    )
+  }
 
   return (
     <Screen padded={false}>

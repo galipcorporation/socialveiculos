@@ -45,9 +45,11 @@ export default function AssistenteIAScreen({ navigation }: RootScreenProps<'Assi
       large={false}
       back
       right={
-        <Pressable onPress={() => navigation.navigate('AssistenteConfig')} hitSlop={8}>
-          <Ionicons name="settings-outline" size={22} color={colors.textDim} />
-        </Pressable>
+        liberado ? (
+          <Pressable onPress={() => navigation.navigate('AssistenteConfig')} hitSlop={8}>
+            <Ionicons name="settings-outline" size={22} color={colors.textDim} />
+          </Pressable>
+        ) : undefined
       }
     />
   )

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { FlatList, StyleSheet, Switch, View } from 'react-native'
+import { FlatList, Pressable, StyleSheet, Switch, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
+    minHeight: 44, // alvo de toque mínimo, já que a linha toda virou o controle
   },
 })

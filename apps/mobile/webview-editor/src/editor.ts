@@ -22,6 +22,7 @@ interface InitMessage {
   variaveis: VarGroup[]
   placeholder?: string
   compact?: boolean
+  minHeight?: number
 }
 
 const Variavel = Node.create({
@@ -152,6 +153,9 @@ function renderVariaveis(grupos: VarGroup[]) {
 
 function iniciar(msg: InitMessage) {
   currentLabels = msg.labels
+  if (msg.minHeight) {
+    document.documentElement.style.setProperty('--min-content', `${msg.minHeight}px`)
+  }
   montarToolbar(!!msg.compact)
   renderVariaveis(msg.variaveis)
 
@@ -205,7 +209,37 @@ function iniciar(msg: InitMessage) {
     document.getElementById('var-menu')!.classList.remove('open')
   })
 
+  // Tocar em qualquer ponto da área de conteúdo abre o teclado. Sem isso, o
+  // toque no padding (fora da caixa do ProseMirror) não foca nada e o teclado
+  // nunca sobe — que é como o editor parecia "morto" no celular.
+  document.getElementById('editor')!.addEventListener('pointerdown', (ev) => {
+    if (!editor || editor.isFocused) return
+    // Só trata o toque em área vazia; dentro do texto o próprio ProseMirror
+    // posiciona o cursor onde o dedo caiu.
+    if ((ev.target as HTMLElement).closest('.ProseMirror')) return
+    ev.preventDefault()
+    editor.commands.focus('end')
+  })
+
+  observarAltura()
   postToRN({ type: 'ready' })
+}
+
+/** Informa a altura real do conteúdo pro lado nativo, que redimensiona a
+ *  WebView. A toolbar quebra em 2 linhas em telas estreitas, então a altura
+ *  fixa que o RN assumia cortava o fim do editor. */
+function observarAltura() {
+  const raiz = document.querySelector<HTMLElement>('.rich-editor')!
+  let ultima = 0
+  const medir = () => {
+    const h = Math.ceil(raiz.getBoundingClientRect().height)
+    if (h > 0 && h !== ultima) {
+      ultima = h
+      postToRN({ type: 'height', height: h })
+    }
+  }
+  new ResizeObserver(medir).observe(raiz)
+  medir()
 }
 
 window.addEventListener('message', (ev) => {
