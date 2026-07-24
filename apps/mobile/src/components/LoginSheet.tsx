@@ -41,7 +41,8 @@ export function LoginSheet() {
     setNome('')
     setEmail('')
     setSenha('')
-    if (res.user.papel === 'gestor' || res.user.papel === 'vendedor') {
+    // Só oferece o painel para quem tem vínculo ativo com uma loja.
+    if (!!res.user.loja_id && (res.user.papel === 'gestor' || res.user.papel === 'vendedor')) {
       setPerguntaLojista(true) // pergunta painel x vitrine antes de concluir o gate
     } else {
       concluir() // fecha e executa a ação pendente

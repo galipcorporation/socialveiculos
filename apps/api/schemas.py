@@ -77,6 +77,7 @@ class VeiculoB2CResponse(BaseModel):
     """Schema público da Vitrine. Exclui placa, preço de custo e margem."""
     id: str
     loja_id: str
+    loja_slug: Optional[str] = None
     loja_nome: Optional[str] = None
     loja_logo: Optional[str] = None
     loja_cidade: Optional[str] = None

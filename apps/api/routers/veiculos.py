@@ -248,6 +248,7 @@ async def get_marketplace_feed(
 
         # Dados da loja (vitrine social: feed = carros, mas mostra a loja que anuncia)
         loja = v.loja
+        v.loja_slug = loja.slug if loja else None
         v.loja_nome = loja.nome if loja else None
         v.loja_logo = loja.logo_url if loja else None
         v.loja_cidade = loja.cidade if loja else None
@@ -308,6 +309,7 @@ async def get_veiculo_vitrine_detalhes(
 
     # Dados da loja que anuncia (mesma hidratação do feed)
     loja = veiculo.loja
+    veiculo.loja_slug = loja.slug if loja else None
     veiculo.loja_nome = loja.nome if loja else None
     veiculo.loja_logo = loja.logo_url if loja else None
     veiculo.loja_cidade = loja.cidade if loja else None

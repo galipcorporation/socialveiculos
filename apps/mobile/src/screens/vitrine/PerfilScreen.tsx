@@ -25,7 +25,9 @@ export default function PerfilScreen() {
   const logoutStore = useAuthStore((s) => s.logout)
   const logout = async () => { await unregisterPush(); logoutStore() }
   const abrirLogin = useLoginGateStore((s) => s.abrir)
-  const trocarExperiencia = useExperienciaStore((s) => s.trocar)
+  const escolherExperiencia = useExperienciaStore((s) => s.escolher)
+  // "Sou lojista" só para quem está logado E tem vínculo com uma loja.
+  const ehLojista = isAuth && !!user?.loja_id && (user.papel === 'gestor' || user.papel === 'vendedor')
   const [sairAberto, setSairAberto] = useState(false)
   const [trocarAberto, setTrocarAberto] = useState(false)
   const [excluirAberto, setExcluirAberto] = useState(false)
@@ -132,7 +134,9 @@ export default function PerfilScreen() {
 
         {/* Ações */}
         <Card padded={false}>
-          <ListRow icon="business-outline" iconColor={colors.info} title="Sou lojista" subtitle="Acessar o painel de gestão da loja" chevron onPress={() => setTrocarAberto(true)} />
+          {ehLojista && (
+            <ListRow icon="business-outline" iconColor={colors.info} title="Sou lojista" subtitle="Acessar o painel de gestão da loja" chevron onPress={() => setTrocarAberto(true)} />
+          )}
           {isAuth && (
             <ListRow icon="log-out-outline" iconColor={colors.error} title="Sair da conta" onPress={() => setSairAberto(true)} style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
           )}
@@ -168,7 +172,7 @@ export default function PerfilScreen() {
       <Sheet visible={trocarAberto} onClose={() => setTrocarAberto(false)} title="Trocar de experiência" scrollable={false}>
         <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
           <Txt variant="body" color="textDim">Ir para o painel do lojista (Gestor). Você pode voltar para a vitrine quando quiser.</Txt>
-          <Button title="Ir para o painel do lojista" icon="business" onPress={() => { setTrocarAberto(false); trocarExperiencia() }} />
+          <Button title="Ir para o painel do lojista" icon="business" onPress={() => { setTrocarAberto(false); escolherExperiencia('lojista') }} />
           <Button title="Cancelar" variant="ghost" onPress={() => setTrocarAberto(false)} />
         </View>
       </Sheet>

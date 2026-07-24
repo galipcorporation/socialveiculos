@@ -828,10 +828,9 @@ function ParceirosTab({ addToast, onStartChat }: { addToast: (t: ToastType, m: s
     })
   }
 
-  const getVitrineUrl = (lojaId: string) => {
-    const isLocal = window.location.hostname === 'localhost'
-    const base = isLocal ? 'http://localhost:5174' : `${window.location.protocol}//${window.location.host.replace('gestor', 'vitrine')}`
-    return `${base}/loja/${lojaId}`
+  const getVitrineUrl = (slug: string) => {
+    const base = import.meta.env.VITE_VITRINE_URL || 'https://vitrine-cyan.vercel.app'
+    return `${base}/loja/${slug}`
   }
 
   const fetchParceiros = useCallback(async () => {
@@ -952,7 +951,7 @@ function ParceirosTab({ addToast, onStartChat }: { addToast: (t: ToastType, m: s
               </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
                 <a
-                  href={getVitrineUrl(p.id)}
+                  href={getVitrineUrl(p.slug)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-glass"

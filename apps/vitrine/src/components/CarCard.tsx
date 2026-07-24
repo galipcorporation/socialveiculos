@@ -12,6 +12,7 @@ export interface Midia {
 export interface Veiculo {
   id: string
   loja_id: string
+  loja_slug?: string
   loja_nome?: string
   loja_logo?: string
   loja_cidade?: string
@@ -104,7 +105,11 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
     <div className="vt-car-card">
       {/* Header — loja */}
       <div className="vt-car-card-header">
-        <div className="vt-car-card-shop" style={{ cursor: 'pointer' }} onClick={() => navigate(`/loja/${veiculo.loja_id}`)}>
+        <div
+          className="vt-car-card-shop"
+          style={{ cursor: veiculo.loja_slug ? 'pointer' : 'default' }}
+          onClick={() => veiculo.loja_slug && navigate(`/loja/${veiculo.loja_slug}`)}
+        >
           <div className="vt-card-shop-ring">
             <div>
               {veiculo.loja_logo

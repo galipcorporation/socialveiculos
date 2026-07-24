@@ -275,23 +275,38 @@ function MembroFormSheet({ visible, membro, comissaoPadrao, onClose }: { visible
             </Card>
           ) : (
             <Card style={{ padding: 0, overflow: 'hidden' }}>
-              {MODULOS.map((m, i) => (
-                <View
-                  key={m.key}
-                  style={[
-                    styles.moduloRow,
-                    i < MODULOS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-                  ]}
-                >
-                  <Txt variant="body" style={{ flex: 1 }}>{m.label}</Txt>
-                  <Switch
-                    value={modulos.includes(m.key)}
-                    onValueChange={() => toggleModulo(m.key)}
-                    trackColor={{ false: colors.overlayStrong, true: colors.primary }}
-                    thumbColor="#fff"
-                  />
-                </View>
-              ))}
+              <Pressable
+                onPress={() => setModulos(modulos.length === MODULOS.length ? [] : [...TODOS_MODULOS])}
+                style={[styles.moduloRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
+              >
+                <Txt variant="captionMedium" color="primaryText" style={{ flex: 1 }}>
+                  {modulos.length === MODULOS.length ? 'Desmarcar todos' : 'Marcar todos'}
+                </Txt>
+                <Txt variant="caption" color="textDim">{modulos.length}/{MODULOS.length}</Txt>
+              </Pressable>
+              {/* Linha inteira é o alvo de toque, sem <Switch>: empilhados, os switches
+                  nativos capturavam o arrasto vertical e travavam o scroll do Sheet. */}
+              {MODULOS.map((m, i) => {
+                const ativo = modulos.includes(m.key)
+                return (
+                  <Pressable
+                    key={m.key}
+                    onPress={() => toggleModulo(m.key)}
+                    style={({ pressed }) => [
+                      styles.moduloRow,
+                      pressed && { backgroundColor: colors.overlaySoft },
+                      i < MODULOS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                    ]}
+                  >
+                    <Ionicons
+                      name={ativo ? 'checkbox' : 'square-outline'}
+                      size={22}
+                      color={ativo ? colors.primary : colors.textDim}
+                    />
+                    <Txt variant="body" style={{ flex: 1 }}>{m.label}</Txt>
+                  </Pressable>
+                )
+              })}
             </Card>
           )}
           {papel === 'vendedor' && (

@@ -65,3 +65,7 @@ pnpm-debug.log*
 *.db-wal.bak-*
 
 .vercel
+
+.vercel
+.env*
+deploy.ps1

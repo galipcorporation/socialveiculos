@@ -106,6 +106,7 @@ async def listar_favoritos(
 
         # Dados da loja que anuncia (mesma hidratação do feed)
         loja = v.loja
+        v.loja_slug = loja.slug if loja else None
         v.loja_nome = loja.nome if loja else None
         v.loja_logo = loja.logo_url if loja else None
         v.loja_cidade = loja.cidade if loja else None

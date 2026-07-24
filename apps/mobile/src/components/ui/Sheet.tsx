@@ -42,7 +42,9 @@ export function Sheet({ visible, onClose, title, children, maxHeight = 0.85, scr
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // `statusBarTranslucent` no Modal tira o resize automático do Android, então
+        // sem `height` o teclado cobre os campos do fim do formulário.
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
       <Pressable style={[styles.backdrop, { backgroundColor: colors.backdrop }]} onPress={onClose}>
         <Pressable onPress={(e) => e.stopPropagation()} style={{ width: '100%' }}>
@@ -67,8 +69,20 @@ export function Sheet({ visible, onClose, title, children, maxHeight = 0.85, scr
               </View>
             ) : null}
             <Body
-              {...(scrollable ? { keyboardShouldPersistTaps: 'handled' as const, showsVerticalScrollIndicator: false } : {})}
-              style={{ paddingHorizontal: spacing.md }}
+              {...(scrollable
+                ? {
+                    keyboardShouldPersistTaps: 'handled' as const,
+                    showsVerticalScrollIndicator: true,
+                    // O painel tem altura limitada (maxHeight): sem `flexShrink` o
+                    // ScrollView pede a altura toda do conteúdo e o corte acontece
+                    // fora da área rolável, deixando o fim do formulário inalcançável.
+                    style: { flexShrink: 1 },
+                    // Padding vai no CONTENT, não no frame: em `style` ele entra na
+                    // conta da viewport e não na do conteúdo, bagunçando a extensão
+                    // do scroll. Todo o resto do app já usa contentContainerStyle.
+                    contentContainerStyle: { paddingHorizontal: spacing.md },
+                  }
+                : { style: { paddingHorizontal: spacing.md } })}
             >
               {children}
             </Body>

@@ -14,6 +14,7 @@ export interface Midia {
 export interface Veiculo {
   id: string
   loja_id: string
+  loja_slug?: string
   loja_nome?: string
   loja_cidade?: string
   loja_estado?: string
