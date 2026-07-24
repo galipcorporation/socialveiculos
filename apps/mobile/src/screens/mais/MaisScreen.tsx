@@ -39,7 +39,7 @@ export default function MaisScreen() {
         ...(liberado('simulador')
           ? [{ icon: 'calculator-outline' as const, label: 'Simulador', onPress: () => navigation.navigate('Simulador') }]
           : []),
-        ...(liberado('assistente')
+        ...(liberado('assistente_ia')
           ? [{ icon: 'chatbubble-ellipses-outline' as const, label: 'Assistente IA', onPress: () => navigation.navigate('AssistenteIA') }]
           : []),
         { icon: 'ribbon-outline', label: 'Comissões', onPress: () => navigation.navigate('Comissoes') },
@@ -208,7 +208,7 @@ export default function MaisScreen() {
               style={sep}
             />
           )}
-          {liberado('assistente') && (
+          {liberado('assistente_ia') && (
             <ListRow
               icon="chatbubble-ellipses-outline"
               iconColor={colors.info}

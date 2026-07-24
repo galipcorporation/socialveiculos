@@ -209,7 +209,7 @@ export default function App() {
           <Route path="ferramentas/fiscal" element={<Navigate to="/configuracoes" state={{ aba: 'fiscal' }} replace />} />
           <Route path="ferramentas/notas-fiscais" element={<ModuleGuard modulo="fiscal"><NotasFiscaisPage /></ModuleGuard>} />
           <Route path="ferramentas/meu-site" element={<ModuleGuard modulo="site"><MeuSitePage /></ModuleGuard>} />
-          <Route path="assistente" element={<ModuleGuard modulo="assistente"><AssistenteIA /></ModuleGuard>} />
+          <Route path="assistente" element={<ModuleGuard modulo="assistente_ia"><AssistenteIA /></ModuleGuard>} />
           <Route path="financeiro" element={<ModuleGuard modulo="financeiro"><Financeiro /></ModuleGuard>} />
           <Route path="minhas-comissoes" element={<MinhasComissoes />} />
           <Route path="aprovacoes" element={<Aprovacoes />} />

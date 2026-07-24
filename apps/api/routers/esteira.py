@@ -218,6 +218,8 @@ async def _venda_info(db: AsyncSession, esteira: EsteiraPosVenda) -> dict:
         "valor_venda": None,
         "comissao_valor": None,
         "comissao_percentual": None,
+        "comissao_id": None,
+        "comissao_paga": None,
     }
     if esteira.vendedor_id:
         res = await db.execute(select(Usuario.nome).where(Usuario.id == esteira.vendedor_id))
@@ -226,13 +228,26 @@ async def _venda_info(db: AsyncSession, esteira: EsteiraPosVenda) -> dict:
             info["vendedor_nome"] = row[0]
     if esteira.veiculo_id:
         res = await db.execute(
-            select(ComissaoVenda.valor_venda, ComissaoVenda.valor_comissao, ComissaoVenda.percentual)
+            select(
+                ComissaoVenda.valor_venda,
+                ComissaoVenda.valor_comissao,
+                ComissaoVenda.percentual,
+                ComissaoVenda.id,
+                ComissaoVenda.pago,
+            )
             .where(ComissaoVenda.veiculo_id == esteira.veiculo_id)
             .limit(1)
         )
         row = res.first()
         if row:
-            info["valor_venda"], info["comissao_valor"], info["comissao_percentual"] = row
+            (
+                info["valor_venda"],
+                info["comissao_valor"],
+                info["comissao_percentual"],
+                info["comissao_id"],
+                info["comissao_paga"],
+            ) = row
+            info["comissao_paga"] = bool(info["comissao_paga"])
     return info
 
 

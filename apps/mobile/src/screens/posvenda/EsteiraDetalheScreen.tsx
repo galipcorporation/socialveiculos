@@ -72,6 +72,8 @@ export default function EsteiraDetalheScreen({ route }: RootScreenProps<'Esteira
       queryClient.invalidateQueries()
       toast.show('success', 'Comissão marcada como paga.')
     },
+    onError: (err) =>
+      toast.show('error', err instanceof Error ? err.message : 'Não foi possível pagar a comissão.'),
   })
 
   const concluirMut = useMutation({

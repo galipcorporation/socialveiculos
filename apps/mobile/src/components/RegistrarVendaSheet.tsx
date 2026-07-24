@@ -7,7 +7,7 @@ import { useTheme } from '../theme/ThemeContext'
 import {
   Button, Input, OptionSheet, SelectField, Sheet, Txt, useToast,
 } from './ui'
-import { contratosService, equipeService, veiculosService } from '../services'
+import { clientesService, contratosService, equipeService, veiculosService } from '../services'
 import type { OutroPagamento } from '../services/veiculos'
 import type { Veiculo } from '../services/types'
 import { Ionicons } from '@expo/vector-icons'
@@ -31,6 +31,7 @@ export function RegistrarVendaSheet({
   const user = useAuthStore((s) => s.user)
 
   const [comprador, setComprador] = useState(compradorInicial ?? '')
+  const [compradorAberto, setCompradorAberto] = useState(false)
   const [valor, setValor] = useState(veiculo?.preco_venda ? maskMoedaInput(String(Math.round(veiculo.preco_venda * 100))) : '')
   const [vendedor, setVendedor] = useState(user?.nome ?? '')
   const [vendedorAberto, setVendedorAberto] = useState(false)
@@ -40,7 +41,12 @@ export function RegistrarVendaSheet({
   const veiculosQ = useQuery({
     queryKey: ['veiculos', { status: 'disponivel' }],
     queryFn: () => veiculosService.listar({ status: 'disponivel' }),
-    enabled: visible && !veiculo,
+    enabled: visible,
+  })
+  const clientesQ = useQuery({
+    queryKey: ['clientes', 'venda'],
+    queryFn: () => clientesService.listar(),
+    enabled: visible,
   })
 
   // Pagamento composto (M058)
@@ -111,20 +117,20 @@ export function RegistrarVendaSheet({
   return (
     <Sheet visible={visible} onClose={onClose} title="Registrar venda">
       <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
-        {veiculo ? (
-          <Txt variant="caption" color="textDim">
-            {veiculo.marca} {veiculo.modelo} · a venda abre a esteira de pós-venda.
-          </Txt>
-        ) : (
-          <SelectField
-            label="Veículo"
-            value={veiculoSelecionado ? `${veiculoSelecionado.marca} ${veiculoSelecionado.modelo}` : ''}
-            placeholder="Selecionar veículo"
-            onPress={() => setVeiculoAberto(true)}
-            icon="car-outline"
-          />
-        )}
-        <Input label="Nome do comprador" placeholder="Ex.: Maria da Silva" value={comprador} onChangeText={setComprador} icon="person-outline" />
+        <SelectField
+          label="Veículo"
+          value={veiculoSelecionado ? `${veiculoSelecionado.marca} ${veiculoSelecionado.modelo}` : undefined}
+          placeholder={veiculosQ.isLoading ? 'Carregando…' : 'Escolher do estoque'}
+          onPress={() => setVeiculoAberto(true)}
+          icon="car-outline"
+        />
+        <SelectField
+          label="Comprador"
+          value={comprador || undefined}
+          placeholder={clientesQ.isLoading ? 'Carregando…' : 'Buscar cliente'}
+          onPress={() => setCompradorAberto(true)}
+          icon="person-outline"
+        />
         <Input label="Valor da venda" placeholder="0,00" keyboardType="numeric" value={valor} onChangeText={(t) => setValor(maskMoedaInput(t))} icon="cash-outline" />
 
         {/* Composição do pagamento */}
@@ -204,20 +210,48 @@ export function RegistrarVendaSheet({
         ]}
         onSelect={(v) => setTemplateId(v)}
       />
-      {!veiculo && (
-        <OptionSheet
-          visible={veiculoAberto}
-          onClose={() => setVeiculoAberto(false)}
-          title="Selecionar veículo"
-          selected={veiculoSelecionado?.id ?? ''}
-          options={(veiculosQ.data ?? []).map((v) => ({ value: v.id, label: `${v.marca} ${v.modelo}`, sublabel: formatBRL(v.preco_venda) }))}
-          onSelect={(vid) => {
-            const escolhido = (veiculosQ.data ?? []).find((v) => v.id === vid)
-            setVeiculoSelecionado(escolhido)
-            if (escolhido?.preco_venda) setValor(maskMoedaInput(String(Math.round(escolhido.preco_venda * 100))))
-          }}
-        />
-      )}
+      <OptionSheet
+        visible={veiculoAberto}
+        onClose={() => setVeiculoAberto(false)}
+        title="Selecionar veículo"
+        buscavel
+        buscaPlaceholder="Buscar por marca, modelo ou placa…"
+        carregando={veiculosQ.isLoading}
+        vazioTexto="Nenhum veículo disponível no estoque."
+        selected={veiculoSelecionado?.id ?? ''}
+        options={(veiculosQ.data ?? []).map((v) => ({
+          value: v.id,
+          label: `${v.marca} ${v.modelo}${v.versao ? ` ${v.versao}` : ''}`,
+          sublabel: [v.placa, formatBRL(v.preco_venda)].filter(Boolean).join(' · '),
+        }))}
+        onSelect={(vid) => {
+          const escolhido = (veiculosQ.data ?? []).find((v) => v.id === vid)
+          setVeiculoSelecionado(escolhido)
+          if (escolhido?.preco_venda) setValor(maskMoedaInput(String(Math.round(escolhido.preco_venda * 100))))
+        }}
+      />
+      <OptionSheet
+        visible={compradorAberto}
+        onClose={() => setCompradorAberto(false)}
+        title="Comprador"
+        buscavel
+        buscaPlaceholder="Buscar por nome, telefone ou CPF…"
+        carregando={clientesQ.isLoading}
+        vazioTexto="Nenhum cliente na carteira ainda."
+        selected={(clientesQ.data ?? []).find((c) => c.nome === comprador)?.id ?? ''}
+        options={(clientesQ.data ?? []).map((c) => ({
+          value: c.id,
+          label: c.nome,
+          sublabel: [c.telefone, c.cpf].filter(Boolean).join(' · '),
+        }))}
+        onSelect={(id) => {
+          const c = (clientesQ.data ?? []).find((x) => x.id === id)
+          if (c) setComprador(c.nome)
+        }}
+        onUsarBusca={setComprador}
+        usarBuscaLabel={(t) => `Vender para “${t}” (novo)`}
+      />
+
     </Sheet>
   )
 }

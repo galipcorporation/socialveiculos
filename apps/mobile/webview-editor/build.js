@@ -19,7 +19,20 @@ async function main() {
   const js = result.outputFiles[0].text
 
   let html = fs.readFileSync(path.join(SRC_DIR, 'index.html'), 'utf8')
-  html = html.replace('<script src="./bundle.js"></script>', `<script>${js}</script>`)
+
+  // O JS minificado do TipTap contém a string literal `<script src="./bundle.js">
+  // </script>` no código de tratamento de colagem. Um replace direto casava com
+  // ESSA ocorrência (ela vem antes da tag real no HTML montado) e cortava o
+  // bundle no meio → SyntaxError e editor nunca inicializava. Usamos um
+  // marcador improvável e uma função de replace (que não interpreta `$&` etc).
+  const MARCADOR = '<script src="./bundle.js"></script>'
+  const partes = html.split(MARCADOR)
+  if (partes.length !== 2) {
+    throw new Error(`index.html deve conter exatamente 1 "${MARCADOR}" (achou ${partes.length - 1})`)
+  }
+  // `</script>` dentro do JS também encerraria a tag antes da hora.
+  const jsSeguro = js.replace(/<\/script>/gi, '<\\/script>')
+  html = `${partes[0]}<script>${jsSeguro}</script>${partes[1]}`
 
   const ts = `// GERADO por webview-editor/build.js — não editar à mão.
 // Fonte: apps/mobile/webview-editor/src/{editor.ts,index.html}

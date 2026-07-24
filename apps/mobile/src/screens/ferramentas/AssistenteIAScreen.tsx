@@ -23,7 +23,7 @@ function iniciais(nome: string): string {
 
 export default function AssistenteIAScreen({ navigation }: RootScreenProps<'AssistenteIA'>) {
   const { colors } = useTheme()
-  const gateQ = useQuery({ queryKey: ['modulo', 'assistente'], queryFn: () => modulosService.liberado('assistente') })
+  const gateQ = useQuery({ queryKey: ['modulo', 'assistente_ia'], queryFn: () => modulosService.liberado('assistente_ia') })
   const liberado = gateQ.data === true
 
   const sessaoQ = useQuery({

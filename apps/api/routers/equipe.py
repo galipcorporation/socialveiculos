@@ -13,7 +13,7 @@ from sqlalchemy.future import select
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
 from auth import hash_password
-from models import Usuario, MembroLoja, PapelUsuario
+from models import Usuario, MembroLoja, PapelUsuario, ModuloHabilitado
 from rbac import exige_permissao, Acao, Recurso
 from schemas import (
     MembroEquipeResponse,
@@ -26,6 +26,56 @@ router = APIRouter(prefix="/v1/equipe", tags=["Equipe (Membros da Loja)"])
 
 # Papéis que podem existir DENTRO de uma loja (nunca admin_plataforma via equipe)
 PAPEIS_PERMITIDOS_NA_LOJA = {PapelUsuario.GESTOR, PapelUsuario.VENDEDOR}
+
+# Módulos do núcleo do CRM: não são contratáveis por fora, então o gestor
+# sempre pode liberá-los a um vendedor. Os demais (premium) dependem de o
+# admin ter habilitado o módulo para a loja (ModuloHabilitado).
+MODULOS_BASE = {"estoque", "crm", "financeiro"}
+
+
+async def _validar_modulos_da_loja(db: AsyncSession, loja_id: str, modulos_json: str | None) -> None:
+    """
+    Rejeita módulos premium que o admin não habilitou para esta loja.
+
+    Sem isso o gestor pode marcar "Fiscal / NF-e" para um vendedor mesmo com o
+    módulo não contratado: o item aparece na navegação e só quebra lá na frente,
+    quando `exige_modulo` devolve 402.
+    """
+    if not modulos_json:
+        return
+    try:
+        pedidos = json.loads(modulos_json)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Campo 'modulos' deve ser um JSON array de strings.",
+        )
+    if not isinstance(pedidos, list):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Campo 'modulos' deve ser um JSON array de strings.",
+        )
+
+    premium_pedidos = {m for m in pedidos if m not in MODULOS_BASE}
+    if not premium_pedidos:
+        return
+
+    habilitados = set((await db.execute(
+        select(ModuloHabilitado.nome_modulo).where(
+            ModuloHabilitado.loja_id == loja_id,
+            ModuloHabilitado.ativo == True,  # noqa: E712 — coluna SQLAlchemy
+        )
+    )).scalars().all())
+
+    nao_contratados = sorted(premium_pedidos - habilitados)
+    if nao_contratados:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Módulos não contratados por esta loja: "
+                f"{', '.join(nao_contratados)}."
+            ),
+        )
 
 
 def _montar_membro_response(membro: MembroLoja, usuario: Usuario) -> dict:
@@ -129,7 +179,10 @@ async def convidar_membro(
             detail="Este usuário já faz parte da equipe desta loja.",
         )
 
-    # 3. Criar o vínculo
+    # 3. Só liberar módulos que o admin habilitou para esta loja
+    await _validar_modulos_da_loja(db, context.loja_id, data.modulos)
+
+    # 4. Criar o vínculo
     membro = MembroLoja(
         usuario_id=usuario.id,
         loja_id=context.loja_id,
@@ -204,6 +257,7 @@ async def atualizar_membro(
             )
         membro.papel = body["papel"]
     if "modulos" in body:
+        await _validar_modulos_da_loja(db, context.loja_id, body["modulos"])
         membro.modulos = body["modulos"]
     if "ativo" in body:
         membro.ativo = body["ativo"]

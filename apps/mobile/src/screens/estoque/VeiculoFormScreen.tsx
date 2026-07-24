@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
@@ -11,27 +11,22 @@ import { fonts, radius, spacing } from '../../theme/tokens'
 import {
   AppHeader, Button, Card, Input, OptionSheet, Screen, SelectField, Txt, useToast,
 } from '../../components/ui'
-import { veiculosService, type VeiculoInput } from '../../services'
-import { ANOS, REGRAS_TIPO, TIPOS_VEICULO, type TipoVeiculo } from '../../services/types'
+import { fipeService, veiculosService, type VeiculoInput } from '../../services'
+import {
+  ANOS, DESCRICAO_PLACEHOLDER, OPCIONAIS_POR_TIPO, REGRAS_TIPO, TIPOS_VEICULO, type TipoVeiculo,
+} from '../../services/types'
 import { formatNumber, maskMoedaInput, maskPlaca, parseMoedaInput } from '../../lib/format'
 import type { RootScreenProps } from '../../navigation/types'
 
 const CAMBIOS = ['Manual', 'Automático', 'Automático CVT', 'Automatizado']
 const COMBUSTIVEIS = ['Flex', 'Gasolina', 'Diesel', 'Etanol', 'Híbrido', 'Elétrico']
-const OPCIONAIS_SUGERIDOS = [
-  'Ar condicionado',
-  'Direção hidráulica',
-  'Vidros elétricos',
-  'Travas elétricas',
-  'Alarme',
-  'Freio ABS',
-  'Airbag',
-  'Kit multimídia',
-  'Rodas de liga leve',
-  'Sensor de ré',
-  'Câmera de ré',
-  'Teto solar',
-]
+
+/** Tipos com cobertura FIPE usam o código do catálogo ('carro' | 'moto' | 'caminhao'). */
+type TipoFipe = 'carro' | 'moto' | 'caminhao'
+
+/** Compara nomes de marca ignorando acento, caixa e pontuação ("VW - VolksWagen"). */
+const normalizar = (s: string) =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
 interface FormState {
   tipo: TipoVeiculo
@@ -70,9 +65,10 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
 
   const [form, setForm] = useState<FormState>(VAZIO)
   const [erros, setErros] = useState<Partial<Record<keyof FormState, string>>>({})
-  const [sheet, setSheet] = useState<'ano' | 'cambio' | 'combustivel' | null>(null)
+  const [sheet, setSheet] = useState<'marca' | 'modelo' | 'ano' | 'cambio' | 'combustivel' | null>(null)
   const [txtOpcional, setTxtOpcional] = useState('')
   const [consultandoPlaca, setConsultandoPlaca] = useState(false)
+  const [marcaCod, setMarcaCod] = useState('')
   const [rapido] = useState(!editando)
   const [secaoAberta, setSecaoAberta] = useState<'detalhes' | 'identificacao' | 'opcionais' | 'descricao' | null>(null)
 
@@ -152,6 +148,46 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
     setForm((f) => ({ ...f, [campo]: valor }))
     if (erros[campo]) setErros((e) => ({ ...e, [campo]: undefined }))
   }
+
+  // ── Catálogo FIPE: marca → modelo (só para tipos cobertos; o resto é texto livre).
+  const tipoFipe = form.tipo as TipoFipe
+  const marcasQ = useQuery({
+    queryKey: ['fipe', 'marcas', tipoFipe],
+    queryFn: () => fipeService.marcas(tipoFipe),
+    enabled: regra.fipe,
+    staleTime: 1000 * 60 * 60,
+  })
+  const modelosQ = useQuery({
+    queryKey: ['fipe', 'modelos', tipoFipe, marcaCod],
+    queryFn: () => fipeService.modelos(tipoFipe, marcaCod),
+    enabled: regra.fipe && !!marcaCod,
+    staleTime: 1000 * 60 * 60,
+  })
+
+  // Trocar de tipo invalida a marca/modelo escolhidos no catálogo anterior
+  // (Honda de carro ≠ Honda de moto na FIPE). Não mexe em veículo já carregado.
+  const tipoAnterior = useRef(form.tipo)
+  useEffect(() => {
+    if (tipoAnterior.current === form.tipo) return
+    tipoAnterior.current = form.tipo
+    setMarcaCod('')
+    setForm((f) => ({ ...f, marca: '', modelo: '' }))
+  }, [form.tipo])
+
+  // Ao editar um veículo (ou preencher pela placa), recupera o código FIPE da
+  // marca para destravar a lista de modelos. A consulta de placa devolve o nome
+  // com grafia própria ("VOLKSWAGEN" vs "VW - VolksWagen"), daí o normaliza.
+  useEffect(() => {
+    if (!regra.fipe || marcaCod || !form.marca.trim() || !marcasQ.data) return
+    const alvo = normalizar(form.marca)
+    const match =
+      marcasQ.data.find((m) => normalizar(m.nome) === alvo) ??
+      marcasQ.data.find((m) => {
+        const n = normalizar(m.nome)
+        return n.includes(alvo) || alvo.includes(n)
+      })
+    if (match) setMarcaCod(match.codigo)
+  }, [regra.fipe, marcaCod, form.marca, marcasQ.data])
 
   const [carregandoFotos, setCarregandoFotos] = useState(false)
 
@@ -332,24 +368,49 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
                 }
               />
             )}
-            <View style={styles.row2}>
-              <Input
-                label="Marca *"
-                placeholder={placeholders.marca}
-                value={form.marca}
-                onChangeText={(t) => set('marca', t)}
-                error={erros.marca}
-                containerStyle={{ flex: 1 }}
-              />
-              <Input
-                label="Modelo *"
-                placeholder={placeholders.modelo}
-                value={form.modelo}
-                onChangeText={(t) => set('modelo', t)}
-                error={erros.modelo}
-                containerStyle={{ flex: 1 }}
-              />
-            </View>
+            {regra.fipe ? (
+              /* Tipos cobertos pela FIPE: marca e modelo saem do catálogo. */
+              <View style={styles.row2}>
+                <SelectField
+                  label="Marca *"
+                  value={form.marca || undefined}
+                  placeholder={marcasQ.isLoading ? 'Carregando…' : 'Selecione a marca'}
+                  onPress={() => setSheet('marca')}
+                  error={erros.marca}
+                  containerStyle={{ flex: 1 }}
+                />
+                <SelectField
+                  label="Modelo *"
+                  value={form.modelo || undefined}
+                  placeholder={
+                    !marcaCod ? 'Escolha a marca…' : modelosQ.isLoading ? 'Carregando…' : 'Selecione o modelo'
+                  }
+                  onPress={() => marcaCod && setSheet('modelo')}
+                  error={erros.modelo}
+                  containerStyle={{ flex: 1 }}
+                />
+              </View>
+            ) : (
+              /* Barco, jet, aeronave, reboque: sem FIPE, digitação livre. */
+              <View style={styles.row2}>
+                <Input
+                  label="Marca *"
+                  placeholder={placeholders.marca}
+                  value={form.marca}
+                  onChangeText={(t) => set('marca', t)}
+                  error={erros.marca}
+                  containerStyle={{ flex: 1 }}
+                />
+                <Input
+                  label="Modelo *"
+                  placeholder={placeholders.modelo}
+                  value={form.modelo}
+                  onChangeText={(t) => set('modelo', t)}
+                  error={erros.modelo}
+                  containerStyle={{ flex: 1 }}
+                />
+              </View>
+            )}
             {regra.versao && (
               <Input
                 label="Versão"
@@ -512,7 +573,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
 
               {/* Input para adicionar novos */}
               <Input
-                placeholder="Digitar opcional (ex: Alarme)..."
+                placeholder={`Digitar opcional (ex: ${OPCIONAIS_POR_TIPO[form.tipo][0]})...`}
                 value={txtOpcional}
                 onChangeText={(text) => {
                   if (text.includes(',')) {
@@ -548,7 +609,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
                 Sugestões comuns (toque para adicionar/remover):
               </Txt>
               <View style={styles.sugestoesContainer}>
-                {OPCIONAIS_SUGERIDOS.map((sug) => {
+                {OPCIONAIS_POR_TIPO[form.tipo].map((sug) => {
                   const jaSelecionado = opcionaisList.includes(sug)
                   return (
                     <Pressable
@@ -584,7 +645,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
             </View>
             <Input
               label="Descrição"
-              placeholder="Detalhes do veículo, histórico, condição…"
+              placeholder={DESCRICAO_PLACEHOLDER[form.tipo]}
               value={form.descricao}
               onChangeText={(t) => set('descricao', t)}
               multiline
@@ -617,6 +678,39 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
         </View>
       </ScrollView>
 
+      <OptionSheet
+        visible={sheet === 'marca'}
+        onClose={() => setSheet(null)}
+        title="Marca"
+        buscavel
+        buscaPlaceholder="Buscar marca…"
+        carregando={marcasQ.isLoading}
+        vazioTexto="Não foi possível carregar as marcas."
+        options={(marcasQ.data ?? []).map((m) => ({ value: m.codigo, label: m.nome }))}
+        selected={marcaCod}
+        onSelect={(cod) => {
+          const nome = marcasQ.data?.find((m) => m.codigo === cod)?.nome ?? ''
+          setMarcaCod(cod)
+          // Marca nova invalida o modelo antigo.
+          setForm((f) => ({ ...f, marca: nome, modelo: '' }))
+          setErros((e) => ({ ...e, marca: undefined }))
+        }}
+      />
+      <OptionSheet
+        visible={sheet === 'modelo'}
+        onClose={() => setSheet(null)}
+        title="Modelo"
+        buscavel
+        buscaPlaceholder="Buscar modelo…"
+        carregando={modelosQ.isLoading}
+        vazioTexto="Nenhum modelo para esta marca."
+        options={(modelosQ.data ?? []).map((m) => ({ value: m.codigo, label: m.nome }))}
+        selected={modelosQ.data?.find((m) => m.nome === form.modelo)?.codigo}
+        onSelect={(cod) => {
+          const nome = modelosQ.data?.find((m) => m.codigo === cod)?.nome ?? ''
+          set('modelo', nome)
+        }}
+      />
       <OptionSheet
         visible={sheet === 'ano'}
         onClose={() => setSheet(null)}

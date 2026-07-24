@@ -218,6 +218,9 @@ function iniciar(msg: InitMessage) {
     // posiciona o cursor onde o dedo caiu.
     if ((ev.target as HTMLElement).closest('.ProseMirror')) return
     ev.preventDefault()
+    // Foca o nó do DOM primeiro: em WebView o `focus()` do elemento é o que
+    // efetivamente abre o teclado; o comando do TipTap só posiciona o cursor.
+    document.querySelector<HTMLElement>('.ProseMirror')?.focus()
     editor.commands.focus('end')
   })
 

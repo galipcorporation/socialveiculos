@@ -24,7 +24,7 @@ const ALL_ITEMS: PaletteItem[] = [
   { path: '/ferramentas/contratos', label: 'Contratos', modulo: 'contratos' },
   { path: '/ferramentas/marketing', label: 'Marketing', modulo: 'marketing' },
   { path: '/ferramentas/fipe', label: 'Consulta FIPE' },
-  { path: '/assistente', label: 'Assistente IA', modulo: 'assistente' },
+  { path: '/assistente', label: 'Assistente IA', modulo: 'assistente_ia' },
   { path: '/ferramentas/notas-fiscais', label: 'Notas Fiscais', modulo: 'fiscal' },
   { path: '/ferramentas/meu-site', label: 'Meu Site', modulo: 'site' },
   { path: '/configuracoes', label: 'Configurações' },

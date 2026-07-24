@@ -1,6 +1,6 @@
 import { api } from '../lib/api'
 import type { Membro, Papel } from './types'
-import { TODOS_MODULOS } from '../lib/modulos'
+import { MODULOS_BASE } from '../lib/modulos'
 
 export interface MembroInput {
   nome: string
@@ -57,9 +57,10 @@ export const equipeService = {
       papel: input.papel,
       senha: input.senha,
       percentual_comissao: input.papel === 'vendedor' ? input.percentual_comissao ?? 0 : null,
-      modulos: input.papel === 'gestor'
-        ? JSON.stringify(TODOS_MODULOS)
-        : input.modulos ?? JSON.stringify([]),
+      // A tela envia a lista já filtrada pelos módulos contratados pela loja.
+      // O fallback fica no núcleo do CRM: pedir um premium não contratado
+      // faria o backend recusar o convite inteiro com 400.
+      modulos: input.modulos ?? JSON.stringify(input.papel === 'gestor' ? MODULOS_BASE : []),
     })
     return mapMembro(m)
   },

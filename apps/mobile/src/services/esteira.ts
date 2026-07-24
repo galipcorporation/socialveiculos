@@ -44,6 +44,8 @@ interface EsteiraDetalheDTO extends EsteiraResumoDTO {
   valor_venda?: number | null
   comissao_valor?: number | null
   comissao_percentual?: number | null
+  comissao_id?: string | null
+  comissao_paga?: boolean | null
   contrato_id?: string | null
   concluida_em?: string | null
   itens: ItemChecklistDTO[]
@@ -81,8 +83,11 @@ function mapItem(i: ItemChecklistDTO): ItemChecklist {
   }
 }
 
-// A comissão paga é modelada como o item de checklist chave 'comissao_paga'.
-function comissaoPaga(itens: ItemChecklist[]): boolean | null {
+// A fonte de verdade é ComissaoVenda.pago no banco (o que a tela Minhas Comissões
+// lê via /me/vendas). O item de checklist 'comissao_paga' é só o espelho visual e
+// serve de fallback quando não há comissão vinculada ao veículo.
+function comissaoPaga(d: EsteiraDetalheDTO, itens: ItemChecklist[]): boolean | null {
+  if (d.comissao_paga != null) return d.comissao_paga
   const item = itens.find((i) => i.chave === 'comissao_paga')
   if (!item) return null
   return item.status === 'concluido'
@@ -101,7 +106,8 @@ function mapDetalhe(d: EsteiraDetalheDTO): Esteira {
     valor_venda: d.valor_venda ?? undefined,
     comissao_valor: d.comissao_valor ?? undefined,
     comissao_percentual: d.comissao_percentual ?? undefined,
-    comissao_paga: comissaoPaga(itens),
+    comissao_id: d.comissao_id ?? undefined,
+    comissao_paga: comissaoPaga(d, itens),
     itens,
     aberta_em: d.aberta_em ?? new Date().toISOString(),
     concluida_em: d.concluida_em ?? null,
@@ -200,8 +206,14 @@ export const esteiraService = {
     return mapDetalhe(d)
   },
 
+  /** Paga de fato a comissão (ComissaoVenda.pago + despesa no caixa) e só então
+   *  conclui o item de checklist — marcar apenas o checklist deixava a tela
+   *  Minhas Comissões mostrando "Pendente" para sempre. */
   async marcarComissaoPaga(idEsteira: string): Promise<Esteira> {
     const atual = await api.get<EsteiraDetalheDTO>(`/esteira/${idEsteira}`)
+    if (atual.comissao_id && !atual.comissao_paga) {
+      await api.patch(`/financeiro/comissoes/${atual.comissao_id}/pagar`)
+    }
     const item = atual.itens.find((i) => i.chave === 'comissao_paga')
     if (item && item.status !== 'concluido') {
       const d = await api.patch<EsteiraDetalheDTO>(`/esteira/${idEsteira}/itens/${item.id}`, {
@@ -209,7 +221,7 @@ export const esteiraService = {
       })
       return mapDetalhe(d)
     }
-    return mapDetalhe(atual)
+    return mapDetalhe(await api.get<EsteiraDetalheDTO>(`/esteira/${idEsteira}`))
   },
 }
 

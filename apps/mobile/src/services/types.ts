@@ -70,17 +70,68 @@ export type RegraTipo = {
   portas: boolean
   versao: boolean
   uso: 'km' | 'horas'
+  /** Tipo tem cobertura na tabela FIPE (marca/modelo vêm do catálogo). */
+  fipe: boolean
 }
 
 export const REGRAS_TIPO: Record<TipoVeiculo, RegraTipo> = {
-  carro: { placa: true, km: true, cambio: true, combustivel: true, portas: true, versao: true, uso: 'km' },
-  moto: { placa: true, km: true, cambio: false, combustivel: true, portas: false, versao: false, uso: 'km' },
-  caminhao: { placa: true, km: true, cambio: true, combustivel: true, portas: false, versao: true, uso: 'km' },
-  barco: { placa: false, km: true, cambio: false, combustivel: true, portas: false, versao: false, uso: 'horas' },
-  jet: { placa: false, km: true, cambio: false, combustivel: true, portas: false, versao: false, uso: 'horas' },
-  aeronave: { placa: false, km: true, cambio: false, combustivel: true, portas: false, versao: false, uso: 'horas' },
-  reboque: { placa: true, km: false, cambio: false, combustivel: false, portas: false, versao: false, uso: 'km' },
-  outro: { placa: true, km: true, cambio: true, combustivel: true, portas: true, versao: true, uso: 'km' },
+  carro: { placa: true, km: true, cambio: true, combustivel: true, portas: true, versao: true, uso: 'km', fipe: true },
+  moto: { placa: true, km: true, cambio: false, combustivel: true, portas: false, versao: false, uso: 'km', fipe: true },
+  caminhao: { placa: true, km: true, cambio: true, combustivel: true, portas: false, versao: true, uso: 'km', fipe: true },
+  barco: { placa: false, km: true, cambio: false, combustivel: true, portas: false, versao: false, uso: 'horas', fipe: false },
+  jet: { placa: false, km: true, cambio: false, combustivel: true, portas: false, versao: false, uso: 'horas', fipe: false },
+  aeronave: { placa: false, km: true, cambio: false, combustivel: true, portas: false, versao: false, uso: 'horas', fipe: false },
+  reboque: { placa: true, km: false, cambio: false, combustivel: false, portas: false, versao: false, uso: 'km', fipe: false },
+  outro: { placa: true, km: true, cambio: true, combustivel: true, portas: true, versao: true, uso: 'km', fipe: false },
+}
+
+// Opcionais sugeridos por tipo — moto não tem porta elétrica, barco não tem airbag.
+const OPCIONAIS_AUTOMOVEL = [
+  'Ar condicionado', 'Direção hidráulica', 'Vidros elétricos', 'Travas elétricas',
+  'Alarme', 'Freio ABS', 'Airbag', 'Kit multimídia', 'Rodas de liga leve',
+  'Sensor de ré', 'Câmera de ré', 'Teto solar',
+]
+
+export const OPCIONAIS_POR_TIPO: Record<TipoVeiculo, string[]> = {
+  carro: OPCIONAIS_AUTOMOVEL,
+  outro: OPCIONAIS_AUTOMOVEL,
+  moto: [
+    'Freio ABS', 'Partida elétrica', 'Painel digital', 'Alarme',
+    'Baú / bagageiro', 'Protetor de motor', 'Manopla aquecida', 'Escapamento esportivo',
+  ],
+  caminhao: [
+    'Ar condicionado', 'Freio ABS', 'Direção hidráulica', 'Cabine leito',
+    'Freio motor', 'Tacógrafo', 'Rastreador', 'Quinta roda', 'Traçado (6x2 / 6x4)',
+  ],
+  barco: [
+    'Motor de popa', 'Motor de centro', 'Cabine', 'Banheiro químico',
+    'GPS / sonar', 'Piloto automático', 'Toldo / capota', 'Carreta rodoviária',
+    'Som marinizado', 'Geladeira / cooler',
+  ],
+  jet: [
+    'Reboque / carreta', 'Ré', 'Sistema de som', 'Baú estanque',
+    'Capa de proteção', 'Colete salva-vidas', 'Modo eco',
+  ],
+  aeronave: [
+    'IFR homologado', 'Piloto automático', 'GPS / glass cockpit', 'Degelo',
+    'Trem retrátil', 'Hélice de velocidade constante', 'Ar condicionado', 'Interior refeito',
+  ],
+  reboque: [
+    'Freio próprio', 'Eixo duplo', 'Rampa', 'Lona / encerado',
+    'Suspensão a ar', 'Pneus novos', 'Documentação em dia',
+  ],
+}
+
+// Placeholder da descrição por tipo — evita "carro" fixo em anúncio de lancha.
+export const DESCRICAO_PLACEHOLDER: Record<TipoVeiculo, string> = {
+  carro: 'Detalhes do veículo, histórico, condição…',
+  moto: 'Detalhes da moto, revisões, condição dos pneus…',
+  caminhao: 'Detalhes do caminhão, implemento, histórico de manutenção…',
+  barco: 'Detalhes da embarcação, horas de motor, local de guarda…',
+  jet: 'Detalhes do jet ski, horas de uso, itens inclusos…',
+  aeronave: 'Detalhes da aeronave, horas de célula/motor, aviônicos…',
+  reboque: 'Detalhes do reboque, capacidade, estado da estrutura…',
+  outro: 'Detalhes do item, histórico, condição…',
 }
 
 export const ANOS: number[] = (() => {
@@ -279,6 +330,7 @@ export interface Esteira {
   valor_venda?: number
   comissao_valor?: number
   comissao_percentual?: number
+  comissao_id?: string
   comissao_paga?: boolean | null
   itens: ItemChecklist[]
   aberta_em: string
@@ -510,7 +562,7 @@ export interface ConversaVitrine {
 }
 
 // ── Módulos pagos (gate) ───────────────────────────────────
-export type Modulo = 'contratos' | 'simulador' | 'marketing' | 'assistente' | 'fiscal' | 'site'
+export type Modulo = 'contratos' | 'simulador' | 'marketing' | 'assistente_ia' | 'fiscal' | 'site'
 
 export interface ModuloStatus {
   modulo: Modulo

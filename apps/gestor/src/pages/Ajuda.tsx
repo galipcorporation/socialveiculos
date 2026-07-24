@@ -196,7 +196,7 @@ const TOPICOS: Topico[] = [
   {
     id: 'assistente',
     titulo: 'Assistente de IA',
-    modulo: 'assistente' as const,
+    modulo: 'assistente_ia' as const,
     icone: 'M12 2a10 10 0 100 20 10 10 0 000-20zm0 5v5l4 2',
     descricao: 'Converse por texto ou voz com o assistente virtual para tirar dúvidas e agilizar o atendimento de leads.',
     passos: [

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
 import { mascararTelefone, capitalizarNome } from '../lib/mascaras'
-import { MODULOS, TODOS_MODULOS, parseModulos, type ModuloKey } from '../lib/modulos'
+import { MODULOS, TODOS_MODULOS, MODULOS_BASE, parseModulos, type ModuloKey } from '../lib/modulos'
 
 type Papel = 'gestor' | 'vendedor'
 
@@ -18,6 +18,13 @@ interface Membro {
   percentual_comissao?: number | null
   ativo: boolean
   created_at: string
+}
+
+/** Item de GET /assinaturas/modulos — status premium por loja. */
+interface ModuloStatus {
+  modulo: string
+  contratado: boolean
+  liberado: boolean
 }
 
 const PAPEL_LABEL: Record<string, string> = {
@@ -40,6 +47,12 @@ export function Equipe() {
   const [error, setError] = useState<string | null>(null)
   const [membroPermissaoIa, setMembroPermissaoIa] = useState<Membro | null>(null)
   const [membroAcessos, setMembroAcessos] = useState<Membro | null>(null)
+  const [modulosLoja, setModulosLoja] = useState<string[]>([])
+
+  // Núcleo do CRM + premium contratados pela loja.
+  const disponiveis: ModuloKey[] = TODOS_MODULOS.filter(
+    (k) => MODULOS_BASE.includes(k) || modulosLoja.includes(k),
+  )
 
   const [mostrarForm, setMostrarForm] = useState(false)
   const [salvando, setSalvando] = useState(false)
@@ -56,7 +69,7 @@ export function Equipe() {
 
   const handlePapelChange = (papel: Papel) => {
     // Gestor recebe todos os módulos por padrão; vendedor parte de seleção individual.
-    setForm((f) => ({ ...f, papel, modulos: papel === 'gestor' ? [...TODOS_MODULOS] : f.modulos }))
+    setForm((f) => ({ ...f, papel, modulos: papel === 'gestor' ? [...disponiveis] : f.modulos }))
   }
 
   const showToast = useUIStore((state) => state.showToast)
@@ -76,8 +89,23 @@ export function Equipe() {
     }
   }
 
+  // Módulos premium que o admin habilitou para esta loja. O gestor só pode
+  // repassar a um vendedor o que a loja de fato contratou.
+  const carregarModulosDaLoja = async () => {
+    try {
+      const status = await api.get<ModuloStatus[]>('/assinaturas/modulos')
+      setModulosLoja(status.filter((m) => m.liberado).map((m) => m.modulo))
+    } catch (err) {
+      console.error(err)
+      // Sem a lista, mostramos só o núcleo — nunca o contrário, para não
+      // oferecer um módulo que o backend vai recusar no salvamento.
+      setModulosLoja([])
+    }
+  }
+
   useEffect(() => {
     carregar()
+    carregarModulosDaLoja()
   }, [])
 
   const handleConvidar = async (e: React.FormEvent) => {
@@ -88,7 +116,7 @@ export function Equipe() {
     }
     setSalvando(true)
     try {
-      const modulos = form.papel === 'gestor' ? TODOS_MODULOS : form.modulos
+      const modulos = form.papel === 'gestor' ? disponiveis : form.modulos
       await api.post('/equipe', {
         nome: form.nome.trim(),
         email: form.email.trim(),
@@ -221,7 +249,8 @@ export function Equipe() {
                 </div>
 
                 <ModulosChecklist
-                  modulos={form.papel === 'gestor' ? TODOS_MODULOS : form.modulos}
+                  modulos={form.papel === 'gestor' ? disponiveis : form.modulos}
+                  disponiveis={disponiveis}
                   onToggle={toggleModulo}
                   disabled={form.papel === 'gestor'}
                   hint={form.papel === 'gestor' ? 'Gestor — acesso total.' : 'Vendedor — selecione os acessos.'}
@@ -324,6 +353,7 @@ export function Equipe() {
       {membroAcessos && (
         <EditarAcessosModal
           membro={membroAcessos}
+          disponiveis={disponiveis}
           onClose={() => setMembroAcessos(null)}
           onSaved={(novos) => {
             setMembros((prev) => prev.map((x) => (x.id === membroAcessos.id ? { ...x, modulos: novos } : x)))
@@ -395,15 +425,20 @@ function ComissaoInput({ membro, onSaved }: { membro: Membro; onSaved: (pct: num
 
 function ModulosChecklist({
   modulos,
+  disponiveis,
   onToggle,
   disabled,
   hint,
 }: {
   modulos: ModuloKey[]
+  /** Núcleo + premium contratados pela loja. O resto aparece bloqueado. */
+  disponiveis: ModuloKey[]
   onToggle: (key: ModuloKey) => void
   disabled?: boolean
   hint?: string
 }) {
+  const bloqueados = MODULOS.filter((m) => !disponiveis.includes(m.key))
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -412,18 +447,21 @@ function ModulosChecklist({
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {MODULOS.map((mod) => {
-          const on = modulos.includes(mod.key)
+          const contratado = disponiveis.includes(mod.key)
+          const on = contratado && modulos.includes(mod.key)
+          const travado = disabled || !contratado
           return (
             <label
               key={mod.key}
+              title={contratado ? undefined : 'Módulo não contratado por esta loja.'}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 10,
                 padding: '10px 12px',
                 fontSize: 13,
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                opacity: disabled ? 0.7 : 1,
+                cursor: travado ? 'not-allowed' : 'pointer',
+                opacity: !contratado ? 0.45 : disabled ? 0.7 : 1,
                 borderRadius: 'var(--sv-radius)',
                 border: `1px solid ${on ? 'var(--sv-primary)' : 'var(--sv-border)'}`,
                 background: on ? 'rgba(59,130,246,0.10)' : 'var(--sv-surface-dim)',
@@ -433,29 +471,45 @@ function ModulosChecklist({
               <input
                 type="checkbox"
                 checked={on}
-                disabled={disabled}
+                disabled={travado}
                 onChange={() => onToggle(mod.key)}
-                style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)', cursor: disabled ? 'not-allowed' : 'pointer' }}
+                style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)', cursor: travado ? 'not-allowed' : 'pointer' }}
               />
-              {mod.label}
+              <span style={{ flex: 1 }}>{mod.label}</span>
+              {!contratado && (
+                <span style={{ fontSize: 10, color: 'var(--sv-text-muted)', whiteSpace: 'nowrap' }}>
+                  não contratado
+                </span>
+              )}
             </label>
           )
         })}
       </div>
+      {bloqueados.length > 0 && (
+        <small style={{ display: 'block', marginTop: 8, fontSize: 11, color: 'var(--sv-text-muted)' }}>
+          Módulos em cinza não fazem parte do plano desta loja. Fale com o suporte para contratá-los.
+        </small>
+      )}
     </div>
   )
 }
 
 function EditarAcessosModal({
   membro,
+  disponiveis,
   onClose,
   onSaved,
 }: {
   membro: Membro
+  disponiveis: ModuloKey[]
   onClose: () => void
   onSaved: (modulos: string) => void
 }) {
-  const [modulos, setModulos] = useState<ModuloKey[]>(parseModulos(membro.modulos))
+  // Descarta módulos que a loja já não tem mais (ex.: plano rebaixado depois
+  // do vendedor ter recebido o acesso) — o backend recusaria o salvamento.
+  const [modulos, setModulos] = useState<ModuloKey[]>(
+    parseModulos(membro.modulos).filter((k) => disponiveis.includes(k)),
+  )
   const [salvando, setSalvando] = useState(false)
   const showToast = useUIStore((state) => state.showToast)
 
@@ -484,7 +538,12 @@ function EditarAcessosModal({
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <ModulosChecklist modulos={modulos} onToggle={toggle} hint="Marque os módulos liberados a este vendedor." />
+          <ModulosChecklist
+            modulos={modulos}
+            disponiveis={disponiveis}
+            onToggle={toggle}
+            hint="Marque os módulos liberados a este vendedor."
+          />
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button className="btn btn-outline" onClick={onClose} disabled={salvando}>Cancelar</button>
             <button className="btn btn-primary" onClick={handleSalvar} disabled={salvando}>

@@ -11,7 +11,8 @@ import {
 import { equipeService, configService } from '../../services'
 import type { Membro, Papel } from '../../services/types'
 import { formatTelefone, maskTelefoneInput } from '../../lib/format'
-import { MODULOS, TODOS_MODULOS, parseModulos, type ModuloKey } from '../../lib/modulos'
+import { MODULOS, MODULOS_BASE, TODOS_MODULOS, parseModulos, type ModuloKey } from '../../lib/modulos'
+import { modulosService } from '../../services/modulos'
 
 export default function EquipeScreen() {
   const queryClient = useQueryClient()
@@ -159,6 +160,14 @@ function MembroFormSheet({ visible, membro, comissaoPadrao, onClose }: { visible
   const [iaAtivo, setIaAtivo] = useState(false)
   const [iaAutonomia, setIaAutonomia] = useState<'copiloto' | 'automatico'>('copiloto')
 
+  // Premium que o admin habilitou para esta loja: o gestor só repassa ao
+  // vendedor o que a loja contratou (o backend recusa o resto com 400).
+  const gateQ = useQuery({ queryKey: ['modulos', 'loja'], queryFn: () => modulosService.todos() })
+  const disponiveis: ModuloKey[] = React.useMemo(() => {
+    const habilitados = (gateQ.data ?? []).filter((m) => m.liberado).map((m) => m.modulo as string)
+    return TODOS_MODULOS.filter((k) => MODULOS_BASE.includes(k) || habilitados.includes(k))
+  }, [gateQ.data])
+
   React.useEffect(() => {
     if (visible) {
       setNome(membro?.nome ?? '')
@@ -166,15 +175,17 @@ function MembroFormSheet({ visible, membro, comissaoPadrao, onClose }: { visible
       setTelefone(membro?.telefone ?? '')
       setPapel(membro?.papel ?? 'vendedor')
       setComissao(String(membro?.percentual_comissao ?? comissaoPadrao))
-      setModulos(parseModulos(membro?.modulos))
+      setModulos(parseModulos(membro?.modulos).filter((k) => disponiveis.includes(k)))
       setSenha('')
       setIaAtivo(membro?.assistente_ativo ?? false)
       setIaAutonomia(membro?.assistente_autonomia ?? 'copiloto')
     }
-  }, [visible, membro, comissaoPadrao])
+  }, [visible, membro, comissaoPadrao, disponiveis])
 
-  const toggleModulo = (key: ModuloKey) =>
+  const toggleModulo = (key: ModuloKey) => {
+    if (!disponiveis.includes(key)) return
     setModulos((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
+  }
 
   const mut = useMutation({
     mutationFn: async () => {
@@ -184,7 +195,7 @@ function MembroFormSheet({ visible, membro, comissaoPadrao, onClose }: { visible
         telefone: telefone.replace(/\D/g, '') || undefined,
         papel,
         percentual_comissao: papel === 'vendedor' ? parseFloat(comissao.replace(',', '.')) || 0 : null,
-        modulos: papel === 'gestor' ? JSON.stringify(TODOS_MODULOS) : JSON.stringify(modulos),
+        modulos: papel === 'gestor' ? JSON.stringify(disponiveis) : JSON.stringify(modulos),
         senha: editando ? undefined : senha,
       }
       const m = editando ? await equipeService.atualizar(membro!.id, input) : await equipeService.criar(input)
@@ -276,34 +287,40 @@ function MembroFormSheet({ visible, membro, comissaoPadrao, onClose }: { visible
           ) : (
             <Card style={{ padding: 0, overflow: 'hidden' }}>
               <Pressable
-                onPress={() => setModulos(modulos.length === MODULOS.length ? [] : [...TODOS_MODULOS])}
+                onPress={() => setModulos(modulos.length === disponiveis.length ? [] : [...disponiveis])}
                 style={[styles.moduloRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
               >
                 <Txt variant="captionMedium" color="primaryText" style={{ flex: 1 }}>
-                  {modulos.length === MODULOS.length ? 'Desmarcar todos' : 'Marcar todos'}
+                  {modulos.length === disponiveis.length ? 'Desmarcar todos' : 'Marcar todos'}
                 </Txt>
-                <Txt variant="caption" color="textDim">{modulos.length}/{MODULOS.length}</Txt>
+                <Txt variant="caption" color="textDim">{modulos.length}/{disponiveis.length}</Txt>
               </Pressable>
               {/* Linha inteira é o alvo de toque, sem <Switch>: empilhados, os switches
                   nativos capturavam o arrasto vertical e travavam o scroll do Sheet. */}
               {MODULOS.map((m, i) => {
-                const ativo = modulos.includes(m.key)
+                const contratado = disponiveis.includes(m.key)
+                const ativo = contratado && modulos.includes(m.key)
                 return (
                   <Pressable
                     key={m.key}
                     onPress={() => toggleModulo(m.key)}
+                    disabled={!contratado}
                     style={({ pressed }) => [
                       styles.moduloRow,
-                      pressed && { backgroundColor: colors.overlaySoft },
+                      pressed && contratado && { backgroundColor: colors.overlaySoft },
+                      !contratado && { opacity: 0.45 },
                       i < MODULOS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
                     ]}
                   >
                     <Ionicons
-                      name={ativo ? 'checkbox' : 'square-outline'}
+                      name={!contratado ? 'lock-closed-outline' : ativo ? 'checkbox' : 'square-outline'}
                       size={22}
                       color={ativo ? colors.primary : colors.textDim}
                     />
                     <Txt variant="body" style={{ flex: 1 }}>{m.label}</Txt>
+                    {!contratado && (
+                      <Txt variant="caption" color="textDim">não contratado</Txt>
+                    )}
                   </Pressable>
                 )
               })}

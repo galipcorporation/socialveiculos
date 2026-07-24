@@ -1612,6 +1612,8 @@ class EsteiraDetalheResponse(BaseModel):
     valor_venda: Optional[float] = None
     comissao_valor: Optional[float] = None
     comissao_percentual: Optional[float] = None
+    comissao_id: Optional[str] = None
+    comissao_paga: Optional[bool] = None
     comunicacao_venda_em: Optional[datetime] = None
     transferencia_em: Optional[datetime] = None
     aberta_em: Optional[datetime] = None

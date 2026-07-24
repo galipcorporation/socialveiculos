@@ -15,7 +15,7 @@ export default function AssistenteConfigScreen({ navigation }: RootScreenProps<'
   const queryClient = useQueryClient()
   const toast = useToast()
 
-  const gateQ = useQuery({ queryKey: ['modulo', 'assistente'], queryFn: () => modulosService.liberado('assistente') })
+  const gateQ = useQuery({ queryKey: ['modulo', 'assistente_ia'], queryFn: () => modulosService.liberado('assistente_ia') })
   const liberado = gateQ.data === true
 
   const q = useQuery({

@@ -1,11 +1,11 @@
 import React, { useEffect, useRef } from 'react'
 import {
-  Animated, Dimensions, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View,
+  Animated, Dimensions, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing } from '../../theme/tokens'
+import { fonts, radius, spacing } from '../../theme/tokens'
 import { Txt } from './Txt'
 
 interface SheetProps {
@@ -124,17 +124,91 @@ interface OptionSheetProps<T extends string> {
   options: SheetOption<T>[]
   selected?: T
   onSelect: (value: T) => void
+  /** Exibe campo de busca no topo — para listas longas (marcas/modelos FIPE). */
+  buscavel?: boolean
+  buscaPlaceholder?: string
+  /** Mostra "Carregando…" no lugar da lista. */
+  carregando?: boolean
+  /** Texto quando não há nenhuma opção. */
+  vazioTexto?: string
+  /**
+   * Permite aproveitar o texto digitado que não casa com nenhuma opção — ex.: vender
+   * para um comprador que ainda não está na carteira. Recebe o termo já trimado.
+   */
+  onUsarBusca?: (texto: string) => void
+  /** Rótulo do botão de `onUsarBusca`. Recebe o termo digitado. */
+  usarBuscaLabel?: (texto: string) => string
 }
 
 /** Seletor de opções em bottom sheet — substituto mobile do <select>. */
 export function OptionSheet<T extends string>({
   visible, onClose, title, options, selected, onSelect,
+  buscavel, buscaPlaceholder = 'Buscar…', carregando, vazioTexto = 'Nenhuma opção disponível.',
+  onUsarBusca, usarBuscaLabel = (t) => `Usar “${t}”`,
 }: OptionSheetProps<T>) {
   const { colors } = useTheme()
+  const [busca, setBusca] = React.useState('')
+
+  // Cada abertura começa com a lista inteira.
+  useEffect(() => { if (visible) setBusca('') }, [visible])
+
+  const filtradas = React.useMemo(() => {
+    const q = busca.trim().toLowerCase()
+    if (!q) return options
+    return options.filter((o) => `${o.label} ${o.sublabel ?? ''}`.toLowerCase().includes(q))
+  }, [options, busca])
+
   return (
     <Sheet visible={visible} onClose={onClose} title={title}>
+      {buscavel ? (
+        <View
+          style={[styles.buscaWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}
+        >
+          <Ionicons name="search" size={16} color={colors.textMuted} />
+          <TextInput
+            value={busca}
+            onChangeText={setBusca}
+            placeholder={buscaPlaceholder}
+            placeholderTextColor={colors.textMuted}
+            autoCorrect={false}
+            style={[styles.buscaInput, { color: colors.text }]}
+          />
+          {busca ? (
+            <Pressable onPress={() => setBusca('')} hitSlop={8}>
+              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      {carregando ? (
+        <View style={styles.optionEstado}>
+          <Txt variant="body" color="textDim">Carregando…</Txt>
+        </View>
+      ) : filtradas.length === 0 ? (
+        <View style={styles.optionEstado}>
+          <Txt variant="body" color="textDim" align="center">
+            {busca.trim() ? 'Nada encontrado para esta busca.' : vazioTexto}
+          </Txt>
+          {onUsarBusca && busca.trim() ? (
+            <Pressable
+              onPress={() => {
+                onUsarBusca(busca.trim())
+                onClose()
+              }}
+              style={({ pressed }) => [
+                styles.option,
+                { backgroundColor: pressed ? colors.overlaySoft : colors.primary + '1c', marginTop: spacing.sm },
+              ]}
+            >
+              <Ionicons name="add-circle-outline" size={19} color={colors.primary} />
+              <Txt variant="bodyMedium" color="primaryText">{usarBuscaLabel(busca.trim())}</Txt>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : (
       <View style={{ gap: 4, paddingBottom: spacing.xs }}>
-        {options.map((opt) => {
+        {filtradas.map((opt) => {
           const ativo = opt.value === selected
           return (
             <Pressable
@@ -170,11 +244,32 @@ export function OptionSheet<T extends string>({
           )
         })}
       </View>
+      )}
     </Sheet>
   )
 }
 
 const styles = StyleSheet.create({
+  buscaWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    height: 42,
+    marginBottom: spacing.xs,
+  },
+  buscaInput: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    paddingVertical: 8,
+  },
+  optionEstado: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+  },
   backdrop: { flex: 1, justifyContent: 'flex-end' },
   panel: {
     borderTopLeftRadius: radius.xl,
