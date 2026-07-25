@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Pressable, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
+import { useQuery } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing } from '../../theme/tokens'
 import {
@@ -10,7 +11,9 @@ import {
 import { useAuthStore } from '../../stores/authStore'
 import { useLojaAtivaStore } from '../../stores/lojaAtivaStore'
 import { useExperienciaStore } from '../../stores/experienciaStore'
-import { parseModulos } from '../../lib/modulos'
+import { MODULOS_BASE, parseModulos, type ModuloKey } from '../../lib/modulos'
+import { modulosService } from '../../services'
+import type { Modulo } from '../../services/types'
 import { unregisterPush } from '../../lib/push'
 
 export default function MaisScreen() {
@@ -25,7 +28,24 @@ export default function MaisScreen() {
 
   const gestor = user?.papel === 'gestor'
   const modulos = parseModulos(user?.modulos)
-  const liberado = (chave: ReturnType<typeof parseModulos>[number]) => gestor || modulos.includes(chave)
+
+  // Módulos premium que o ADMIN contratou para a loja (assinatura em dia).
+  // Sem isto a lista mostraria ferramentas não contratadas — o gestor abriria
+  // a tela e só tomaria 402 lá dentro. Núcleo (estoque/crm/financeiro) não
+  // passa por aqui: não é contratável, só depende da liberação do gestor.
+  const contratadosQ = useQuery({ queryKey: ['modulos'], queryFn: () => modulosService.todos() })
+  const contratados = contratadosQ.data
+  const contratado = (chave: ModuloKey): boolean => {
+    if (MODULOS_BASE.includes(chave)) return true
+    // Enquanto carrega, esconde: melhor o item aparecer um instante depois do
+    // que piscar uma ferramenta que a loja não tem.
+    if (!contratados) return false
+    return contratados.some((m) => m.modulo === (chave as Modulo) && m.liberado)
+  }
+
+  /** Só aparece se a loja contratou (admin) E o vendedor tem acesso (gestor). */
+  const liberado = (chave: ModuloKey) =>
+    contratado(chave) && (gestor || modulos.includes(chave))
   const sep = { borderTopWidth: 1, borderTopColor: colors.border }
 
   const atalhos: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }[] = gestor
@@ -33,7 +53,10 @@ export default function MaisScreen() {
         { icon: 'wallet-outline', label: 'Financeiro', onPress: () => navigation.navigate('Financeiro') },
         { icon: 'people-outline', label: 'Equipe', onPress: () => navigation.navigate('Equipe') },
         { icon: 'clipboard-outline', label: 'Pós-venda', onPress: () => navigation.navigate('PosVenda') },
-        { icon: 'sparkles-outline', label: 'Marketing', onPress: () => navigation.navigate('Marketing') },
+        // Marketing é premium: atalho só existe se a loja contratou.
+        ...(liberado('marketing')
+          ? [{ icon: 'sparkles-outline' as const, label: 'Marketing', onPress: () => navigation.navigate('Marketing') }]
+          : []),
       ]
     : [
         ...(liberado('simulador')
@@ -173,7 +196,8 @@ export default function MaisScreen() {
             subtitle="Valor de referência por marca/modelo/ano"
             chevron
             onPress={() => navigation.navigate('Fipe')}
-            style={sep}
+            // Sem o Simulador acima, a FIPE é a 1ª linha e não leva borda.
+            style={liberado('simulador') ? sep : { borderTopWidth: 0 }}
           />
           {liberado('contratos') && (
             <ListRow
@@ -219,7 +243,7 @@ export default function MaisScreen() {
               style={sep}
             />
           )}
-          {gestor && (
+          {gestor && liberado('site') && (
             <ListRow
               icon="globe-outline"
               iconColor={colors.success}

@@ -110,6 +110,7 @@ function renderVariaveis(grupos: VarGroup[]) {
       chip.onclick = () => {
         editor?.chain().focus().insertContent({ type: 'variavel', attrs: { chave: it.chave, label: it.label } }).run()
         document.getElementById('var-menu')!.classList.remove('open')
+        medirAltura()
       }
       if (isPersonalizado) {
         const rm = document.createElement('span')
@@ -204,9 +205,12 @@ function iniciar(msg: InitMessage) {
 
   document.getElementById('var-btn')!.addEventListener('click', () => {
     document.getElementById('var-menu')!.classList.toggle('open')
+    // Mede na hora: a WebView precisa crescer/encolher junto com o menu.
+    medirAltura()
   })
   document.getElementById('var-close')!.addEventListener('click', () => {
     document.getElementById('var-menu')!.classList.remove('open')
+    medirAltura()
   })
 
   // Tocar em qualquer ponto da área de conteúdo abre o teclado. Sem isso, o
@@ -231,18 +235,25 @@ function iniciar(msg: InitMessage) {
 /** Informa a altura real do conteúdo pro lado nativo, que redimensiona a
  *  WebView. A toolbar quebra em 2 linhas em telas estreitas, então a altura
  *  fixa que o RN assumia cortava o fim do editor. */
+let medirAltura = () => {}
+
 function observarAltura() {
   const raiz = document.querySelector<HTMLElement>('.rich-editor')!
   let ultima = 0
-  const medir = () => {
+  medirAltura = () => {
     const h = Math.ceil(raiz.getBoundingClientRect().height)
     if (h > 0 && h !== ultima) {
       ultima = h
       postToRN({ type: 'height', height: h })
     }
   }
-  new ResizeObserver(medir).observe(raiz)
-  medir()
+  // Observa também os filhos: abrir o menu de variáveis muda a altura por
+  // dentro e o observer só na raiz nem sempre dispara a tempo.
+  const obs = new ResizeObserver(medirAltura)
+  obs.observe(raiz)
+  document.querySelectorAll<HTMLElement>('.re-toolbar, .re-var-menu, .re-content')
+    .forEach((el) => obs.observe(el))
+  medirAltura()
 }
 
 window.addEventListener('message', (ev) => {

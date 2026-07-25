@@ -10,7 +10,7 @@ import {
   Avatar, Card, EmptyState, ErrorState, KpiCard, Screen, Sheet, Skeleton, Txt,
 } from '../../components/ui'
 import { BarChart } from '../../components/charts/BarChart'
-import { dashboardService, esteiraService } from '../../services'
+import { dashboardService, esteiraService, modulosService } from '../../services'
 import { parseModulos } from '../../lib/modulos'
 import { formatBRLCompact, formatNumber, formatRelativo } from '../../lib/format'
 import { useAuthStore } from '../../stores/authStore'
@@ -61,7 +61,14 @@ export default function DashboardScreen() {
 
   const gestor = user?.papel === 'gestor'
   const modulos = parseModulos(user?.modulos)
-  const simuladorLiberado = gestor || modulos.includes('simulador')
+  // Premium: precisa da contratação do admin (loja) E do acesso do vendedor.
+  // Só `gestor ||` mostraria o atalho de um módulo que a loja nunca contratou.
+  const simuladorContratadoQ = useQuery({
+    queryKey: ['modulo', 'simulador'],
+    queryFn: () => modulosService.liberado('simulador'),
+  })
+  const simuladorLiberado =
+    !!simuladorContratadoQ.data && (gestor || modulos.includes('simulador'))
 
   const acoes: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }[] = [
     { icon: 'add-circle', label: 'Novo veículo', onPress: () => navigation.navigate('VeiculoForm') },
