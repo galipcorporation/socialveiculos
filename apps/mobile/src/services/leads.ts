@@ -147,6 +147,16 @@ export const leadsService = {
       valor_proposta: input.valor_proposta || null,
       observacoes: input.observacoes || null,
     })
+    // O valor informado no cadastro também vira a primeira negociação, senão
+    // ele não apareceria no histórico de propostas do detalhe.
+    if (input.valor_proposta) {
+      try {
+        await this.adicionarNegociacao(l.id, { valor_proposta: input.valor_proposta })
+      } catch {
+        // o lead já foi criado; o valor segue em lead.valor_proposta
+      }
+      return this.obter(l.id)
+    }
     return enriquecerVeiculo(mapLead(l))
   },
 

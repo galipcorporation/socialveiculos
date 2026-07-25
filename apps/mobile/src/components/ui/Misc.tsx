@@ -1,5 +1,6 @@
 import React from 'react'
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -12,14 +13,31 @@ const AVATAR_CORES = ['#2563eb', '#7c3aed', '#0891b2', '#ea580c', '#16a34a', '#d
 
 interface AvatarProps {
   nome?: string | null
+  /** Foto de perfil. Sem ela, cai nas iniciais. */
+  uri?: string | null
   size?: number
+  /** Só layout (margem, posição) — forma e cor vêm do próprio Avatar. */
   style?: StyleProp<ViewStyle>
 }
 
-/** Avatar por iniciais — cor estável derivada do nome. */
-export function Avatar({ nome, size = 40, style }: AvatarProps) {
+/** Avatar: foto quando houver, senão iniciais com cor estável derivada do nome. */
+export function Avatar({ nome, uri, size = 40, style }: AvatarProps) {
   const hash = [...(nome ?? '?')].reduce((acc, c) => acc + c.charCodeAt(0), 0)
   const cor = AVATAR_CORES[hash % AVATAR_CORES.length]
+
+  if (uri) {
+    return (
+      <View
+        style={[
+          { width: size, height: size, borderRadius: size / 2, backgroundColor: cor + '2b', overflow: 'hidden' },
+          style,
+        ]}
+      >
+        <Image source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="cover" transition={150} />
+      </View>
+    )
+  }
+
   return (
     <View
       style={[

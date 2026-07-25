@@ -13,6 +13,7 @@ import type { Veiculo } from '../services/types'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable } from 'react-native'
 import { formatBRL, maskMoedaInput, parseMoedaInput } from '../lib/format'
+import { extractErrorDetails } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
 
 export function RegistrarVendaSheet({
@@ -99,12 +100,14 @@ export function RegistrarVendaSheet({
       })
     },
     onSuccess: (esteira) => {
-      queryClient.invalidateQueries()
+      for (const k of [['veiculos'], ['esteira'], ['leads'], ['comissoes'], ['dashboard'], ['clientes']]) {
+        queryClient.invalidateQueries({ queryKey: k })
+      }
       onClose()
       toast.show('success', 'Venda registrada! Esteira de pós-venda criada.')
       navigation.navigate('EsteiraDetalhe', { id: esteira.id })
     },
-    onError: () => toast.show('error', 'Não foi possível registrar a venda.'),
+    onError: (err) => toast.show('error', extractErrorDetails(err).message),
   })
 
   // Comissão prevista (para transparência ao vendedor)

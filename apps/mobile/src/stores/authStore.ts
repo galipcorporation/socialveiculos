@@ -10,6 +10,8 @@ export interface User {
   papel: 'admin_plataforma' | 'gestor' | 'vendedor' | 'cliente'
   ativo: boolean
   mfa_ativo: boolean
+  avatar_url?: string | null
+  telefone?: string | null
   modulos?: string | null
   loja_id?: string | null
 }
@@ -22,6 +24,8 @@ interface AuthState {
   login: (token: string, refreshToken: string, user: User) => void
   logout: () => void
   setToken: (token: string) => void
+  /** Substitui o usuário logado (após editar o perfil), mantendo a sessão. */
+  setUser: (user: User) => void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -36,6 +40,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () =>
         set({ token: null, refreshToken: null, user: null, isAuthenticated: false }),
       setToken: (token) => set({ token }),
+      setUser: (user) => set({ user }),
     }),
     {
       name: 'sv-auth-storage',

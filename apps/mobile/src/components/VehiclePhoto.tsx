@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { fonts, radius } from '../theme/tokens'
 import { Txt } from './ui/Txt'
+import { isFoto } from '../services/types'
 import type { TipoVeiculo, Veiculo } from '../services/types'
 
 // Sem foto → placeholder em gradiente com monograma da marca.
@@ -46,7 +47,7 @@ interface VehiclePhotoProps {
 }
 
 export function VehiclePhoto({ veiculo, width = '100%', height, borderRadius = radius.md, style }: VehiclePhotoProps) {
-  const foto = veiculo.midias?.find((m) => m.tipo === 'imagem')?.url
+  const foto = veiculo.midias?.find(isFoto)?.url
 
   if (foto) {
     return (

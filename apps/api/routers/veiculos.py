@@ -141,6 +141,7 @@ async def get_marketplace_feed(
     preco_max: Optional[float] = Query(None),
     ordenacao: Optional[str] = Query(None),
     carroceria: Optional[str] = Query(None),
+    tipo: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: Optional[Usuario] = Depends(get_optional_user)
 ):
@@ -172,6 +173,9 @@ async def get_marketplace_feed(
 
     if marca:
         stmt = stmt.where(Veiculo.marca.ilike(f"%{marca}%"))
+
+    if tipo:
+        stmt = stmt.where(Veiculo.tipo.ilike(f"%{tipo}%"))
 
     if preco_max:
         stmt = stmt.where(Veiculo.preco_venda <= preco_max)

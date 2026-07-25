@@ -460,10 +460,11 @@ async def iniciar_conversa_b2c(
         nova_conversa_criada = True
 
     # 3. Adicionar mensagem inicial
+    msg_texto = (data.mensagem and data.mensagem.strip()) or f"Olá, tenho interesse no veículo {veiculo.marca} {veiculo.modelo}."
     nova_msg = Mensagem(
         conversa_id=conversa.id,
         autor_id=current_user.id,
-        conteudo=data.mensagem
+        conteudo=msg_texto
     )
     db.add(nova_msg)
     conversa.updated_at = utcnow()
@@ -497,7 +498,7 @@ async def iniciar_conversa_b2c(
             origem=OrigemLead.VITRINE,
             etapa=EtapaLead.LEAD,
             valor_estimado=veiculo.preco_venda or 0.0,
-            observacoes=f"Lead gerado via Chat Vitrine B2C. Mensagem inicial: {data.mensagem}"
+            observacoes=f"Lead gerado via Chat Vitrine B2C. Mensagem inicial: {msg_texto}"
         )
         db.add(lead)
         await db.flush()

@@ -338,8 +338,8 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
               <path d="M13.73 21a2 2 0 01-3.46 0" />
             </svg>
             {notifications.length > 0 && (
-              <span className="badge" style={{ position: 'absolute', top: 0, right: 0, background: 'var(--sv-error)', color: 'white', borderRadius: '50%', minWidth: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 'bold', padding: '2px' }}>
-                {notifications.length}
+              <span className="badge">
+                {notifications.length > 99 ? '99+' : notifications.length}
               </span>
             )}
           </button>

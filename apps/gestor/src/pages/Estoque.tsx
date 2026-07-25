@@ -5,7 +5,7 @@ import { api, extractErrorDetails, type ApiErrorDetails } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
 import { useAuthStore } from '../stores/authStore'
 import { SimuladorModal } from '../components/SimuladorModal'
-import { type Veiculo } from '../lib/veiculo'
+import { midiaCapa, type Veiculo } from '../lib/veiculo'
 import {
   CarIcon, SearchIcon, PlusIcon, EditIcon, TrashIcon, ChevLeft, ChevRight, DollarIcon,
 } from './estoque/icons'
@@ -413,15 +413,18 @@ export function Estoque() {
                 <tr key={v.id}>
                   <td>
                     <div className="vehicle-info-cell">
-                      {v.midias && v.midias.length > 0 ? (
-                        <div className="vehicle-thumb">
-                          <img src={v.midias[0].thumb_url || v.midias[0].url} alt={`${v.marca} ${v.modelo}`} loading="lazy" decoding="async" />
-                        </div>
-                      ) : (
-                        <div className="vehicle-thumb-placeholder">
-                          <CarIcon />
-                        </div>
-                      )}
+                      {(() => {
+                        const capa = midiaCapa(v.midias)
+                        return capa ? (
+                          <div className="vehicle-thumb">
+                            <img src={capa.thumb_url || capa.url} alt={`${v.marca} ${v.modelo}`} loading="lazy" decoding="async" />
+                          </div>
+                        ) : (
+                          <div className="vehicle-thumb-placeholder">
+                            <CarIcon />
+                          </div>
+                        )
+                      })()}
                       <div className="vehicle-info-text">
                         <h4>{v.marca} {v.modelo} {v.versao || ''}</h4>
                         <p>{v.placa || 'Sem placa'} · {v.cor || '—'} · {v.combustivel || '—'}</p>
@@ -547,15 +550,18 @@ export function Estoque() {
             {veiculos.map(v => (
               <div key={v.id} className="mobile-vehicle-card">
                 <div className="mobile-vehicle-card-header">
-                  {v.midias && v.midias.length > 0 ? (
-                    <div className="vehicle-thumb">
-                      <img src={v.midias[0].thumb_url || v.midias[0].url} alt={`${v.marca} ${v.modelo}`} loading="lazy" decoding="async" />
-                    </div>
-                  ) : (
-                    <div className="vehicle-thumb-placeholder">
-                      <CarIcon />
-                    </div>
-                  )}
+                  {(() => {
+                    const capa = midiaCapa(v.midias)
+                    return capa ? (
+                      <div className="vehicle-thumb">
+                        <img src={capa.thumb_url || capa.url} alt={`${v.marca} ${v.modelo}`} loading="lazy" decoding="async" />
+                      </div>
+                    ) : (
+                      <div className="vehicle-thumb-placeholder">
+                        <CarIcon />
+                      </div>
+                    )
+                  })()}
                   <div className="mobile-vehicle-card-info">
                     <h4>{v.marca} {v.modelo}</h4>
                     <p>{v.placa || 'Sem placa'} · {v.cor || '—'} · {v.combustivel || '—'}</p>

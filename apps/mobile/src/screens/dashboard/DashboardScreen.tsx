@@ -107,8 +107,10 @@ export default function DashboardScreen() {
         >
           <Ionicons name="notifications-outline" size={21} color={colors.text} />
           {alertas.length > 0 && (
-            <View style={[styles.sinoBadge, { backgroundColor: colors.error, borderColor: colors.bg }]}>
-              <Txt style={{ fontFamily: fonts.bold, fontSize: 10, color: '#fff' }}>{alertas.length}</Txt>
+            <View style={[styles.sinoBadge, { backgroundColor: colors.error, borderColor: colors.surface }]}>
+              <Txt style={styles.sinoBadgeText}>
+                {alertas.length > 99 ? '99+' : alertas.length}
+              </Txt>
             </View>
           )}
         </Pressable>
@@ -353,15 +355,24 @@ const styles = StyleSheet.create({
   },
   sinoBadge: {
     position: 'absolute',
-    top: -3,
-    right: -3,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+    top: -5,
+    right: -5,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
+    elevation: 3,
+  },
+  sinoBadgeText: {
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    color: '#ffffff',
+    lineHeight: 13,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   banner: {
     flexDirection: 'row',

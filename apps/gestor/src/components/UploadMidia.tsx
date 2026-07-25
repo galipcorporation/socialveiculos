@@ -1,14 +1,9 @@
 import React, { useState, useRef } from 'react'
 import { useUIStore } from '../stores/uiStore'
 import { useAuthStore } from '../stores/authStore'
+import { isVideo, type Midia } from '../lib/veiculo'
 
-export interface Midia {
-  id: string
-  tipo: 'foto' | 'video'
-  url: string
-  thumb_url?: string | null
-  ordem: number
-}
+export type { Midia }
 
 interface UploadMidiaProps {
   veiculoId: string
@@ -266,8 +261,8 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
             </span>
           )}
           <div style={{ height: thumbHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
-            {m.tipo === 'video' ? (
-              <video src={m.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            {isVideo(m) ? (
+              <video src={m.url} controls preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
               <img src={m.thumb_url || m.url} alt="Mídia" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             )}

@@ -3,6 +3,7 @@
 // mantendo as assinaturas que as telas consomem.
 
 export { authService } from './auth'
+export type { PerfilMeInput } from './auth'
 export { veiculosService, CATEGORIAS_CUSTO } from './veiculos'
 export type { VeiculoInput, VeiculosFiltro, RegistrarVendaInput } from './veiculos'
 export { leadsService } from './leads'

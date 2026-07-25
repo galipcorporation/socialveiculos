@@ -47,10 +47,17 @@ class UserResponse(BaseModel):
     ativo: bool
     mfa_ativo: bool = False
     avatar_url: Optional[str] = None
+    telefone: Optional[str] = None
     modulos: Optional[str] = None  # JSON array de módulos liberados (vendedor)
     loja_id: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UpdateMeRequest(BaseModel):
+    """Edição do próprio perfil. E-mail e papel não mudam por aqui."""
+    nome: Optional[str] = Field(None, min_length=2, max_length=200)
+    telefone: Optional[str] = Field(None, max_length=20)
 
 
 class LoginRequest(BaseModel):
@@ -723,6 +730,45 @@ async def get_me(
         user_resp.loja_id = membro.loja_id
         user_resp.modulos = membro.modulos
     return user_resp
+
+
+@router.patch("/me", response_model=UserResponse, dependencies=[Depends(rate_limit(20, 60))])
+async def atualizar_me(
+    data: UpdateMeRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Edita o próprio perfil (nome e telefone). Disponível para qualquer usuário
+    logado, inclusive o cliente B2C da Vitrine. E-mail e papel não mudam aqui.
+    """
+    alterados = []
+    if data.nome is not None and data.nome.strip() != current_user.nome:
+        current_user.nome = data.nome.strip()
+        alterados.append("nome")
+    if data.telefone is not None:
+        novo_tel = data.telefone.strip() or None
+        if novo_tel != current_user.telefone:
+            current_user.telefone = novo_tel
+            alterados.append("telefone")
+
+    if alterados:
+        client_ip = request.client.host if request.client else None
+        await registrar_auditoria(
+            db=db,
+            loja_id=None,
+            ator_id=current_user.id,
+            ator_nome=current_user.nome,
+            acao="auth.update_me",
+            entidade="usuario",
+            entidade_id=current_user.id,
+            detalhes=f"Perfil atualizado: {', '.join(alterados)}.",
+            ip=client_ip,
+        )
+        await db.commit()
+        await db.refresh(current_user)
+    return current_user
 
 
 @router.post("/me/avatar", response_model=UserResponse, dependencies=[Depends(rate_limit(10, 60))])

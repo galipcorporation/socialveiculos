@@ -41,9 +41,13 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
   const conversar = () =>
     comLogin('Entre para conversar com a loja.', async () => {
       if (!a) return
-      const conv = await vitrineService.abrirConversa(a)
-      queryClient.invalidateQueries({ queryKey: ['vitrine', 'conversas'] })
-      navigation.navigate('ConversaVitrine', { id: conv.id, nome: conv.loja_nome })
+      try {
+        const conv = await vitrineService.abrirConversa(a)
+        queryClient.invalidateQueries({ queryKey: ['vitrine', 'conversas'] })
+        navigation.navigate('ConversaVitrine', { id: conv.id, nome: conv.loja_nome })
+      } catch {
+        toast.show('error', 'Não foi possível iniciar a conversa com a loja.')
+      }
     })
 
   const whatsapp = async () => {

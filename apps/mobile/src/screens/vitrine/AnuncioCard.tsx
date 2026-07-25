@@ -36,7 +36,14 @@ export const AnuncioCard = React.memo(function AnuncioCard({ anuncio: a, onPress
         {a.loja_verificada && <Ionicons name="checkmark-circle" size={14} color={colors.primary} />}
         <Txt variant="caption" color="textMuted">{a.loja_cidade}/{a.loja_estado}</Txt>
         {onSeguirLoja && (
-          <Pressable onPress={onSeguirLoja} hitSlop={8} style={{ marginLeft: 4 }}>
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation()
+              onSeguirLoja()
+            }}
+            hitSlop={8}
+            style={{ marginLeft: 4 }}
+          >
             <Txt variant="captionMedium" color={seguindoLoja ? 'textMuted' : 'primaryText'}>
               {seguindoLoja ? 'Seguindo' : 'Seguir'}
             </Txt>
@@ -89,6 +96,7 @@ const styles = StyleSheet.create({
   fav: {
     position: 'absolute', top: spacing.sm, right: spacing.sm,
     width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+    zIndex: 12, elevation: 6,
   },
-  badges: { position: 'absolute', top: spacing.sm, left: spacing.sm, flexDirection: 'row', gap: 4 },
+  badges: { position: 'absolute', top: spacing.sm, left: spacing.sm, flexDirection: 'row', gap: 4, zIndex: 12, elevation: 6 },
 })

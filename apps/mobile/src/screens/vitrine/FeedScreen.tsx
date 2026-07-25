@@ -32,9 +32,12 @@ export default function FeedScreen() {
 
   const seguirLoja = useCallback((lojaId: string, seguindoAgora: boolean) =>
     comLogin('Entre para seguir lojas.', async () => {
-      await vitrineService.alternarSeguir(lojaId, seguindoAgora)
+      const novoEstado = await vitrineService.alternarSeguir(lojaId, seguindoAgora)
+      queryClient.setQueryData<AnuncioVitrine[]>(['vitrine', 'feed', filtro, buscaDebounced], (ant) =>
+        (ant ?? []).map((a) => (a.loja_id === lojaId ? { ...a, seguindo_loja: novoEstado } : a))
+      )
       queryClient.invalidateQueries({ queryKey: ['vitrine'] })
-    }), [comLogin, queryClient])
+    }), [comLogin, queryClient, filtro, buscaDebounced])
 
   const whatsapp = useCallback(async (a: AnuncioVitrine) => {
     if (!a.loja_whatsapp) return
@@ -52,7 +55,7 @@ export default function FeedScreen() {
   return (
     <View style={{ flex: 1 }}>
       <View style={{ paddingTop: insets.top + spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.xs }}>
-        <Txt style={{ fontFamily: fonts.displayExtraBold, fontSize: 24, color: colors.text }}>Descobrir</Txt>
+        <Txt style={{ fontFamily: fonts.displayExtraBold, fontSize: 24, color: colors.text }}>Feed</Txt>
         <Txt variant="caption" color="textDim">Carros de lojas verificadas perto de você</Txt>
       </View>
       <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.xs }}>
@@ -70,6 +73,10 @@ export default function FeedScreen() {
           keyExtractor={(a) => a.id}
           contentContainerStyle={{ paddingHorizontal: spacing.md, gap: spacing.sm, paddingBottom: spacing.xxl }}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={7}
+          removeClippedSubviews
           refreshing={q.isRefetching}
           onRefresh={() => queryClient.invalidateQueries({ queryKey: ['vitrine', 'feed'] })}
           ListEmptyComponent={<EmptyState icon="car-outline" title="Nada por aqui" subtitle="Nenhum veículo neste filtro." />}
@@ -102,7 +109,7 @@ const FeedItem = React.memo(function FeedItem({ item, abrirDetalhe, abrirLoja, f
   const onPress = useCallback(() => abrirDetalhe(item.id), [abrirDetalhe, item.id])
   const onLojaPress = useCallback(() => abrirLoja(item.loja_id), [abrirLoja, item.loja_id])
   const onFavorito = useCallback(() => favoritar(item.id, item.favoritado_por_mim), [favoritar, item.id, item.favoritado_por_mim])
-  const onSeguirLoja = useCallback(() => seguirLoja(item.loja_id, false), [seguirLoja, item.loja_id])
+  const onSeguirLoja = useCallback(() => seguirLoja(item.loja_id, !!item.seguindo_loja), [seguirLoja, item.loja_id, item.seguindo_loja])
   const onWhatsapp = useCallback(() => whatsapp(item), [whatsapp, item])
 
   return (
@@ -112,6 +119,7 @@ const FeedItem = React.memo(function FeedItem({ item, abrirDetalhe, abrirLoja, f
       onLojaPress={onLojaPress}
       onFavorito={onFavorito}
       onSeguirLoja={onSeguirLoja}
+      seguindoLoja={item.seguindo_loja}
       onWhatsapp={item.loja_whatsapp ? onWhatsapp : undefined}
     />
   )

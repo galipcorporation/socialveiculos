@@ -1279,8 +1279,8 @@ class MensagemB2CResponse(BaseModel):
 
 class ConversaB2CCreateRequest(BaseModel):
     veiculo_id: str
-    loja_id: str
-    mensagem: str = Field(..., min_length=1)
+    loja_id: Optional[str] = None
+    mensagem: Optional[str] = None
 
 
 # ── Simulador de Crédito ───────────────────────────────────────

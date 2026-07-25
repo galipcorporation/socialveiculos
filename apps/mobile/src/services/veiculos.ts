@@ -1,8 +1,9 @@
 import { api } from '../lib/api'
 import { esteiraService } from './esteira'
+import { isFoto } from './types'
 import type {
   CategoriaCusto, CustoVeiculo, DocumentoVenda, Esteira, Midia, SolicitacaoAprovacao,
-  TipoDocumentoVenda, TipoSolicitacao, Veiculo, VeiculoStatus,
+  TipoDocumentoVenda, TipoMidia, TipoSolicitacao, Veiculo, VeiculoStatus,
 } from './types'
 
 export interface VeiculosFiltro {
@@ -60,7 +61,7 @@ export const CATEGORIAS_CUSTO: { value: CategoriaCusto; label: string }[] = [
 ]
 
 // ── DTOs da API ────────────────────────────────────────────
-interface MidiaDTO { id: string; tipo: 'imagem' | 'video'; url: string; ordem: number }
+interface MidiaDTO { id: string; tipo: string; url: string; ordem: number }
 interface VeiculoDTO {
   id: string
   loja_id: string
@@ -127,6 +128,9 @@ interface SolicitacaoDTO {
   status: 'pendente' | 'aprovado' | 'rejeitado'
   motivo?: string | null
   justificativa_rejeicao?: string | null
+  requisitante?: { id: string; nome: string; email: string } | null
+  /** JSON com os dados propostos — traz o novo preço na alteração de preço. */
+  dados_novos?: string | null
   veiculo_marca?: string | null
   veiculo_modelo?: string | null
   created_at: string
@@ -138,6 +142,18 @@ const STATUS_SOL: Record<SolicitacaoDTO['status'], SolicitacaoAprovacao['status'
 }
 const TIPO_SOL: Record<SolicitacaoDTO['tipo_acao'], TipoSolicitacao> = {
   excluir_veiculo: 'exclusao', alterar_preco: 'alteracao_preco',
+}
+
+/** `dados_novos` chega como string JSON ({"preco_venda": 1234}); nunca deixar
+ *  um JSON malformado derrubar a lista inteira de aprovações. */
+function precoProposto(dadosNovos?: string | null): number | undefined {
+  if (!dadosNovos) return undefined
+  try {
+    const v = (JSON.parse(dadosNovos) as { preco_venda?: unknown }).preco_venda
+    return typeof v === 'number' ? v : undefined
+  } catch {
+    return undefined
+  }
 }
 
 function mapVeiculo(v: VeiculoDTO): Veiculo {
@@ -165,7 +181,12 @@ function mapVeiculo(v: VeiculoDTO): Veiculo {
     opcionais: v.opcionais ?? undefined,
     created_at: v.created_at,
     updated_at: v.updated_at,
-    midias: (v.midias ?? []).map((m): Midia => ({ id: m.id, tipo: m.tipo, url: m.url, ordem: m.ordem })),
+    midias: (v.midias ?? []).map((m): Midia => ({
+      id: m.id,
+      tipo: isFoto({ tipo: m.tipo as Midia['tipo'], url: m.url }) ? 'foto' : 'video',
+      url: m.url,
+      ordem: m.ordem,
+    })),
   }
 }
 
@@ -274,7 +295,7 @@ export const veiculosService = {
   },
 
   /** Envia uma mídia local (uri file://, foto ou vídeo) ao storage e associa ao veículo. */
-  async enviarFoto(idVeiculo: string, uri: string, tipo: 'imagem' | 'video' = 'imagem'): Promise<void> {
+  async enviarFoto(idVeiculo: string, uri: string, tipo: TipoMidia = 'foto'): Promise<void> {
     const nome = uri.split('/').pop() || (tipo === 'video' ? 'video.mp4' : 'foto.jpg')
     const ext = nome.split('.').pop()?.toLowerCase()
     const mime =
@@ -283,8 +304,8 @@ export const veiculosService = {
         : ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
     const fd = new FormData()
     fd.append('file', { uri, name: nome, type: mime } as unknown as Blob)
-    const { url } = await api.post<{ url: string }>('/midias/upload', fd)
-    await api.post(`/veiculos/${idVeiculo}/midias`, { url, tipo })
+    const { url, thumb_url } = await api.post<{ url: string; thumb_url?: string | null }>('/midias/upload', fd)
+    await api.post(`/veiculos/${idVeiculo}/midias`, { url, thumb_url, tipo })
   },
 
   /** Venda: cria contrato + esteira no backend e retorna a esteira criada. */
@@ -399,8 +420,9 @@ export const veiculosService = {
       veiculo_id: s.entidade_id,
       veiculo_nome: [s.veiculo_marca, s.veiculo_modelo].filter(Boolean).join(' ') || 'Veículo',
       tipo: TIPO_SOL[s.tipo_acao],
-      motivo: s.motivo ?? '',
-      solicitante_nome: '',
+      motivo: s.motivo?.trim() || 'Não informado',
+      solicitante_nome: s.requisitante?.nome ?? 'Não informado',
+      novo_preco: precoProposto(s.dados_novos),
       status: STATUS_SOL[s.status],
       created_at: s.created_at,
       resolvida_em: s.status !== 'pendente' ? s.updated_at : undefined,

@@ -33,7 +33,7 @@ export default function VitrineTabs() {
         tabBarLabelStyle: { fontFamily: fonts.medium, fontSize: 11 },
       })}
     >
-      <Tab.Screen name="Feed" component={FeedScreen} options={{ title: 'Descobrir' }} />
+      <Tab.Screen name="Feed" component={FeedScreen} options={{ title: 'Feed' }} />
       <Tab.Screen name="Buscar" component={BuscarScreen} />
       <Tab.Screen name="Mensagens" component={MensagensScreen} />
       <Tab.Screen name="Perfil" component={PerfilScreen} />

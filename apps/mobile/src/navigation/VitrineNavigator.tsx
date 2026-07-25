@@ -5,6 +5,8 @@ import VitrineTabs from './VitrineTabs'
 import CarroDetalheScreen from '../screens/vitrine/CarroDetalheScreen'
 import PerfilLojaScreen from '../screens/vitrine/PerfilLojaScreen'
 import ConversaVitrineScreen from '../screens/vitrine/ConversaVitrineScreen'
+import EditarPerfilScreen from '../screens/vitrine/EditarPerfilScreen'
+import LojasSeguidasScreen from '../screens/vitrine/LojasSeguidasScreen'
 import { LoginSheet } from '../components/LoginSheet'
 
 const Stack = createNativeStackNavigator<VitrineStackParamList>()
@@ -18,6 +20,8 @@ export default function VitrineNavigator() {
         <Stack.Screen name="CarroDetalhe" component={CarroDetalheScreen} />
         <Stack.Screen name="PerfilLoja" component={PerfilLojaScreen} />
         <Stack.Screen name="ConversaVitrine" component={ConversaVitrineScreen} />
+        <Stack.Screen name="EditarPerfil" component={EditarPerfilScreen} />
+        <Stack.Screen name="LojasSeguidas" component={LojasSeguidasScreen} />
       </Stack.Navigator>
       <LoginSheet />
     </>

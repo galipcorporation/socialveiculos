@@ -5,10 +5,9 @@ import { useUIStore } from '../stores/uiStore'
 import { mascararMoeda, parseMoeda } from '../lib/mascaras'
 import { createReconnectingSocket, type ReconnectingSocket } from '../lib/ws'
 import { useChatStore } from '../stores/chatStore'
+import { midiaCapa, type Midia } from '../lib/veiculo'
 
 /* ── Types ───────────────────────────────────────────────────── */
-
-interface Midia { id: string; tipo: string; url: string; thumb_url?: string | null; ordem: number }
 
 interface Veiculo {
   id: string
@@ -466,11 +465,14 @@ function FeedTab({ addToast, onStartChat }: { addToast: (t: ToastType, m: string
           {/* Media & Vehicle details */}
           <div style={{ display: 'flex', gap: 12, background: 'var(--sv-surface-dim)', padding: 10, borderRadius: 'var(--sv-radius-md)' }}>
             <div style={{ width: 100, height: 75, background: 'var(--sv-surface-dim)', borderRadius: 'var(--sv-radius)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              {pub.veiculo?.midias && pub.veiculo.midias.length > 0 ? (
-                <img src={pub.veiculo.midias[0].thumb_url || pub.veiculo.midias[0].url} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <CarIcon />
-              )}
+              {(() => {
+                const capa = midiaCapa(pub.veiculo?.midias)
+                return capa ? (
+                  <img src={capa.thumb_url || capa.url} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <CarIcon />
+                )
+              })()}
             </div>
             {pub.veiculo ? (
               <div style={{ flex: 1 }}>

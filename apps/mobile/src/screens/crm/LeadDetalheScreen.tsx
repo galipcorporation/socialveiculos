@@ -98,6 +98,19 @@ export default function LeadDetalheScreen({ route }: RootScreenProps<'LeadDetalh
                 </View>
               </View>
             </View>
+            {lead.valor_proposta ? (
+              <View style={[styles.propostaLead, { borderTopColor: colors.border }]}>
+                <Txt variant="caption" color="textMuted">Valor da proposta</Txt>
+                <Txt style={{ fontFamily: fonts.displayBold, fontSize: 20, color: colors.text }}>
+                  {formatBRL(lead.valor_proposta)}
+                </Txt>
+              </View>
+            ) : null}
+            {lead.observacoes ? (
+              <Txt variant="caption" color="textDim" style={{ marginTop: spacing.xs }}>
+                {lead.observacoes}
+              </Txt>
+            ) : null}
             <View style={styles.acoesContato}>
               <AcaoContato icon="call" label="Ligar" onPress={ligar} disabled={!lead.cliente?.telefone} />
               <AcaoContato icon="logo-whatsapp" label="WhatsApp" onPress={whatsapp} disabled={!lead.cliente?.telefone} verde />
@@ -382,6 +395,7 @@ function NegociacoesCard({ leadId }: { leadId: string }) {
 
 const styles = StyleSheet.create({
   clienteRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  propostaLead: { marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1 },
   acoesContato: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.md },
   acaoContato: {
     flex: 1,

@@ -13,7 +13,8 @@ import {
 } from '../../components/ui'
 import { fipeService, veiculosService, type VeiculoInput } from '../../services'
 import {
-  ANOS, DESCRICAO_PLACEHOLDER, OPCIONAIS_POR_TIPO, REGRAS_TIPO, TIPOS_VEICULO, type TipoVeiculo,
+  ANOS, DESCRICAO_PLACEHOLDER, OPCIONAIS_POR_TIPO, REGRAS_TIPO, TIPOS_VEICULO,
+  type TipoMidia, type TipoVeiculo,
 } from '../../services/types'
 import { formatNumber, maskMoedaInput, maskPlaca, parseMoedaInput } from '../../lib/format'
 import type { RootScreenProps } from '../../navigation/types'
@@ -51,7 +52,7 @@ interface FormState {
 /** Mídia (foto ou vídeo) do formulário — mesma regra do resto do app: um campo só, tipo unificado. */
 interface MidiaForm {
   uri: string
-  tipo: 'imagem' | 'video'
+  tipo: TipoMidia
   /** true = escolhida agora pelo ImagePicker (precisa upload); false = já existe no servidor. */
   nova: boolean
 }
@@ -219,7 +220,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
             [{ resize: { width: 1600 } }],
             { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
           )
-          return { uri: r.uri, tipo: 'imagem', nova: true }
+          return { uri: r.uri, tipo: 'foto', nova: true }
         }),
       )
       set('midias', [...form.midias, ...processadas].slice(0, 8))
@@ -263,8 +264,8 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
         ? await veiculosService.atualizar(id!, montarInput())
         : await veiculosService.criar(montarInput())
       const midiasNovas = form.midias.filter((m) => m.nova)
-      for (const m of midiasNovas) {
-        await veiculosService.enviarFoto(veiculo.id, m.uri, m.tipo)
+      if (midiasNovas.length > 0) {
+        await Promise.all(midiasNovas.map((m) => veiculosService.enviarFoto(veiculo.id, m.uri, m.tipo)))
       }
       return veiculo
     },

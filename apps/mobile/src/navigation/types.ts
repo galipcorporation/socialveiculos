@@ -56,6 +56,8 @@ export type VitrineStackParamList = {
   CarroDetalhe: { id: string }
   PerfilLoja: { id: string }
   ConversaVitrine: { id: string; nome: string }
+  EditarPerfil: undefined
+  LojasSeguidas: undefined
 }
 
 export type VitrineTabsParamList = {

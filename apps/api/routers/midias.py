@@ -22,6 +22,11 @@ MAX_FILE_SIZE_VIDEO = 100 * 1024 * 1024  # 100MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
 ALLOWED_VIDEO_TYPES = {"video/mp4", "video/mpeg", "video/quicktime", "video/webm"}
 
+# Extensões usadas para inferir o tipo quando o cliente manda algo inconsistente.
+# Espelham os fronts: apps/gestor/src/lib/veiculo.ts e apps/mobile/src/services/types.ts.
+EXT_FOTO = (".jpg", ".jpeg", ".png", ".webp")
+EXT_VIDEO = (".mp4", ".mov", ".webm")
+
 
 @router.post("/midias/upload", status_code=status.HTTP_201_CREATED)
 async def upload_midia(
@@ -108,8 +113,17 @@ async def associar_midia_veiculo(
     max_ordem = ordem_res.scalar() or 0
     proxima_ordem = max_ordem + 1
 
-    # Criar mídia
-    tipo_enum = TipoMidia.FOTO if midia_data.get("tipo") == "foto" else TipoMidia.VIDEO
+    # Criar mídia. O tipo canônico é o enum TipoMidia ("foto"/"video"); "imagem" é
+    # aceito como apelido legado porque builds antigas do app ainda o enviam.
+    # A extensão da URL tem precedência sobre o campo `tipo`.
+    tipo_raw = str(midia_data.get("tipo") or "").lower()
+    url_str = str(midia_data.get("url") or "").lower()
+    if url_str.endswith(EXT_FOTO):
+        tipo_enum = TipoMidia.FOTO
+    elif url_str.endswith(EXT_VIDEO):
+        tipo_enum = TipoMidia.VIDEO
+    else:
+        tipo_enum = TipoMidia.FOTO if tipo_raw in ("foto", "imagem") else TipoMidia.VIDEO
     nova_midia = Midia(
         veiculo_id=veiculo_id,
         tipo=tipo_enum,

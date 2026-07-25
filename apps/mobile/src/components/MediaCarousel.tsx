@@ -104,7 +104,10 @@ export function MediaCarousel({ veiculo, width, height, borderRadius = radius.md
     if (!width) setLarguraMedida(e.nativeEvent.layout.width)
   }
 
-  const midias: Midia[] = [...(veiculo.midias ?? [])].sort((a, b) => a.ordem - b.ordem)
+  const midias: Midia[] = React.useMemo(
+    () => [...(veiculo.midias ?? [])].sort((a, b) => a.ordem - b.ordem),
+    [veiculo.midias]
+  )
   const [indice, setIndice] = useState(0)
   const listRef = useRef<FlatList<Midia>>(null)
 
@@ -135,7 +138,7 @@ export function MediaCarousel({ veiculo, width, height, borderRadius = radius.md
   }
 
   return (
-    <View style={{ width: w, height }} onLayout={onLayoutContainer}>
+    <View style={{ width: w, height, position: 'relative', overflow: 'hidden', borderRadius }} onLayout={onLayoutContainer}>
       <FlatList
         ref={listRef}
         data={midias}
@@ -146,20 +149,28 @@ export function MediaCarousel({ veiculo, width, height, borderRadius = radius.md
         getItemLayout={(_, i) => ({ length: w, offset: w * i, index: i })}
         onViewableItemsChanged={onViewableChanged}
         viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+        initialNumToRender={1}
+        maxToRenderPerBatch={2}
+        windowSize={3}
+        removeClippedSubviews
         renderItem={({ item, index }) =>
+          // Só o slide corrente monta player nativo; os vizinhos ficam no
+          // pôster até entrarem em cena (N players vivos travavam o scroll).
           item.tipo === 'video'
-            ? <VideoSlide url={item.url} width={w} height={height} borderRadius={borderRadius} ativo={index === indice} />
+            ? index === indice
+              ? <VideoSlide url={item.url} width={w} height={height} borderRadius={borderRadius} ativo />
+              : <Placeholder veiculo={veiculo} width={w} height={height} borderRadius={borderRadius} />
             : <Image source={{ uri: item.url }} style={{ width: w, height, borderRadius, backgroundColor: '#2d3748' }} contentFit="cover" transition={200} />
         }
       />
 
       {indice > 0 && (
-        <Pressable onPress={() => irPara(indice - 1)} hitSlop={10} style={[styles.seta, { left: 8 }]}>
+        <Pressable onPress={() => irPara(indice - 1)} hitSlop={12} style={[styles.seta, { left: 8 }]}>
           <Ionicons name="chevron-back" size={18} color="#fff" />
         </Pressable>
       )}
       {indice < midias.length - 1 && (
-        <Pressable onPress={() => irPara(indice + 1)} hitSlop={10} style={[styles.seta, { right: 8 }]}>
+        <Pressable onPress={() => irPara(indice + 1)} hitSlop={12} style={[styles.seta, { right: 8 }]}>
           <Ionicons name="chevron-forward" size={18} color="#fff" />
         </Pressable>
       )}
@@ -168,7 +179,7 @@ export function MediaCarousel({ veiculo, width, height, borderRadius = radius.md
         <Txt style={{ color: '#fff', fontFamily: fonts.semibold, fontSize: 11 }}>{indice + 1}/{midias.length}</Txt>
       </View>
 
-      <View style={styles.bolinhas}>
+      <View style={styles.bolinhas} pointerEvents="none">
         {midias.map((m, i) => (
           <View key={m.id} style={[styles.bolinha, { opacity: i === indice ? 1 : 0.4 }]} />
         ))}
@@ -180,17 +191,17 @@ export function MediaCarousel({ veiculo, width, height, borderRadius = radius.md
 const styles = StyleSheet.create({
   seta: {
     position: 'absolute', top: '50%', marginTop: -16,
-    width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center', justifyContent: 'center',
+    width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center', justifyContent: 'center', zIndex: 10, elevation: 5,
   },
   contador: {
-    position: 'absolute', bottom: 10, right: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: radius.full,
-    paddingHorizontal: 8, paddingVertical: 2,
+    position: 'absolute', bottom: 8, right: 8,
+    backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: radius.full,
+    paddingHorizontal: 8, paddingVertical: 3, zIndex: 10, elevation: 5,
   },
   bolinhas: {
-    position: 'absolute', bottom: 12, left: 0, right: 0,
-    flexDirection: 'row', justifyContent: 'center', gap: 4,
+    position: 'absolute', bottom: 10, left: 0, right: 0,
+    flexDirection: 'row', justifyContent: 'center', gap: 4, zIndex: 9,
   },
   bolinha: {
     width: 5, height: 5, borderRadius: 3, backgroundColor: '#fff',

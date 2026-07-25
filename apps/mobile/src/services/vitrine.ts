@@ -3,6 +3,7 @@
 import { api } from '../lib/api'
 import type { User } from '../stores/authStore'
 import type { LoginResult } from './auth'
+import { isFoto } from './types'
 import type { AnuncioVitrine, ConversaVitrine, LojaVitrine, Mensagem, Midia, TipoVeiculo } from './types'
 
 export type FiltroFeed = 'todos' | 'ofertas' | 'novidades' | 'carro' | 'moto'
@@ -37,10 +38,23 @@ interface VeiculoB2CDTO {
   preco_venda?: number | null
   descricao?: string | null
   opcionais?: string | null
-  midias?: { id: string; tipo: 'imagem' | 'video'; url: string; ordem: number }[]
+  midias?: { id: string; tipo: string; url: string; ordem: number }[]
   total_favoritos?: number
   favoritado_por_mim?: boolean
+  seguindo_loja?: boolean
+  oferta?: boolean
+  novidade?: boolean
   created_at?: string
+}
+interface LojaSeguidaDTO {
+  id: string
+  nome: string
+  logo_url?: string | null
+  cidade?: string | null
+  estado?: string | null
+  verificada?: boolean
+  total_veiculos?: number
+  seguindo_desde: string
 }
 interface ConversaB2CDTO {
   id: string
@@ -85,11 +99,17 @@ function mapAnuncio(v: VeiculoB2CDTO): AnuncioVitrine {
     preco_venda: v.preco_venda ?? undefined,
     descricao: v.descricao ?? undefined,
     opcionais: v.opcionais ?? undefined,
-    midias: (v.midias ?? []).map((m): Midia => ({ id: m.id, tipo: m.tipo, url: m.url, ordem: m.ordem })),
-    oferta: false,
-    novidade: false,
+    midias: (v.midias ?? []).map((m): Midia => ({
+      id: m.id,
+      tipo: isFoto({ tipo: m.tipo as Midia['tipo'], url: m.url }) ? 'foto' : 'video',
+      url: m.url,
+      ordem: m.ordem,
+    })),
+    oferta: v.oferta ?? (v.preco_venda != null && v.preco_venda > 0),
+    novidade: v.novidade ?? (v.created_at ? (Date.now() - new Date(v.created_at).getTime() < 14 * 86400000) : false),
     total_favoritos: v.total_favoritos ?? 0,
     favoritado_por_mim: v.favoritado_por_mim ?? false,
+    seguindo_loja: v.seguindo_loja ?? false,
     created_at: v.created_at ?? new Date().toISOString(),
   }
 }
@@ -131,10 +151,16 @@ export const vitrineService = {
     const params: Record<string, string> = {}
     if (busca.trim()) params.q = busca.trim()
     if (filtro === 'carro' || filtro === 'moto') params.tipo = filtro
+    if (filtro === 'ofertas' || filtro === 'novidades') params.ordenacao = filtro
+
     const data = await api.get<VeiculoB2CDTO[]>('/marketplace/feed', params)
     let lista = data.map(mapAnuncio)
-    if (filtro === 'ofertas') lista = lista.filter((a) => a.oferta)
+
+    if (filtro === 'carro') lista = lista.filter((a) => a.tipo === 'carro')
+    else if (filtro === 'moto') lista = lista.filter((a) => a.tipo === 'moto')
+    else if (filtro === 'ofertas') lista = lista.filter((a) => a.oferta)
     else if (filtro === 'novidades') lista = lista.filter((a) => a.novidade)
+
     return lista.sort((a, b) => b.created_at.localeCompare(a.created_at))
   },
 
@@ -185,6 +211,22 @@ export const vitrineService = {
     return anuncios.filter((a) => a.loja_id === lojaId).map(mapAnuncio)
   },
 
+  /** Lojas que o usuário logado segue, com contagem de anúncios. */
+  async lojasSeguidas(): Promise<LojaVitrine[]> {
+    const data = await api.get<LojaSeguidaDTO[]>('/vitrine/lojas/seguindo')
+    return data.map((l) => ({
+      id: l.id,
+      nome: l.nome,
+      logo_url: l.logo_url ?? undefined,
+      cidade: l.cidade ?? undefined,
+      estado: l.estado ?? undefined,
+      verificada: l.verificada ?? false,
+      total_veiculos: l.total_veiculos ?? 0,
+      seguindo: true,
+      seguindo_desde: l.seguindo_desde,
+    }))
+  },
+
   /** Retorna se o usuário logado segue a loja. */
   async checarSeguindo(lojaId: string): Promise<boolean> {
     const r = await api.get<{ seguindo: boolean; loja_id: string }>(`/vitrine/lojas/${lojaId}/seguindo`)
@@ -193,12 +235,18 @@ export const vitrineService = {
 
   /** Alterna seguir/deixar de seguir a loja. Retorna o novo estado. */
   async alternarSeguir(lojaId: string, seguindoAgora: boolean): Promise<boolean> {
-    if (seguindoAgora) {
-      const r = await api.delete<{ seguindo: boolean }>(`/vitrine/lojas/${lojaId}/seguir`)
-      return !!r.seguindo
+    try {
+      if (seguindoAgora) {
+        await api.delete<{ seguindo: boolean }>(`/vitrine/lojas/${lojaId}/seguir`)
+        return false
+      }
+      await api.post<{ seguindo: boolean }>(`/vitrine/lojas/${lojaId}/seguir`)
+      return true
+    } catch (err: any) {
+      if (err?.details?.status === 400) return true
+      if (err?.details?.status === 404) return false
+      throw err
     }
-    const r = await api.post<{ seguindo: boolean }>(`/vitrine/lojas/${lojaId}/seguir`)
-    return !!r.seguindo
   },
 
   // ── Chat B2C (comprador ↔ loja) ──────────────────────────
@@ -213,7 +261,11 @@ export const vitrineService = {
   },
 
   async abrirConversa(anuncio: AnuncioVitrine): Promise<ConversaVitrine> {
-    const c = await api.post<ConversaB2CDTO>('/vitrine/conversas', { veiculo_id: anuncio.id })
+    const c = await api.post<ConversaB2CDTO>('/vitrine/conversas', {
+      veiculo_id: anuncio.id,
+      loja_id: anuncio.loja_id,
+      mensagem: `Olá, tenho interesse no veículo ${anuncio.marca} ${anuncio.modelo}.`,
+    })
     return mapConversa(c)
   },
 

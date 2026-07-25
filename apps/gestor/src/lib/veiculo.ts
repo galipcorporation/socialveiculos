@@ -3,7 +3,29 @@
    Estoque (VeiculoModal) e Simulador. Não duplicar estas listas.
    ══════════════════════════════════════════════════════════════ */
 
-export interface Midia { id: string; tipo: string; url: string; thumb_url?: string | null; ordem: number }
+/* Tipo de mídia canônico — igual ao enum TipoMidia do backend (apps/api/models.py). */
+export type TipoMidia = 'foto' | 'video'
+
+export interface Midia { id: string; tipo: TipoMidia; url: string; thumb_url?: string | null; ordem: number }
+
+const EXT_FOTO = ['.jpg', '.jpeg', '.png', '.webp']
+const EXT_VIDEO = ['.mp4', '.mov', '.webm']
+
+const temExtensao = (url: string | undefined | null, exts: string[]): boolean => {
+  const u = (url || '').toLowerCase()
+  return exts.some(ext => u.endsWith(ext))
+}
+
+/* A extensão da URL tem precedência sobre o campo `tipo`: mídias gravadas antes
+   da correção do B077 vieram do banco com tipo='video' sendo foto. */
+export const isFoto = (m: Pick<Midia, 'tipo' | 'url'>): boolean =>
+  temExtensao(m?.url, EXT_FOTO) || (m?.tipo === 'foto' && !temExtensao(m?.url, EXT_VIDEO))
+
+export const isVideo = (m: Pick<Midia, 'tipo' | 'url'>): boolean => !!m?.url && !isFoto(m)
+
+/* Capa do veículo: primeira foto; sem foto nenhuma, cai na primeira mídia. */
+export const midiaCapa = <T extends Pick<Midia, 'tipo' | 'url'>>(midias?: T[]): T | undefined =>
+  midias?.find(isFoto) ?? midias?.[0]
 
 export interface Veiculo {
   id: string

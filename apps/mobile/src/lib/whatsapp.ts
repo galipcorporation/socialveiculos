@@ -22,16 +22,19 @@ export async function abrirWhatsapp(numero: string, mensagem?: string): Promise<
     Alert.alert('WhatsApp', 'Número de telefone inválido.')
     return
   }
-  const texto = mensagem ? `?text=${encodeURIComponent(mensagem)}` : ''
-  const url = `https://wa.me/${numeroLimpo}${texto}`
+  const texto = mensagem ? `&text=${encodeURIComponent(mensagem)}` : ''
+  const deepLink = `whatsapp://send?phone=${numeroLimpo}${texto}`
+  const webUrl = `https://wa.me/${numeroLimpo}${mensagem ? `?text=${encodeURIComponent(mensagem)}` : ''}`
+
   try {
-    const ok = await Linking.canOpenURL(url)
-    if (ok) {
-      await Linking.openURL(url)
-    } else {
+    // Tenta abrir diretamente o aplicativo do WhatsApp via deep link nativo
+    await Linking.openURL(deepLink)
+  } catch {
+    try {
+      // Se falhar o app nativo, tenta o link web (wa.me) no navegador
+      await Linking.openURL(webUrl)
+    } catch {
       Alert.alert('WhatsApp', 'Não foi possível abrir o WhatsApp. Verifique se ele está instalado.')
     }
-  } catch {
-    Alert.alert('WhatsApp', 'Não foi possível abrir o WhatsApp. Verifique se ele está instalado.')
   }
 }

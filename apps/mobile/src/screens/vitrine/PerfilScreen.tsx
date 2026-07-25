@@ -1,14 +1,16 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Pressable, Share, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useMutation } from '@tanstack/react-query'
+import { useNavigation } from '@react-navigation/native'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTheme, type ThemeMode } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
 import { AppHeader, Avatar, Badge, Button, Card, ListRow, Screen, Sheet, Txt, useToast } from '../../components/ui'
 import { useAuthStore } from '../../stores/authStore'
 import { useExperienciaStore } from '../../stores/experienciaStore'
 import { useLoginGateStore } from '../../stores/loginGateStore'
-import { lgpdService } from '../../services'
+import { authService, lgpdService, vitrineService } from '../../services'
+import { formatTelefone } from '../../lib/format'
 import { unregisterPush } from '../../lib/push'
 
 const MODOS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -20,6 +22,7 @@ const MODOS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyp
 export default function PerfilScreen() {
   const { colors, mode, setMode } = useTheme()
   const toast = useToast()
+  const navigation = useNavigation<any>()
   const user = useAuthStore((s) => s.user)
   const isAuth = useAuthStore((s) => s.isAuthenticated)
   const logoutStore = useAuthStore((s) => s.logout)
@@ -31,6 +34,24 @@ export default function PerfilScreen() {
   const [sairAberto, setSairAberto] = useState(false)
   const [trocarAberto, setTrocarAberto] = useState(false)
   const [excluirAberto, setExcluirAberto] = useState(false)
+  // LGPD (exportar/excluir) fica fora da tela principal, atrás de "Privacidade e dados".
+  const [privacidadeAberto, setPrivacidadeAberto] = useState(false)
+
+  // Só para o contador do atalho "Lojas que sigo".
+  const lojasQ = useQuery({
+    queryKey: ['vitrine', 'lojas-seguidas'],
+    queryFn: () => vitrineService.lojasSeguidas(),
+    enabled: isAuth,
+  })
+  const totalSeguindo = lojasQ.data?.length ?? 0
+
+  // Sessões antigas guardaram o usuário sem avatar_url/telefone (campos novos):
+  // recarrega do servidor para a foto e o telefone aparecerem sem precisar relogar.
+  const setUser = useAuthStore((s) => s.setUser)
+  const meQ = useQuery({ queryKey: ['auth', 'me'], queryFn: () => authService.me(), enabled: isAuth })
+  useEffect(() => {
+    if (meQ.data) setUser(meQ.data)
+  }, [meQ.data, setUser])
 
   const exportarMut = useMutation({
     mutationFn: () => lgpdService.exportar(),
@@ -64,16 +85,41 @@ export default function PerfilScreen() {
       <Screen padded style={{ gap: spacing.md }}>
         {/* Conta */}
         {isAuth ? (
-          <Card>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-              <Avatar nome={user?.nome} size={56} />
-              <View style={{ flex: 1 }}>
-                <Txt variant="title" numberOfLines={1}>{user?.nome}</Txt>
-                <Txt variant="caption" color="textDim" numberOfLines={1}>{user?.email}</Txt>
-                <Badge label="Comprador" tone="primary" size="sm" style={{ marginTop: 6 }} />
+          <>
+            <Card style={{ gap: spacing.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <Avatar nome={user?.nome} uri={user?.avatar_url} size={64} />
+                <View style={{ flex: 1 }}>
+                  <Txt variant="title" numberOfLines={1}>{user?.nome}</Txt>
+                  <Txt variant="caption" color="textDim" numberOfLines={1}>{user?.email}</Txt>
+                  {user?.telefone ? (
+                    <Txt variant="caption" color="textDim" numberOfLines={1}>{formatTelefone(user.telefone)}</Txt>
+                  ) : null}
+                  <Badge label="Comprador" tone="primary" size="sm" style={{ marginTop: 6, alignSelf: 'flex-start' }} />
+                </View>
               </View>
-            </View>
-          </Card>
+              <Button
+                title="Editar perfil"
+                variant="tonal"
+                icon="create-outline"
+                size="sm"
+                onPress={() => navigation.navigate('EditarPerfil')}
+                full
+              />
+            </Card>
+
+            {/* Minha atividade */}
+            <Card padded={false}>
+              <ListRow
+                icon="storefront-outline"
+                iconColor={colors.primary}
+                title="Lojas que sigo"
+                subtitle={totalSeguindo > 0 ? `${totalSeguindo} loja${totalSeguindo === 1 ? '' : 's'}` : 'Acompanhe os anúncios das suas lojas'}
+                chevron
+                onPress={() => navigation.navigate('LojasSeguidas')}
+              />
+            </Card>
+          </>
         ) : (
           <Card style={{ gap: spacing.sm }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
@@ -109,36 +155,25 @@ export default function PerfilScreen() {
           </View>
         </Card>
 
-        {/* Privacidade e dados (LGPD) */}
-        {isAuth && (
-          <Card padded={false}>
-            <ListRow
-              icon="download-outline"
-              iconColor={colors.info}
-              title="Exportar meus dados"
-              subtitle="Baixe tudo o que guardamos sobre você"
-              chevron
-              onPress={() => exportarMut.mutate()}
-            />
-            <ListRow
-              icon="trash-outline"
-              iconColor={colors.error}
-              title="Excluir minha conta"
-              subtitle="Apaga e anonimiza seus dados. Irreversível."
-              chevron
-              onPress={() => setExcluirAberto(true)}
-              style={{ borderTopWidth: 1, borderTopColor: colors.border }}
-            />
-          </Card>
-        )}
-
         {/* Ações */}
         <Card padded={false}>
           {ehLojista && (
             <ListRow icon="business-outline" iconColor={colors.info} title="Sou lojista" subtitle="Acessar o painel de gestão da loja" chevron onPress={() => setTrocarAberto(true)} />
           )}
           {isAuth && (
-            <ListRow icon="log-out-outline" iconColor={colors.error} title="Sair da conta" onPress={() => setSairAberto(true)} style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
+            <>
+              {/* Exportar/excluir vivem dentro deste sheet — ações raras e sensíveis
+                  não ficam a um toque na tela principal. */}
+              <ListRow
+                icon="shield-checkmark-outline"
+                iconColor={colors.textDim}
+                title="Privacidade e dados"
+                chevron
+                onPress={() => setPrivacidadeAberto(true)}
+                style={ehLojista ? { borderTopWidth: 1, borderTopColor: colors.border } : undefined}
+              />
+              <ListRow icon="log-out-outline" iconColor={colors.error} title="Sair da conta" onPress={() => setSairAberto(true)} style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
+            </>
           )}
         </Card>
 
@@ -150,6 +185,32 @@ export default function PerfilScreen() {
           <Txt variant="body" color="textDim">Você continuará navegando no feed, mas perderá acesso aos favoritos e às conversas até entrar de novo.</Txt>
           <Button title="Sair" variant="danger" icon="log-out-outline" onPress={() => { logout(); setSairAberto(false) }} />
           <Button title="Cancelar" variant="ghost" onPress={() => setSairAberto(false)} />
+        </View>
+      </Sheet>
+
+      <Sheet visible={privacidadeAberto} onClose={() => setPrivacidadeAberto(false)} title="Privacidade e dados" scrollable={false}>
+        <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+          <Txt variant="body" color="textDim">
+            Seus direitos sobre os dados que guardamos (LGPD).
+          </Txt>
+          <Button
+            title="Exportar meus dados"
+            variant="tonal"
+            icon="download-outline"
+            loading={exportarMut.isPending}
+            onPress={() => exportarMut.mutate()}
+            full
+          />
+          <Button
+            title="Excluir minha conta"
+            variant="ghost"
+            icon="trash-outline"
+            onPress={() => { setPrivacidadeAberto(false); setExcluirAberto(true) }}
+            full
+          />
+          <Txt variant="caption" color="textMuted" align="center">
+            Excluir a conta apaga favoritos e conversas de forma permanente.
+          </Txt>
         </View>
       </Sheet>
 

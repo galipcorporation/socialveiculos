@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -15,7 +16,7 @@ from sqlalchemy.orm import selectinload
 from database import get_db
 from deps import get_current_user, get_current_b2b_user, B2BContext
 from models import (
-    Story, LojaSeguidora, LojaConfig, Loja, Veiculo, Usuario,
+    Story, LojaSeguidora, LojaConfig, Loja, Veiculo, Usuario, StatusVeiculo,
 )
 
 router = APIRouter(prefix="/v1", tags=["Stories"])
@@ -47,6 +48,18 @@ class StoryOut(BaseModel):
 class SeguirLojaOut(BaseModel):
     seguindo: bool
     loja_id: str
+
+
+class LojaSeguidaOut(BaseModel):
+    """Loja que o usuário B2C segue — cartão da lista "Lojas que sigo"."""
+    id: str
+    nome: str
+    logo_url: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    verificada: bool = False
+    total_veiculos: int = 0
+    seguindo_desde: datetime
 
 
 class LojaConfigOut(BaseModel):
@@ -193,6 +206,53 @@ async def criar_story(
 
 
 # ── Seguir / Desseguir loja ────────────────────────────────────
+
+# Declarada antes de "/vitrine/lojas/{loja_id}/..." para o path fixo não ser
+# capturado como um loja_id pelo matcher do FastAPI.
+@router.get("/vitrine/lojas/seguindo", response_model=List[LojaSeguidaOut])
+async def listar_lojas_seguidas(
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Lojas que o usuário segue, com a contagem de anúncios visíveis no feed."""
+    res = await db.execute(
+        select(Loja, LojaSeguidora.created_at)
+        .join(LojaSeguidora, LojaSeguidora.loja_id == Loja.id)
+        .where(LojaSeguidora.usuario_id == current_user.id, Loja.ativa == True)
+        .order_by(LojaSeguidora.created_at.desc())
+    )
+    linhas = res.all()
+    if not linhas:
+        return []
+
+    # Contagem em 1 query só, com o mesmo filtro de visibilidade do feed público.
+    ids = [loja.id for loja, _ in linhas]
+    cnt_res = await db.execute(
+        select(Veiculo.loja_id, func.count(Veiculo.id))
+        .where(
+            Veiculo.loja_id.in_(ids),
+            Veiculo.publicado_marketplace == True,
+            Veiculo.status == StatusVeiculo.DISPONIVEL,
+            Veiculo.midias.any(),
+        )
+        .group_by(Veiculo.loja_id)
+    )
+    totais = {lid: total for lid, total in cnt_res.all()}
+
+    return [
+        LojaSeguidaOut(
+            id=loja.id,
+            nome=loja.nome,
+            logo_url=loja.logo_url,
+            cidade=loja.cidade,
+            estado=loja.estado,
+            verificada=bool(loja.verificada),
+            total_veiculos=totais.get(loja.id, 0),
+            seguindo_desde=desde,
+        )
+        for loja, desde in linhas
+    ]
+
 
 @router.post("/vitrine/lojas/{loja_id}/seguir", response_model=SeguirLojaOut)
 async def seguir_loja(
