@@ -36,6 +36,39 @@ importers:
 
   apps/admin:
     dependencies:
+      '@tiptap/core':
+        specifier: ^3.28.0
+        version: 3.28.0(@tiptap/pm@3.28.0)
+      '@tiptap/extension-image':
+        specifier: ^3.28.0
+        version: 3.28.0(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))
+      '@tiptap/extension-placeholder':
+        specifier: ^3.28.0
+        version: 3.28.0(@tiptap/extensions@3.28.0(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))(@tiptap/pm@3.28.0))
+      '@tiptap/extension-table':
+        specifier: ^3.28.0
+        version: 3.28.0(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))(@tiptap/pm@3.28.0)
+      '@tiptap/extension-table-cell':
+        specifier: ^3.28.0
+        version: 3.28.0(@tiptap/extension-table@3.28.0(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))(@tiptap/pm@3.28.0))
+      '@tiptap/extension-table-header':
+        specifier: ^3.28.0
+        version: 3.28.0(@tiptap/extension-table@3.28.0(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))(@tiptap/pm@3.28.0))
+      '@tiptap/extension-table-row':
+        specifier: ^3.28.0
+        version: 3.28.0(@tiptap/extension-table@3.28.0(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))(@tiptap/pm@3.28.0))
+      '@tiptap/extension-text-align':
+        specifier: ^3.28.0
+        version: 3.28.0(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))
+      '@tiptap/react':
+        specifier: ^3.28.0
+        version: 3.28.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))(@tiptap/pm@3.28.0)(@types/react-dom@19.2.3(@types/react@19.1.17))(@types/react@19.1.17)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@tiptap/starter-kit':
+        specifier: ^3.28.0
+        version: 3.28.0
+      dompurify:
+        specifier: ^3.4.12
+        version: 3.4.12
       lucide-react:
         specifier: ^1.21.0
         version: 1.21.0(react@19.1.0)

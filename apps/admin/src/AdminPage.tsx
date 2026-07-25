@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload, KeyRound } from 'lucide-react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload, KeyRound, FileText, FlaskConical, Play, XCircle, Star } from 'lucide-react'
 import { api } from './lib/api'
 import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda } from './lib/mascaras'
 import { useUIStore } from './stores/uiStore'
+import { RichEditor } from './components/RichEditor'
 
 // ── Tipos ────────────────────────────────────────────────────────
 
@@ -12,7 +13,13 @@ interface LojaItem {
   slug: string
   cidade?: string | null
   estado?: string | null
+  telefone?: string | null
+  whatsapp?: string | null
+  whatsapp_pareado?: string | null
+  whatsapp_divergente?: boolean
   ativa: boolean
+  destaque?: boolean
+  destaque_ate?: string | null
   created_at: string
 }
 
@@ -1738,7 +1745,7 @@ function AbaLojas() {
           <table className="stock-table">
             <thead>
               <tr>
-                {['Nome', 'Cidade / UF', 'Status', 'Criado em', 'Ações'].map((h) => (
+                {['Nome', 'Cidade / UF', 'WhatsApp', 'Status', 'Destaque', 'Criado em', 'Ações'].map((h) => (
                   <th key={h}>{h}</th>
                 ))}
               </tr>
@@ -1749,6 +1756,25 @@ function AbaLojas() {
                   <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{loja.nome}</td>
                   <td style={{ color: 'var(--sv-text-dim)' }}>
                     {loja.cidade && loja.estado ? `${loja.cidade} / ${loja.estado}` : loja.cidade || loja.estado || '—'}
+                  </td>
+                  <td style={{ color: 'var(--sv-text-dim)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>{loja.whatsapp || '—'}</span>
+                      {loja.whatsapp_divergente && (
+                        <span
+                          title={`Número pareado no WhatsApp (${loja.whatsapp_pareado}) diverge do cadastrado`}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '1px 8px', borderRadius: 999,
+                            fontSize: '12px', fontWeight: 600,
+                            background: 'color-mix(in srgb, var(--sv-warning) 15%, transparent)',
+                            color: 'var(--sv-warning)',
+                          }}
+                        >
+                          <AlertTriangle size={11} /> Divergente
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     <span style={{
@@ -1762,6 +1788,24 @@ function AbaLojas() {
                     }}>
                       {loja.ativa ? 'Ativa' : 'Inativa'}
                     </span>
+                  </td>
+                  <td>
+                    {loja.destaque ? (
+                      <span
+                        title={loja.destaque_ate ? `Vence em ${fmtData(loja.destaque_ate)}` : 'Sem prazo definido'}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '2px 10px', borderRadius: 999,
+                          fontSize: '12px', fontWeight: 600,
+                          background: 'color-mix(in srgb, var(--sv-warning) 15%, transparent)',
+                          color: 'var(--sv-warning)',
+                        }}
+                      >
+                        <Star size={11} /> Destaque
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--sv-text-muted)', fontSize: '12px' }}>—</span>
+                    )}
                   </td>
                   <td style={{ color: 'var(--sv-text-dim)' }}>{fmtData(loja.created_at)}</td>
                   <td>
@@ -2522,9 +2566,289 @@ function AbaUsuarios() {
   )
 }
 
+// ── Aba Contrato de Assinatura ────────────────────────────────────
+
+interface ContratoVersaoItem {
+  id: string
+  versao: string
+  conteudo_html: string
+  vigente: boolean
+  created_at: string
+}
+
+function AbaContrato() {
+  const [versoes, setVersoes] = useState<ContratoVersaoItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editorAberto, setEditorAberto] = useState(false)
+  const [tornarVigenteLoading, setTornarVigenteLoading] = useState<string | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const carregar = useCallback(() => {
+    setLoading(true)
+    api.get<ContratoVersaoItem[]>('/admin/contrato-assinatura/versoes').then(setVersoes).finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  const tornarVigente = async (id: string) => {
+    setTornarVigenteLoading(id)
+    setErro(null)
+    try {
+      await api.patch(`/admin/contrato-assinatura/versoes/${id}/tornar-vigente`, {})
+      carregar()
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao tornar a versão vigente.')
+    } finally {
+      setTornarVigenteLoading(null)
+    }
+  }
+
+  return (
+    <div style={{ marginTop: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <p style={{ color: 'var(--sv-text-muted)', fontSize: '14px', maxWidth: 480 }}>
+          Texto do contrato de assinatura B2B (Social Veículos ↔ Loja). A versão vigente é a usada por padrão ao ativar uma nova assinatura.
+        </p>
+        <button className="btn btn-primary" onClick={() => setEditorAberto(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Plus size={16} /> Nova versão
+        </button>
+      </div>
+
+      {erro && (
+        <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', marginBottom: '16px', background: 'color-mix(in srgb, var(--sv-error) 12%, var(--sv-surface))', border: '1px solid color-mix(in srgb, var(--sv-error) 30%, var(--sv-border))', borderLeft: '3px solid var(--sv-error)', borderRadius: 'var(--sv-radius)', fontSize: '14px', color: 'var(--sv-text)' }}>
+          <AlertTriangle size={16} style={{ color: 'var(--sv-error)', flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>{erro}</span>
+          <button onClick={() => setErro(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--sv-text-muted)', display: 'flex', padding: '2px' }}><X size={14} /></button>
+        </div>
+      )}
+
+      {loading ? (
+        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+      ) : versoes.length === 0 ? (
+        <EmptyState msg="Nenhuma versão do contrato cadastrada ainda. Clique em “Nova versão” para colar o texto atual." />
+      ) : (
+        <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
+          <table className="stock-table">
+            <thead>
+              <tr>
+                {['Versão', 'Status', 'Criado em', 'Ações'].map((h) => (
+                  <th key={h}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {versoes.map((v) => (
+                <tr key={v.id}>
+                  <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{v.versao}</td>
+                  <td>
+                    {v.vigente ? (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        padding: '2px 10px', borderRadius: 999, fontSize: '12px', fontWeight: 600,
+                        background: 'color-mix(in srgb, var(--sv-success) 15%, transparent)', color: 'var(--sv-success)',
+                      }}>
+                        <CheckCircle size={11} /> Vigente
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--sv-text-muted)', fontSize: '12px' }}>—</span>
+                    )}
+                  </td>
+                  <td style={{ color: 'var(--sv-text-dim)' }}>{fmtData(v.created_at)}</td>
+                  <td>
+                    {!v.vigente && (
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: '12px' }}
+                        onClick={() => tornarVigente(v.id)}
+                        disabled={tornarVigenteLoading === v.id}
+                      >
+                        Tornar vigente
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {editorAberto && (
+        <ModalNovaVersaoContrato
+          versaoSugerida={versoes[0]?.versao}
+          onClose={() => setEditorAberto(false)}
+          onSaved={() => { setEditorAberto(false); carregar() }}
+        />
+      )}
+    </div>
+  )
+}
+
+function ModalNovaVersaoContrato({ versaoSugerida, onClose, onSaved }: { versaoSugerida?: string; onClose: () => void; onSaved: () => void }) {
+  const [versao, setVersao] = useState('')
+  const [conteudoHtml, setConteudoHtml] = useState('<p>Digite o texto do contrato aqui…</p>')
+  const [tornarVigente, setTornarVigente] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setErro(null)
+    try {
+      await api.post('/admin/contrato-assinatura/versoes', {
+        versao,
+        conteudo_html: conteudoHtml,
+        tornar_vigente: tornarVigente,
+      })
+      onSaved()
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao salvar a versão do contrato.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 900, width: '100%' }}>
+        <div className="modal-header">
+          <h3 className="modal-title">Nova versão do contrato</h3>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
+        </div>
+        <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {erro && <p style={{ color: 'var(--sv-error)', fontSize: '14px' }}>{erro}</p>}
+
+          <div className="form-group">
+            <label>Identificador da versão</label>
+            <input
+              className="form-input"
+              value={versao}
+              onChange={(e) => setVersao(e.target.value)}
+              placeholder={versaoSugerida ? `Ex: ${versaoSugerida}` : 'Ex: 2026-07'}
+              maxLength={20}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Texto do contrato</label>
+            <RichEditor
+              value={conteudoHtml}
+              onChange={setConteudoHtml}
+              variaveis={[]}
+              labels={{}}
+              minHeight={320}
+              placeholder="Digite o texto do contrato…"
+            />
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '14px' }}>
+            <input type="checkbox" checked={tornarVigente} onChange={(e) => setTornarVigente(e.target.checked)} />
+            Tornar esta a versão vigente
+          </label>
+
+          <div className="modal-footer" style={{ paddingTop: '16px' }}>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? <span className="spinner" /> : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ── Aba Testes ───────────────────────────────────────────────────
+
+interface ResultadoTestes {
+  ok: boolean
+  passou: number
+  falhou: number
+  erros: number
+  duracao_s: number
+  resumo: string
+  saida: string
+}
+
+function AbaTestes() {
+  const [rodando, setRodando] = useState(false)
+  const [resultado, setResultado] = useState<ResultadoTestes | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const rodar = async () => {
+    setRodando(true)
+    setErro(null)
+    setResultado(null)
+    try {
+      const r = await api.post<ResultadoTestes>('/admin/testes/rodar')
+      setResultado(r)
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Falha ao executar os testes.')
+    } finally {
+      setRodando(false)
+    }
+  }
+
+  const cor = resultado?.ok ? 'var(--sv-success)' : 'var(--sv-error)'
+
+  return (
+    <div style={{ marginTop: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--sv-text)' }}>Suíte de testes da API</h3>
+          <p style={{ color: 'var(--sv-text-muted)', fontSize: '14px', marginTop: 4 }}>
+            Roda o pytest do backend (auth multi-loja, boot, credenciais) e mostra o resultado.
+          </p>
+        </div>
+        <button
+          className="btn btn-primary"
+          onClick={rodar}
+          disabled={rodando}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: rodando ? 'wait' : 'pointer' }}
+        >
+          <Play size={16} />
+          {rodando ? 'Rodando…' : 'Rodar testes'}
+        </button>
+      </div>
+
+      {erro && (
+        <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', marginTop: '20px', background: 'color-mix(in srgb, var(--sv-error) 12%, var(--sv-surface))', border: '1px solid color-mix(in srgb, var(--sv-error) 30%, var(--sv-border))', borderLeft: '3px solid var(--sv-error)', borderRadius: 'var(--sv-radius)', fontSize: '14px', color: 'var(--sv-text)' }}>
+          <AlertTriangle size={16} style={{ color: 'var(--sv-error)', flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>{erro}</span>
+        </div>
+      )}
+
+      {rodando && !resultado && (
+        <p style={{ marginTop: 20, color: 'var(--sv-text-muted)', fontSize: '14px' }}>
+          Executando a suíte (pode levar alguns segundos)…
+        </p>
+      )}
+
+      {resultado && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 16, borderRadius: 'var(--sv-radius)', border: `1px solid ${cor}`, background: `color-mix(in srgb, ${cor} 10%, transparent)` }}>
+            {resultado.ok ? <CheckCircle size={24} color={cor} /> : <XCircle size={24} color={cor} />}
+            <div>
+              <div style={{ fontWeight: 700, color: cor }}>{resultado.ok ? 'Todos os testes passaram' : 'Há testes falhando'}</div>
+              <div style={{ fontSize: '14px', color: 'var(--sv-text-dim)', marginTop: 2 }}>
+                {resultado.passou} passou · {resultado.falhou} falhou · {resultado.erros} erro · {resultado.duracao_s}s
+              </div>
+            </div>
+          </div>
+          <pre style={{ marginTop: 16, padding: 16, borderRadius: 'var(--sv-radius)', background: 'var(--sv-bg)', border: '1px solid var(--sv-border)', color: 'var(--sv-text-dim)', fontSize: 12, lineHeight: 1.5, maxHeight: 380, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+            {resultado.saida}
+          </pre>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Página principal ─────────────────────────────────────────────
 
-type Aba = 'overview' | 'lojas' | 'assinaturas' | 'planos' | 'auditoria' | 'erros' | 'usuarios'
+type Aba = 'overview' | 'lojas' | 'assinaturas' | 'planos' | 'contrato' | 'auditoria' | 'erros' | 'usuarios' | 'testes'
 
 const ABAS: { id: Aba; label: string; Icon: typeof Shield }[] = [
   { id: 'overview', label: 'Overview', Icon: Shield },
@@ -2532,8 +2856,10 @@ const ABAS: { id: Aba; label: string; Icon: typeof Shield }[] = [
   { id: 'usuarios', label: 'Usuários', Icon: Users },
   { id: 'assinaturas', label: 'Assinaturas', Icon: CreditCard },
   { id: 'planos', label: 'Planos', Icon: Package },
+  { id: 'contrato', label: 'Contrato', Icon: FileText },
   { id: 'auditoria', label: 'Auditoria', Icon: ClipboardList },
   { id: 'erros', label: 'Erros', Icon: AlertTriangle },
+  { id: 'testes', label: 'Testes', Icon: FlaskConical },
 ]
 
 export function AdminPage() {
@@ -2569,8 +2895,10 @@ export function AdminPage() {
       {aba === 'usuarios' && <AbaUsuarios />}
       {aba === 'assinaturas' && <AbaAssinaturas />}
       {aba === 'planos' && <AbaPlanos />}
+      {aba === 'contrato' && <AbaContrato />}
       {aba === 'auditoria' && <AbaAuditoria />}
       {aba === 'erros' && <AbaErros />}
+      {aba === 'testes' && <AbaTestes />}
     </div>
   )
 }
