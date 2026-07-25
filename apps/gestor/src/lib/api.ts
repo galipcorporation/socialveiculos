@@ -155,7 +155,8 @@ class ApiClient {
       const ts = new Date().toISOString()
       const requestId = response.headers.get('x-request-id') ?? undefined
       if (response.status >= 500 && response.status !== 503) {
-        void reportarErroServidor({ path, status: response.status, timestamp: ts, requestId, origem: 'gestor' })
+        const erroMsg = typeof body.detail === 'string' ? body.detail : (body.error ?? (body.detail ? JSON.stringify(body.detail) : undefined))
+        void reportarErroServidor({ path, status: response.status, timestamp: ts, requestId, origem: 'gestor', mensagem: erroMsg })
       }
       throw new ApiError(friendlyHttpMessage(response.status, body.error ?? body.detail), {
         status: response.status,
@@ -256,6 +257,7 @@ function reportarErroServidor(data: {
   timestamp: string
   requestId?: string
   origem: string
+  mensagem?: string
 }) {
   const { user } = useAuthStore.getState()
   const payload = {

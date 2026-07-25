@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload, KeyRound, FileText, FlaskConical, Play, XCircle, Star, Download, Printer, Send } from 'lucide-react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload, KeyRound, FileText, FlaskConical, Play, XCircle, Star, Download, Printer, Send, Copy, Check } from 'lucide-react'
 import { api } from './lib/api'
 import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda, mascararTelefone } from './lib/mascaras'
 import { useUIStore } from './stores/uiStore'
@@ -2316,9 +2316,235 @@ function fmtDetalhes(detalhes: string | null | undefined): {
   status?: number
   user_name?: string
   user_email?: string
+  mensagem?: string
+  timestamp?: string
 } {
   if (!detalhes) return {}
   try { return JSON.parse(detalhes) } catch { return {} }
+}
+
+function formatarErroTexto(log: LogItem): string {
+  const det = fmtDetalhes(log.detalhes)
+  const user_name = det.user_name || log.ator_nome || 'Anônimo'
+  const user_email = det.user_email || 'Não informado'
+  const dataFormatada = fmtDataHoraCompleta(log.created_at)
+
+  let txt = `[ERRO REGISTRADO - SOCIAL VEÍCULOS]
+----------------------------------------
+ID do Log: ${log.id}
+Data: ${dataFormatada}
+Origem: ${log.entidade || '—'}
+Rota: ${det.path || '—'}
+Status HTTP: ${det.status ?? '5xx'}
+Usuário: ${user_name} (${user_email})
+Request ID: ${log.entidade_id || '—'}
+Status IA: ${log.ajusteia ? 'Resolvido (IA)' : 'Pendente'}`
+
+  if (det.mensagem) {
+    txt += `\nMensagem do Erro: ${det.mensagem}`
+  }
+
+  txt += `\n\n[Detalhes JSON]:\n${log.detalhes || '{}'}`
+  return txt
+}
+
+function formatarListaErrosTexto(logs: LogItem[]): string {
+  if (logs.length === 0) return 'Nenhum erro registrado.'
+  let txt = `=== RELATÓRIO DE ERROS REGISTRADOS (${logs.length} item(ns)) ===\nGerado em: ${new Date().toLocaleString('pt-BR')}\n\n`
+  logs.forEach((log, index) => {
+    txt += `--- Erro #${index + 1} ---\n${formatarErroTexto(log)}\n\n`
+  })
+  return txt
+}
+
+function ModalDetalhesErro({
+  log,
+  onClose,
+  onContato,
+  onToggleAjusteIA,
+}: {
+  log: LogItem
+  onClose: () => void
+  onContato?: () => void
+  onToggleAjusteIA?: () => void
+}) {
+  const [copiado, setCopiado] = useState(false)
+  const [copiadoJson, setCopiadoJson] = useState(false)
+  const det = fmtDetalhes(log.detalhes)
+  const user_name = det.user_name || log.ator_nome || 'Anônimo'
+  const user_email = det.user_email
+
+  const handleCopiarTexto = () => {
+    navigator.clipboard.writeText(formatarErroTexto(log))
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
+  }
+
+  const handleCopiarJson = () => {
+    const raw = JSON.stringify({
+      id: log.id,
+      acao: log.acao,
+      entidade: log.entidade,
+      request_id: log.entidade_id,
+      detalhes: det,
+      created_at: log.created_at,
+    }, null, 2)
+    navigator.clipboard.writeText(raw)
+    setCopiadoJson(true)
+    setTimeout(() => setCopiadoJson(false), 2000)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card modal-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertTriangle size={20} style={{ color: 'var(--sv-error)' }} />
+            <h3 className="modal-title">Detalhes do Erro</h3>
+          </div>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+
+        <div className="modal-body modal-form-grid">
+          <div className="span-2" style={{
+            background: 'rgba(255, 255, 255, 0.03)',
+            padding: '16px',
+            borderRadius: 'var(--sv-radius)',
+            border: '1px solid var(--sv-border)',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '12px'
+          }}>
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>ORIGEM</span>
+              <span style={{ fontWeight: 600, color: 'var(--sv-primary)' }}>{log.entidade || '—'}</span>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>ROTA</span>
+              <code style={{ fontSize: '12px', color: 'var(--sv-text)', wordBreak: 'break-all' }}>{det.path || '—'}</code>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>STATUS</span>
+              <span style={{ fontWeight: 700, color: 'var(--sv-error)' }}>HTTP {det.status ?? 500}</span>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>DATA E HORA</span>
+              <span style={{ fontSize: '13px', color: 'var(--sv-text-dim)' }}>{fmtDataHoraCompleta(log.created_at)}</span>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>USUÁRIO</span>
+              <span style={{ fontWeight: 600, color: 'var(--sv-text)', fontSize: '13px' }}>{user_name}</span>
+              {user_email && <div style={{ fontSize: '12px', color: 'var(--sv-text-dim)' }}>{user_email}</div>}
+            </div>
+
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>REQUEST ID</span>
+              <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--sv-text-dim)' }}>{log.entidade_id || '—'}</span>
+            </div>
+          </div>
+
+          {det.mensagem && (
+            <div className="span-2" style={{
+              background: 'color-mix(in srgb, var(--sv-error) 8%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--sv-error) 25%, transparent)',
+              padding: '14px',
+              borderRadius: 'var(--sv-radius)',
+            }}>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sv-error)', display: 'block', marginBottom: '4px' }}>
+                MENSAGEM DE EXCEÇÃO
+              </span>
+              <pre style={{
+                margin: 0,
+                fontSize: '13px',
+                color: 'var(--sv-text)',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                fontFamily: 'monospace'
+              }}>
+                {det.mensagem}
+              </pre>
+            </div>
+          )}
+
+          <div className="span-2" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sv-text-dim)' }}>
+                DADOS DO LOG (JSON)
+              </label>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleCopiarJson}
+                style={{ padding: '3px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                {copiadoJson ? <Check size={12} style={{ color: 'var(--sv-success)' }} /> : <Copy size={12} />}
+                {copiadoJson ? 'JSON Copiado!' : 'Copiar JSON'}
+              </button>
+            </div>
+            <pre style={{
+              background: 'rgba(0, 0, 0, 0.4)',
+              border: '1px solid var(--sv-border)',
+              padding: '12px',
+              borderRadius: 'var(--sv-radius)',
+              fontSize: '12px',
+              color: '#34d399',
+              fontFamily: 'monospace',
+              maxHeight: '220px',
+              overflow: 'auto',
+              margin: 0,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all'
+            }}>
+              {JSON.stringify(det, null, 2)}
+            </pre>
+          </div>
+
+          <div className="modal-footer span-2" style={{ justifyContent: 'space-between', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {onToggleAjusteIA && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={onToggleAjusteIA}
+                  style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  {log.ajusteia ? <CheckCircle size={14} style={{ color: 'var(--sv-success)' }} /> : <AlertTriangle size={14} />}
+                  {log.ajusteia ? 'Resolvido (IA)' : 'Marcar Resolvido'}
+                </button>
+              )}
+              {user_email && onContato && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => { onClose(); onContato() }}
+                  style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  <Mail size={14} /> Entrar em Contato
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleCopiarTexto}
+                style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                {copiado ? <Check size={14} /> : <Copy size={14} />}
+                {copiado ? 'Erro Copiado!' : 'Copiar Resumo de Erro'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={onClose}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 interface ErroSelecionado {
@@ -2450,6 +2676,9 @@ function AbaErros() {
   const [pagina, setPagina] = useState(1)
   const [subAba, setSubAba] = useState<'ativos' | 'ocultados'>('ativos')
   const [erroSelecionado, setErroSelecionado] = useState<ErroSelecionado | null>(null)
+  const [logDetalhes, setLogDetalhes] = useState<LogItem | null>(null)
+  const [copiadoId, setCopiadoId] = useState<string | null>(null)
+  const [copiadoTodos, setCopiadoTodos] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [acaoLoading, setAcaoLoading] = useState<string | null>(null)
   const [loteLoading, setLoteLoading] = useState(false)
@@ -2476,6 +2705,9 @@ function AbaErros() {
     try {
       await api.patch(`/admin/erros/${logId}/visibilidade`, { visivel: !atualVisivel })
       setLogs((prev) => prev.filter((log) => log.id !== logId))
+      if (logDetalhes?.id === logId) {
+        setLogDetalhes(null)
+      }
     } catch (err: any) {
       setErro(err?.message || 'Erro ao alterar a visibilidade do registro.')
     } finally {
@@ -2489,6 +2721,9 @@ function AbaErros() {
     try {
       await api.patch(`/admin/erros/${logId}/ajusteia`, { ajusteia: !atualAjuste })
       setLogs((prev) => prev.map((log) => log.id === logId ? { ...log, ajusteia: !atualAjuste } : log))
+      if (logDetalhes?.id === logId) {
+        setLogDetalhes((prev) => prev ? { ...prev, ajusteia: !atualAjuste } : null)
+      }
     } catch (err: any) {
       setErro(err?.message || 'Erro ao marcar o ajuste por IA.')
     } finally {
@@ -2526,6 +2761,18 @@ function AbaErros() {
     }
   }
 
+  const copiarSingleLog = (log: LogItem) => {
+    navigator.clipboard.writeText(formatarErroTexto(log))
+    setCopiadoId(log.id)
+    setTimeout(() => setCopiadoId(null), 2000)
+  }
+
+  const copiarTodosErros = () => {
+    navigator.clipboard.writeText(formatarListaErrosTexto(logs))
+    setCopiadoTodos(true)
+    setTimeout(() => setCopiadoTodos(false), 2000)
+  }
+
   const inicio = (pagina - 1) * POR_PAG
   const paginas = Math.ceil(logs.length / POR_PAG)
   const slice = logs.slice(inicio, inicio + POR_PAG)
@@ -2553,7 +2800,19 @@ function AbaErros() {
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {logs.length > 0 && (
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: '12px', padding: '8px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              onClick={copiarTodosErros}
+              title="Copiar relatório formatado com todos os erros visíveis"
+            >
+              {copiadoTodos ? <Check size={14} style={{ color: 'var(--sv-success)' }} /> : <Copy size={14} />}
+              {copiadoTodos ? 'Lista Copiada!' : 'Copiar Todos os Erros'}
+            </button>
+          )}
+
           {subAba === 'ativos' && logs.length > 0 && (
             <button
               className="btn btn-secondary"
@@ -2620,6 +2879,8 @@ function AbaErros() {
                   const det = fmtDetalhes(log.detalhes)
                   const user_name = det.user_name || log.ator_nome
                   const user_email = det.user_email
+                  const isCopiado = copiadoId === log.id
+
                   return (
                     <tr key={log.id}>
                       <td>
@@ -2690,7 +2951,26 @@ function AbaErros() {
                       </td>
                       <td style={{ color: 'var(--sv-text-dim)' }}>{fmtDataHoraCompleta(log.created_at)}</td>
                       <td>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                            onClick={() => copiarSingleLog(log)}
+                            title="Copiar resumo do erro"
+                          >
+                            {isCopiado ? <Check size={14} style={{ color: 'var(--sv-success)' }} /> : <Copy size={14} />}
+                            {isCopiado ? 'Copiado' : 'Copiar'}
+                          </button>
+
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                            onClick={() => setLogDetalhes(log)}
+                            title="Ver detalhes completos do erro"
+                          >
+                            <FileText size={14} /> Detalhes
+                          </button>
+
                           {subAba === 'ativos' ? (
                             <>
                               {user_email && (
@@ -2747,6 +3027,29 @@ function AbaErros() {
             </div>
           )}
         </>
+      )}
+
+      {logDetalhes && (
+        <ModalDetalhesErro
+          log={logDetalhes}
+          onClose={() => setLogDetalhes(null)}
+          onToggleAjusteIA={() => toggleAjusteIA(logDetalhes.id, !!logDetalhes.ajusteia)}
+          onContato={
+            fmtDetalhes(logDetalhes.detalhes).user_email
+              ? () => {
+                  const det = fmtDetalhes(logDetalhes.detalhes)
+                  setErroSelecionado({
+                    id: logDetalhes.id,
+                    path: det.path || '—',
+                    status: det.status ?? 500,
+                    user_name: det.user_name || logDetalhes.ator_nome || 'Anônimo',
+                    user_email: det.user_email || '',
+                    date: fmtDataHoraCompleta(logDetalhes.created_at)
+                  })
+                }
+              : undefined
+          }
+        />
       )}
 
       {erroSelecionado && (

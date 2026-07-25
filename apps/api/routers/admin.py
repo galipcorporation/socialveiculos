@@ -845,6 +845,7 @@ class ReportarErroRequest(BaseModel):
     origem: Optional[str] = None  # "gestor" | "vitrine"
     user_name: Optional[str] = None
     user_email: Optional[str] = None
+    mensagem: Optional[str] = None
 
 
 @router.post(
@@ -871,6 +872,8 @@ async def reportar_erro_servidor(
         detalhes_dict["user_name"] = data.user_name
     if data.user_email:
         detalhes_dict["user_email"] = data.user_email
+    if data.mensagem:
+        detalhes_dict["mensagem"] = data.mensagem
 
     log = LogAuditoria(
         id=str(uuid4()),

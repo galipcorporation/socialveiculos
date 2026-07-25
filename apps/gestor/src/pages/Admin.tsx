@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import DOMPurify from 'dompurify'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, FlaskConical, Play, CheckCircle2, XCircle, Pencil, CreditCard, FileText, Check, Star, StarOff } from 'lucide-react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, FlaskConical, Play, CheckCircle2, XCircle, Pencil, CreditCard, FileText, Check, Star, StarOff, Copy } from 'lucide-react'
 import { api } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
 import { mascararTelefone, mascararMoeda, parseMoeda } from '../lib/mascaras'
@@ -41,6 +41,8 @@ interface LogItem {
   entidade_id?: string | null
   detalhes?: string | null
   created_at: string
+  visivel?: boolean
+  ajusteia?: boolean
 }
 
 interface NovaLojaForm {
@@ -1371,15 +1373,61 @@ function AbaAuditoria() {
 
 // ── Aba Erros ────────────────────────────────────────────────────
 
-function fmtDetalhes(detalhes: string | null | undefined): { path?: string; status?: number } {
+function fmtDetalhes(detalhes: string | null | undefined): {
+  path?: string
+  status?: number
+  user_name?: string
+  user_email?: string
+  mensagem?: string
+  timestamp?: string
+} {
   if (!detalhes) return {}
   try { return JSON.parse(detalhes) } catch { return {} }
+}
+
+function formatarErroTexto(log: LogItem): string {
+  const det = fmtDetalhes(log.detalhes)
+  const user_name = det.user_name || log.ator_nome || 'Anônimo'
+  const user_email = det.user_email || 'Não informado'
+
+  let txt = `[ERRO REGISTRADO - SOCIAL VEÍCULOS]
+----------------------------------------
+ID do Log: ${log.id}
+Data: ${new Date(log.created_at).toLocaleString('pt-BR')}
+Origem: ${log.entidade || '—'}
+Rota: ${det.path || '—'}
+Status HTTP: ${det.status ?? '5xx'}
+Usuário: ${user_name} (${user_email})
+Request ID: ${log.entidade_id || '—'}
+Status IA: ${log.ajusteia ? 'Resolvido (IA)' : 'Pendente'}`
+
+  if (det.mensagem) {
+    txt += `\nMensagem do Erro: ${det.mensagem}`
+  }
+
+  txt += `\n\n[Detalhes JSON]:\n${log.detalhes || '{}'}`
+  return txt
+}
+
+function formatarListaErrosTexto(logs: LogItem[]): string {
+  if (logs.length === 0) return 'Nenhum erro registrado.'
+  let txt = `=== RELATÓRIO DE ERROS REGISTRADOS (${logs.length} item(ns)) ===
+Gerado em: ${new Date().toLocaleString('pt-BR')}
+
+`
+  logs.forEach((log, index) => {
+    txt += `--- Erro #${index + 1} ---\n${formatarErroTexto(log)}\n\n`
+  })
+  return txt
 }
 
 function AbaErros() {
   const [logs, setLogs] = useState<LogItem[]>([])
   const [loading, setLoading] = useState(true)
   const [pagina, setPagina] = useState(1)
+  const [logDetalhes, setLogDetalhes] = useState<LogItem | null>(null)
+  const [copiadoId, setCopiadoId] = useState<string | null>(null)
+  const [copiadoTodos, setCopiadoTodos] = useState(false)
   const POR_PAG = 20
 
   const carregar = useCallback(() => {
@@ -1389,12 +1437,39 @@ function AbaErros() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  const copiarSingleLog = (log: LogItem) => {
+    navigator.clipboard.writeText(formatarErroTexto(log))
+    setCopiadoId(log.id)
+    setTimeout(() => setCopiadoId(null), 2000)
+  }
+
+  const copiarTodosErros = () => {
+    navigator.clipboard.writeText(formatarListaErrosTexto(logs))
+    setCopiadoTodos(true)
+    setTimeout(() => setCopiadoTodos(false), 2000)
+  }
+
   const inicio = (pagina - 1) * POR_PAG
   const paginas = Math.ceil(logs.length / POR_PAG)
   const slice = logs.slice(inicio, inicio + POR_PAG)
 
   return (
     <div style={{ marginTop: 'var(--sv-space-6)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sv-space-4)', flexWrap: 'wrap', gap: '8px' }}>
+        <h4 style={{ margin: 0, color: 'var(--sv-text-primary)', fontSize: 'var(--sv-text-base)', fontWeight: 600 }}>Erros de Servidor Registrados</h4>
+        {logs.length > 0 && (
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: 'var(--sv-text-xs)', padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            onClick={copiarTodosErros}
+            title="Copiar todos os erros em formato de texto"
+          >
+            {copiadoTodos ? <Check size={14} style={{ color: 'var(--sv-success, #10b981)' }} /> : <Copy size={14} />}
+            {copiadoTodos ? 'Lista Copiada!' : 'Copiar Todos os Erros'}
+          </button>
+        )}
+      </div>
+
       {logs.length > 0 && (
         <div style={{
           display: 'flex',
@@ -1423,7 +1498,7 @@ function AbaErros() {
             <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--sv-border)' }}>
-                  {['Origem', 'Rota', 'Status', 'Request ID', 'Data'].map((h) => (
+                  {['Origem', 'Rota', 'Status', 'Request ID', 'Data', 'Ações'].map((h) => (
                     <th key={h} style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', textAlign: 'left', color: 'var(--sv-text-muted)', fontWeight: 500 }}>{h}</th>
                   ))}
                 </tr>
@@ -1431,6 +1506,8 @@ function AbaErros() {
               <tbody>
                 {slice.map((log) => {
                   const det = fmtDetalhes(log.detalhes)
+                  const isCopiado = copiadoId === log.id
+
                   return (
                     <tr key={log.id} style={{ borderBottom: '1px solid var(--sv-border)' }}>
                       <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
@@ -1466,6 +1543,28 @@ function AbaErros() {
                         {log.entidade_id || '—'}
                       </td>
                       <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-muted)' }}>{fmtData(log.created_at)}</td>
+                      <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '3px 8px', fontSize: 'var(--sv-text-xs)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            onClick={() => copiarSingleLog(log)}
+                            title="Copiar resumo do erro"
+                          >
+                            {isCopiado ? <Check size={13} style={{ color: 'var(--sv-success, #10b981)' }} /> : <Copy size={13} />}
+                            {isCopiado ? 'Copiado' : 'Copiar'}
+                          </button>
+
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '3px 8px', fontSize: 'var(--sv-text-xs)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            onClick={() => setLogDetalhes(log)}
+                            title="Ver detalhes do erro"
+                          >
+                            <FileText size={13} /> Detalhes
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   )
                 })}

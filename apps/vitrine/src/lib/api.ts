@@ -38,6 +38,7 @@ function reportarErroServidor(data: {
   timestamp: string
   requestId?: string
   origem: string
+  mensagem?: string
 }) {
   const { user } = useAuthStore.getState()
   const payload = {
@@ -150,7 +151,8 @@ class ApiClient {
       const ts = new Date().toISOString()
       const requestId = response.headers.get('x-request-id') ?? undefined
       if (response.status >= 500) {
-        void reportarErroServidor({ path, status: response.status, timestamp: ts, requestId, origem: 'vitrine' })
+        const erroMsg = typeof body.detail === 'string' ? body.detail : (body.error ?? (body.detail ? JSON.stringify(body.detail) : undefined))
+        void reportarErroServidor({ path, status: response.status, timestamp: ts, requestId, origem: 'vitrine', mensagem: erroMsg })
       }
       throw new ApiError(friendlyHttpMessage(response.status, body.error), {
         status: response.status,
