@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTheme } from '../theme/ThemeContext'
 import { fonts } from '../theme/tokens'
 import { chatService } from '../services'
+import { useModulosLiberados } from '../hooks/useModulosLiberados'
 import type { MainTabsParamList } from './types'
 import DashboardScreen from '../screens/dashboard/DashboardScreen'
 import EstoqueScreen from '../screens/estoque/EstoqueScreen'
@@ -24,6 +25,9 @@ const ICONS: Record<keyof MainTabsParamList, { on: keyof typeof Ionicons.glyphMa
 
 export default function MainTabs() {
   const { colors } = useTheme()
+  // Estoque e CRM são do núcleo, mas o gestor pode não ter liberado para o
+  // vendedor — nesse caso a aba nem é registrada, em vez de abrir e dar 403.
+  const { liberado } = useModulosLiberados()
   const { data: naoLidas } = useQuery({
     queryKey: ['chat', 'nao-lidas'],
     queryFn: () => chatService.totalNaoLidas(),
@@ -53,8 +57,8 @@ export default function MainTabs() {
       })}
     >
       <Tab.Screen name="Inicio" component={DashboardScreen} options={{ title: 'Início' }} />
-      <Tab.Screen name="Estoque" component={EstoqueScreen} />
-      <Tab.Screen name="CRM" component={CrmScreen} />
+      {liberado('estoque') && <Tab.Screen name="Estoque" component={EstoqueScreen} />}
+      {liberado('crm') && <Tab.Screen name="CRM" component={CrmScreen} />}
       <Tab.Screen
         name="Chat"
         component={ChatScreen}

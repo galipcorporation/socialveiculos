@@ -77,7 +77,7 @@ function FeedTab() {
 
   const abrirProposta = (p: PublicacaoRepasse) => {
     setProposta(p)
-    setValor(p.valor_repasse ? String(p.valor_repasse) : '')
+    setValor(p.valor_repasse ? maskMoedaInput(String(Math.round(p.valor_repasse * 100))) : '')
     setObs('')
   }
 

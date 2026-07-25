@@ -5,7 +5,8 @@ import { useNavigation } from '@react-navigation/native'
 import { useTheme, type ThemeMode } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
 import { AppHeader, Card, ListRow, Screen, Txt } from '../../components/ui'
-import { useAuthStore } from '../../stores/authStore'
+import { useModulosLiberados } from '../../hooks/useModulosLiberados'
+import type { ModuloKey } from '../../lib/modulos'
 import type { RootStackParamList } from '../../navigation/types'
 
 const MODOS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -19,44 +20,57 @@ type ItemConfigLoja = {
   icon: keyof typeof Ionicons.glyphMap
   title: string
   subtitle: string
+  /** Módulo dono desta configuração. Sem ele, a tela configura o núcleo da loja. */
+  modulo?: ModuloKey
+  /** Configuração da loja inteira — vendedor não mexe. */
+  soGestor?: boolean
 }
 
 const CONFIG_LOJA: ItemConfigLoja[] = [
-  { screen: 'PerfilLoja', icon: 'storefront-outline', title: 'Perfil da Loja', subtitle: 'Dados cadastrais e comissão padrão' },
-  { screen: 'CredenciaisBanco', icon: 'card-outline', title: 'Credenciais Bancárias', subtitle: 'Bancos e financeiras do Simulador' },
-  { screen: 'CredenciaisIA', icon: 'sparkles-outline', title: 'Inteligência Artificial', subtitle: 'Sua chave de IA (BYOK)' },
-  { screen: 'RedesSociais', icon: 'share-social-outline', title: 'Redes Sociais', subtitle: 'Instagram e Facebook para marketing' },
-  { screen: 'Detran', icon: 'document-text-outline', title: 'Consulta DETRAN', subtitle: 'Fornecedor de consultas veiculares' },
-  { screen: 'Fiscal', icon: 'receipt-outline', title: 'Fiscal / NF-e', subtitle: 'Dados fiscais e certificado A1' },
+  { screen: 'PerfilLoja', icon: 'storefront-outline', title: 'Perfil da Loja', subtitle: 'Dados cadastrais e comissão padrão', soGestor: true },
+  { screen: 'CredenciaisBanco', icon: 'card-outline', title: 'Credenciais Bancárias', subtitle: 'Bancos e financeiras do Simulador', modulo: 'simulador' },
+  { screen: 'CredenciaisIA', icon: 'sparkles-outline', title: 'Inteligência Artificial', subtitle: 'Sua chave de IA (BYOK)', modulo: 'assistente_ia' },
+  { screen: 'RedesSociais', icon: 'share-social-outline', title: 'Redes Sociais', subtitle: 'Instagram e Facebook para marketing', modulo: 'marketing', soGestor: true },
+  { screen: 'Detran', icon: 'document-text-outline', title: 'Consulta DETRAN', subtitle: 'Fornecedor de consultas veiculares', modulo: 'estoque', soGestor: true },
+  { screen: 'Fiscal', icon: 'receipt-outline', title: 'Fiscal / NF-e', subtitle: 'Dados fiscais e certificado A1', modulo: 'fiscal', soGestor: true },
 ]
 
 export default function ConfiguracoesScreen() {
   const { colors, mode, setMode } = useTheme()
   const navigation = useNavigation()
-  const user = useAuthStore((s) => s.user)
-  const gestor = user?.papel !== 'vendedor'
+  const { liberado, gestor } = useModulosLiberados()
+
+  // Só entra o que o usuário realmente acessa: se o módulo não está no plano da
+  // loja ou o gestor não liberou para este vendedor, a configuração dele não
+  // aparece aqui — do mesmo jeito que não aparece no fluxo.
+  const itens = CONFIG_LOJA.filter(
+    (i) => (gestor || !i.soGestor) && (!i.modulo || liberado(i.modulo)),
+  )
+
   return (
     <Screen scroll={false} padded={false}>
       <AppHeader title="Configurações" large={false} back />
       <Screen padded style={{ gap: spacing.md }}>
-        {/* Configurações da loja (M048) */}
-        <Card padded={false}>
-          <Txt variant="label" color="textMuted" style={{ padding: spacing.md, paddingBottom: spacing.xs, textTransform: 'uppercase' }}>
-            {gestor ? 'Loja' : 'Minhas credenciais'}
-          </Txt>
-          {(gestor ? CONFIG_LOJA : CONFIG_LOJA.filter((i) => i.screen === 'CredenciaisBanco')).map((item, i) => (
-            <ListRow
-              key={item.screen}
-              icon={item.icon}
-              iconColor={colors.primary}
-              title={item.title}
-              subtitle={item.subtitle}
-              chevron
-              onPress={() => navigation.navigate(item.screen as never)}
-              style={i > 0 ? { borderTopWidth: 1, borderTopColor: colors.border } : undefined}
-            />
-          ))}
-        </Card>
+        {/* Configurações da loja (M048) — só os módulos que o usuário acessa */}
+        {itens.length > 0 && (
+          <Card padded={false}>
+            <Txt variant="label" color="textMuted" style={{ padding: spacing.md, paddingBottom: spacing.xs, textTransform: 'uppercase' }}>
+              {gestor ? 'Loja' : 'Minhas credenciais'}
+            </Txt>
+            {itens.map((item, i) => (
+              <ListRow
+                key={item.screen}
+                icon={item.icon}
+                iconColor={colors.primary}
+                title={item.title}
+                subtitle={item.subtitle}
+                chevron
+                onPress={() => navigation.navigate(item.screen as never)}
+                style={i > 0 ? { borderTopWidth: 1, borderTopColor: colors.border } : undefined}
+              />
+            ))}
+          </Card>
+        )}
 
         {/* Tema */}
         <Card>

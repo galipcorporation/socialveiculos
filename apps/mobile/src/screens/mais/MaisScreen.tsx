@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { Pressable, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
-import { useQuery } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing } from '../../theme/tokens'
 import {
@@ -11,9 +10,7 @@ import {
 import { useAuthStore } from '../../stores/authStore'
 import { useLojaAtivaStore } from '../../stores/lojaAtivaStore'
 import { useExperienciaStore } from '../../stores/experienciaStore'
-import { MODULOS_BASE, parseModulos, type ModuloKey } from '../../lib/modulos'
-import { modulosService } from '../../services'
-import type { Modulo } from '../../services/types'
+import { useModulosLiberados } from '../../hooks/useModulosLiberados'
 import { unregisterPush } from '../../lib/push'
 
 export default function MaisScreen() {
@@ -26,26 +23,8 @@ export default function MaisScreen() {
   const trocarExperiencia = useExperienciaStore((s) => s.trocar)
   const [sairAberto, setSairAberto] = useState(false)
 
-  const gestor = user?.papel === 'gestor'
-  const modulos = parseModulos(user?.modulos)
-
-  // Módulos premium que o ADMIN contratou para a loja (assinatura em dia).
-  // Sem isto a lista mostraria ferramentas não contratadas — o gestor abriria
-  // a tela e só tomaria 402 lá dentro. Núcleo (estoque/crm/financeiro) não
-  // passa por aqui: não é contratável, só depende da liberação do gestor.
-  const contratadosQ = useQuery({ queryKey: ['modulos'], queryFn: () => modulosService.todos() })
-  const contratados = contratadosQ.data
-  const contratado = (chave: ModuloKey): boolean => {
-    if (MODULOS_BASE.includes(chave)) return true
-    // Enquanto carrega, esconde: melhor o item aparecer um instante depois do
-    // que piscar uma ferramenta que a loja não tem.
-    if (!contratados) return false
-    return contratados.some((m) => m.modulo === (chave as Modulo) && m.liberado)
-  }
-
-  /** Só aparece se a loja contratou (admin) E o vendedor tem acesso (gestor). */
-  const liberado = (chave: ModuloKey) =>
-    contratado(chave) && (gestor || modulos.includes(chave))
+  // Só aparece se a loja contratou (admin) E o vendedor tem acesso (gestor).
+  const { liberado, gestor } = useModulosLiberados()
   const sep = { borderTopWidth: 1, borderTopColor: colors.border }
 
   const atalhos: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }[] = gestor
@@ -80,7 +59,7 @@ export default function MaisScreen() {
               key={a.label}
               onPress={a.onPress}
               style={({ pressed }) => ({
-                flexBasis: '48%', flexGrow: 1,
+                flexBasis: '48%', flexGrow: 0,
                 backgroundColor: pressed ? colors.surfaceElevated : colors.surface,
                 borderColor: colors.border, borderWidth: 1, borderRadius: radius.lg,
                 padding: spacing.md, gap: spacing.sm,

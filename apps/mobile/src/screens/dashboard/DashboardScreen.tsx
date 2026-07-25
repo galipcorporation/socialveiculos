@@ -217,8 +217,8 @@ export default function DashboardScreen() {
                     },
                   ]}
                 >
-                  <Ionicons name={a.icon} size={22} color={colors.primary} />
-                  <Txt variant="caption" color="textDim" align="center" numberOfLines={1}>
+                  <Ionicons name={a.icon} size={20} color={colors.primary} />
+                  <Txt variant="caption" color="textDim" numberOfLines={1}>
                     {a.label}
                   </Txt>
                 </Pressable>
@@ -390,14 +390,18 @@ const styles = StyleSheet.create({
   },
   acoesRow: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   acao: {
-    flex: 1,
+    flexBasis: '48%',
+    flexGrow: 0,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: 4,
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.lg,
     borderWidth: 1,
   },

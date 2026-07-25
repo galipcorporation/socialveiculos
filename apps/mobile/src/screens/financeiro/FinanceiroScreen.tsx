@@ -302,7 +302,7 @@ function NovoLancamentoSheet({ visible, onClose }: { visible: boolean; onClose: 
   const recuperarRascunho = (rascunho: Lancamento) => {
     setTipo(rascunho.tipo)
     setDescricao(rascunho.descricao ?? '')
-    setValor(rascunho.valor ? String(rascunho.valor).replace('.', ',') : '')
+    setValor(rascunho.valor ? maskMoedaInput(String(Math.round(rascunho.valor * 100))) : '')
     setStatus(rascunho.status_pagamento)
     setRascunhoId(rascunho.id)
     setRascunhoDisponivel(null)
