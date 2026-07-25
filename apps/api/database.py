@@ -3,9 +3,13 @@ Social Veículos — Configuração do banco de dados.
 SQLAlchemy async engine + session factory.
 """
 
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 # ── Engine ──────────────────────────────────────────────────────
@@ -75,16 +79,16 @@ async def create_all_tables():
         # Migrações seguras locais
         try:
             await conn.execute(text("ALTER TABLE log_auditoria ADD COLUMN visivel BOOLEAN DEFAULT 1 NOT NULL"))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"ALTER TABLE ignorado (provavelmente já existe): {e}")
         try:
             await conn.execute(text("ALTER TABLE log_auditoria ADD COLUMN ajusteia BOOLEAN DEFAULT 0 NOT NULL"))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"ALTER TABLE ignorado (provavelmente já existe): {e}")
         try:
             await conn.execute(text("ALTER TABLE veiculo ADD COLUMN contrato_origem_id VARCHAR(36) REFERENCES contrato(id) ON DELETE SET NULL"))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"ALTER TABLE ignorado (provavelmente já existe): {e}")
 
 
 async def drop_all_tables():

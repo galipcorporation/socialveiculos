@@ -25,6 +25,8 @@ from schemas import (
     LojaResponse, LogAuditoriaResponse,
     AssinaturaResponse, PagamentoResponse, PlanoResponse,
     AdminAtivarAssinaturaRequest, AdminRenovarAssinaturaRequest, AdminSuspenderAssinaturaRequest,
+    AdminReativarAssinaturaRequest, AdminTrocarPlanoRequest, AdminCortesiasRequest,
+    AdminDiffModulosResponse, AdminModuloStatusItem,
     AdminAssinaturaDetalheResponse, AdminVencimentoItem,
     AdminCriarPlanoRequest, AdminEditarPlanoRequest,
     ContratoVersaoResponse, ContratoVersaoCreateRequest,
@@ -34,7 +36,17 @@ from schemas import (
 )
 from auth import hash_password, create_access_token
 from storage import storage_provider
-from modulos import assinatura_em_dia
+from modulos import Modulo, assinatura_em_dia
+from plano_acesso import (
+    STATUS_RECUPERAVEIS,
+    acesso_liberado,
+    definir_cortesias,
+    modulos_do_plano,
+    prever_troca_plano,
+    proximo_vencimento_apos,
+    reativar_loja,
+    sincronizar_modulos,
+)
 
 router = APIRouter(prefix="/v1/admin", tags=["Administração Global"])
 
@@ -341,18 +353,17 @@ async def editar_loja(
         loja.cep = data.cep.strip() or None
 
     if data.modulos_ativos is not None:
-        from sqlalchemy import delete
-        # Remover módulos atuais
-        await db.execute(
-            delete(ModuloHabilitado).where(ModuloHabilitado.loja_id == loja_id)
-        )
-        # Adicionar novos módulos habilitados
-        for m_name in data.modulos_ativos:
-            db.add(ModuloHabilitado(
-                loja_id=loja_id,
-                nome_modulo=m_name,
-                ativo=True
-            ))
+        # Os módulos do PLANO não se editam aqui — quem manda neles é o plano
+        # contratado (ver plano_acesso.sincronizar_modulos). Antes este bloco
+        # apagava tudo e recriava do zero, desfazendo o que a ativação do plano
+        # tinha habilitado. O que sobra é a liberação de cortesia.
+        assinatura = await _assinatura_mais_recente(db, loja_id)
+        plano = None
+        if assinatura and assinatura.status in STATUS_RECUPERAVEIS:
+            plano = (await db.execute(
+                select(Plano).where(Plano.id == assinatura.plano_id)
+            )).scalar_one_or_none()
+        await definir_cortesias(db, loja_id, plano, data.modulos_ativos)
 
     await db.commit()
     await db.refresh(loja)
@@ -864,20 +875,75 @@ def _dias_para_vencer(venc: Optional[datetime]) -> Optional[int]:
     return (venc - _now()).days
 
 
-async def _habilitar_modulos_do_plano(db: AsyncSession, loja_id: str, plano: Plano) -> List[str]:
-    modulos_incluidos = json.loads(plano.modulos_incluidos) if plano.modulos_incluidos else []
-    for nome in modulos_incluidos:
-        existente = (await db.execute(
-            select(ModuloHabilitado).where(
-                ModuloHabilitado.loja_id == loja_id,
-                ModuloHabilitado.nome_modulo == nome,
-            )
+async def _plano_ativo_ou_404(db: AsyncSession, plano_id: str) -> Plano:
+    plano = (await db.execute(
+        select(Plano).where(Plano.id == plano_id, Plano.ativo == True)
+    )).scalar_one_or_none()
+    if not plano:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plano não encontrado ou inativo.")
+    return plano
+
+
+async def _loja_ou_404(db: AsyncSession, loja_id: str) -> Loja:
+    loja = (await db.execute(select(Loja).where(Loja.id == loja_id))).scalar_one_or_none()
+    if not loja:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loja não encontrada.")
+    return loja
+
+
+async def _montar_detalhe_assinatura(db: AsyncSession, loja_id: str) -> AdminAssinaturaDetalheResponse:
+    """
+    Estado consolidado de Plano & Acesso da loja: assinatura, plano, pagamentos
+    e a lista completa de módulos com origem (plano vs. cortesia) e se está
+    valendo agora. A UI monta a tela inteira com esta única chamada.
+    """
+    loja = await _loja_ou_404(db, loja_id)
+    assinatura = await _assinatura_mais_recente(db, loja_id)
+
+    plano = None
+    pagamentos: List[Pagamento] = []
+    if assinatura:
+        plano = (await db.execute(
+            select(Plano).where(Plano.id == assinatura.plano_id)
         )).scalar_one_or_none()
-        if existente:
-            existente.ativo = True
-        else:
-            db.add(ModuloHabilitado(loja_id=loja_id, nome_modulo=nome, ativo=True))
-    return modulos_incluidos
+        pagamentos = list((await db.execute(
+            select(Pagamento)
+            .where(Pagamento.assinatura_id == assinatura.id)
+            .order_by(Pagamento.created_at.desc())
+        )).scalars().all())
+
+    liberado = acesso_liberado(assinatura)
+    do_plano = set(modulos_do_plano(plano)) if assinatura and assinatura.status in STATUS_RECUPERAVEIS else set()
+    habilitados = {
+        m.nome_modulo: m
+        for m in (await db.execute(
+            select(ModuloHabilitado).where(ModuloHabilitado.loja_id == loja_id)
+        )).scalars().all()
+    }
+
+    modulos: List[AdminModuloStatusItem] = []
+    for modulo in Modulo:
+        registro = habilitados.get(modulo.value)
+        ativo = bool(registro and registro.ativo)
+        modulos.append(AdminModuloStatusItem(
+            modulo=modulo.value,
+            ativo=ativo,
+            cortesia=bool(registro and registro.ativo and registro.cortesia),
+            do_plano=modulo.value in do_plano,
+            liberado=ativo and liberado,
+        ))
+
+    venc = assinatura.proximo_vencimento if assinatura else None
+    return AdminAssinaturaDetalheResponse(
+        assinatura=AssinaturaResponse.model_validate(assinatura) if assinatura else None,
+        plano=PlanoResponse.model_validate(plano) if plano else None,
+        pagamentos=[PagamentoResponse.model_validate(p) for p in pagamentos],
+        dias_para_vencer=_dias_para_vencer(venc) if assinatura else None,
+        acesso_liberado=liberado,
+        loja_ativa=loja.ativa,
+        vencida=bool(venc and venc < _now()),
+        modulos=modulos,
+    )
 
 
 @router.post(
@@ -896,9 +962,7 @@ async def ativar_assinatura_manual(
     sem depender de gateway. Exige aceite de contrato explícito — é o registro
     jurídico de que o cliente concordou com os termos antes de virar pagante.
     """
-    loja = (await db.execute(select(Loja).where(Loja.id == loja_id))).scalar_one_or_none()
-    if not loja:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loja não encontrada.")
+    loja = await _loja_ou_404(db, loja_id)
     if not loja.ativa:
         loja.ativa = True  # reverte a desativação automática por vencimento (assinatura_worker)
 
@@ -908,14 +972,13 @@ async def ativar_assinatura_manual(
             detail="É obrigatório confirmar que o cliente aceitou o contrato de assinatura antes de ativar.",
         )
 
-    plano = (await db.execute(
-        select(Plano).where(Plano.id == data.plano_id, Plano.ativo == True)
-    )).scalar_one_or_none()
-    if not plano:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plano não encontrado ou inativo.")
+    plano = await _plano_ativo_ou_404(db, data.plano_id)
 
     atual = await _assinatura_mais_recente(db, loja_id)
-    if atual and atual.status == StatusAssinatura.ATIVA:
+    if atual and atual.status != StatusAssinatura.CANCELADA:
+        # Encerra qualquer assinatura anterior ainda viva (ativa, suspensa ou
+        # expirada) — senão ficavam duas concorrendo e a busca "mais recente"
+        # passava a decidir o acesso por acidente.
         atual.status = StatusAssinatura.CANCELADA
         atual.fim = _now()
 
@@ -935,7 +998,8 @@ async def ativar_assinatura_manual(
     db.add(assinatura)
     await db.flush()
 
-    modulos_incluidos = await _habilitar_modulos_do_plano(db, loja_id, plano)
+    diff = await sincronizar_modulos(db, loja_id, plano)
+    modulos_incluidos = modulos_do_plano(plano)
 
     pagamento = Pagamento(
         assinatura_id=assinatura.id,
@@ -954,6 +1018,8 @@ async def ativar_assinatura_manual(
             "plano_id": plano.id, "valor_mensal": data.valor_mensal, "meses": data.meses,
             "forma_pagamento": data.forma_pagamento, "contrato_versao": data.contrato_versao,
             "modulos": modulos_incluidos,
+            "modulos_liberados": diff.liberados,
+            "modulos_removidos": diff.removidos,
         }),
     )
     await db.commit()
@@ -985,27 +1051,30 @@ async def renovar_assinatura_manual(
         )
 
     plano_trocado_de = None
+    plano_vigente = (await db.execute(
+        select(Plano).where(Plano.id == assinatura.plano_id)
+    )).scalar_one_or_none()
+
     if data.plano_id is not None and data.plano_id != assinatura.plano_id:
-        novo_plano = (await db.execute(
-            select(Plano).where(Plano.id == data.plano_id, Plano.ativo == True)
-        )).scalar_one_or_none()
-        if not novo_plano:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plano não encontrado ou inativo.")
+        novo_plano = await _plano_ativo_ou_404(db, data.plano_id)
         plano_trocado_de = assinatura.plano_id
         assinatura.plano_id = novo_plano.id
+        plano_vigente = novo_plano
+
+    # Reaplica os módulos do plano SEMPRE — inclusive quando não houve troca,
+    # para corrigir lojas que ficaram dessincronizadas. Sem esta chamada, subir
+    # de plano não liberava os módulos novos e descer não removia os antigos.
+    diff = await sincronizar_modulos(db, loja_id, plano_vigente)
 
     agora = _now()
-    base = assinatura.proximo_vencimento or agora
-    if base < agora:
-        base = agora  # não acumula atraso: renovação sempre soma a partir de hoje se já venceu
-
     assinatura.status = StatusAssinatura.ATIVA
     assinatura.fim = None
-    assinatura.proximo_vencimento = base + timedelta(days=30 * data.meses)
+    # Não acumula atraso: soma a partir de hoje se o vencimento já passou.
+    assinatura.proximo_vencimento = proximo_vencimento_apos(
+        assinatura.proximo_vencimento, data.meses, agora,
+    )
 
-    loja = (await db.execute(select(Loja).where(Loja.id == loja_id))).scalar_one_or_none()
-    if loja and not loja.ativa:
-        loja.ativa = True  # reverte a desativação automática por vencimento (assinatura_worker)
+    await reativar_loja(db, loja_id)
     if data.valor_mensal is not None:
         assinatura.valor_mensal = data.valor_mensal
     if data.observacoes:
@@ -1028,6 +1097,8 @@ async def renovar_assinatura_manual(
         detalhes=json.dumps({
             "meses": data.meses, "valor_pago": valor_pago, "forma_pagamento": data.forma_pagamento,
             "novo_vencimento": assinatura.proximo_vencimento.isoformat(),
+            **({"modulos_liberados": diff.liberados} if diff.liberados else {}),
+            **({"modulos_removidos": diff.removidos} if diff.removidos else {}),
             **({"plano_id_anterior": plano_trocado_de, "plano_id_novo": assinatura.plano_id} if plano_trocado_de is not None else {}),
         }),
     )
@@ -1048,19 +1119,251 @@ async def suspender_assinatura_manual(
 ):
     """Suspende a assinatura (inadimplência/cancelamento manual) — bloqueia módulos premium na hora."""
     assinatura = await _assinatura_mais_recente(db, loja_id)
-    if not assinatura or assinatura.status != StatusAssinatura.ATIVA:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Loja não tem assinatura ativa para suspender.")
+    if not assinatura:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loja não tem assinatura.")
+    if assinatura.status == StatusAssinatura.SUSPENSA:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Assinatura já está suspensa.")
+    if assinatura.status == StatusAssinatura.CANCELADA:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Assinatura cancelada não pode ser suspensa.")
 
+    status_anterior = assinatura.status.value
     assinatura.status = StatusAssinatura.SUSPENSA
+    if data.bloquear_login:
+        loja = await _loja_ou_404(db, loja_id)
+        loja.ativa = False
 
     await registrar_auditoria(
         db=db, loja_id=loja_id, ator_id=admin.id, ator_nome=admin.nome,
         acao="assinatura.suspender_manual", entidade="assinatura", entidade_id=assinatura.id,
-        detalhes=json.dumps({"motivo": data.motivo}),
+        detalhes=json.dumps({
+            "motivo": data.motivo,
+            "status_anterior": status_anterior,
+            "bloqueou_login": data.bloquear_login,
+        }),
     )
     await db.commit()
     await db.refresh(assinatura)
     return assinatura
+
+
+@router.post(
+    "/lojas/{loja_id}/assinatura/reativar",
+    response_model=AssinaturaResponse,
+)
+async def reativar_assinatura_manual(
+    loja_id: str,
+    data: AdminReativarAssinaturaRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """
+    Volta uma assinatura SUSPENSA/EXPIRADA para ATIVA sem exigir pagamento.
+
+    Era o buraco da tela: depois de suspender, o único caminho de volta passava
+    por registrar uma cobrança, obrigando o admin a forjar um pagamento para
+    desfazer uma suspensão feita por engano. Religa o login e ressincroniza os
+    módulos do plano.
+    """
+    assinatura = await _assinatura_mais_recente(db, loja_id)
+    if not assinatura:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="Loja ainda não tem assinatura. Use /assinatura/ativar para a primeira contratação.",
+        )
+    if assinatura.status == StatusAssinatura.ATIVA:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Assinatura já está ativa.")
+    if assinatura.status == StatusAssinatura.CANCELADA:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Assinatura cancelada — use /assinatura/ativar para iniciar uma nova.",
+        )
+
+    status_anterior = assinatura.status.value
+    plano = (await db.execute(
+        select(Plano).where(Plano.id == assinatura.plano_id)
+    )).scalar_one_or_none()
+
+    assinatura.status = StatusAssinatura.ATIVA
+    assinatura.fim = None
+
+    # Reativar sem novo pagamento com a data já vencida deixaria a loja ATIVA e
+    # ao mesmo tempo bloqueada por vencimento (acesso_liberado checa a data), e
+    # o worker a expiraria de novo no dia seguinte. Concede o prazo pedido.
+    agora = _now()
+    if assinatura.proximo_vencimento is None or assinatura.proximo_vencimento < agora:
+        assinatura.proximo_vencimento = agora + timedelta(days=data.dias_cortesia)
+
+    diff = await sincronizar_modulos(db, loja_id, plano)
+    await reativar_loja(db, loja_id)
+
+    await registrar_auditoria(
+        db=db, loja_id=loja_id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="assinatura.reativar_manual", entidade="assinatura", entidade_id=assinatura.id,
+        detalhes=json.dumps({
+            "motivo": data.motivo,
+            "status_anterior": status_anterior,
+            "dias_cortesia": data.dias_cortesia,
+            "novo_vencimento": assinatura.proximo_vencimento.isoformat() if assinatura.proximo_vencimento else None,
+            "modulos_liberados": diff.liberados,
+        }),
+    )
+    await db.commit()
+    await db.refresh(assinatura)
+    return assinatura
+
+
+@router.post(
+    "/lojas/{loja_id}/assinatura/cancelar",
+    response_model=AssinaturaResponse,
+)
+async def cancelar_assinatura_manual(
+    loja_id: str,
+    data: AdminSuspenderAssinaturaRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """
+    Encerra a assinatura em definitivo (churn). Desliga os módulos do plano e,
+    opcionalmente, o login. Estado terminal: voltar exige nova ativação.
+    """
+    assinatura = await _assinatura_mais_recente(db, loja_id)
+    if not assinatura:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loja não tem assinatura.")
+    if assinatura.status == StatusAssinatura.CANCELADA:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Assinatura já está cancelada.")
+
+    status_anterior = assinatura.status.value
+    assinatura.status = StatusAssinatura.CANCELADA
+    assinatura.fim = _now()
+
+    # Sem plano vigente, todos os módulos do plano caem (cortesias sobrevivem).
+    diff = await sincronizar_modulos(db, loja_id, None)
+    if data.bloquear_login:
+        loja = await _loja_ou_404(db, loja_id)
+        loja.ativa = False
+
+    await registrar_auditoria(
+        db=db, loja_id=loja_id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="assinatura.cancelar_manual", entidade="assinatura", entidade_id=assinatura.id,
+        detalhes=json.dumps({
+            "motivo": data.motivo,
+            "status_anterior": status_anterior,
+            "modulos_removidos": diff.removidos,
+            "bloqueou_login": data.bloquear_login,
+        }),
+    )
+    await db.commit()
+    await db.refresh(assinatura)
+    return assinatura
+
+
+@router.post(
+    "/lojas/{loja_id}/assinatura/trocar-plano",
+    response_model=AssinaturaResponse,
+)
+async def trocar_plano_assinatura(
+    loja_id: str,
+    data: AdminTrocarPlanoRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """
+    Troca o plano sem registrar cobrança (upgrade/downgrade acertado à parte).
+    Sincroniza os módulos na hora — é a operação que a UI usa ao salvar a tela
+    de Plano & Acesso.
+    """
+    assinatura = await _assinatura_mais_recente(db, loja_id)
+    if not assinatura:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="Loja ainda não tem assinatura. Use /assinatura/ativar para a primeira contratação.",
+        )
+    if assinatura.status not in STATUS_RECUPERAVEIS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Assinatura cancelada — use /assinatura/ativar para iniciar uma nova.",
+        )
+
+    novo_plano = await _plano_ativo_ou_404(db, data.plano_id)
+    plano_anterior = assinatura.plano_id
+    assinatura.plano_id = novo_plano.id
+    if data.valor_mensal is not None:
+        assinatura.valor_mensal = data.valor_mensal
+    if data.observacoes is not None:
+        assinatura.observacoes = data.observacoes
+
+    diff = await sincronizar_modulos(db, loja_id, novo_plano)
+
+    await registrar_auditoria(
+        db=db, loja_id=loja_id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="assinatura.trocar_plano", entidade="assinatura", entidade_id=assinatura.id,
+        detalhes=json.dumps({
+            "plano_id_anterior": plano_anterior,
+            "plano_id_novo": novo_plano.id,
+            "valor_mensal": assinatura.valor_mensal,
+            "modulos_liberados": diff.liberados,
+            "modulos_removidos": diff.removidos,
+        }),
+    )
+    await db.commit()
+    await db.refresh(assinatura)
+    return assinatura
+
+
+@router.get(
+    "/lojas/{loja_id}/assinatura/previa-troca/{plano_id}",
+    response_model=AdminDiffModulosResponse,
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def previa_troca_plano(
+    loja_id: str,
+    plano_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Diff dos módulos que uma troca de plano causaria — sem aplicar nada."""
+    plano = await _plano_ativo_ou_404(db, plano_id)
+    diff = await prever_troca_plano(db, loja_id, plano)
+    return AdminDiffModulosResponse(
+        liberados=diff.liberados,
+        removidos=diff.removidos,
+        mantidos_cortesia=diff.mantidos_cortesia,
+    )
+
+
+@router.patch(
+    "/lojas/{loja_id}/modulos-cortesia",
+    response_model=AdminAssinaturaDetalheResponse,
+)
+async def definir_modulos_cortesia(
+    loja_id: str,
+    data: AdminCortesiasRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """
+    Define os módulos liberados por cortesia (fora do plano).
+
+    Substitui a edição solta de módulos no cadastro da loja, que apagava tudo e
+    recriava ignorando o plano — os dois se sobrescreviam. Aqui o plano continua
+    mandando nos módulos dele; só o que está fora entra como cortesia.
+    """
+    await _loja_ou_404(db, loja_id)
+    assinatura = await _assinatura_mais_recente(db, loja_id)
+    plano = None
+    if assinatura and assinatura.status in STATUS_RECUPERAVEIS:
+        plano = (await db.execute(
+            select(Plano).where(Plano.id == assinatura.plano_id)
+        )).scalar_one_or_none()
+
+    aplicadas = await definir_cortesias(db, loja_id, plano, data.modulos)
+
+    await registrar_auditoria(
+        db=db, loja_id=loja_id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="assinatura.definir_cortesias", entidade="loja", entidade_id=loja_id,
+        detalhes=json.dumps({"cortesias": aplicadas}),
+    )
+    await db.commit()
+    return await _montar_detalhe_assinatura(db, loja_id)
 
 
 @router.get(
@@ -1073,25 +1376,7 @@ async def get_assinatura_loja(
     db: AsyncSession = Depends(get_db),
 ):
     """Estado da assinatura da loja + histórico de pagamentos, para a tela de gestão do admin."""
-    assinatura = await _assinatura_mais_recente(db, loja_id)
-    plano = None
-    pagamentos: List[Pagamento] = []
-    if assinatura:
-        plano = (await db.execute(
-            select(Plano).where(Plano.id == assinatura.plano_id)
-        )).scalar_one_or_none()
-        pagamentos = (await db.execute(
-            select(Pagamento)
-            .where(Pagamento.assinatura_id == assinatura.id)
-            .order_by(Pagamento.created_at.desc())
-        )).scalars().all()
-
-    return AdminAssinaturaDetalheResponse(
-        assinatura=AssinaturaResponse.model_validate(assinatura) if assinatura else None,
-        plano=PlanoResponse.model_validate(plano) if plano else None,
-        pagamentos=[PagamentoResponse.model_validate(p) for p in pagamentos],
-        dias_para_vencer=_dias_para_vencer(assinatura.proximo_vencimento) if assinatura else None,
-    )
+    return await _montar_detalhe_assinatura(db, loja_id)
 
 
 # ═══════════════════════════════════════════════════════════════

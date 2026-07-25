@@ -3,7 +3,7 @@ var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { en
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 import { jsx, jsxs, Fragment } from "react/jsx-runtime";
 import { renderToString } from "react-dom/server";
-import { useNavigate, Link, useLocation, useParams, Routes, Route, StaticRouter } from "react-router-dom";
+import { useNavigate, useLocation, Link, useParams, Routes, Route, StaticRouter } from "react-router-dom";
 import { Helmet, HelmetProvider } from "react-helmet-async";
 import React, { createContext, useState, useEffect, useContext, useRef, useCallback } from "react";
 import { create } from "zustand";
@@ -626,25 +626,7 @@ function LoginModal() {
         ] }),
         /* @__PURE__ */ jsx("button", { type: "submit", className: "vt-btn vt-btn-primary vt-btn-block", disabled: loading, children: loading ? /* @__PURE__ */ jsx("span", { className: "spinner" }) : "Criar minha Conta" })
       ] })
-    ),
-    !mfaChallengeToken && /* @__PURE__ */ jsxs(Fragment, { children: [
-      /* @__PURE__ */ jsx("div", { className: "vt-modal-divider", children: /* @__PURE__ */ jsx("span", { children: "ou continue com" }) }),
-      /* @__PURE__ */ jsxs(
-        "button",
-        {
-          type: "button",
-          className: "vt-btn vt-btn-social",
-          onClick: () => {
-            window.location.href = "/v1/auth/google/login";
-          },
-          disabled: loading,
-          children: [
-            /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", width: "18", height: "18", fill: "currentColor", style: { marginRight: 8 }, children: /* @__PURE__ */ jsx("path", { d: "M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.113-5.111 4.113-3.419 0-6.202-2.783-6.202-6.202 0-3.419 2.783-6.202 6.202-6.202 1.481 0 2.836.526 3.902 1.488l3.125-3.125C18.992 2.378 15.82 1 12.016 1c-6.075 0-11 4.925-11 11s4.925 11 11 11c5.787 0 10.373-4.084 10.373-10.428 0-.687-.06-1.3-.173-1.857H12.24z" }) }),
-            /* @__PURE__ */ jsx("span", { children: "Continuar com Google" })
-          ]
-        }
-      )
-    ] })
+    )
   ] }) });
 }
 function MfaSettingsModal({ mfaAtivo, onClose, onChange }) {
@@ -792,7 +774,7 @@ function formatKm(val) {
 function timeAgo(v) {
   return `${v.ano_fabricacao}/${v.ano_modelo}`;
 }
-function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir, isAuthenticated }) {
+function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir }) {
   var _a;
   const navigate = useNavigate();
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -809,18 +791,28 @@ function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir, isAu
   };
   const lojaInicial = (veiculo.loja_nome ?? veiculo.marca).slice(0, 2).toUpperCase();
   const localidade = [veiculo.loja_cidade, veiculo.loja_estado].filter(Boolean).join(", ");
+  const indisponivel = veiculo.status !== "disponivel";
   return /* @__PURE__ */ jsxs("div", { className: "vt-car-card", children: [
     /* @__PURE__ */ jsxs("div", { className: "vt-car-card-header", children: [
-      /* @__PURE__ */ jsxs("div", { className: "vt-car-card-shop", style: { cursor: "pointer" }, onClick: () => navigate(`/loja/${veiculo.loja_id}`), children: [
-        /* @__PURE__ */ jsx("div", { className: "vt-card-shop-ring", children: /* @__PURE__ */ jsx("div", { children: veiculo.loja_logo ? /* @__PURE__ */ jsx("img", { src: veiculo.loja_logo, alt: veiculo.loja_nome, style: { width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" } }) : lojaInicial }) }),
-        /* @__PURE__ */ jsxs("div", { className: "vt-car-card-shop-info", children: [
-          /* @__PURE__ */ jsxs("h4", { children: [
-            veiculo.loja_nome ?? "Loja Parceira",
-            veiculo.loja_verificada && /* @__PURE__ */ jsx(VerifiedIcon, {})
-          ] }),
-          /* @__PURE__ */ jsx("span", { children: localidade || "Brasil" })
-        ] })
-      ] }),
+      /* @__PURE__ */ jsxs(
+        "div",
+        {
+          className: "vt-car-card-shop",
+          style: { cursor: veiculo.loja_slug ? "pointer" : "default" },
+          onClick: () => veiculo.loja_slug && navigate(`/loja/${veiculo.loja_slug}`),
+          children: [
+            /* @__PURE__ */ jsx("div", { className: "vt-card-shop-ring", children: /* @__PURE__ */ jsx("div", { children: veiculo.loja_logo ? /* @__PURE__ */ jsx("img", { src: veiculo.loja_logo, alt: veiculo.loja_nome, style: { width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" } }) : lojaInicial }) }),
+            /* @__PURE__ */ jsxs("div", { className: "vt-car-card-shop-info", children: [
+              /* @__PURE__ */ jsxs("h4", { children: [
+                veiculo.loja_nome ?? "Loja Parceira",
+                veiculo.loja_verificada && /* @__PURE__ */ jsx(VerifiedIcon, {})
+              ] }),
+              /* @__PURE__ */ jsx("span", { children: localidade || "Brasil" })
+            ] }),
+            veiculo.loja_destaque && /* @__PURE__ */ jsx("span", { className: "vt-badge-patrocinado", children: "Patrocinado" })
+          ]
+        }
+      ),
       /* @__PURE__ */ jsx(
         "button",
         {
@@ -831,14 +823,14 @@ function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir, isAu
       )
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "vt-car-card-image", children: [
-      currentMidia && !imgError ? currentMidia.tipo === "video" ? /* @__PURE__ */ jsx("video", { src: currentMidia.url, controls: true, muted: true, playsInline: true, style: { width: "100%", height: "100%", objectFit: "cover" } }) : /* @__PURE__ */ jsx("img", { src: currentMidia.url, alt: `${veiculo.marca} ${veiculo.modelo}`, onError: () => setImgError(true) }) : /* @__PURE__ */ jsxs("div", { className: "vt-car-card-placeholder", children: [
+      currentMidia && !imgError ? currentMidia.tipo === "video" ? /* @__PURE__ */ jsx("video", { src: currentMidia.url, controls: true, muted: true, playsInline: true, style: { width: "100%", height: "100%", objectFit: "cover" } }) : /* @__PURE__ */ jsx("img", { src: currentMidia.thumb_url || currentMidia.url, alt: `${veiculo.marca} ${veiculo.modelo}`, loading: "lazy", decoding: "async", onError: () => setImgError(true) }) : /* @__PURE__ */ jsxs("div", { className: "vt-car-card-placeholder", children: [
         /* @__PURE__ */ jsx(CarIcon$1, {}),
         /* @__PURE__ */ jsx("span", { children: "Sem foto disponível" })
       ] }),
-      /* @__PURE__ */ jsxs("div", { className: "vt-car-card-badges", children: [
+      /* @__PURE__ */ jsx("div", { className: "vt-car-card-badges", children: indisponivel ? /* @__PURE__ */ jsx("span", { className: "vt-badge vt-badge-vendido", children: "Vendido" }) : /* @__PURE__ */ jsxs(Fragment, { children: [
         /* @__PURE__ */ jsx("span", { className: "vt-badge vt-badge-destaque", children: "Destaque" }),
         ((_a = veiculo.descricao) == null ? void 0 : _a.toLowerCase().includes("troca")) && /* @__PURE__ */ jsx("span", { className: "vt-badge vt-badge-troca", children: "Aceita troca" })
-      ] }),
+      ] }) }),
       midias.length > 1 && /* @__PURE__ */ jsxs("span", { className: "vt-media-count", children: [
         currentIdx + 1,
         "/",
@@ -895,7 +887,7 @@ function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir, isAu
           /* @__PURE__ */ jsx("span", { style: { textTransform: "capitalize" }, children: veiculo.combustivel })
         ] })
       ] }),
-      /* @__PURE__ */ jsxs("div", { className: "vt-card-cta", children: [
+      indisponivel ? /* @__PURE__ */ jsx("div", { className: "vt-card-cta", children: /* @__PURE__ */ jsx("button", { className: "vt-btn-chat", disabled: true, title: "Este veículo não está mais disponível", children: "Vendido" }) }) : /* @__PURE__ */ jsxs("div", { className: "vt-card-cta", children: [
         veiculo.loja_whatsapp && /* @__PURE__ */ jsxs("button", { className: "vt-btn-negociar", onClick: () => onWhatsApp(veiculo), children: [
           /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", width: "17", height: "17", fill: "currentColor", children: /* @__PURE__ */ jsx("path", { d: "M.06 24l1.7-6.2A11.9 11.9 0 1 1 12 24a11.9 11.9 0 0 1-5.7-1.5L.06 24zM6.6 20l.4.2a9.9 9.9 0 1 0-3.4-3.4l.2.4-1 3.7 3.8-.9z" }) }),
           "WhatsApp"
@@ -909,6 +901,59 @@ function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir, isAu
     ] })
   ] });
 }
+const ITEMS = [
+  {
+    path: "/",
+    label: "Explorar",
+    icon: /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", style: { width: 20, height: 20, marginBottom: 2 }, children: [
+      /* @__PURE__ */ jsx("circle", { cx: "12", cy: "12", r: "10" }),
+      /* @__PURE__ */ jsx("circle", { cx: "12", cy: "12", r: "3" })
+    ] })
+  },
+  {
+    path: "/favoritos",
+    label: "Favoritos",
+    icon: /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", style: { width: 20, height: 20, marginBottom: 2 }, children: /* @__PURE__ */ jsx("path", { d: "M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" }) })
+  },
+  {
+    path: "/mensagens",
+    label: "Mensagens",
+    icon: /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", style: { width: 20, height: 20, marginBottom: 2 }, children: /* @__PURE__ */ jsx("path", { d: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" }) })
+  }
+];
+function BottomNav() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return /* @__PURE__ */ jsx("div", { className: "vt-mobile-nav", style: {
+    position: "fixed",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: "64px",
+    background: "var(--vt-surface)",
+    backdropFilter: "blur(10px)",
+    borderTop: "1px solid var(--vt-border)",
+    display: "flex",
+    justifyContent: "space-around",
+    alignItems: "center",
+    zIndex: 999,
+    padding: "0 10px"
+  }, children: ITEMS.map((item) => {
+    const active = location.pathname === item.path;
+    return /* @__PURE__ */ jsxs(
+      "div",
+      {
+        onClick: () => navigate(item.path),
+        style: { display: "flex", flexDirection: "column", alignItems: "center", color: active ? "var(--vt-primary)" : "var(--vt-text-dim)", cursor: "pointer", fontSize: 11 },
+        children: [
+          item.icon,
+          /* @__PURE__ */ jsx("span", { children: item.label })
+        ]
+      },
+      item.path
+    );
+  }) });
+}
 const CarIcon = () => /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.5", style: { width: 24, height: 24 }, children: [
   /* @__PURE__ */ jsx("rect", { x: "1", y: "6", width: "22", height: "10", rx: "3" }),
   /* @__PURE__ */ jsx("circle", { cx: "6", cy: "18", r: "2" }),
@@ -918,7 +963,7 @@ const CarIcon = () => /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: 
 function Feed() {
   const navigate = useNavigate();
   const { isAuthenticated, user, openLoginModal, logout, updateUser } = useAuthStore();
-  const { config, lojaId, isWhiteLabel } = useSiteConfig();
+  const { lojaId, isWhiteLabel } = useSiteConfig();
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem("vt-theme") === "dark";
   });
@@ -1263,37 +1308,7 @@ function Feed() {
       ] }),
       /* @__PURE__ */ jsx("span", { children: "© 2026 Social Veículos" })
     ] }),
-    /* @__PURE__ */ jsxs("div", { className: "vt-mobile-nav", style: {
-      position: "fixed",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: "64px",
-      background: "var(--vt-surface)",
-      backdropFilter: "blur(10px)",
-      borderTop: "1px solid var(--vt-border)",
-      display: "flex",
-      justifyContent: "space-around",
-      alignItems: "center",
-      zIndex: 999,
-      padding: "0 10px"
-    }, children: [
-      /* @__PURE__ */ jsxs("div", { onClick: () => navigate("/"), style: { display: "flex", flexDirection: "column", alignItems: "center", color: "var(--vt-primary)", cursor: "pointer", fontSize: 11 }, children: [
-        /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", style: { width: 20, height: 20, marginBottom: 2 }, children: [
-          /* @__PURE__ */ jsx("circle", { cx: "12", cy: "12", r: "10" }),
-          /* @__PURE__ */ jsx("circle", { cx: "12", cy: "12", r: "3" })
-        ] }),
-        /* @__PURE__ */ jsx("span", { children: "Explorar" })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { onClick: () => navigate("/favoritos"), style: { display: "flex", flexDirection: "column", alignItems: "center", color: "var(--vt-text-dim)", cursor: "pointer", fontSize: 11 }, children: [
-        /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", style: { width: 20, height: 20, marginBottom: 2 }, children: /* @__PURE__ */ jsx("path", { d: "M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" }) }),
-        /* @__PURE__ */ jsx("span", { children: "Favoritos" })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { onClick: () => navigate("/mensagens"), style: { display: "flex", flexDirection: "column", alignItems: "center", color: "var(--vt-text-dim)", cursor: "pointer", fontSize: 11 }, children: [
-        /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", style: { width: 20, height: 20, marginBottom: 2 }, children: /* @__PURE__ */ jsx("path", { d: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" }) }),
-        /* @__PURE__ */ jsx("span", { children: "Mensagens" })
-      ] })
-    ] }),
+    /* @__PURE__ */ jsx(BottomNav, {}),
     showPerfilModal && user && /* @__PURE__ */ jsx("div", { className: "vt-modal-overlay", onClick: closePerfilModal, children: /* @__PURE__ */ jsxs("div", { className: "vt-modal-card", style: { maxWidth: 400, width: "min(400px, 92vw)", background: "var(--vt-surface)", border: "1px solid var(--vt-border)", color: "var(--vt-text)" }, onClick: (e) => e.stopPropagation(), children: [
       /* @__PURE__ */ jsxs("div", { className: "vt-modal-header", style: { borderBottom: "1px solid var(--vt-border)", paddingBottom: "12px" }, children: [
         /* @__PURE__ */ jsx("h3", { style: { margin: 0 }, children: "Minha Conta" }),
@@ -1526,7 +1541,8 @@ function Favoritos() {
       /* @__PURE__ */ jsx("h2", { children: "Faça login para ver seus favoritos" }),
       /* @__PURE__ */ jsx("p", { style: { color: "var(--vt-text-dim)", marginBottom: 20 }, children: "Você precisa estar autenticado para salvar e gerenciar seus veículos favoritos." }),
       /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-primary", onClick: () => openLoginModal("login"), children: "Entrar / Cadastrar" }),
-      /* @__PURE__ */ jsx(LoginModal, {})
+      /* @__PURE__ */ jsx(LoginModal, {}),
+      /* @__PURE__ */ jsx(BottomNav, {})
     ] });
   }
   return /* @__PURE__ */ jsxs("div", { className: "vt-page", style: { padding: "20px 16px", minHeight: "100vh", paddingBottom: 100 }, children: [
@@ -1550,7 +1566,8 @@ function Favoritos() {
       },
       v.id
     )) }),
-    /* @__PURE__ */ jsx(LoginModal, {})
+    /* @__PURE__ */ jsx(LoginModal, {}),
+    /* @__PURE__ */ jsx(BottomNav, {})
   ] });
 }
 function wsUrl(path) {
@@ -1802,7 +1819,8 @@ function Mensagens() {
       /* @__PURE__ */ jsx("h2", { style: { fontSize: 18, fontWeight: 700 }, children: "Faça login para ver suas mensagens" }),
       /* @__PURE__ */ jsx("p", { style: { color: "var(--vt-text-dim)", fontSize: 14 }, children: "Converse direto com as lojas sobre os veículos de seu interesse." }),
       /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-primary", onClick: () => openLoginModal("login"), children: "Entrar / Cadastrar" }),
-      /* @__PURE__ */ jsx(LoginModal, {})
+      /* @__PURE__ */ jsx(LoginModal, {}),
+      /* @__PURE__ */ jsx(BottomNav, {})
     ] });
   }
   return /* @__PURE__ */ jsxs("div", { className: "vt-chat-shell", children: [
@@ -1906,7 +1924,8 @@ function Mensagens() {
       /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: /* @__PURE__ */ jsx("path", { d: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" }) }),
       /* @__PURE__ */ jsx("p", { children: "Selecione uma conversa para começar" })
     ] }) }),
-    /* @__PURE__ */ jsx(LoginModal, {})
+    /* @__PURE__ */ jsx(LoginModal, {}),
+    /* @__PURE__ */ jsx(BottomNav, {})
   ] });
 }
 const isServer = typeof window === "undefined";
@@ -1980,6 +1999,99 @@ function getSSGData() {
   const g = globalThis;
   return g.__SSG_DATA__ ?? null;
 }
+function PreAprovacaoModal({ veiculoId, onClose }) {
+  const [form, setForm] = useState({ nome: "", telefone: "", email: "", renda_mensal: "", entrada: "" });
+  const [enviando, setEnviando] = useState(false);
+  const [ok, setOk] = useState(false);
+  const [erro, setErro] = useState("");
+  const enviar = async (e) => {
+    e.preventDefault();
+    setEnviando(true);
+    setErro("");
+    try {
+      await api.post("/marketplace/pre-aprovacao", {
+        veiculo_id: veiculoId,
+        nome: form.nome.trim(),
+        telefone: form.telefone.trim(),
+        email: form.email.trim() || void 0,
+        renda_mensal: form.renda_mensal ? Number(form.renda_mensal) : void 0,
+        entrada: form.entrada ? Number(form.entrada) : void 0
+      });
+      setOk(true);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Não foi possível enviar. Tente novamente.");
+    } finally {
+      setEnviando(false);
+    }
+  };
+  return /* @__PURE__ */ jsx("div", { className: "vt-modal-overlay", onClick: onClose, children: /* @__PURE__ */ jsxs("div", { className: "vt-modal", onClick: (e) => e.stopPropagation(), style: { maxWidth: 420 }, children: [
+    /* @__PURE__ */ jsx("button", { className: "vt-modal-close", onClick: onClose, "aria-label": "Fechar", children: "×" }),
+    ok ? /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "1rem 0" }, children: [
+      /* @__PURE__ */ jsx("h3", { children: "Pedido enviado! 🎉" }),
+      /* @__PURE__ */ jsx("p", { style: { color: "var(--vt-text-dim)", marginTop: 8 }, children: "A loja vai entrar em contato para dar sequência ao financiamento." }),
+      /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-primary vt-btn-block", style: { marginTop: 16 }, onClick: onClose, children: "Fechar" })
+    ] }) : /* @__PURE__ */ jsxs("form", { onSubmit: enviar, children: [
+      /* @__PURE__ */ jsx("h3", { style: { marginBottom: 4 }, children: "Simular financiamento" }),
+      /* @__PURE__ */ jsx("p", { style: { color: "var(--vt-text-dim)", fontSize: 13, marginBottom: 16 }, children: "Preencha seus dados e a loja retorna com as condições. Não é uma aprovação automática." }),
+      /* @__PURE__ */ jsx(
+        "input",
+        {
+          className: "vt-input",
+          placeholder: "Seu nome",
+          required: true,
+          value: form.nome,
+          onChange: (e) => setForm({ ...form, nome: e.target.value })
+        }
+      ),
+      /* @__PURE__ */ jsx(
+        "input",
+        {
+          className: "vt-input",
+          placeholder: "WhatsApp / telefone",
+          required: true,
+          value: form.telefone,
+          onChange: (e) => setForm({ ...form, telefone: e.target.value }),
+          style: { marginTop: 10 }
+        }
+      ),
+      /* @__PURE__ */ jsx(
+        "input",
+        {
+          className: "vt-input",
+          placeholder: "E-mail (opcional)",
+          type: "email",
+          value: form.email,
+          onChange: (e) => setForm({ ...form, email: e.target.value }),
+          style: { marginTop: 10 }
+        }
+      ),
+      /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 10, marginTop: 10 }, children: [
+        /* @__PURE__ */ jsx(
+          "input",
+          {
+            className: "vt-input",
+            placeholder: "Renda mensal (R$)",
+            inputMode: "numeric",
+            value: form.renda_mensal,
+            onChange: (e) => setForm({ ...form, renda_mensal: e.target.value.replace(/\D/g, "") })
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "input",
+          {
+            className: "vt-input",
+            placeholder: "Entrada (R$)",
+            inputMode: "numeric",
+            value: form.entrada,
+            onChange: (e) => setForm({ ...form, entrada: e.target.value.replace(/\D/g, "") })
+          }
+        )
+      ] }),
+      erro && /* @__PURE__ */ jsx("p", { style: { color: "var(--vt-error, #dc2626)", fontSize: 13, marginTop: 10 }, children: erro }),
+      /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-primary vt-btn-block", type: "submit", disabled: enviando, style: { marginTop: 16 }, children: enviando ? "Enviando…" : "Quero simular financiamento" })
+    ] })
+  ] }) });
+}
 function MidiaView({ midia, className }) {
   if (midia.tipo === "video") {
     return /* @__PURE__ */ jsx("video", { src: midia.url, className, controls: true, preload: "metadata" });
@@ -1992,6 +2104,7 @@ function CarroDetalhe({ initialData }) {
   const [veiculo, setVeiculo] = useState(seed);
   const [loading, setLoading] = useState(!seed);
   const [erro, setErro] = useState(false);
+  const [modalCredito, setModalCredito] = useState(false);
   useEffect(() => {
     if (seed && seed.id === id) return;
     let alive = true;
@@ -2098,19 +2211,30 @@ function CarroDetalhe({ initialData }) {
           /* @__PURE__ */ jsx("h3", { children: "Opcionais" }),
           /* @__PURE__ */ jsx("div", { className: "vt-detail-chips", children: opcionais.map((o) => /* @__PURE__ */ jsx("span", { className: "vt-chip", children: o }, o)) })
         ] }),
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            className: "vt-btn vt-btn-primary vt-btn-block",
+            style: { marginTop: "1.5rem" },
+            onClick: () => setModalCredito(true),
+            children: "Simular financiamento"
+          }
+        ),
         whatsappHref && /* @__PURE__ */ jsx(
           "a",
           {
             href: whatsappHref,
             target: "_blank",
             rel: "noopener noreferrer",
-            className: "vt-btn vt-btn-primary vt-btn-block",
-            style: { marginTop: "1.5rem" },
+            className: "vt-btn vt-btn-outline vt-btn-block",
+            style: { marginTop: "0.75rem" },
             children: "Chamar no WhatsApp"
           }
         )
       ] })
-    ] })
+    ] }),
+    modalCredito && /* @__PURE__ */ jsx(PreAprovacaoModal, { veiculoId: veiculo.id, onClose: () => setModalCredito(false) }),
+    /* @__PURE__ */ jsx(BottomNav, {})
   ] });
 }
 function StoreItemMedia({ midias, alt }) {
@@ -2217,7 +2341,8 @@ function Loja({ initialData }) {
           /* @__PURE__ */ jsx("div", { className: "vt-store-item-price", children: formatBRL$1(v.preco_venda) })
         ] })
       ] }, v.id);
-    }) })
+    }) }),
+    /* @__PURE__ */ jsx(BottomNav, {})
   ] });
 }
 const formatBRL = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -2244,7 +2369,8 @@ function MeusVeiculos() {
   if (!isAuthenticated) {
     return /* @__PURE__ */ jsxs("div", { className: "vt-empty-state", children: [
       /* @__PURE__ */ jsx("p", { children: "Faça login para ver seus veículos." }),
-      /* @__PURE__ */ jsx("button", { className: "vt-btn-primary", onClick: () => openLoginModal("login"), children: "Entrar" })
+      /* @__PURE__ */ jsx("button", { className: "vt-btn-primary", onClick: () => openLoginModal("login"), children: "Entrar" }),
+      /* @__PURE__ */ jsx(BottomNav, {})
     ] });
   }
   if (loading) {
@@ -2253,7 +2379,8 @@ function MeusVeiculos() {
   if (!veiculos.length) {
     return /* @__PURE__ */ jsxs("div", { className: "vt-empty-state", children: [
       /* @__PURE__ */ jsx("h3", { children: "Nenhum veículo encontrado" }),
-      /* @__PURE__ */ jsx("p", { children: "Quando você comprar um veículo por uma loja da plataforma, ele aparecerá aqui com os documentos da venda." })
+      /* @__PURE__ */ jsx("p", { children: "Quando você comprar um veículo por uma loja da plataforma, ele aparecerá aqui com os documentos da venda." }),
+      /* @__PURE__ */ jsx(BottomNav, {})
     ] });
   }
   return /* @__PURE__ */ jsxs("div", { className: "vt-page", children: [
@@ -2320,7 +2447,8 @@ function MeusVeiculos() {
           d.id
         )) })
       ] })
-    ] }, v.veiculo_id)) })
+    ] }, v.veiculo_id)) }),
+    /* @__PURE__ */ jsx(BottomNav, {})
   ] });
 }
 function InstitucionalLayout({

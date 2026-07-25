@@ -172,8 +172,8 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
         {/* setas */}
         {midias.length > 1 && (
           <>
-            <button className="vt-media-arrow left" onClick={prev}>‹</button>
-            <button className="vt-media-arrow right" onClick={next}>›</button>
+            <button className="vt-media-arrow left" onClick={prev} aria-label="Foto anterior">‹</button>
+            <button className="vt-media-arrow right" onClick={next} aria-label="Próxima foto">›</button>
           </>
         )}
 
@@ -195,6 +195,7 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
             className={`vt-act${veiculo.favoritado_por_mim ? ' liked' : ''}`}
             onClick={() => onFavoritar(veiculo.id, veiculo.favoritado_por_mim)}
             title={veiculo.favoritado_por_mim ? 'Desfavoritar' : 'Favoritar'}
+            aria-label={veiculo.favoritado_por_mim ? 'Desfavoritar veículo' : 'Favoritar veículo'}
           >
             <svg viewBox="0 0 24 24" fill={veiculo.favoritado_por_mim ? 'currentColor' : 'none'} stroke="currentColor">
               <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
@@ -203,7 +204,7 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
         </div>
 
         {/* Salvar (bookmark) */}
-        <button className="vt-act" title="Salvar" onClick={() => onFavoritar(veiculo.id, veiculo.favoritado_por_mim)}>
+        <button className="vt-act" title="Salvar" aria-label="Salvar veículo" onClick={() => onFavoritar(veiculo.id, veiculo.favoritado_por_mim)}>
           <svg viewBox="0 0 24 24" fill={veiculo.favoritado_por_mim ? 'currentColor' : 'none'} stroke="currentColor">
             <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
           </svg>

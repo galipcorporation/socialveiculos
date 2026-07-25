@@ -89,7 +89,7 @@ export function LoginModal() {
   return (
     <div className="vt-modal-overlay" onClick={close}>
       <div className="vt-modal-card" onClick={(e) => e.stopPropagation()}>
-        <button className="vt-modal-close" onClick={close}>
+        <button className="vt-modal-close" onClick={close} aria-label="Fechar">
           <X size={20} />
         </button>
 
@@ -207,6 +207,7 @@ export function LoginModal() {
                   className="vt-btn-toggle-password"
                   onClick={() => setShowPasswordLogin(!showPasswordLogin)}
                   tabIndex={-1}
+                  aria-label={showPasswordLogin ? 'Ocultar senha' : 'Mostrar senha'}
                 >
                   {showPasswordLogin ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -288,6 +289,7 @@ export function LoginModal() {
                   className="vt-btn-toggle-password"
                   onClick={() => setShowPasswordRegister(!showPasswordRegister)}
                   tabIndex={-1}
+                  aria-label={showPasswordRegister ? 'Ocultar senha' : 'Mostrar senha'}
                 >
                   {showPasswordRegister ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>

@@ -813,7 +813,7 @@ function EsteiraDetalheModal({
               </div>
             )}
           </div>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar">✕</button>
         </div>
         <div className="modal-body">
           {loading ? (

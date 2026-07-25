@@ -40,8 +40,8 @@ function StoreItemMedia({ midias, alt }: { midias: MidiaItem[]; alt: string }) {
       {ordenadas.length > 1 && (
         <>
           <span className="vt-media-count">{idx + 1}/{ordenadas.length}</span>
-          <button className="vt-media-arrow left" onClick={prev}>‹</button>
-          <button className="vt-media-arrow right" onClick={next}>›</button>
+          <button className="vt-media-arrow left" onClick={prev} aria-label="Foto anterior">‹</button>
+          <button className="vt-media-arrow right" onClick={next} aria-label="Próxima foto">›</button>
           <div className="vt-media-dots">
             {ordenadas.map((_, i) => (
               <span key={i} className={i === idx ? 'on' : ''} />

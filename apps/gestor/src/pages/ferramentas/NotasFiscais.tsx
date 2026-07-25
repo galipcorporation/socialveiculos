@@ -344,7 +344,7 @@ function ModalCancelarNota({ nota, onClose, onDone }: { nota: NotaFiscalItem; on
       <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
         <div className="modal-header">
           <h3 className="modal-title">Cancelar NF-e {nota.serie}/{nota.numero}</h3>
-          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-4)' }}>
           <p style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>
@@ -400,7 +400,7 @@ function ModalCartaCorrecao({ nota, onClose, onDone }: { nota: NotaFiscalItem; o
       <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
         <div className="modal-header">
           <h3 className="modal-title">Carta de Correção — NF-e {nota.serie}/{nota.numero}</h3>
-          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-4)' }}>
           <p style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>

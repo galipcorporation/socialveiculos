@@ -777,7 +777,7 @@ export function SimuladorPage() {
           <div className="modal-glass" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 style={{ textTransform: 'uppercase' }}>Configurar {bancoSelecionadoParaConfig}</h3>
-              <button className="modal-close" onClick={() => setShowModalConfig(false)}>
+              <button className="modal-close" onClick={() => setShowModalConfig(false)} aria-label="Fechar">
                 <X style={{ width: '20px', height: '20px' }} />
               </button>
             </div>
@@ -819,7 +819,7 @@ export function SimuladorPage() {
           <div className="modal-glass" style={{ maxWidth: '800px', width: '100%' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Resultados da Simulação</h3>
-              <button className="modal-close" onClick={() => setShowModalResultados(false)}>
+              <button className="modal-close" onClick={() => setShowModalResultados(false)} aria-label="Fechar">
                 <X style={{ width: '20px', height: '20px' }} />
               </button>
             </div>

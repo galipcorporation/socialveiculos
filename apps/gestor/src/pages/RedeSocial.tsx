@@ -549,7 +549,7 @@ function FeedTab({ addToast, onStartChat }: { addToast: (t: ToastType, m: string
           <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
             <div className="modal-header">
               <h3>Proposta de Repasse</h3>
-              <button className="modal-close" onClick={() => setProposalPub(null)}>×</button>
+              <button className="modal-close" onClick={() => setProposalPub(null)} aria-label="Fechar">×</button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <p style={{ margin: 0 }}>Você está fazendo uma proposta para o veículo <strong>{proposalPub.veiculo?.marca || 'Veículo'} {proposalPub.veiculo?.modelo || ''}</strong> da loja <strong>{proposalPub.loja_nome}</strong>.</p>

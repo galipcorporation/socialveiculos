@@ -3,6 +3,9 @@ Social Veículos — Credenciais de IA (BYOK) por loja (M024)
 Permite ao gestor cadastrar sua própria chave de API de IA (Anthropic, OpenAI, Gemini).
 """
 
+import logging
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +19,7 @@ from rbac import exige_permissao, Acao, Recurso
 from simulador.crypt import encrypt_credentials, decrypt_credentials
 
 router = APIRouter(prefix="/v1/configuracoes/credenciais-ia", tags=["Credenciais IA (BYOK)"])
+logger = logging.getLogger(__name__)
 
 PROVEDORES_VALIDOS = {"anthropic", "openai", "gemini"}
 
@@ -124,8 +128,14 @@ async def remover_credencial_ia(
 
 
 async def _validar_chave(provedor: str, api_key: str) -> None:
-    """Faz chamada mínima ao provedor para validar a chave antes de salvar."""
-    import httpx
+    """Faz chamada mínima ao provedor para validar a chave antes de salvar.
+
+    Só considera a chave válida se a chamada realmente confirmou isso (2xx ou
+    um erro de auth explícito do provedor). Falha de rede/timeout não bloqueia
+    o save mas também NÃO aprova a chave — sobe 503 pedindo nova tentativa.
+    Qualquer exceção fora desse esperado é logada como erro real e propagada,
+    nunca tratada como "chave válida".
+    """
     try:
         if provedor == "anthropic":
             async with httpx.AsyncClient() as client:
@@ -137,6 +147,7 @@ async def _validar_chave(provedor: str, api_key: str) -> None:
                 )
                 if r.status_code == 401:
                     raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Chave Anthropic inválida ou sem permissão.")
+                r.raise_for_status()
         elif provedor == "openai":
             async with httpx.AsyncClient() as client:
                 r = await client.get(
@@ -146,11 +157,21 @@ async def _validar_chave(provedor: str, api_key: str) -> None:
                 )
                 if r.status_code == 401:
                     raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Chave OpenAI inválida.")
+                r.raise_for_status()
     except HTTPException:
         raise
+    except httpx.HTTPError as e:
+        # Rede/API fora do ar: não sabemos se a chave é válida, então não aprova.
+        logger.warning("Falha de rede ao validar chave %s: %s", provedor, e)
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Não foi possível validar a chave agora (falha de rede/API fora do ar). Tente novamente.",
+        )
     except Exception:
-        # Falha de rede não bloqueia o save
-        pass
+        # Qualquer outra exceção (ex.: schema de resposta mudou) é um erro real,
+        # não sinal de chave válida — loga e propaga em vez de engolir.
+        logger.error("Erro inesperado ao validar chave %s", provedor, exc_info=True)
+        raise
 
 
 async def resolver_api_key_ia(loja_id: str, db: AsyncSession) -> tuple[str, str]:

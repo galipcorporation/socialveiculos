@@ -64,6 +64,9 @@ pnpm-debug.log*
 *.db-shm.bak-*
 *.db-wal.bak-*
 
+# Relatório JUnit do pytest (gerado pelo CI, ver .github/workflows/ci.yml)
+pytest-report.xml
+
 .vercel
 
 .vercel

@@ -363,6 +363,8 @@ export interface Lancamento {
   data: string
   veiculo_nome?: string
   status_pagamento: 'pago' | 'pendente'
+  // rascunho = autosave incompleto (não conta em saldo/relatórios); confirmado = definitivo.
+  status?: 'rascunho' | 'confirmado'
   created_at: string
   // Soft delete (lixeira)
   deletado_em?: string

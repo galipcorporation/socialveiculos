@@ -742,7 +742,7 @@ export function Estoque() {
           <div className="modal-glass" style={{ width: '450px', padding: '24px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Solicitar Exclusão</h3>
-              <button className="modal-close" onClick={() => setSolicitandoExclusaoVeiculo(null)} style={{ background: 'none', border: 'none', color: 'var(--sv-text-muted)', cursor: 'pointer', fontSize: '20px' }}>✕</button>
+              <button className="modal-close" onClick={() => setSolicitandoExclusaoVeiculo(null)} style={{ background: 'none', border: 'none', color: 'var(--sv-text-muted)', cursor: 'pointer', fontSize: '20px' }} aria-label="Fechar">✕</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <p style={{ fontSize: '14px', color: 'var(--sv-text-dim)', margin: 0 }}>

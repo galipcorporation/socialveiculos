@@ -9,8 +9,13 @@ primary_region = "gru"  # São Paulo
 [env]
   PORT = "8090"
   MOCK_WHATSAPP = "false"
+  NODE_ENV = "production"
   # A API fala com o worker via rede interna; webhook aponta de volta pra API.
   FASTAPI_WEBHOOK_URL = "http://socialveiculos-api.internal:8000/v1/assistente/webhook"
+  # SERVICE_TOKEN NAO vai aqui — secrets do Fly nao ficam no fly.toml (fica em texto plano).
+  # Definir antes do primeiro deploy em producao:
+  #   fly secrets set SERVICE_TOKEN=<valor-forte-gerado> -a socialveiculos-worker
+  # Sem essa env var setada, o worker loga erro fatal no boot (ver server.js).
 
 # Sem [http_service] público: o worker só é acessível pela rede privada .internal.
 # Expõe a porta apenas internamente.

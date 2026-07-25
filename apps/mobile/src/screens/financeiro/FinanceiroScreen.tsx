@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { FlatList, StyleSheet, View } from 'react-native'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
@@ -11,6 +11,8 @@ import { financeiroService, veiculosService } from '../../services'
 import type { PeriodoFinanceiro } from '../../services/financeiro'
 import type { Lancamento, TipoLancamento } from '../../services/types'
 import { formatBRL, formatBRLCompact, formatData, maskMoedaInput, parseMoedaInput } from '../../lib/format'
+
+const AUTOSAVE_DEBOUNCE_MS = 4000
 
 type Filtro = TipoLancamento | 'todos'
 
@@ -273,22 +275,91 @@ function NovoLancamentoSheet({ visible, onClose }: { visible: boolean; onClose: 
   const [veiculoNome, setVeiculoNome] = useState<string | undefined>(undefined)
   const [veicSheet, setVeicSheet] = useState(false)
 
+  // Autosave (rascunho): id do rascunho no backend (upsert) + banner de recuperação.
+  const [rascunhoId, setRascunhoId] = useState<string | undefined>(undefined)
+  const [rascunhoDisponivel, setRascunhoDisponivel] = useState<Lancamento | null>(null)
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const primeiraRenderizacao = useRef(true)
+
   const veiculosQ = useQuery({ queryKey: ['veiculos', 'financeiro'], queryFn: () => veiculosService.listar(), enabled: visible })
 
+  // Ao abrir a tela, verifica se existe um rascunho pendente para oferecer recuperação.
+  useEffect(() => {
+    if (!visible) return
+    let cancelado = false
+    financeiroService.obterRascunho()
+      .then((rascunho) => { if (!cancelado) setRascunhoDisponivel(rascunho) })
+      .catch(() => {})
+    return () => { cancelado = true }
+  }, [visible])
+
+  const limparFormulario = () => {
+    setTipo('despesa'); setDescricao(''); setValor(''); setStatus('pago'); setVeiculoNome(undefined)
+    setRascunhoId(undefined)
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
+  }
+
+  const recuperarRascunho = (rascunho: Lancamento) => {
+    setTipo(rascunho.tipo)
+    setDescricao(rascunho.descricao ?? '')
+    setValor(rascunho.valor ? String(rascunho.valor).replace('.', ',') : '')
+    setStatus(rascunho.status_pagamento)
+    setRascunhoId(rascunho.id)
+    setRascunhoDisponivel(null)
+  }
+
+  const descartarRascunho = () => setRascunhoDisponivel(null)
+
+  // Autosave: debounce de alguns segundos após a última alteração, salva como
+  // rascunho (upsert) sem exigir o preenchimento completo. Não roda antes de
+  // qualquer digitação (evita salvar um rascunho vazio ao só abrir o sheet).
+  useEffect(() => {
+    if (!visible) return
+    if (primeiraRenderizacao.current) { primeiraRenderizacao.current = false; return }
+    if (!descricao.trim() && !valor.trim()) return // nada digitado ainda
+
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
+    autosaveTimer.current = setTimeout(() => {
+      financeiroService.salvarRascunho(
+        {
+          tipo,
+          descricao: descricao.trim() || undefined,
+          valor: parseMoedaInput(valor) || undefined,
+          status_pagamento: status,
+        },
+        rascunhoId
+      )
+        .then((r) => setRascunhoId(r.id))
+        .catch(() => {}) // autosave silencioso: falha não deve interromper o usuário
+    }, AUTOSAVE_DEBOUNCE_MS)
+
+    return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipo, descricao, valor, status, visible])
+
+  useEffect(() => {
+    if (!visible) primeiraRenderizacao.current = true
+  }, [visible])
+
   const mut = useMutation({
-    mutationFn: () =>
-      financeiroService.criar({
+    mutationFn: () => {
+      const input = {
         tipo,
         descricao: descricao.trim(),
         valor: parseMoedaInput(valor),
         status_pagamento: status,
         veiculo_nome: veiculoNome,
-      }),
+      }
+      // Se já existe um rascunho salvo (autosave), confirma-o em vez de criar
+      // um lançamento novo — evita duplicar o registro.
+      return rascunhoId
+        ? financeiroService.confirmar(rascunhoId, input)
+        : financeiroService.criar(input)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['financeiro'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      setDescricao('')
-      setValor('')
+      limparFormulario()
       onClose()
       toast.show('success', 'Lançamento registrado.')
     },
@@ -300,6 +371,19 @@ function NovoLancamentoSheet({ visible, onClose }: { visible: boolean; onClose: 
   return (
     <Sheet visible={visible} onClose={onClose} title="Novo lançamento">
       <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
+        {rascunhoDisponivel && (
+          <Card style={{ gap: spacing.xs }}>
+            <Txt variant="bodyMedium">Você tem um rascunho não salvo</Txt>
+            <Txt variant="caption" color="textDim">
+              {rascunhoDisponivel.descricao || 'Lançamento sem descrição'}
+              {rascunhoDisponivel.valor ? ` · ${formatBRL(rascunhoDisponivel.valor)}` : ''}
+            </Txt>
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <Button title="Continuar de onde parou" size="sm" onPress={() => recuperarRascunho(rascunhoDisponivel)} />
+              <Button title="Descartar" size="sm" variant="ghost" onPress={descartarRascunho} />
+            </View>
+          </Card>
+        )}
         <SegmentedControl
           options={[
             { value: 'receita', label: 'Receita' },

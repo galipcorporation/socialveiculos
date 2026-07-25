@@ -90,6 +90,9 @@ async def _avisar_d7(db, assinatura: Assinatura, loja: Loja, dias: int) -> None:
 
 async def _expirar(db, assinatura: Assinatura, loja: Loja) -> None:
     link = f"assinatura:{assinatura.id}:expirada"
+    # Os módulos habilitados são preservados de propósito: o gate central já
+    # bloqueia o acesso pelo status/vencimento, e manter o que estava contratado
+    # deixa a reativação (que ressincroniza pelo plano) restaurar o estado exato.
     assinatura.status = StatusAssinatura.EXPIRADA
     loja.ativa = False
 

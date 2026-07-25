@@ -403,7 +403,7 @@ export function Feed() {
 
         <div className="vt-topbar-actions">
           {/* Toggle tema */}
-          <button className="vt-icon-btn" onClick={() => setDarkMode(d => !d)} title={darkMode ? 'Tema claro' : 'Tema escuro'}>
+          <button className="vt-icon-btn" onClick={() => setDarkMode(d => !d)} title={darkMode ? 'Tema claro' : 'Tema escuro'} aria-label={darkMode ? 'Ativar tema claro' : 'Ativar tema escuro'}>
             {darkMode ? (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
@@ -463,7 +463,7 @@ export function Feed() {
       {storyAberto && (
         <div onClick={() => setStoryAberto(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div onClick={e => e.stopPropagation()} style={{ background: 'var(--vt-surface)', borderRadius: 16, width: 360, maxWidth: '95vw', overflow: 'hidden', position: 'relative' }}>
-            <button onClick={() => setStoryAberto(null)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#fff', zIndex: 2 }}>✕</button>
+            <button onClick={() => setStoryAberto(null)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#fff', zIndex: 2 }} aria-label="Fechar">✕</button>
             {storyAberto.midia_url
               ? <img src={storyAberto.midia_url} alt="" style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover', maxHeight: 560 }} />
               : <div style={{ width: '100%', aspectRatio: '9/16', maxHeight: 560, background: 'var(--vt-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CarIcon /></div>}
@@ -528,7 +528,7 @@ export function Feed() {
           <div className="vt-modal-card" style={{ maxWidth: 400, width: 'min(400px, 92vw)', background: 'var(--vt-surface)', border: '1px solid var(--vt-border)', color: 'var(--vt-text)' }} onClick={e => e.stopPropagation()}>
             <div className="vt-modal-header" style={{ borderBottom: '1px solid var(--vt-border)', paddingBottom: '12px' }}>
               <h3 style={{ margin: 0 }}>Minha Conta</h3>
-              <button className="vt-modal-close" onClick={closePerfilModal} style={{ color: 'var(--vt-text)' }}>×</button>
+              <button className="vt-modal-close" onClick={closePerfilModal} style={{ color: 'var(--vt-text)' }} aria-label="Fechar">×</button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px 0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

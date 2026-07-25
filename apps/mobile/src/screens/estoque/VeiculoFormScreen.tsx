@@ -45,13 +45,21 @@ interface FormState {
   opcionais: string
   descricao: string
   publicado: boolean
-  fotos: string[]
+  midias: MidiaForm[]
+}
+
+/** Mídia (foto ou vídeo) do formulário — mesma regra do resto do app: um campo só, tipo unificado. */
+interface MidiaForm {
+  uri: string
+  tipo: 'imagem' | 'video'
+  /** true = escolhida agora pelo ImagePicker (precisa upload); false = já existe no servidor. */
+  nova: boolean
 }
 
 const VAZIO: FormState = {
   tipo: 'carro', placa: '', marca: '', modelo: '', versao: '', anoModelo: null, cor: '',
   km: '', cambio: '', combustivel: '', portas: '4', precoVenda: '', precoCusto: '',
-  opcionais: '', descricao: '', publicado: false, fotos: [],
+  opcionais: '', descricao: '', publicado: false, midias: [],
 }
 
 export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoForm'>) {
@@ -139,7 +147,9 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
       opcionais: v.opcionais ?? '',
       descricao: v.descricao ?? '',
       publicado: !!v.publicado_marketplace,
-      fotos: (v.midias ?? []).filter((m) => m.tipo === 'imagem').map((m) => m.url),
+      midias: [...(v.midias ?? [])]
+        .sort((a, b) => a.ordem - b.ordem)
+        .map((m) => ({ uri: m.url, tipo: m.tipo, nova: false })),
     })
   }, [existenteQ.data])
 
@@ -191,27 +201,28 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
 
   const [carregandoFotos, setCarregandoFotos] = useState(false)
 
-  const escolherFotos = async () => {
+  const escolherMidias = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ['images', 'videos'],
       allowsMultipleSelection: true,
-      selectionLimit: 8 - form.fotos.length,
+      selectionLimit: 8 - form.midias.length,
       quality: 0.8,
     })
     if (res.canceled || res.assets.length === 0) return
     setCarregandoFotos(true)
     try {
-      const redimensionadas = await Promise.all(
-        res.assets.map(async (a) => {
+      const processadas = await Promise.all(
+        res.assets.map(async (a): Promise<MidiaForm> => {
+          if (a.type === 'video') return { uri: a.uri, tipo: 'video', nova: true }
           const r = await ImageManipulator.manipulateAsync(
             a.uri,
             [{ resize: { width: 1600 } }],
             { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
           )
-          return r.uri
+          return { uri: r.uri, tipo: 'imagem', nova: true }
         }),
       )
-      set('fotos', [...form.fotos, ...redimensionadas].slice(0, 8))
+      set('midias', [...form.midias, ...processadas].slice(0, 8))
     } finally {
       setCarregandoFotos(false)
     }
@@ -251,9 +262,9 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
       const veiculo = editando
         ? await veiculosService.atualizar(id!, montarInput())
         : await veiculosService.criar(montarInput())
-      const fotosNovas = form.fotos.filter((uri) => uri.startsWith('file://'))
-      for (const uri of fotosNovas) {
-        await veiculosService.enviarFoto(veiculo.id, uri)
+      const midiasNovas = form.midias.filter((m) => m.nova)
+      for (const m of midiasNovas) {
+        await veiculosService.enviarFoto(veiculo.id, m.uri, m.tipo)
       }
       return veiculo
     },
@@ -513,23 +524,28 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
             />
           </Card>
 
-          {/* Fotos */}
+          {/* Fotos e vídeos */}
           <Card>
-            <Txt variant="title" style={{ marginBottom: spacing.sm }}>Fotos</Txt>
+            <Txt variant="title" style={{ marginBottom: spacing.sm }}>Fotos e vídeos</Txt>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.xs }}>
               <Pressable
-                onPress={escolherFotos}
-                disabled={carregandoFotos || form.fotos.length >= 8}
+                onPress={escolherMidias}
+                disabled={carregandoFotos || form.midias.length >= 8}
                 style={[styles.addFoto, { borderColor: colors.borderHover, backgroundColor: colors.overlaySoft }]}
               >
                 <Ionicons name={carregandoFotos ? 'hourglass-outline' : 'camera-outline'} size={24} color={colors.textDim} />
                 <Txt variant="caption" color="textDim">{carregandoFotos ? 'Preparando…' : 'Adicionar'}</Txt>
               </Pressable>
-              {form.fotos.map((uri, i) => (
-                <View key={uri + i}>
-                  <Image source={{ uri }} style={styles.foto} />
+              {form.midias.map((m, i) => (
+                <View key={m.uri + i}>
+                  <Image source={{ uri: m.uri }} style={styles.foto} />
+                  {m.tipo === 'video' && (
+                    <View pointerEvents="none" style={styles.playOverlay}>
+                      <Ionicons name="play-circle" size={28} color="#fff" />
+                    </View>
+                  )}
                   <Pressable
-                    onPress={() => set('fotos', form.fotos.filter((_, idx) => idx !== i))}
+                    onPress={() => set('midias', form.midias.filter((_, idx) => idx !== i))}
                     style={styles.removerFoto}
                     hitSlop={8}
                   >
@@ -769,6 +785,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   foto: { width: 84, height: 84, borderRadius: radius.md },
+  playOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   removerFoto: {
     position: 'absolute',
     top: 4,

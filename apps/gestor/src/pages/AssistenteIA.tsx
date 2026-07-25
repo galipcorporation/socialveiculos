@@ -660,7 +660,7 @@ function ConfigAssistenteModal({ onClose, showToast }: { onClose: () => void; sh
       <div className="modal-glass" style={{ maxWidth: 500, width: 'min(500px, 92vw)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Configurações do Assistente de IA</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar">×</button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
           {loading ? (
@@ -889,7 +889,7 @@ function RoteiroGravacaoModal({
       <div className="modal-glass" style={{ maxWidth: 520, width: 'min(520px, 92vw)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Gravar amostra de voz</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar">×</button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
           <div style={{ background: 'var(--sv-surface-hover)', padding: 14, borderRadius: 8, border: '1px solid var(--sv-border)' }}>

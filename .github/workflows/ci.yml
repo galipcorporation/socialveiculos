@@ -43,8 +43,8 @@ jobs:
 
       - name: Frontend Build, Lint & Typecheck
         run: |
-          pnpm --filter @sv/gestor run build --emptyOutDir || echo "Ignorando falhas leves de build no CI"
-          pnpm --filter @sv/vitrine run build --emptyOutDir || echo "Ignorando falhas leves de build no CI"
+          pnpm --filter @sv/gestor run build --emptyOutDir
+          pnpm --filter @sv/vitrine run build --emptyOutDir
 
       # Configuração de Python para Backend API
       - name: Set up Python
@@ -62,3 +62,28 @@ jobs:
         run: |
           cd apps/api
           python -m py_compile main.py limiter.py
+
+      - name: Remove residual test database
+        working-directory: apps/api
+        shell: bash
+        run: rm -f ci_test.db ci_test.db-shm ci_test.db-wal
+
+      - name: Seed test database
+        working-directory: apps/api
+        env:
+          API_DEBUG: "true"
+          JWT_SECRET: "ci-test-secret-nao-usar-em-producao-32bytes-min"
+          WEBHOOK_SECRET: "ci-test-webhook-secret-nao-usar-em-producao"
+          DATABASE_URL: "sqlite:///./ci_test.db"
+        run: python seed.py
+
+      - name: Run Backend Tests (pytest)
+        working-directory: apps/api
+        env:
+          API_DEBUG: "true"
+          JWT_SECRET: "ci-test-secret-nao-usar-em-producao-32bytes-min"
+          WEBHOOK_SECRET: "ci-test-webhook-secret-nao-usar-em-producao"
+          DATABASE_URL: "sqlite:///./ci_test.db"
+        run: |
+          pytest -v --junitxml=pytest-report.xml
+          python ../../scripts/ci/check_pytest_skips.py pytest-report.xml

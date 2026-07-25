@@ -90,7 +90,7 @@ export default function ConversaVitrineScreen({ route }: VitrineScreenProps<'Con
   )
 }
 
-function Bolha({ mensagem }: { mensagem: Mensagem }) {
+const Bolha = React.memo(function Bolha({ mensagem }: { mensagem: Mensagem }) {
   const { colors, dark } = useTheme()
   const minha = mensagem.autor === 'cliente'
   return (
@@ -108,7 +108,7 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
       </Txt>
     </View>
   )
-}
+})
 
 const styles = StyleSheet.create({
   bolha: { maxWidth: '80%', borderRadius: radius.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { FlatList, View } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { useQuery } from '@tanstack/react-query'
@@ -10,6 +10,7 @@ import { vitrineService } from '../../services'
 import { useAuthStore } from '../../stores/authStore'
 import { useGateLogin } from '../../hooks/useGateLogin'
 import { useToggleFavorito } from '../../hooks/useToggleFavorito'
+import type { AnuncioVitrine } from '../../services/types'
 
 type Modo = 'buscar' | 'favoritos'
 
@@ -36,6 +37,10 @@ export default function BuscarScreen() {
 
   const dados = modo === 'buscar' ? buscaQ.data ?? [] : favQ.data ?? []
   const carregando = modo === 'buscar' ? buscaQ.isLoading : favQ.isLoading
+
+  const abrirDetalhe = useCallback((id: string) => navigation.navigate('CarroDetalhe', { id }), [navigation])
+  const abrirLoja = useCallback((id: string) => navigation.navigate('PerfilLoja', { id }), [navigation])
+  const favoritarItem = useCallback((id: string, favoritadoAtual: boolean) => favoritar(id, favoritadoAtual), [favoritar])
 
   return (
     <View style={{ flex: 1 }}>
@@ -69,11 +74,11 @@ export default function BuscarScreen() {
               : <EmptyState icon="search-outline" title="Nada encontrado" subtitle={busca ? `Sem resultados para "${busca}".` : 'Digite para buscar veículos.'} />
           }
           renderItem={({ item }) => (
-            <AnuncioCard
-              anuncio={item}
-              onPress={() => navigation.navigate('CarroDetalhe', { id: item.id })}
-              onLojaPress={() => navigation.navigate('PerfilLoja', { id: item.loja_id })}
-              onFavorito={() => favoritar(item.id, item.favoritado_por_mim)}
+            <BuscarItem
+              item={item}
+              abrirDetalhe={abrirDetalhe}
+              abrirLoja={abrirLoja}
+              favoritar={favoritarItem}
             />
           )}
         />
@@ -81,3 +86,18 @@ export default function BuscarScreen() {
     </View>
   )
 }
+
+interface BuscarItemProps {
+  item: AnuncioVitrine
+  abrirDetalhe: (id: string) => void
+  abrirLoja: (id: string) => void
+  favoritar: (id: string, favoritadoAtual: boolean) => void
+}
+
+const BuscarItem = React.memo(function BuscarItem({ item, abrirDetalhe, abrirLoja, favoritar }: BuscarItemProps) {
+  const onPress = useCallback(() => abrirDetalhe(item.id), [abrirDetalhe, item.id])
+  const onLojaPress = useCallback(() => abrirLoja(item.loja_id), [abrirLoja, item.loja_id])
+  const onFavorito = useCallback(() => favoritar(item.id, item.favoritado_por_mim), [favoritar, item.id, item.favoritado_por_mim])
+
+  return <AnuncioCard anuncio={item} onPress={onPress} onLojaPress={onLojaPress} onFavorito={onFavorito} />
+})

@@ -11,7 +11,8 @@ from typing import Callable
 
 from database import get_db
 from deps import get_current_b2b_user, B2BContext
-from models import ModuloHabilitado, Assinatura, StatusAssinatura
+from models import ModuloHabilitado, StatusAssinatura
+from plano_acesso import acesso_liberado, assinatura_vigente
 
 
 class Modulo(str, enum.Enum):
@@ -30,17 +31,15 @@ STATUS_LIBERA_MODULO = {StatusAssinatura.ATIVA}
 
 
 async def assinatura_em_dia(db: AsyncSession, loja_id: str) -> bool:
-    """True se a loja tem ao menos uma assinatura em estado que libera módulos."""
-    stmt = (
-        select(Assinatura)
-        .where(
-            Assinatura.loja_id == loja_id,
-            Assinatura.status.in_(STATUS_LIBERA_MODULO),
-        )
-        .limit(1)
-    )
-    res = await db.execute(stmt)
-    return res.scalar_one_or_none() is not None
+    """
+    True se a assinatura vigente da loja libera acesso agora.
+
+    Considera a assinatura MAIS RECENTE (não "qualquer uma ativa") e checa
+    também o vencimento — antes, uma assinatura vencida seguia liberando os
+    módulos até o worker diário rodar, e uma assinatura nova SUSPENSA não
+    derrubava o acesso porque uma antiga ATIVA ainda satisfazia a busca.
+    """
+    return acesso_liberado(await assinatura_vigente(db, loja_id))
 
 
 async def modulo_ativo(db: AsyncSession, loja_id: str, modulo: Modulo) -> bool:

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Linking, Pressable, StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -14,6 +14,7 @@ import { vitrineService } from '../../services'
 import { useGateLogin } from '../../hooks/useGateLogin'
 import { useToggleFavorito } from '../../hooks/useToggleFavorito'
 import { formatBRL, formatKm } from '../../lib/format'
+import { abrirWhatsapp } from '../../lib/whatsapp'
 import type { VitrineScreenProps } from '../../navigation/types'
 
 export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroDetalhe'>) {
@@ -47,11 +48,8 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
 
   const whatsapp = async () => {
     if (!a?.loja_whatsapp) { toast.show('info', 'Loja sem WhatsApp cadastrado.'); return }
-    const texto = encodeURIComponent(`Olá! Tenho interesse no ${a.marca} ${a.modelo} anunciado na Social Veículos.`)
-    const url = `https://wa.me/55${a.loja_whatsapp.replace(/\D/g, '')}?text=${texto}`
-    const ok = await Linking.canOpenURL(url)
-    if (ok) Linking.openURL(url)
-    else toast.show('info', 'Não foi possível abrir o WhatsApp.')
+    const texto = `Olá! Tenho interesse no ${a.marca} ${a.modelo} anunciado na Social Veículos.`
+    await abrirWhatsapp(a.loja_whatsapp, texto)
   }
 
   return (

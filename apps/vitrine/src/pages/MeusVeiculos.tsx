@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
+import { useUIStore } from '../stores/uiStore'
 import { BottomNav } from '../components/BottomNav'
 
 interface VeiculoDocumento {
@@ -47,7 +48,10 @@ export function MeusVeiculos() {
     if (!isAuthenticated) { setLoading(false); return }
     api.get<MeuVeiculo[]>('/vitrine/meus-veiculos')
       .then(setVeiculos)
-      .catch(() => {})
+      .catch((err) => {
+        console.error('Erro ao carregar meus veículos:', err)
+        useUIStore.getState().showError('Não foi possível carregar seus veículos. Tente novamente.')
+      })
       .finally(() => setLoading(false))
   }, [isAuthenticated])
 

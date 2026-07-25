@@ -21,6 +21,7 @@ from sqlalchemy import func, or_, desc
 
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
+from lib_formatacao import formatar_moeda
 from models import (
     utcnow,
     Contrato, Veiculo, ClientePF, StatusContrato, TipoContrato,
@@ -612,7 +613,7 @@ async def vender_veiculo(
     observacoes = body.observacoes or ""
     if body.outros:
         outros_txt = "\n".join(
-            f"{o.descricao}: R$ {o.valor:,.2f}" for o in body.outros
+            f"{o.descricao}: {formatar_moeda(o.valor)}" for o in body.outros
         )
         observacoes = f"{observacoes}\n{outros_txt}".strip() if observacoes else outros_txt
     if body.trocas:
@@ -620,7 +621,7 @@ async def vender_veiculo(
             f"Dação em pagamento: {t.marca} {t.modelo}"
             + (f" {t.ano_fabricacao}/{t.ano_modelo}" if t.ano_fabricacao and t.ano_modelo else "")
             + (f", placa {t.placa}" if t.placa else ", sem placa")
-            + f" — avaliado em R$ {t.valor_avaliacao:,.2f}"
+            + f" — avaliado em {formatar_moeda(t.valor_avaliacao)}"
             for t in body.trocas
         )
         observacoes = f"{observacoes}\n{dacao}".strip() if observacoes else dacao
@@ -671,13 +672,13 @@ async def vender_veiculo(
     if receita > 0:
         composicao = []
         if dinheiro:
-            composicao.append(f"dinheiro/PIX R$ {dinheiro:,.2f}")
+            composicao.append(f"dinheiro/PIX {formatar_moeda(dinheiro)}")
         for o in body.outros:
-            composicao.append(f"{o.descricao} R$ {o.valor:,.2f}")
+            composicao.append(f"{o.descricao} {formatar_moeda(o.valor)}")
         if fin_valor:
-            composicao.append(f"financiado R$ {fin_valor:,.2f}" + (f" em {parcelas}x" if parcelas else ""))
+            composicao.append(f"financiado {formatar_moeda(fin_valor)}" + (f" em {parcelas}x" if parcelas else ""))
         if total_trocas:
-            composicao.append(f"troca(s) R$ {total_trocas:,.2f} (entraram no estoque)")
+            composicao.append(f"troca(s) {formatar_moeda(total_trocas)} (entraram no estoque)")
         lancamento = LancamentoFinanceiro(
             loja_id=ctx.loja.id,
             tipo=TipoLancamento.RECEITA,
@@ -752,7 +753,7 @@ async def vender_veiculo(
     await db.refresh(esteira)
 
     detalhe_trocas = f" {len(trocas_criadas)} veículo(s) recebidos em troca." if trocas_criadas else ""
-    detalhe_excedente = f" Excedente de R$ {excedente:,.2f} somado à comissão do vendedor." if excedente > 0 else ""
+    detalhe_excedente = f" Excedente de {formatar_moeda(excedente)} somado à comissão do vendedor." if excedente > 0 else ""
     await registrar_auditoria(
         db=db,
         loja_id=ctx.loja.id,
@@ -789,7 +790,7 @@ _jinja_env = Environment(autoescape=True)
 def _fmt_brl(v):
     if v is None:
         return "R$ ___________"
-    return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return formatar_moeda(v)
 
 
 def _render_template_contrato(template: TemplateContrato, contrato: Contrato, loja) -> str:
@@ -971,7 +972,7 @@ def _gerar_html_contrato(contrato: Contrato, loja) -> str:
     def fmt_brl(v):
         if v is None:
             return "R$ ___________"
-        return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return formatar_moeda(v)
 
     veiculo_desc = ""
     if veiculo:

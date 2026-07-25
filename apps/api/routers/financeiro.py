@@ -15,6 +15,7 @@ from sqlalchemy.future import select
 
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
+from limiter import rate_limit
 from models import (
     utcnow,
     LancamentoFinanceiro,
@@ -25,6 +26,7 @@ from models import (
     TipoLancamento,
     StatusVeiculo,
     StatusPagamento,
+    StatusLancamento,
     EtapaLead,
     EsteiraPosVenda,
     PapelUsuario,
@@ -35,6 +37,8 @@ from schemas import (
     LancamentoResponse,
     LancamentoCreateRequest,
     LancamentoUpdateRequest,
+    LancamentoRascunhoRequest,
+    LancamentoConfirmarRequest,
     LancamentoExcluirRequest,
     CustoVeiculoCreateRequest,
     CustosVeiculoResponse,
@@ -78,6 +82,7 @@ async def _calcular_resumo(
         .where(
             LancamentoFinanceiro.loja_id == loja_id,
             LancamentoFinanceiro.status_pagamento == StatusPagamento.PAGO,
+            LancamentoFinanceiro.status == StatusLancamento.CONFIRMADO,
             LancamentoFinanceiro.deletado_em.is_(None),
         )
     )
@@ -235,6 +240,7 @@ async def get_dashboard_kpis(
             LancamentoFinanceiro.loja_id == loja_id,
             LancamentoFinanceiro.tipo == TipoLancamento.RECEITA,
             LancamentoFinanceiro.status_pagamento == StatusPagamento.PAGO,
+            LancamentoFinanceiro.status == StatusLancamento.CONFIRMADO,
             LancamentoFinanceiro.data >= inicio_mes,
             LancamentoFinanceiro.deletado_em.is_(None),
         )
@@ -350,10 +356,12 @@ async def listar_lancamentos(
     tipo: Optional[TipoLancamento] = Query(None),
     mes: Optional[int] = Query(None, ge=1, le=12),
     ano: Optional[int] = Query(None),
+    incluir_rascunhos: bool = Query(False, description="Inclui rascunhos (autosave incompleto) na listagem."),
 ):
     """
     Lista os lançamentos financeiros da loja (filtro opcional por tipo, mes, ano).
-    🔒 Isolamento por Tenant.
+    🔒 Isolamento por Tenant. Rascunhos (autosave) ficam fora por padrão — mesmo
+    padrão de StatusVeiculo.RASCUNHO excluído do estoque por padrão.
     """
     stmt = (
         select(LancamentoFinanceiro, Veiculo.marca, Veiculo.modelo, Veiculo.placa)
@@ -361,6 +369,8 @@ async def listar_lancamentos(
         .where(LancamentoFinanceiro.loja_id == context.loja_id, LancamentoFinanceiro.deletado_em.is_(None))
         .order_by(LancamentoFinanceiro.data.desc())
     )
+    if not incluir_rascunhos:
+        stmt = stmt.where(LancamentoFinanceiro.status == StatusLancamento.CONFIRMADO)
     if tipo is not None:
         stmt = stmt.where(LancamentoFinanceiro.tipo == tipo)
     
@@ -393,6 +403,7 @@ async def listar_lancamentos(
             "categoria": lanc.categoria,
             "observacoes": lanc.observacoes,
             "status_pagamento": lanc.status_pagamento.value if hasattr(lanc.status_pagamento, 'value') else lanc.status_pagamento,
+            "status": lanc.status.value if hasattr(lanc.status, 'value') else lanc.status,
             "created_at": lanc.created_at,
         }
         resultados.append(lanc_dict)
@@ -404,7 +415,10 @@ async def listar_lancamentos(
     "/financeiro/lancamentos",
     response_model=LancamentoResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(exige_permissao(Acao.CRIAR, Recurso.FINANCEIRO))],
+    dependencies=[
+        Depends(exige_permissao(Acao.CRIAR, Recurso.FINANCEIRO)),
+        Depends(rate_limit(30, 60)),
+    ],
 )
 async def criar_lancamento(
     data: LancamentoCreateRequest,
@@ -413,7 +427,7 @@ async def criar_lancamento(
     context: B2BContext = Depends(get_current_b2b_user),
 ):
     """
-    Cria um lançamento financeiro (receita, despesa ou comissão) na loja.
+    Cria um lançamento financeiro (receita, despesa ou comissão) na loja, já CONFIRMADO.
     🔒 Isolamento por Tenant: vincula automaticamente ao loja_id do contexto.
     """
     payload = data.model_dump()
@@ -423,6 +437,7 @@ async def criar_lancamento(
 
     lancamento = LancamentoFinanceiro(
         loja_id=context.loja_id,
+        status=StatusLancamento.CONFIRMADO,
         **payload
     )
     db.add(lancamento)
@@ -448,7 +463,10 @@ async def criar_lancamento(
 @router.patch(
     "/financeiro/lancamentos/{id}",
     response_model=LancamentoResponse,
-    dependencies=[Depends(exige_permissao(Acao.EDITAR, Recurso.FINANCEIRO))],
+    dependencies=[
+        Depends(exige_permissao(Acao.EDITAR, Recurso.FINANCEIRO)),
+        Depends(rate_limit(30, 60)),
+    ],
 )
 async def atualizar_lancamento(
     id: str,
@@ -485,6 +503,151 @@ async def atualizar_lancamento(
         entidade="lancamento_financeiro",
         entidade_id=lancamento.id,
         detalhes=json.dumps({k: (v.value if hasattr(v, "value") else v) for k, v in body.items()}, default=str),
+        ip=request.client.host if request.client else None,
+    )
+    await db.commit()
+
+    return lancamento
+
+
+# ── Rascunho (autosave) & Confirmação ───────────────────────────
+# Mesmo mecanismo do "cadastro rápido" de veículo (StatusVeiculo.RASCUNHO):
+# o formulário salva automaticamente enquanto o usuário preenche, sem contar
+# para saldo/relatórios, até ser confirmado explicitamente.
+
+@router.get(
+    "/financeiro/lancamentos/rascunho",
+    response_model=Optional[LancamentoResponse],
+    dependencies=[Depends(exige_permissao(Acao.VER, Recurso.FINANCEIRO))],
+)
+async def obter_rascunho_lancamento(
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """
+    Retorna o rascunho (autosave) mais recente do usuário na loja, se houver,
+    para oferecer recuperação ao reabrir o formulário. 🔒 Escopo por usuário + loja.
+    """
+    stmt = (
+        select(LancamentoFinanceiro)
+        .where(
+            LancamentoFinanceiro.loja_id == context.loja_id,
+            LancamentoFinanceiro.status == StatusLancamento.RASCUNHO,
+            LancamentoFinanceiro.deletado_em.is_(None),
+            LancamentoFinanceiro.deletado_por_id.is_(None),
+        )
+        .order_by(LancamentoFinanceiro.created_at.desc())
+        .limit(1)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+@router.post(
+    "/financeiro/lancamentos/rascunho",
+    response_model=LancamentoResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(exige_permissao(Acao.CRIAR, Recurso.FINANCEIRO)),
+        Depends(rate_limit(30, 60)),
+    ],
+)
+async def salvar_rascunho_lancamento(
+    data: LancamentoRascunhoRequest,
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+    rascunho_id: Optional[str] = Query(None, description="Id do rascunho a atualizar; omitido cria um novo."),
+):
+    """
+    Autosave: cria ou atualiza (upsert por rascunho_id) um lançamento com status
+    RASCUNHO. Campos parciais são aceitos — o vendedor pode ainda estar
+    preenchendo. Não gera auditoria (evita ruído a cada poucos segundos) nem
+    conta para saldo/relatórios (ver filtro StatusLancamento.CONFIRMADO em
+    _calcular_resumo e listar_lancamentos).
+    """
+    payload = data.model_dump(exclude_unset=True)
+
+    lancamento = None
+    if rascunho_id:
+        stmt = select(LancamentoFinanceiro).where(
+            LancamentoFinanceiro.id == rascunho_id,
+            LancamentoFinanceiro.loja_id == context.loja_id,
+            LancamentoFinanceiro.status == StatusLancamento.RASCUNHO,
+            LancamentoFinanceiro.deletado_em.is_(None),
+        )
+        lancamento = (await db.execute(stmt)).scalar_one_or_none()
+
+    if lancamento:
+        for key, value in payload.items():
+            setattr(lancamento, key, value)
+    else:
+        if payload.get("data") is None:
+            payload["data"] = datetime.now(timezone.utc).replace(tzinfo=None)
+        payload.setdefault("tipo", TipoLancamento.DESPESA)
+        lancamento = LancamentoFinanceiro(
+            loja_id=context.loja_id,
+            status=StatusLancamento.RASCUNHO,
+            **payload,
+        )
+        db.add(lancamento)
+
+    await db.commit()
+    await db.refresh(lancamento)
+    return lancamento
+
+
+@router.post(
+    "/financeiro/lancamentos/{id}/confirmar",
+    response_model=LancamentoResponse,
+    dependencies=[
+        Depends(exige_permissao(Acao.CRIAR, Recurso.FINANCEIRO)),
+        Depends(rate_limit(30, 60)),
+    ],
+)
+async def confirmar_lancamento(
+    id: str,
+    data: LancamentoConfirmarRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user),
+):
+    """
+    Confirma um rascunho como lançamento definitivo (torna-o visível em
+    saldo/relatórios). Aceita completar campos que ainda faltavam; exige
+    tipo, descrição e valor preenchidos ao final. 🔒 Isolamento por Tenant.
+    """
+    stmt = select(LancamentoFinanceiro).where(
+        LancamentoFinanceiro.id == id,
+        LancamentoFinanceiro.loja_id == context.loja_id,
+        LancamentoFinanceiro.deletado_em.is_(None),
+    )
+    lancamento = (await db.execute(stmt)).scalar_one_or_none()
+    if not lancamento:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lançamento não encontrado.")
+
+    body = data.model_dump(exclude_unset=True)
+    for key, value in body.items():
+        setattr(lancamento, key, value)
+
+    if not lancamento.tipo:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Informe o tipo do lançamento.")
+    if not lancamento.descricao or not lancamento.descricao.strip():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Informe a descrição do lançamento.")
+    if not lancamento.valor or lancamento.valor <= 0:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Informe um valor válido para o lançamento.")
+
+    lancamento.status = StatusLancamento.CONFIRMADO
+    await db.commit()
+    await db.refresh(lancamento)
+
+    await registrar_auditoria(
+        db=db,
+        loja_id=context.loja_id,
+        ator_id=context.usuario.id,
+        ator_nome=context.usuario.nome,
+        acao="lancamento.confirmar",
+        entidade="lancamento_financeiro",
+        entidade_id=lancamento.id,
+        detalhes=json.dumps({"tipo": lancamento.tipo.value, "valor": lancamento.valor}),
         ip=request.client.host if request.client else None,
     )
     await db.commit()

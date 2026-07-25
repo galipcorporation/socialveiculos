@@ -605,7 +605,7 @@ export function Financeiro() {
           <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
             <div className="modal-header">
               <h3>Comissões pendentes</h3>
-              <button className="modal-close" onClick={() => setShowComissoes(false)}>✕</button>
+              <button className="modal-close" onClick={() => setShowComissoes(false)} aria-label="Fechar">✕</button>
             </div>
             <div className="modal-body">
               {loadingComissoes ? (
@@ -649,7 +649,7 @@ export function Financeiro() {
           <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-header">
               <h3>Excluir lançamento</h3>
-              <button className="modal-close" onClick={() => setExcluindo(null)} disabled={salvandoExclusao}>✕</button>
+              <button className="modal-close" onClick={() => setExcluindo(null)} disabled={salvandoExclusao} aria-label="Fechar">✕</button>
             </div>
             <div className="modal-body">
               <p style={{ marginBottom: 12, fontSize: 14, color: 'var(--sv-text-dim)' }}>
@@ -686,7 +686,7 @@ export function Financeiro() {
           <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: 640 }}>
             <div className="modal-header">
               <h3>Lixeira</h3>
-              <button className="modal-close" onClick={() => setShowLixeira(false)}>✕</button>
+              <button className="modal-close" onClick={() => setShowLixeira(false)} aria-label="Fechar">✕</button>
             </div>
             <div className="modal-body">
               {loadingLixeira ? (

@@ -49,7 +49,7 @@ async def get_solicitacoes_pendentes(
     """
     stmt = (
         select(SolicitacaoAprovacao)
-        .options(selectinload(SolicitacaoAprovacao.requinitante if hasattr(SolicitacaoAprovacao, "requinitante") else SolicitacaoAprovacao.requisitante))
+        .options(selectinload(SolicitacaoAprovacao.requisitante))
         .where(
             SolicitacaoAprovacao.loja_id == context.loja_id,
             SolicitacaoAprovacao.status == StatusAprovacao.PENDENTE
@@ -75,7 +75,7 @@ async def get_historico_solicitacoes(
     """
     stmt = (
         select(SolicitacaoAprovacao)
-        .options(selectinload(SolicitacaoAprovacao.requinitante if hasattr(SolicitacaoAprovacao, "requinitante") else SolicitacaoAprovacao.requisitante))
+        .options(selectinload(SolicitacaoAprovacao.requisitante))
         .where(
             SolicitacaoAprovacao.loja_id == context.loja_id,
             SolicitacaoAprovacao.status != StatusAprovacao.PENDENTE

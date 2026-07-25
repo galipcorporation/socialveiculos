@@ -702,7 +702,7 @@ function ModelosTab() {
         <div className="glass-card" style={{ flex: '1 1 60%', padding: 20, minWidth: 0, position: 'sticky', top: 20 }}>
           <div className="modal-header" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0 }}>{editing ? 'Editar Modelo' : 'Novo Modelo'}</h3>
-            <button className="modal-close" onClick={closeEditor} style={{ background: 'none', border: 'none', color: 'var(--sv-text-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
+            <button className="modal-close" onClick={closeEditor} style={{ background: 'none', border: 'none', color: 'var(--sv-text-muted)', cursor: 'pointer', fontSize: 18 }} aria-label="Fechar">✕</button>
           </div>
           <EditorTemplateContent
             template={editing}
@@ -978,7 +978,7 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
       <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
         <div className="modal-header">
           <h3>{isEditing ? `Editar Contrato ${contrato!.numero}` : 'Novo Contrato'}</h3>
-          <button className="modal-close" onClick={onClose}><XIcon /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><XIcon /></button>
         </div>
 
         <div className="modal-body">

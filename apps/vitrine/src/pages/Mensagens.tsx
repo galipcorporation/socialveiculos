@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { api } from '../lib/api'
 import { createReconnectingSocket, type ReconnectingSocket } from '../lib/ws'
 import { useAuthStore } from '../stores/authStore'
+import { useUIStore } from '../stores/uiStore'
 import { LoginModal } from '../components/LoginModal'
 import { BottomNav } from '../components/BottomNav'
 
@@ -85,6 +86,7 @@ export function Mensagens() {
       }
     } catch (err) {
       console.error('Erro ao buscar conversas:', err)
+      useUIStore.getState().showError('Não foi possível carregar suas conversas. Tente novamente.')
     } finally {
       setLoadingConversas(false)
     }
@@ -97,6 +99,7 @@ export function Mensagens() {
       setMensagens(data)
     } catch (err) {
       console.error('Erro ao buscar mensagens:', err)
+      useUIStore.getState().showError('Não foi possível carregar as mensagens desta conversa. Tente novamente.')
     } finally {
       setLoadingMsgs(false)
     }
@@ -170,6 +173,7 @@ export function Mensagens() {
         fetchMensagens(selected.id)
       } catch (err) {
         console.error('Erro ao enviar mensagem:', err)
+        useUIStore.getState().showError('Não foi possível enviar a mensagem. Tente novamente.')
       }
     }
   }
@@ -250,7 +254,7 @@ export function Mensagens() {
             {/* Header */}
             <div className="vt-chat-head">
               <div className="vt-chat-head-left">
-                <button className="vt-chat-back" onClick={() => setSidebarHidden(false)}>
+                <button className="vt-chat-back" onClick={() => setSidebarHidden(false)} aria-label="Voltar">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 22, height: 22 }}>
                     <polyline points="15 18 9 12 15 6" />
                   </svg>
@@ -320,7 +324,7 @@ export function Mensagens() {
                   onKeyDown={handleKeyDown}
                 />
               </div>
-              <button className="vt-chat-send" onClick={() => handleSend()} disabled={!newMsg.trim()}>
+              <button className="vt-chat-send" onClick={() => handleSend()} disabled={!newMsg.trim()} aria-label="Enviar mensagem">
                 <SendIcon />
               </button>
             </div>

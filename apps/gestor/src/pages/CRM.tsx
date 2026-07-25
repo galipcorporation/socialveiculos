@@ -595,7 +595,7 @@ function NovoLeadModal({
       <div className="modal-glass" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Novo Lead</h3>
-          <button className="modal-close" onClick={onClose}><XIcon /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><XIcon /></button>
         </div>
 
         <div className="modal-body">
@@ -928,7 +928,7 @@ function LeadDetailModal({
       <div className="modal-glass" style={{ maxWidth: 750 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Detalhes do Lead</h3>
-          <button className="modal-close" onClick={onClose}><XIcon /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><XIcon /></button>
         </div>
 
         <div className="modal-body">
@@ -1366,7 +1366,7 @@ function ClienteModal({
       <div className="modal-glass" style={{ maxWidth: 700 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{isEditing ? 'Editar Cliente' : 'Novo Cliente'}</h3>
-          <button className="modal-close" onClick={onClose}><XIcon /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><XIcon /></button>
         </div>
 
         <div className="modal-body">

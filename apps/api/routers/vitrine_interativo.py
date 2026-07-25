@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from database import get_db, async_session
 from deps import get_current_user
+from limiter import rate_limit
 from models import (
     utcnow,
     Usuario, Veiculo, Favorito, Conversa, Mensagem, Loja,
@@ -31,7 +32,12 @@ router = APIRouter(prefix="/v1/vitrine", tags=["Vitrine Interativa B2C"])
 # ── FAVORITOS
 # ═══════════════════════════════════════════════════════════════
 
-@router.post("/favoritos", response_model=FavoritoResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/favoritos",
+    response_model=FavoritoResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit(20, 60))],
+)
 async def favoritar_veiculo(
     data: FavoritoRequest,
     db: AsyncSession = Depends(get_db),
@@ -338,7 +344,11 @@ async def listar_mensagens_b2c_loja(
     ]
 
 
-@router.post("/chat/conversas/{conversa_id}/mensagens", response_model=MensagemB2CResponse)
+@router.post(
+    "/chat/conversas/{conversa_id}/mensagens",
+    response_model=MensagemB2CResponse,
+    dependencies=[Depends(rate_limit(15, 60))],
+)
 async def enviar_mensagem_b2c_loja(
     conversa_id: str,
     payload: dict,
@@ -399,7 +409,12 @@ async def enviar_mensagem_b2c_loja(
 
 
 
-@router.post("/conversas", response_model=ConversaB2CResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/conversas",
+    response_model=ConversaB2CResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit(15, 60))],
+)
 async def iniciar_conversa_b2c(
     data: ConversaB2CCreateRequest,
     db: AsyncSession = Depends(get_db),
@@ -611,7 +626,11 @@ async def listar_mensagens_conversa(
     return response_data
 
 
-@router.post("/conversas/{id}/mensagens", response_model=MensagemB2CResponse)
+@router.post(
+    "/conversas/{id}/mensagens",
+    response_model=MensagemB2CResponse,
+    dependencies=[Depends(rate_limit(15, 60))],
+)
 async def enviar_mensagem_conversa(
     id: str,
     data: ConversaB2CCreateRequest, # Podemos usar para mandar a mensagem (reaproveitando o campo mensagem)

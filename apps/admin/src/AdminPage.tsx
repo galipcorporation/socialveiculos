@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+﻿import { useState, useEffect, useCallback } from 'react'
 import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload, KeyRound } from 'lucide-react'
 import { api } from './lib/api'
 import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda } from './lib/mascaras'
 import { useUIStore } from './stores/uiStore'
 
-// ── Tipos ────────────────────────────────────────────────────────
+// â”€â”€ Tipos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface LojaItem {
   id: string
@@ -57,13 +57,13 @@ const EMPTY_FORM: NovaLojaForm = {
   gestor_senha: '',
 }
 
-// ── Helpers ──────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function fmtData(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-// ── Sub-componentes ──────────────────────────────────────────────
+// â”€â”€ Sub-componentes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function StatCard({ label, value, Icon }: { label: string; value: number; Icon: any }) {
   return (
@@ -87,7 +87,7 @@ function EmptyState({ msg }: { msg: string }) {
   )
 }
 
-// ── Modal Nova Loja ──────────────────────────────────────────────
+// â”€â”€ Modal Nova Loja â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState<NovaLojaForm>(EMPTY_FORM)
@@ -110,7 +110,7 @@ function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     setErro(null)
 
     if (form.cnpj && !validarCNPJ(form.cnpj)) {
-      setErro('CNPJ inválido.')
+      setErro('CNPJ invÃ¡lido.')
       setLoading(false)
       return
     }
@@ -155,7 +155,7 @@ function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: '12px' }}>
             <div className="form-group">
               <label>Cidade</label>
-              <input value={form.cidade} onChange={set('cidade')} placeholder="São Paulo" />
+              <input value={form.cidade} onChange={set('cidade')} placeholder="SÃ£o Paulo" />
             </div>
             <div className="form-group">
               <label>UF</label>
@@ -168,15 +168,15 @@ function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 
           <div className="form-group">
             <label>Nome do Gestor</label>
-            <input value={form.gestor_nome} onChange={set('gestor_nome')} required placeholder="João Silva" />
+            <input value={form.gestor_nome} onChange={set('gestor_nome')} required placeholder="JoÃ£o Silva" />
           </div>
           <div className="form-group">
             <label>E-mail</label>
             <input type="email" value={form.gestor_email} onChange={set('gestor_email')} required placeholder="joao@loja.com.br" />
           </div>
           <div className="form-group">
-            <label>Senha temporária</label>
-            <input type="password" value={form.gestor_senha} onChange={set('gestor_senha')} required minLength={6} placeholder="••••••••" />
+            <label>Senha temporÃ¡ria</label>
+            <input type="password" value={form.gestor_senha} onChange={set('gestor_senha')} required minLength={6} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
           </div>
 
           <div className="modal-footer" style={{ paddingTop: '16px' }}>
@@ -191,7 +191,7 @@ function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   )
 }
 
-// ── Modal Editar Loja & Módulos ──────────────────────────────────
+// â”€â”€ Modal Editar Loja & MÃ³dulos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface ModalEditarLojaProps {
   lojaId: string
@@ -260,22 +260,17 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
     setForm((f) => ({ ...f, [field]: val }))
   }
 
-  const toggleModulo = (modulo: string) => {
-    setForm((f) => {
-      const ativos = f.modulos_ativos.includes(modulo)
-        ? f.modulos_ativos.filter((m) => m !== modulo)
-        : [...f.modulos_ativos, modulo]
-      return { ...f, modulos_ativos: ativos }
-    })
-  }
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setErro(null)
 
     try {
-      await api.patch(`/admin/lojas/${lojaId}`, form)
+      // `modulos_ativos` fica de fora de propÃ³sito: os mÃ³dulos sÃ£o derivados do
+      // plano (ver "Plano & Acesso"). EnviÃ¡-los aqui reescrevia a liberaÃ§Ã£o
+      // feita pelo plano, e as duas telas se sobrescreviam.
+      const { modulos_ativos: _ignorado, ...dadosLoja } = form
+      await api.patch(`/admin/lojas/${lojaId}`, dadosLoja)
       onSaved()
       onClose()
     } catch (err: any) {
@@ -284,15 +279,6 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
       setSaving(false)
     }
   }
-
-  const ALL_MODULES = [
-    { key: 'contratos', label: 'Contratos', desc: 'Geração de termos e contratos com OCR.' },
-    { key: 'simulador', label: 'Simulador', desc: 'Simulação multi-banco e impressão de PDF.' },
-    { key: 'marketing', label: 'Marketing', desc: 'Geração de posts e criativos via IA.' },
-    { key: 'assistente_ia', label: 'Assistente de IA', desc: 'Copiloto de vendas integrado ao WhatsApp.' },
-    { key: 'fiscal', label: 'Fiscal / NF-e', desc: 'Emissão de nota fiscal integrada a contratos.' },
-    { key: 'site', label: 'Meu Site / Vitrine', desc: 'Site exclusivo integrado com estoque.' },
-  ]
 
   if (loading) {
     return (
@@ -309,7 +295,7 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
         <div className="modal-header">
-          <h3 className="modal-title">Editar Loja & Módulos</h3>
+          <h3 className="modal-title">Editar Loja & MÃ³dulos</h3>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '75vh', overflowY: 'auto' }}>
@@ -331,7 +317,7 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
             </div>
           </div>
 
-          {/* Logo da loja — usada em contratos, vitrine e marca-d'água padrão */}
+          {/* Logo da loja â€” usada em contratos, vitrine e marca-d'Ã¡gua padrÃ£o */}
           <div className="form-group">
             <label>Logo da loja</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -340,7 +326,7 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
               )}
               <label className="btn btn-secondary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <Upload size={15} />
-                {enviandoLogo ? 'Enviando…' : (logoUrl ? 'Trocar logo' : 'Enviar logo')}
+                {enviandoLogo ? 'Enviandoâ€¦' : (logoUrl ? 'Trocar logo' : 'Enviar logo')}
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
@@ -349,14 +335,14 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadLogo(f); e.target.value = '' }}
                 />
               </label>
-              <span style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>PNG, JPG ou WEBP · até 2 MB</span>
+              <span style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>PNG, JPG ou WEBP Â· atÃ© 2 MB</span>
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: '12px' }}>
             <div className="form-group">
               <label>Cidade</label>
-              <input value={form.cidade} onChange={set('cidade')} placeholder="São Paulo" />
+              <input value={form.cidade} onChange={set('cidade')} placeholder="SÃ£o Paulo" />
             </div>
             <div className="form-group">
               <label>UF</label>
@@ -376,52 +362,45 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
           </div>
 
           <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '8px 0' }} />
-          <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 0 }}>Módulos Habilitados</p>
+          <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 0 }}>MÃ³dulos</p>
 
-          <div className="modulos-grid">
-            {ALL_MODULES.map((m) => {
-              const ativo = form.modulos_ativos.includes(m.key)
-              const bloqueadoPorAssinatura = ativo && !assinaturaEmDia
-              return (
-                <div
-                  key={m.key}
-                  onClick={() => toggleModulo(m.key)}
-                  className={`modulo-item-row${ativo ? ' ativo' : ''}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={ativo}
-                    onChange={() => {}} // custom handled by container click
-                  />
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--sv-text)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {m.label}
-                      {bloqueadoPorAssinatura && (
-                        <span style={{
-                          fontSize: '11px', fontWeight: 600, color: 'var(--sv-warning, #d97706)',
-                          background: 'rgba(217, 119, 6, 0.12)', border: '1px solid rgba(217, 119, 6, 0.3)',
-                          borderRadius: 4, padding: '1px 6px', textTransform: 'none',
-                        }}>
-                          contratado · inativo por assinatura
-                        </span>
-                      )}
-                    </p>
-                    <p style={{ fontSize: '12px', color: 'var(--sv-text-muted)', margin: 0 }}>{m.desc}</p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-          {!assinaturaEmDia && (
-            <p style={{ fontSize: '12px', color: 'var(--sv-warning, #d97706)', margin: 0 }}>
-              Assinatura da loja não está em dia — módulos marcados acima ficam contratados mas indisponíveis para o gestor até a regularização.
+          {/* Somente leitura: quem manda nos mÃ³dulos Ã© o plano contratado, editÃ¡vel
+              em "Plano & Acesso". Editar aqui e lÃ¡ ao mesmo tempo se sobrescrevia. */}
+          <div style={{
+            padding: '13px 15px', border: '1px solid var(--sv-border)',
+            borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim, rgba(255,255,255,0.02))',
+          }}>
+            <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', margin: '0 0 9px', lineHeight: 1.55 }}>
+              Os mÃ³dulos seguem o <strong>plano contratado</strong>. Para trocar de plano ou liberar
+              um extra de cortesia, use <strong>Plano &amp; Acesso</strong> na listagem de lojas.
             </p>
-          )}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {form.modulos_ativos.length === 0 && (
+                <span style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>Nenhum mÃ³dulo liberado.</span>
+              )}
+              {form.modulos_ativos.map((key) => (
+                <span key={key} style={{
+                  fontSize: 11.5, fontWeight: 600, padding: '3px 9px', borderRadius: 999,
+                  background: assinaturaEmDia
+                    ? 'color-mix(in srgb, var(--sv-success) 15%, transparent)'
+                    : 'color-mix(in srgb, var(--sv-warning) 15%, transparent)',
+                  color: assinaturaEmDia ? 'var(--sv-success)' : 'var(--sv-warning)',
+                }}>
+                  {rotuloModulo(key)}
+                </span>
+              ))}
+            </div>
+            {!assinaturaEmDia && form.modulos_ativos.length > 0 && (
+              <p style={{ fontSize: 12, color: 'var(--sv-warning)', margin: '9px 0 0' }}>
+                Assinatura fora de dia â€” contratados, porÃ©m indisponÃ­veis para o gestor atÃ© regularizar.
+              </p>
+            )}
+          </div>
 
           <div className="modal-footer" style={{ paddingTop: '16px' }}>
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? <span className="spinner" /> : 'Salvar Alterações'}
+              {saving ? <span className="spinner" /> : 'Salvar AlteraÃ§Ãµes'}
             </button>
           </div>
         </form>
@@ -430,7 +409,7 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
   )
 }
 
-// ── Assinaturas (ativação manual via Pix) ─────────────────────────
+// â”€â”€ Assinaturas (ativaÃ§Ã£o manual via Pix) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface AssinaturaItem {
   id: string
@@ -467,11 +446,30 @@ interface PlanoItem {
   ativo: boolean
 }
 
+interface ModuloStatusItem {
+  modulo: string
+  ativo: boolean
+  cortesia: boolean
+  do_plano: boolean
+  liberado: boolean
+}
+
+interface DiffModulos {
+  liberados: string[]
+  removidos: string[]
+  mantidos_cortesia: string[]
+  plano_id?: string // preenchido no cliente: qual plano gerou este diff
+}
+
 interface AssinaturaDetalhe {
   assinatura: AssinaturaItem | null
   plano: PlanoItem | null
   pagamentos: PagamentoItem[]
   dias_para_vencer: number | null
+  acesso_liberado: boolean
+  loja_ativa: boolean
+  vencida: boolean
+  modulos: ModuloStatusItem[]
 }
 
 interface VencimentoItem {
@@ -485,8 +483,31 @@ interface VencimentoItem {
   dias_para_vencer?: number | null
 }
 
+// CatÃ¡logo Ãºnico dos mÃ³dulos premium â€” espelha o enum Modulo do backend.
+const MODULOS_CATALOGO = [
+  { key: 'contratos', label: 'Contratos', desc: 'GeraÃ§Ã£o de termos e contratos com OCR.' },
+  { key: 'simulador', label: 'Simulador', desc: 'SimulaÃ§Ã£o multi-banco e impressÃ£o de PDF.' },
+  { key: 'marketing', label: 'Marketing', desc: 'GeraÃ§Ã£o de posts e criativos via IA.' },
+  { key: 'assistente_ia', label: 'Assistente de IA', desc: 'Copiloto de vendas integrado ao WhatsApp.' },
+  { key: 'fiscal', label: 'Fiscal / NF-e', desc: 'EmissÃ£o de nota fiscal integrada a contratos.' },
+  { key: 'site', label: 'Meu Site / Vitrine', desc: 'Site exclusivo integrado com estoque.' },
+]
+
+const rotuloModulo = (key: string) =>
+  MODULOS_CATALOGO.find((m) => m.key === key)?.label || key
+
 const STATUS_ASSINATURA_LABEL: Record<string, string> = {
   ativa: 'Ativa', cancelada: 'Cancelada', suspensa: 'Suspensa', expirada: 'Expirada',
+}
+
+function modulosDoPlano(plano?: PlanoItem | null): string[] {
+  if (!plano?.modulos_incluidos) return []
+  try {
+    const v = JSON.parse(plano.modulos_incluidos)
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
+  }
 }
 
 function corStatusAssinatura(status: string) {
@@ -496,12 +517,12 @@ function corStatusAssinatura(status: string) {
 }
 
 function fmtMoeda(v?: number | null) {
-  if (v == null) return '—'
+  if (v == null) return 'â€”'
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
 function fmtDataHora(iso?: string | null) {
-  if (!iso) return '—'
+  if (!iso) return 'â€”'
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
@@ -532,12 +553,15 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [suspendendo, setSuspendendo] = useState(false)
+  const [reativando, setReativando] = useState(false)
+  const [planoSelecionado, setPlanoSelecionado] = useState('')
+  const [diff, setDiff] = useState<DiffModulos | null>(null)
+  const [mostrarPagamento, setMostrarPagamento] = useState(false)
 
   const hoje = new Date()
   const versaoContratoPadrao = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
 
   const [form, setForm] = useState({
-    plano_id: '',
     valor_mensal: mascararMoeda(99.90),
     meses: '1',
     forma_pagamento: 'pix_manual',
@@ -557,88 +581,156 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
         const ativos = todosPlanos.filter((p) => p.ativo)
         setDetalhe(det)
         setPlanos(ativos)
+        setPlanoSelecionado(det.assinatura?.plano_id || ativos[0]?.id || '')
+        setDiff(null)
         setForm((f) => ({
           ...f,
-          plano_id: det.assinatura?.plano_id || ativos[0]?.id || '',
           valor_mensal: mascararMoeda(det.assinatura?.valor_mensal ?? ativos[0]?.preco_mensal ?? 99.90),
+          observacoes: det.assinatura?.observacoes || '',
         }))
       })
-      .catch((err) => setErro(err.message || 'Erro ao carregar assinatura.'))
+      .catch((err) => setErro(err.message || 'Erro ao carregar o plano da loja.'))
       .finally(() => setLoading(false))
   }, [lojaId])
 
   useEffect(() => { carregar() }, [carregar])
 
-  const temAssinaturaAtivavel = detalhe?.assinatura && detalhe.assinatura.status !== 'cancelada'
+  const assinatura = detalhe?.assinatura
+  const statusAtual = assinatura?.status
+  const semPlano = !assinatura || statusAtual === 'cancelada'
+  const podeReativar = statusAtual === 'suspensa' || statusAtual === 'expirada'
+  const planoAtualId = assinatura?.plano_id
+  const trocandoPlano = !semPlano && planoSelecionado !== planoAtualId
+  const planoEscolhido = planos.find((p) => p.id === planoSelecionado)
 
-  const ativar = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // PrÃ©via do efeito da troca â€” o admin vÃª o que muda antes de confirmar.
+  // O diff Ã© guardado junto do plano que o gerou para descartar resposta fora
+  // de ordem sem precisar limpar o state num efeito.
+  useEffect(() => {
+    if (!trocandoPlano || !planoSelecionado) return
+    let cancelado = false
+    api.get<DiffModulos>(`/admin/lojas/${lojaId}/assinatura/previa-troca/${planoSelecionado}`)
+      .then((d) => { if (!cancelado) setDiff({ ...d, plano_id: planoSelecionado }) })
+      .catch(() => { if (!cancelado) setDiff(null) })
+    return () => { cancelado = true }
+  }, [lojaId, planoSelecionado, trocandoPlano])
+
+  const diffVisivel = trocandoPlano && diff?.plano_id === planoSelecionado ? diff : null
+
+  const executar = async (acao: () => Promise<unknown>, msgErro: string) => {
     setErro(null)
-    if (!form.contrato_aceito) {
-      setErro('Confirme que o cliente aceitou o contrato antes de ativar.')
-      return
-    }
     setSaving(true)
     try {
-      await api.post(`/admin/lojas/${lojaId}/assinatura/ativar`, {
-        plano_id: form.plano_id,
-        valor_mensal: parseMoeda(form.valor_mensal),
-        meses: parseInt(form.meses, 10),
-        forma_pagamento: form.forma_pagamento,
-        referencia_pagamento: form.referencia_pagamento || null,
-        contrato_aceito: form.contrato_aceito,
-        contrato_versao: form.contrato_versao,
-        observacoes: form.observacoes || null,
-      })
+      await acao()
       onSaved()
       carregar()
     } catch (err: any) {
-      setErro(err.message || 'Erro ao ativar assinatura.')
+      setErro(err.message || msgErro)
     } finally {
       setSaving(false)
     }
   }
 
-  const renovar = async (e: React.FormEvent) => {
+  const ativar = (e: React.FormEvent) => {
     e.preventDefault()
-    setErro(null)
-    setSaving(true)
+    if (!form.contrato_aceito) {
+      setErro('Confirme que o cliente aceitou o contrato antes de ativar.')
+      return
+    }
+    return executar(() => api.post(`/admin/lojas/${lojaId}/assinatura/ativar`, {
+      plano_id: planoSelecionado,
+      valor_mensal: parseMoeda(form.valor_mensal),
+      meses: parseInt(form.meses, 10),
+      forma_pagamento: form.forma_pagamento,
+      referencia_pagamento: form.referencia_pagamento || null,
+      contrato_aceito: form.contrato_aceito,
+      contrato_versao: form.contrato_versao,
+      observacoes: form.observacoes || null,
+    }), 'Erro ao ativar o plano.')
+  }
+
+  const registrarPagamento = (e: React.FormEvent) => {
+    e.preventDefault()
+    return executar(() => api.post(`/admin/lojas/${lojaId}/assinatura/renovar`, {
+      plano_id: planoSelecionado || null,
+      valor_mensal: form.valor_mensal ? parseMoeda(form.valor_mensal) : null,
+      meses: parseInt(form.meses, 10),
+      forma_pagamento: form.forma_pagamento,
+      referencia_pagamento: form.referencia_pagamento || null,
+      observacoes: form.observacoes || null,
+    }), 'Erro ao registrar o pagamento.')
+  }
+
+  const salvarTrocaPlano = () => executar(
+    () => api.post(`/admin/lojas/${lojaId}/assinatura/trocar-plano`, {
+      plano_id: planoSelecionado,
+      valor_mensal: form.valor_mensal ? parseMoeda(form.valor_mensal) : null,
+      observacoes: form.observacoes || null,
+    }),
+    'Erro ao trocar o plano.',
+  )
+
+  const reativar = async () => {
+    const motivo = await prompt({
+      title: 'Reativar acesso',
+      label: 'Motivo (opcional)',
+      placeholder: 'Ex: pagamento confirmado por fora, suspensÃ£o indevida...',
+      confirmText: 'Reativar',
+    })
+    if (motivo === null) return
+    setReativando(true)
     try {
-      await api.post(`/admin/lojas/${lojaId}/assinatura/renovar`, {
-        plano_id: form.plano_id || null,
-        valor_mensal: form.valor_mensal ? parseMoeda(form.valor_mensal) : null,
-        meses: parseInt(form.meses, 10),
-        forma_pagamento: form.forma_pagamento,
-        referencia_pagamento: form.referencia_pagamento || null,
-        observacoes: form.observacoes || null,
-      })
-      onSaved()
-      carregar()
-    } catch (err: any) {
-      setErro(err.message || 'Erro ao renovar assinatura.')
+      await executar(
+        () => api.post(`/admin/lojas/${lojaId}/assinatura/reativar`, { motivo: motivo || undefined }),
+        'Erro ao reativar o acesso.',
+      )
     } finally {
-      setSaving(false)
+      setReativando(false)
     }
   }
 
   const suspender = async () => {
     const motivo = await prompt({
-      title: 'Suspender assinatura',
+      title: 'Suspender acesso',
       label: 'Motivo',
-      placeholder: 'Ex: inadimplência, pedido do cliente...',
+      placeholder: 'Ex: inadimplÃªncia, pedido do cliente...',
       confirmText: 'Suspender',
-    }) || undefined
+    })
+    if (motivo === null) return
     setSuspendendo(true)
-    setErro(null)
     try {
-      await api.post(`/admin/lojas/${lojaId}/assinatura/suspender`, { motivo })
-      onSaved()
-      carregar()
-    } catch (err: any) {
-      setErro(err.message || 'Erro ao suspender assinatura.')
+      await executar(
+        () => api.post(`/admin/lojas/${lojaId}/assinatura/suspender`, { motivo: motivo || undefined }),
+        'Erro ao suspender o acesso.',
+      )
     } finally {
       setSuspendendo(false)
     }
+  }
+
+  const cancelar = async () => {
+    const motivo = await prompt({
+      title: 'Cancelar plano',
+      label: 'Motivo do cancelamento',
+      placeholder: 'Ex: churn, encerrou a loja...',
+      confirmText: 'Cancelar plano',
+    })
+    if (motivo === null) return
+    await executar(
+      () => api.post(`/admin/lojas/${lojaId}/assinatura/cancelar`, { motivo: motivo || undefined }),
+      'Erro ao cancelar o plano.',
+    )
+  }
+
+  const alternarCortesia = (modulo: string) => {
+    const atuais = (detalhe?.modulos || []).filter((m) => m.cortesia).map((m) => m.modulo)
+    const novas = atuais.includes(modulo)
+      ? atuais.filter((m) => m !== modulo)
+      : [...atuais, modulo]
+    return executar(
+      () => api.patch(`/admin/lojas/${lojaId}/modulos-cortesia`, { modulos: novas }),
+      'Erro ao alterar a liberaÃ§Ã£o de cortesia.',
+    )
   }
 
   if (loading) {
@@ -646,19 +738,32 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
       <div className="modal-overlay">
         <div className="modal-container glass-card" style={{ maxWidth: 680, padding: 32, textAlign: 'center' }}>
           <span className="spinner" />
-          <p style={{ marginTop: 12, color: 'var(--sv-text-dim)' }}>Carregando assinatura...</p>
+          <p style={{ marginTop: 12, color: 'var(--sv-text-dim)' }}>Carregando plano e acesso...</p>
         </div>
       </div>
     )
   }
 
-  const assinatura = detalhe?.assinatura
+  // Cor da faixa lateral do bloco de estado: verde liberado, laranja travado.
+  const corEstado = !assinatura
+    ? 'var(--sv-text-muted)'
+    : detalhe?.acesso_liberado
+      ? 'var(--sv-success)'
+      : 'var(--sv-warning)'
+
+  const modulosLiberados = (detalhe?.modulos || []).filter((m) => m.liberado).length
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
         <div className="modal-header">
-          <h3 className="modal-title">Assinatura — {lojaNome}</h3>
+          <div>
+            <h3 className="modal-title">Plano &amp; Acesso</h3>
+            <p style={{ fontSize: 12, color: 'var(--sv-text-muted)', margin: '2px 0 0' }}>
+              {lojaNome}
+              {assinatura && ` Â· desde ${fmtDataHora(assinatura.inicio)}`}
+            </p>
+          </div>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '78vh', overflowY: 'auto' }}>
@@ -669,58 +774,152 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
             </div>
           )}
 
-          {/* Estado atual */}
-          <div style={{ padding: '14px 16px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--sv-border)', borderRadius: 'var(--sv-radius)' }}>
+          {/* Estado atual â€” o que a loja tem e se estÃ¡ valendo agora */}
+          <div style={{
+            padding: '16px 18px', background: 'var(--sv-surface-dim, rgba(255,255,255,0.02))',
+            border: '1px solid var(--sv-border)', borderRadius: 'var(--sv-radius-md)',
+            borderLeft: `3px solid ${corEstado}`,
+          }}>
             {assinatura ? (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontWeight: 600, color: 'var(--sv-text)' }}>{detalhe?.plano?.nome}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 19, fontWeight: 700, color: 'var(--sv-text)' }}>{detalhe?.plano?.nome || 'Plano removido'}</div>
+                    <div style={{ fontSize: 13, color: 'var(--sv-text-dim)', marginTop: 3 }}>
+                      {fmtMoeda(assinatura.valor_mensal)}/mÃªs
+                      {detalhe?.plano && assinatura.valor_mensal != null && assinatura.valor_mensal !== detalhe.plano.preco_mensal && (
+                        <span style={{ color: 'var(--sv-text-muted)' }}> Â· tabela {fmtMoeda(detalhe.plano.preco_mensal)}</span>
+                      )}
+                    </div>
+                  </div>
                   <BadgeStatusAssinatura status={assinatura.status} />
                 </div>
-                <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', margin: '2px 0' }}>
-                  Valor combinado: <strong>{fmtMoeda(assinatura.valor_mensal)}</strong>/mês
-                </p>
-                <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', margin: '2px 0' }}>
-                  Vencimento: <strong>{fmtDataHora(assinatura.proximo_vencimento)}</strong>
-                  {detalhe?.dias_para_vencer != null && (
-                    <span style={{ color: detalhe.dias_para_vencer < 0 ? 'var(--sv-error)' : detalhe.dias_para_vencer <= 7 ? 'var(--sv-warning)' : 'var(--sv-text-muted)' }}>
-                      {' '}({detalhe.dias_para_vencer < 0 ? `vencida há ${Math.abs(detalhe.dias_para_vencer)}d` : `em ${detalhe.dias_para_vencer}d`})
-                    </span>
-                  )}
-                </p>
-                <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', margin: '2px 0' }}>
-                  Contrato aceito: {assinatura.contrato_aceito_em
-                    ? <strong>{fmtDataHora(assinatura.contrato_aceito_em)} (v{assinatura.contrato_versao})</strong>
-                    : <span style={{ color: 'var(--sv-error)' }}>não registrado</span>}
-                </p>
+
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14,
+                  paddingTop: 13, borderTop: '1px solid var(--sv-border)',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--sv-text-muted)', marginBottom: 4 }}>Paga atÃ©</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--sv-text)' }}>
+                      {fmtDataHora(assinatura.proximo_vencimento)}
+                      {detalhe?.dias_para_vencer != null && (
+                        <span style={{ fontWeight: 400, fontSize: 13, color: detalhe.dias_para_vencer < 0 ? 'var(--sv-error)' : detalhe.dias_para_vencer <= 7 ? 'var(--sv-warning)' : 'var(--sv-text-muted)' }}>
+                          {' '}({detalhe.dias_para_vencer < 0 ? `venceu hÃ¡ ${Math.abs(detalhe.dias_para_vencer)}d` : `em ${detalhe.dias_para_vencer}d`})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--sv-text-muted)', marginBottom: 4 }}>Contrato</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--sv-text)' }}>
+                      {assinatura.contrato_aceito_em
+                        ? <>aceito <span style={{ fontWeight: 400, fontSize: 13, color: 'var(--sv-text-dim)' }}>v{assinatura.contrato_versao}</span></>
+                        : <span style={{ color: 'var(--sv-error)' }}>nÃ£o registrado</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--sv-text-muted)', marginBottom: 4 }}>MÃ³dulos liberados</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--sv-text)' }}>
+                      {modulosLiberados} <span style={{ fontWeight: 400, fontSize: 13, color: 'var(--sv-text-dim)' }}>de {MODULOS_CATALOGO.length}</span>
+                    </div>
+                  </div>
+                </div>
+
                 {assinatura.observacoes && (
-                  <p style={{ fontSize: 13, color: 'var(--sv-text-muted)', margin: '6px 0 0', fontStyle: 'italic' }}>"{assinatura.observacoes}"</p>
+                  <p style={{ fontSize: 13, color: 'var(--sv-text-muted)', margin: '12px 0 0', fontStyle: 'italic' }}>"{assinatura.observacoes}"</p>
                 )}
-                {assinatura.status === 'ativa' && (
+
+                {!detalhe?.acesso_liberado && (
+                  <div style={{
+                    marginTop: 14, padding: '11px 13px', borderRadius: 'var(--sv-radius)', fontSize: 13, lineHeight: 1.5,
+                    display: 'flex', gap: 9, alignItems: 'flex-start',
+                    background: 'color-mix(in srgb, var(--sv-warning) 11%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--sv-warning) 26%, transparent)',
+                    color: 'var(--sv-warning)',
+                  }}>
+                    <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>
+                      {detalhe?.loja_ativa === false
+                        ? <>A loja estÃ¡ com o <strong>login bloqueado</strong>. Os mÃ³dulos seguem contratados, mas ninguÃ©m acessa atÃ© reativar.</>
+                        : detalhe?.vencida
+                          ? <>A assinatura estÃ¡ <strong>vencida</strong> â€” os mÃ³dulos premium estÃ£o bloqueados atÃ© registrar o pagamento.</>
+                          : <>Os mÃ³dulos premium estÃ£o <strong>bloqueados</strong> enquanto a assinatura nÃ£o estiver ativa e em dia.</>}
+                    </span>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 8, marginTop: 15, flexWrap: 'wrap' }}>
+                  {podeReativar && (
+                    <button
+                      type="button" className="btn btn-primary"
+                      style={{ padding: '6px 13px', fontSize: 12 }}
+                      onClick={reativar} disabled={reativando || saving}
+                    >
+                      {reativando ? <span className="spinner" /> : 'â†» Reativar acesso agora'}
+                    </button>
+                  )}
+                  {!mostrarPagamento && (
+                    <button
+                      type="button" className="btn btn-secondary"
+                      style={{ padding: '6px 13px', fontSize: 12 }}
+                      onClick={() => setMostrarPagamento(true)} disabled={saving}
+                    >
+                      {podeReativar ? 'Reativar registrando pagamento' : 'Registrar pagamento'}
+                    </button>
+                  )}
+                  {assinatura.status === 'ativa' && (
+                    <button
+                      type="button" className="btn btn-secondary"
+                      style={{ padding: '6px 13px', fontSize: 12, color: 'var(--sv-error)' }}
+                      onClick={suspender} disabled={suspendendo || saving}
+                    >
+                      {suspendendo ? <span className="spinner" /> : 'Suspender acesso'}
+                    </button>
+                  )}
                   <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ marginTop: 10, padding: '4px 10px', fontSize: '12px', color: 'var(--sv-error)' }}
-                    onClick={suspender}
-                    disabled={suspendendo}
+                    type="button" className="btn btn-secondary"
+                    style={{ padding: '6px 13px', fontSize: 12, color: 'var(--sv-error)' }}
+                    onClick={cancelar} disabled={saving}
                   >
-                    {suspendendo ? <span className="spinner" /> : 'Suspender assinatura'}
+                    Cancelar plano
                   </button>
-                )}
+                </div>
               </>
             ) : (
-              <p style={{ fontSize: 13, color: 'var(--sv-text-muted)', margin: 0 }}>Loja ainda não tem assinatura.</p>
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 19, fontWeight: 700, color: 'var(--sv-text-dim)' }}>Sem plano</div>
+                    <div style={{ fontSize: 13, color: 'var(--sv-text-dim)', marginTop: 3 }}>
+                      A loja acessa o sistema bÃ¡sico, mas nenhum mÃ³dulo premium estÃ¡ liberado.
+                    </div>
+                  </div>
+                  <span style={{
+                    display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600,
+                    background: 'color-mix(in srgb, var(--sv-text-muted) 18%, transparent)', color: 'var(--sv-text-dim)',
+                  }}>Nenhum plano</span>
+                </div>
+                <div style={{
+                  marginTop: 14, padding: '11px 13px', borderRadius: 'var(--sv-radius)', fontSize: 13, lineHeight: 1.5,
+                  background: 'color-mix(in srgb, var(--sv-info) 10%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--sv-info) 24%, transparent)',
+                  color: 'var(--sv-info)',
+                }}>
+                  Escolha um plano abaixo e registre o primeiro pagamento para liberar o acesso.
+                </div>
+              </>
             )}
           </div>
 
-          {/* Histórico de pagamentos */}
+          {/* HistÃ³rico de pagamentos */}
           {detalhe && detalhe.pagamentos.length > 0 && (
             <div>
-              <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 8 }}>Histórico de Pagamentos</p>
+              <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 8 }}>HistÃ³rico de Pagamentos</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {detalhe.pagamentos.map((p) => (
                   <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--sv-text-dim)', padding: '6px 8px', background: 'rgba(255,255,255,0.02)', borderRadius: 6 }}>
-                    <span>{fmtDataHora(p.data_pagamento || p.created_at)} · {p.metodo || 'gateway'} {p.referencia ? `(${p.referencia})` : ''}</span>
+                    <span>{fmtDataHora(p.data_pagamento || p.created_at)} Â· {p.metodo || 'gateway'} {p.referencia ? `(${p.referencia})` : ''}</span>
                     <span style={{ fontWeight: 600, color: 'var(--sv-text)' }}>{fmtMoeda(p.valor)}</span>
                   </div>
                 ))}
@@ -728,93 +927,299 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
             </div>
           )}
 
-          <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '4px 0' }} />
-
-          {/* Formulário: ativar (nova/cancelada) ou renovar (existente) */}
-          <form onSubmit={temAssinaturaAtivavel ? renovar : ativar} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', margin: 0 }}>
-              {temAssinaturaAtivavel ? 'Registrar cobrança / renovar' : 'Ativar assinatura'}
+          {/* Seletor de plano â€” cards, com prÃ©via do efeito nos mÃ³dulos */}
+          <div>
+            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px' }}>
+              {semPlano ? 'Escolher plano' : 'Plano contratado'}
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--sv-text-muted)', margin: '0 0 13px', lineHeight: 1.55 }}>
+              Trocar o plano religa os mÃ³dulos automaticamente â€” vocÃª vÃª o que muda antes de salvar.
             </p>
 
-            <div className="form-group">
-              <label>Plano</label>
-              <select value={form.plano_id} onChange={(e) => setForm((f) => ({ ...f, plano_id: e.target.value }))} required>
-                {planos.map((p) => (
-                  <option key={p.id} value={p.id}>{p.nome} — {fmtMoeda(p.preco_mensal)}/mês (tabela)</option>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(planos.length || 1, 3)}, 1fr)`, gap: 11 }}>
+              {planos.map((p) => {
+                const sel = p.id === planoSelecionado
+                const atual = p.id === planoAtualId
+                return (
+                  <button
+                    key={p.id} type="button" onClick={() => setPlanoSelecionado(p.id)} disabled={saving}
+                    style={{
+                      position: 'relative', textAlign: 'left', cursor: saving ? 'not-allowed' : 'pointer',
+                      border: `1.5px solid ${sel ? 'var(--sv-primary)' : 'var(--sv-border)'}`,
+                      background: sel ? 'color-mix(in srgb, var(--sv-primary) 9%, transparent)' : 'var(--sv-surface-dim, rgba(255,255,255,0.02))',
+                      borderRadius: 'var(--sv-radius-md)', padding: 14, transition: 'var(--sv-transition)',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {atual && (
+                      <span style={{
+                        position: 'absolute', top: -8, left: 12, fontSize: 10, fontWeight: 700,
+                        background: 'var(--sv-surface-hover)', border: '1px solid var(--sv-border)',
+                        color: 'var(--sv-text-dim)', padding: '2px 8px', borderRadius: 999,
+                        textTransform: 'uppercase', letterSpacing: '0.04em',
+                      }}>plano atual</span>
+                    )}
+                    {sel && (
+                      <span style={{
+                        position: 'absolute', top: 11, right: 12, width: 19, height: 19,
+                        background: 'var(--sv-primary)', color: '#fff', borderRadius: '50%', fontSize: 11,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
+                      }}>âœ“</span>
+                    )}
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--sv-text)', marginBottom: 2 }}>{p.nome}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--sv-primary-text, var(--sv-primary))', marginBottom: 9 }}>
+                      {fmtMoeda(p.preco_mensal)}/mÃªs
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--sv-text-muted)', lineHeight: 1.65 }}>
+                      {modulosDoPlano(p).map(rotuloModulo).join(' Â· ') || 'Sem mÃ³dulos premium'}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Diff da troca */}
+            {diffVisivel && (
+              <div style={{
+                marginTop: 13, padding: '13px 15px', borderRadius: 'var(--sv-radius)',
+                border: '1px solid color-mix(in srgb, var(--sv-info) 24%, transparent)',
+                background: 'color-mix(in srgb, var(--sv-info) 7%, transparent)',
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--sv-info)', marginBottom: 9 }}>
+                  â†” Mudando de {detalhe?.plano?.nome} para {planoEscolhido?.nome}
+                </div>
+                {diffVisivel.liberados.map((m) => (
+                  <div key={`add-${m}`} style={{ fontSize: 13, padding: '3px 0', color: 'var(--sv-text-dim)' }}>
+                    <span style={{ color: 'var(--sv-success)', fontWeight: 700, display: 'inline-block', width: 14 }}>+</span>
+                    {rotuloModulo(m)} <span style={{ color: 'var(--sv-text-muted)' }}>â€” serÃ¡ liberado</span>
+                  </div>
                 ))}
-              </select>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: '12px' }}>
-              <div className="form-group">
-                <label>Valor combinado (R$/mês)</label>
-                <input type="text" inputMode="numeric" value={form.valor_mensal} onChange={(e) => setForm((f) => ({ ...f, valor_mensal: mascararMoeda(e.target.value) }))} required={!temAssinaturaAtivavel} placeholder="99,90" />
-              </div>
-              <div className="form-group">
-                <label>Meses pagos</label>
-                <input type="number" min="1" max="12" value={form.meses} onChange={(e) => setForm((f) => ({ ...f, meses: e.target.value }))} required />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div className="form-group">
-                <label>Forma de pagamento</label>
-                <select value={form.forma_pagamento} onChange={(e) => setForm((f) => ({ ...f, forma_pagamento: e.target.value }))}>
-                  <option value="pix_manual">Pix manual</option>
-                  <option value="dinheiro">Dinheiro</option>
-                  <option value="boleto">Boleto</option>
-                  <option value="outro">Outro</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Referência / comprovante</label>
-                <input value={form.referencia_pagamento} onChange={(e) => setForm((f) => ({ ...f, referencia_pagamento: e.target.value }))} placeholder="ID do Pix (opcional)" />
-              </div>
-            </div>
-
-            {!temAssinaturaAtivavel && (
-              <div className="form-group">
-                <label>Versão do contrato aceito</label>
-                <input value={form.contrato_versao} onChange={(e) => setForm((f) => ({ ...f, contrato_versao: e.target.value }))} required placeholder="2026-07" />
+                {diffVisivel.removidos.map((m) => (
+                  <div key={`rm-${m}`} style={{ fontSize: 13, padding: '3px 0', color: 'var(--sv-text-dim)' }}>
+                    <span style={{ color: 'var(--sv-error)', fontWeight: 700, display: 'inline-block', width: 14 }}>âˆ’</span>
+                    {rotuloModulo(m)} <span style={{ color: 'var(--sv-text-muted)' }}>â€” serÃ¡ bloqueado</span>
+                  </div>
+                ))}
+                {diffVisivel.mantidos_cortesia.map((m) => (
+                  <div key={`ct-${m}`} style={{ fontSize: 13, padding: '3px 0', color: 'var(--sv-text-dim)' }}>
+                    <span style={{ color: 'var(--sv-warning)', fontWeight: 700, display: 'inline-block', width: 14 }}>=</span>
+                    {rotuloModulo(m)} <span style={{ color: 'var(--sv-text-muted)' }}>â€” mantido por cortesia</span>
+                  </div>
+                ))}
+                {!diffVisivel.liberados.length && !diffVisivel.removidos.length && (
+                  <div style={{ fontSize: 13, color: 'var(--sv-text-muted)' }}>Nenhuma mudanÃ§a nos mÃ³dulos.</div>
+                )}
+                {planoEscolhido && (
+                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--sv-border)', fontSize: 12, color: 'var(--sv-text-muted)' }}>
+                    Valor de tabela passa a {fmtMoeda(planoEscolhido.preco_mensal)} â€” ajuste o valor combinado se houver desconto.
+                  </div>
+                )}
+                {!semPlano && (
+                  <button
+                    type="button" className="btn btn-primary"
+                    style={{ marginTop: 12, padding: '6px 13px', fontSize: 12 }}
+                    onClick={salvarTrocaPlano} disabled={saving}
+                  >
+                    {saving ? <span className="spinner" /> : 'Aplicar troca de plano'}
+                  </button>
+                )}
               </div>
             )}
+          </div>
 
-            <div className="form-group">
-              <label>Observações</label>
-              <textarea
-                value={form.observacoes}
-                onChange={(e) => setForm((f) => ({ ...f, observacoes: e.target.value }))}
-                placeholder="Ex: fundadora 3x R$99,90, depois vai para R$299,90"
-                rows={2}
-                style={{ resize: 'vertical' }}
-              />
+          {/* MÃ³dulos â€” o que a loja enxerga */}
+          {detalhe && (
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px' }}>
+                O que a loja enxerga hoje
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--sv-text-muted)', margin: '0 0 13px', lineHeight: 1.55 }}>
+                Os mÃ³dulos do plano ligam sozinhos. VocÃª pode liberar um <strong>extra de cortesia</strong> â€” ele sobrevive Ã  troca de plano.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 9 }}>
+                {MODULOS_CATALOGO.map((cat) => {
+                  const st = detalhe.modulos.find((m) => m.modulo === cat.key)
+                  const doPlano = !!st?.do_plano
+                  const cortesia = !!st?.cortesia
+                  const ligado = !!st?.ativo
+                  const cor = doPlano ? 'var(--sv-success)' : cortesia ? 'var(--sv-warning)' : 'var(--sv-text-muted)'
+                  return (
+                    <div key={cat.key} style={{
+                      display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px',
+                      border: `1px solid ${ligado ? `color-mix(in srgb, ${cor} 32%, transparent)` : 'var(--sv-border)'}`,
+                      borderRadius: 'var(--sv-radius)',
+                      background: ligado ? `color-mix(in srgb, ${cor} 7%, transparent)` : 'var(--sv-surface-dim, rgba(255,255,255,0.02))',
+                      opacity: ligado && !st?.liberado ? 0.62 : 1,
+                    }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: ligado ? cor : 'var(--sv-text-muted)' }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--sv-text)', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                          {cat.label}
+                          {doPlano && (
+                            <span style={{
+                              fontSize: 9.5, fontWeight: 700, padding: '2px 7px', borderRadius: 999,
+                              textTransform: 'uppercase', letterSpacing: '0.04em',
+                              background: 'color-mix(in srgb, var(--sv-primary) 20%, transparent)',
+                              color: 'var(--sv-primary-text, var(--sv-primary))',
+                            }}>plano</span>
+                          )}
+                          {cortesia && (
+                            <span style={{
+                              fontSize: 9.5, fontWeight: 700, padding: '2px 7px', borderRadius: 999,
+                              textTransform: 'uppercase', letterSpacing: '0.04em',
+                              background: 'color-mix(in srgb, var(--sv-warning) 20%, transparent)',
+                              color: 'var(--sv-warning)',
+                            }}>cortesia</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: 'var(--sv-text-muted)', marginTop: 1 }}>
+                          {doPlano
+                            ? (st?.liberado ? cat.desc : 'Contratado Â· bloqueado pela assinatura')
+                            : cortesia
+                              ? (st?.liberado ? 'Liberado manualmente Â· fora do plano' : 'Cortesia Â· bloqueado pela assinatura')
+                              : cat.desc}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => !doPlano && alternarCortesia(cat.key)}
+                        disabled={doPlano || saving}
+                        title={doPlano ? 'IncluÃ­do no plano â€” troque o plano para alterar' : cortesia ? 'Remover cortesia' : 'Liberar como cortesia'}
+                        style={{
+                          width: 36, height: 20, borderRadius: 999, flexShrink: 0, position: 'relative',
+                          background: ligado ? `color-mix(in srgb, ${cor} 30%, transparent)` : 'var(--sv-input-bg)',
+                          border: `1px solid ${ligado ? `color-mix(in srgb, ${cor} 50%, transparent)` : 'var(--sv-border)'}`,
+                          cursor: doPlano || saving ? 'not-allowed' : 'pointer',
+                          opacity: doPlano ? 0.45 : 1, padding: 0,
+                        }}
+                      >
+                        <span style={{
+                          position: 'absolute', top: 1, left: ligado ? 17 : 1, width: 14, height: 14, borderRadius: '50%',
+                          background: ligado ? cor : 'var(--sv-text-muted)', transition: 'var(--sv-transition)',
+                        }} />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
+          )}
 
-            {!temAssinaturaAtivavel && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--sv-text)', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={form.contrato_aceito}
-                  onChange={(e) => setForm((f) => ({ ...f, contrato_aceito: e.target.checked }))}
-                />
-                Confirmo que o cliente aceitou os Termos de Uso e o contrato de assinatura.
-              </label>
-            )}
+          {/* Pagamento â€” ativaÃ§Ã£o (sem plano) ou renovaÃ§Ã£o (colapsado) */}
+          {(semPlano || mostrarPagamento) && (
+            <form onSubmit={semPlano ? ativar : registrarPagamento} style={{
+              display: 'flex', flexDirection: 'column', gap: 13,
+              border: '1px solid var(--sv-border)', borderRadius: 'var(--sv-radius-md)', padding: 16,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--sv-text)' }}>
+                    {semPlano ? 'Primeiro pagamento' : 'Registrar pagamento'}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--sv-text-muted)', marginTop: 2 }}>
+                    {semPlano ? 'ObrigatÃ³rio para ativar o plano' : 'Pix, dinheiro ou boleto â€” sem gateway ainda'}
+                  </div>
+                </div>
+                {!semPlano && (
+                  <button type="button" className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }}
+                    onClick={() => setMostrarPagamento(false)} disabled={saving}>Ocultar</button>
+                )}
+              </div>
 
-            <div className="modal-footer" style={{ paddingTop: '4px' }}>
-              <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Fechar</button>
-              <button type="submit" className="btn btn-primary" disabled={saving}>
-                {saving ? <span className="spinner" /> : temAssinaturaAtivavel ? 'Registrar pagamento' : 'Ativar assinatura'}
-              </button>
-            </div>
-          </form>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 110px', gap: 12 }}>
+                <div className="form-group">
+                  <label>Valor combinado (R$/mÃªs)</label>
+                  <input type="text" inputMode="numeric" value={form.valor_mensal}
+                    onChange={(e) => setForm((f) => ({ ...f, valor_mensal: mascararMoeda(e.target.value) }))}
+                    required={semPlano} placeholder="99,90" />
+                </div>
+                <div className="form-group">
+                  <label>Forma de pagamento</label>
+                  <select value={form.forma_pagamento} onChange={(e) => setForm((f) => ({ ...f, forma_pagamento: e.target.value }))}>
+                    <option value="pix_manual">Pix manual</option>
+                    <option value="dinheiro">Dinheiro</option>
+                    <option value="boleto">Boleto</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Meses</label>
+                  <input type="number" min="1" max="12" value={form.meses}
+                    onChange={(e) => setForm((f) => ({ ...f, meses: e.target.value }))} required />
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '12px 14px', borderRadius: 'var(--sv-radius)',
+                background: 'color-mix(in srgb, var(--sv-primary) 8%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--sv-primary) 25%, transparent)',
+              }}>
+                <span style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>Total recebido</span>
+                <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--sv-primary-text, var(--sv-primary))' }}>
+                  {fmtMoeda(parseMoeda(form.valor_mensal) * (parseInt(form.meses, 10) || 1))}
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: semPlano ? '1fr 1fr' : '1fr', gap: 12 }}>
+                {semPlano && (
+                  <div className="form-group">
+                    <label>VersÃ£o do contrato aceito</label>
+                    <input value={form.contrato_versao}
+                      onChange={(e) => setForm((f) => ({ ...f, contrato_versao: e.target.value }))}
+                      required placeholder="2026-07" />
+                  </div>
+                )}
+                <div className="form-group">
+                  <label>ReferÃªncia / comprovante</label>
+                  <input value={form.referencia_pagamento}
+                    onChange={(e) => setForm((f) => ({ ...f, referencia_pagamento: e.target.value }))}
+                    placeholder="ID do Pix (opcional)" />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>ObservaÃ§Ãµes</label>
+                <textarea value={form.observacoes}
+                  onChange={(e) => setForm((f) => ({ ...f, observacoes: e.target.value }))}
+                  placeholder="Ex: fundadora 3x R$99,90, depois vai para R$299,90"
+                  rows={2} style={{ resize: 'vertical' }} />
+              </div>
+
+              {semPlano && (
+                <label style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: 13, lineHeight: 1.5,
+                  color: 'var(--sv-text)', cursor: 'pointer', padding: '11px 13px',
+                  background: 'var(--sv-surface-dim, rgba(255,255,255,0.02))',
+                  border: '1px solid var(--sv-border)', borderRadius: 'var(--sv-radius)',
+                }}>
+                  <input type="checkbox" checked={form.contrato_aceito} style={{ marginTop: 2 }}
+                    onChange={(e) => setForm((f) => ({ ...f, contrato_aceito: e.target.checked }))} />
+                  <span>Confirmo que o cliente aceitou os <strong>Termos de Uso</strong> e o contrato de assinatura.</span>
+                </label>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="submit" className="btn btn-primary" disabled={saving}>
+                  {saving ? <span className="spinner" /> : semPlano ? 'Ativar plano' : 'Registrar pagamento'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+
+        <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>
+            {assinatura?.criado_por_admin ? 'CobranÃ§a manual (Pix) â€” sem gateway' : ''}
+          </span>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Fechar</button>
         </div>
       </div>
     </div>
   )
 }
 
-// ── Aba Assinaturas (vencimentos) ─────────────────────────────────
+// â”€â”€ Aba Assinaturas (vencimentos) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function AbaAssinaturas() {
   const [itens, setItens] = useState<VencimentoItem[]>([])
@@ -848,7 +1253,7 @@ function AbaAssinaturas() {
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <p style={{ color: 'var(--sv-text-muted)' }}>Carregandoâ€¦</p>
       ) : itens.length === 0 ? (
         <EmptyState msg="Nenhuma assinatura vencendo ou vencida nessa janela." />
       ) : (
@@ -856,7 +1261,7 @@ function AbaAssinaturas() {
           <table className="stock-table">
             <thead>
               <tr>
-                {['Loja', 'Plano', 'Valor', 'Vencimento', 'Situação', 'Ações'].map((h) => (
+                {['Loja', 'Plano', 'Valor', 'Vencimento', 'SituaÃ§Ã£o', 'AÃ§Ãµes'].map((h) => (
                   <th key={h}>{h}</th>
                 ))}
               </tr>
@@ -870,7 +1275,7 @@ function AbaAssinaturas() {
                   <td style={{ color: 'var(--sv-text-dim)' }}>{fmtDataHora(it.proximo_vencimento)}</td>
                   <td>
                     {it.dias_para_vencer != null && it.dias_para_vencer < 0 ? (
-                      <span style={{ color: 'var(--sv-error)', fontWeight: 600, fontSize: 12 }}>Vencida há {Math.abs(it.dias_para_vencer)}d</span>
+                      <span style={{ color: 'var(--sv-error)', fontWeight: 600, fontSize: 12 }}>Vencida hÃ¡ {Math.abs(it.dias_para_vencer)}d</span>
                     ) : (
                       <span style={{ color: 'var(--sv-warning)', fontWeight: 600, fontSize: 12 }}>Vence em {it.dias_para_vencer}d</span>
                     )}
@@ -903,16 +1308,9 @@ function AbaAssinaturas() {
   )
 }
 
-// ── Planos (catálogo — CRUD completo) ─────────────────────────────
+// â”€â”€ Planos (catÃ¡logo â€” CRUD completo) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-const TODOS_MODULOS = [
-  { key: 'contratos', label: 'Contratos' },
-  { key: 'simulador', label: 'Simulador' },
-  { key: 'marketing', label: 'Marketing' },
-  { key: 'assistente_ia', label: 'Assistente de IA' },
-  { key: 'fiscal', label: 'Fiscal / NF-e' },
-  { key: 'site', label: 'Meu Site / Vitrine' },
-]
+const TODOS_MODULOS = MODULOS_CATALOGO
 
 interface ModalPlanoProps {
   planoId: string | null // null = criar novo
@@ -932,14 +1330,14 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
-  // Carrega o plano específico a partir da lista (evita endpoint extra de detalhe)
+  // Carrega o plano especÃ­fico a partir da lista (evita endpoint extra de detalhe)
   useEffect(() => {
     if (!planoId) { setLoading(false); return }
     setLoading(true)
     api.get<PlanoItem[]>('/admin/planos')
       .then((planos) => {
         const p = planos.find((x) => x.id === planoId)
-        if (!p) { setErro('Plano não encontrado.'); return }
+        if (!p) { setErro('Plano nÃ£o encontrado.'); return }
         setForm({
           nome: p.nome,
           descricao: p.descricao || '',
@@ -1019,24 +1417,24 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
               <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} required placeholder="Profissional" />
             </div>
             <div className="form-group">
-              <label>Preço (R$/mês)</label>
+              <label>PreÃ§o (R$/mÃªs)</label>
               <input type="text" inputMode="numeric" value={form.preco_mensal} onChange={(e) => setForm((f) => ({ ...f, preco_mensal: mascararMoeda(e.target.value) }))} required placeholder="299,90" />
             </div>
           </div>
 
           <div className="form-group">
-            <label>Descrição</label>
+            <label>DescriÃ§Ã£o</label>
             <textarea
               value={form.descricao}
               onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))}
-              placeholder="Gestão completa + módulos premium"
+              placeholder="GestÃ£o completa + mÃ³dulos premium"
               rows={2}
               style={{ resize: 'vertical' }}
             />
           </div>
 
           <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '8px 0' }} />
-          <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 0 }}>Módulos Incluídos</p>
+          <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 0 }}>MÃ³dulos IncluÃ­dos</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {TODOS_MODULOS.map((m) => {
@@ -1064,13 +1462,13 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
               checked={form.ativo}
               onChange={(e) => setForm((f) => ({ ...f, ativo: e.target.checked }))}
             />
-            Plano ativo (visível para contratação)
+            Plano ativo (visÃ­vel para contrataÃ§Ã£o)
           </label>
 
           <div className="modal-footer" style={{ paddingTop: '16px' }}>
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? <span className="spinner" /> : planoId ? 'Salvar Alterações' : 'Criar Plano'}
+              {saving ? <span className="spinner" /> : planoId ? 'Salvar AlteraÃ§Ãµes' : 'Criar Plano'}
             </button>
           </div>
         </form>
@@ -1111,7 +1509,7 @@ function AbaPlanos() {
   const excluir = async (plano: PlanoItem) => {
     const ok = await confirm({
       title: 'Excluir plano',
-      message: `Excluir o plano "${plano.nome}" definitivamente? Só é possível se nenhuma loja estiver vinculada a ele.`,
+      message: `Excluir o plano "${plano.nome}" definitivamente? SÃ³ Ã© possÃ­vel se nenhuma loja estiver vinculada a ele.`,
       confirmText: 'Excluir',
       danger: true,
     })
@@ -1145,7 +1543,7 @@ function AbaPlanos() {
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <p style={{ color: 'var(--sv-text-muted)' }}>Carregandoâ€¦</p>
       ) : planos.length === 0 ? (
         <EmptyState msg="Nenhum plano cadastrado ainda. Crie o primeiro para poder ativar assinaturas." />
       ) : (
@@ -1153,7 +1551,7 @@ function AbaPlanos() {
           <table className="stock-table">
             <thead>
               <tr>
-                {['Nome', 'Preço', 'Módulos', 'Status', 'Ações'].map((h) => (
+                {['Nome', 'PreÃ§o', 'MÃ³dulos', 'Status', 'AÃ§Ãµes'].map((h) => (
                   <th key={h}>{h}</th>
                 ))}
               </tr>
@@ -1168,7 +1566,7 @@ function AbaPlanos() {
                       {p.descricao && <div style={{ fontSize: 12, color: 'var(--sv-text-muted)', fontWeight: 400, marginTop: 2 }}>{p.descricao}</div>}
                     </td>
                     <td style={{ color: 'var(--sv-text-dim)' }}>{fmtMoeda(p.preco_mensal)}</td>
-                    <td style={{ color: 'var(--sv-text-dim)', fontSize: 13 }}>{modulos.length > 0 ? modulos.join(', ') : '—'}</td>
+                    <td style={{ color: 'var(--sv-text-dim)', fontSize: 13 }}>{modulos.length > 0 ? modulos.join(', ') : 'â€”'}</td>
                     <td>
                       <span style={{
                         display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: '12px', fontWeight: 600,
@@ -1192,7 +1590,7 @@ function AbaPlanos() {
                           style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
                           onClick={() => toggleAtivo(p)}
                           disabled={acaoLoading === p.id}
-                          title={p.ativo ? 'Desativar (não pode mais ser contratado)' : 'Reativar'}
+                          title={p.ativo ? 'Desativar (nÃ£o pode mais ser contratado)' : 'Reativar'}
                         >
                           {p.ativo ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
                           {p.ativo ? 'Desativar' : 'Ativar'}
@@ -1202,7 +1600,7 @@ function AbaPlanos() {
                           style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--sv-error)' }}
                           onClick={() => excluir(p)}
                           disabled={acaoLoading === p.id}
-                          title="Excluir definitivamente (só se nenhuma loja estiver vinculada)"
+                          title="Excluir definitivamente (sÃ³ se nenhuma loja estiver vinculada)"
                         >
                           <X size={14} /> Excluir
                         </button>
@@ -1227,7 +1625,7 @@ function AbaPlanos() {
   )
 }
 
-// ── Aba Overview ─────────────────────────────────────────────────
+// â”€â”€ Aba Overview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function AbaOverview() {
   const [stats, setStats] = useState<Stats | null>(null)
@@ -1237,21 +1635,21 @@ function AbaOverview() {
     api.get<Stats>('/admin/stats').then(setStats).finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <p style={{ color: 'var(--sv-text-muted)', padding: '32px' }}>Carregando…</p>
-  if (!stats) return <EmptyState msg="Não foi possível carregar as estatísticas." />
+  if (loading) return <p style={{ color: 'var(--sv-text-muted)', padding: '32px' }}>Carregandoâ€¦</p>
+  if (!stats) return <EmptyState msg="NÃ£o foi possÃ­vel carregar as estatÃ­sticas." />
 
   return (
     <div className="kpi-grid" style={{ marginTop: '24px' }}>
       <StatCard label="Total de Lojas" value={stats.total_lojas} Icon={Building2} />
       <StatCard label="Lojas Ativas" value={stats.lojas_ativas} Icon={Building2} />
-      <StatCard label="Veículos" value={stats.total_veiculos} Icon={Car} />
-      <StatCard label="Usuários" value={stats.total_usuarios} Icon={Users} />
+      <StatCard label="VeÃ­culos" value={stats.total_veiculos} Icon={Car} />
+      <StatCard label="UsuÃ¡rios" value={stats.total_usuarios} Icon={Users} />
       <StatCard label="Logs de Auditoria" value={stats.total_logs_auditoria} Icon={ClipboardList} />
     </div>
   )
 }
 
-// ── Aba Lojas ────────────────────────────────────────────────────
+// â”€â”€ Aba Lojas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function AbaLojas() {
   const [lojas, setLojas] = useState<LojaItem[]>([])
@@ -1321,7 +1719,7 @@ function AbaLojas() {
               fontSize: '14px',
               outline: 'none',
             }}
-            placeholder="Buscar por nome…"
+            placeholder="Buscar por nomeâ€¦"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
           />
@@ -1332,7 +1730,7 @@ function AbaLojas() {
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <p style={{ color: 'var(--sv-text-muted)' }}>Carregandoâ€¦</p>
       ) : lojasFiltradas.length === 0 ? (
         <EmptyState msg={busca ? 'Nenhuma loja encontrada para essa busca.' : 'Nenhuma loja cadastrada.'} />
       ) : (
@@ -1340,7 +1738,7 @@ function AbaLojas() {
           <table className="stock-table">
             <thead>
               <tr>
-                {['Nome', 'Cidade / UF', 'Status', 'Criado em', 'Ações'].map((h) => (
+                {['Nome', 'Cidade / UF', 'Status', 'Criado em', 'AÃ§Ãµes'].map((h) => (
                   <th key={h}>{h}</th>
                 ))}
               </tr>
@@ -1350,7 +1748,7 @@ function AbaLojas() {
                 <tr key={loja.id}>
                   <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{loja.nome}</td>
                   <td style={{ color: 'var(--sv-text-dim)' }}>
-                    {loja.cidade && loja.estado ? `${loja.cidade} / ${loja.estado}` : loja.cidade || loja.estado || '—'}
+                    {loja.cidade && loja.estado ? `${loja.cidade} / ${loja.estado}` : loja.cidade || loja.estado || 'â€”'}
                   </td>
                   <td>
                     <span style={{
@@ -1382,7 +1780,7 @@ function AbaLojas() {
                         className="btn btn-secondary"
                         style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
                         onClick={() => setLojaEditandoId(loja.id)}
-                        title="Editar loja e liberar módulos"
+                        title="Editar loja e liberar mÃ³dulos"
                       >
                         <Edit size={14} /> Editar
                       </button>
@@ -1425,7 +1823,7 @@ function AbaLojas() {
   )
 }
 
-// ── Aba Auditoria ────────────────────────────────────────────────
+// â”€â”€ Aba Auditoria â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function AbaAuditoria() {
   const [logs, setLogs] = useState<LogItem[]>([])
@@ -1444,7 +1842,7 @@ function AbaAuditoria() {
   return (
     <div style={{ marginTop: '24px' }}>
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <p style={{ color: 'var(--sv-text-muted)' }}>Carregandoâ€¦</p>
       ) : logs.length === 0 ? (
         <EmptyState msg="Nenhum log de auditoria registrado." />
       ) : (
@@ -1453,7 +1851,7 @@ function AbaAuditoria() {
             <table className="stock-table">
               <thead>
                 <tr>
-                  {['Ação', 'Entidade', 'Usuário', 'Data'].map((h) => (
+                  {['AÃ§Ã£o', 'Entidade', 'UsuÃ¡rio', 'Data'].map((h) => (
                     <th key={h}>{h}</th>
                   ))}
                 </tr>
@@ -1462,8 +1860,8 @@ function AbaAuditoria() {
                 {slice.map((log) => (
                   <tr key={log.id}>
                     <td style={{ color: 'var(--sv-text)', fontFamily: 'monospace', fontSize: '12px' }}>{log.acao}</td>
-                    <td style={{ color: 'var(--sv-text-dim)' }}>{log.entidade || '—'}</td>
-                    <td style={{ color: 'var(--sv-text-dim)' }}>{log.ator_nome || '—'}</td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>{log.entidade || 'â€”'}</td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>{log.ator_nome || 'â€”'}</td>
                     <td style={{ color: 'var(--sv-text-dim)' }}>{fmtData(log.created_at)}</td>
                   </tr>
                 ))}
@@ -1474,7 +1872,7 @@ function AbaAuditoria() {
             <div style={{ display: 'flex', gap: '8px', marginTop: '16px', alignItems: 'center' }}>
               <button className="btn btn-secondary" disabled={pagina === 1} onClick={() => setPagina((p) => p - 1)}>Anterior</button>
               <span style={{ color: 'var(--sv-text-muted)', fontSize: '14px' }}>{pagina} / {paginas}</span>
-              <button className="btn btn-secondary" disabled={pagina === paginas} onClick={() => setPagina((p) => p + 1)}>Próxima</button>
+              <button className="btn btn-secondary" disabled={pagina === paginas} onClick={() => setPagina((p) => p + 1)}>PrÃ³xima</button>
             </div>
           )}
         </>
@@ -1483,7 +1881,7 @@ function AbaAuditoria() {
   )
 }
 
-// ── Aba Erros ────────────────────────────────────────────────────
+// â”€â”€ Aba Erros â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function fmtDetalhes(detalhes: string | null | undefined): {
   path?: string
@@ -1517,19 +1915,19 @@ function ModalContatoErro({
   useEffect(() => {
     if (template === 'analise') {
       setMensagem(
-        `Olá ${erro.user_name},\n\nIdentificamos que ocorreu um erro (status ${erro.status}) ao acessar a rota ${erro.path} no dia ${erro.date}.\n\nNossa equipe técnica já está analisando o problema para resolvê-lo o quanto antes. Agradecemos sua paciência!\n\nAtenciosamente,\nSuporte Social Veículos`
+        `OlÃ¡ ${erro.user_name},\n\nIdentificamos que ocorreu um erro (status ${erro.status}) ao acessar a rota ${erro.path} no dia ${erro.date}.\n\nNossa equipe tÃ©cnica jÃ¡ estÃ¡ analisando o problema para resolvÃª-lo o quanto antes. Agradecemos sua paciÃªncia!\n\nAtenciosamente,\nSuporte Social VeÃ­culos`
       )
     } else {
       setMensagem(
-        `Olá ${erro.user_name},\n\nO erro (status ${erro.status}) que ocorreu ao acessar a rota ${erro.path} no dia ${erro.date} já foi resolvido pela nossa equipe técnica.\n\nVocê já pode tentar acessar novamente. Se o problema persistir, por favor nos avise.\n\nAtenciosamente,\nSuporte Social Veículos`
+        `OlÃ¡ ${erro.user_name},\n\nO erro (status ${erro.status}) que ocorreu ao acessar a rota ${erro.path} no dia ${erro.date} jÃ¡ foi resolvido pela nossa equipe tÃ©cnica.\n\nVocÃª jÃ¡ pode tentar acessar novamente. Se o problema persistir, por favor nos avise.\n\nAtenciosamente,\nSuporte Social VeÃ­culos`
       )
     }
   }, [template, erro])
 
   const handleEnviar = () => {
     const subject = template === 'analise'
-      ? 'Estamos analisando o erro relatado - Social Veículos'
-      : 'Erro resolvido com sucesso - Social Veículos'
+      ? 'Estamos analisando o erro relatado - Social VeÃ­culos'
+      : 'Erro resolvido com sucesso - Social VeÃ­culos'
 
     const mailtoUrl = `mailto:${erro.user_email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(mensagem)}`
     window.location.href = mailtoUrl
@@ -1547,7 +1945,7 @@ function ModalContatoErro({
           
           <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '12px', borderRadius: 'var(--sv-radius)', fontSize: '13px', border: '1px solid var(--sv-border)' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '8px' }}>
-              <span style={{ color: 'var(--sv-text-muted)' }}>Usuário:</span>
+              <span style={{ color: 'var(--sv-text-muted)' }}>UsuÃ¡rio:</span>
               <strong style={{ color: 'var(--sv-text)' }}>{erro.user_name}</strong>
               
               <span style={{ color: 'var(--sv-text-muted)' }}>E-mail:</span>
@@ -1569,7 +1967,7 @@ function ModalContatoErro({
                   onChange={() => setTemplate('analise')}
                   style={{ cursor: 'pointer' }}
                 />
-                Em análise
+                Em anÃ¡lise
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px', color: 'var(--sv-text-dim)' }}>
                 <input
@@ -1659,7 +2057,7 @@ function AbaErros() {
   }
 
   const ocultarTodos = async () => {
-    const ok = await confirm({ title: 'Ocultar erros', message: 'Deseja ocultar todos os erros ativos desta visualização?', confirmText: 'Ocultar' })
+    const ok = await confirm({ title: 'Ocultar erros', message: 'Deseja ocultar todos os erros ativos desta visualizaÃ§Ã£o?', confirmText: 'Ocultar' })
     if (!ok) return
     try {
       await api.post('/admin/erros/ocultar-todos', {})
@@ -1670,7 +2068,7 @@ function AbaErros() {
   }
 
   const restaurarTodos = async () => {
-    const ok = await confirm({ title: 'Restaurar erros', message: 'Deseja restaurar todos os erros ocultados para a visualização ativa?', confirmText: 'Restaurar' })
+    const ok = await confirm({ title: 'Restaurar erros', message: 'Deseja restaurar todos os erros ocultados para a visualizaÃ§Ã£o ativa?', confirmText: 'Restaurar' })
     if (!ok) return
     try {
       await api.post('/admin/erros/restaurar-todos', {})
@@ -1687,7 +2085,7 @@ function AbaErros() {
   return (
     <div style={{ marginTop: '24px' }}>
       
-      {/* Sub-abas & Ações em Lote */}
+      {/* Sub-abas & AÃ§Ãµes em Lote */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
         <div className="crm-tabs" style={{ margin: 0, padding: 0, background: 'transparent', border: 'none' }}>
           <button
@@ -1752,7 +2150,7 @@ function AbaErros() {
       )}
 
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <p style={{ color: 'var(--sv-text-muted)' }}>Carregandoâ€¦</p>
       ) : logs.length === 0 ? (
         <EmptyState msg={subAba === 'ativos' ? "Nenhum erro de servidor ativo registrado." : "Nenhum erro ocultado."} />
       ) : (
@@ -1761,7 +2159,7 @@ function AbaErros() {
             <table className="stock-table">
               <thead>
                 <tr>
-                  {['Origem', 'Rota', 'Status', 'Usuário', 'Ajuste IA', 'Data', 'Ações'].map((h) => (
+                  {['Origem', 'Rota', 'Status', 'UsuÃ¡rio', 'Ajuste IA', 'Data', 'AÃ§Ãµes'].map((h) => (
                     <th key={h}>{h}</th>
                   ))}
                 </tr>
@@ -1783,11 +2181,11 @@ function AbaErros() {
                           background: 'color-mix(in srgb, var(--sv-primary) 15%, transparent)',
                           color: 'var(--sv-primary)',
                         }}>
-                          {log.entidade || '—'}
+                          {log.entidade || 'â€”'}
                         </span>
                       </td>
                       <td style={{ color: 'var(--sv-text)', fontFamily: 'monospace', fontSize: '12px' }}>
-                        {det.path || '—'}
+                        {det.path || 'â€”'}
                       </td>
                       <td>
                         <span style={{
@@ -1809,7 +2207,7 @@ function AbaErros() {
                             {user_email && <div style={{ fontSize: '12px', color: 'var(--sv-text-dim)' }}>{user_email}</div>}
                           </div>
                         ) : (
-                          <span style={{ color: 'var(--sv-text-muted)' }}>Anônimo</span>
+                          <span style={{ color: 'var(--sv-text-muted)' }}>AnÃ´nimo</span>
                         )}
                       </td>
                       <td>
@@ -1849,13 +2247,13 @@ function AbaErros() {
                                   style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
                                   onClick={() => setErroSelecionado({
                                     id: log.id,
-                                    path: det.path || '—',
+                                    path: det.path || 'â€”',
                                     status: det.status ?? 500,
-                                    user_name: user_name || 'Anônimo',
+                                    user_name: user_name || 'AnÃ´nimo',
                                     user_email: user_email || '',
                                     date: fmtData(log.created_at)
                                   })}
-                                  title="Entrar em contato com o usuário"
+                                  title="Entrar em contato com o usuÃ¡rio"
                                 >
                                   <Mail size={14} /> Contato
                                 </button>
@@ -1891,7 +2289,7 @@ function AbaErros() {
             <div style={{ display: 'flex', gap: '8px', marginTop: '16px', alignItems: 'center' }}>
               <button className="btn btn-secondary" disabled={pagina === 1} onClick={() => setPagina((p) => p - 1)}>Anterior</button>
               <span style={{ color: 'var(--sv-text-muted)', fontSize: '14px' }}>{pagina} / {paginas}</span>
-              <button className="btn btn-secondary" disabled={pagina === paginas} onClick={() => setPagina((p) => p + 1)}>Próxima</button>
+              <button className="btn btn-secondary" disabled={pagina === paginas} onClick={() => setPagina((p) => p + 1)}>PrÃ³xima</button>
             </div>
           )}
         </>
@@ -1907,7 +2305,7 @@ function AbaErros() {
   )
 }
 
-// ── Aba Usuários (reset de senha) ────────────────────────────────
+// â”€â”€ Aba UsuÃ¡rios (reset de senha) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface UsuarioItem {
   id: string
@@ -1936,7 +2334,7 @@ function ModalResetSenha({ usuario, onClose }: { usuario: UsuarioItem; onClose: 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (senha !== confirmar) {
-      setErro('As senhas não conferem.')
+      setErro('As senhas nÃ£o conferem.')
       return
     }
     setLoading(true)
@@ -1963,7 +2361,7 @@ function ModalResetSenha({ usuario, onClose }: { usuario: UsuarioItem; onClose: 
             <CheckCircle size={40} style={{ color: 'var(--sv-success)' }} />
             <p style={{ color: 'var(--sv-text)', fontWeight: 600 }}>Senha redefinida</p>
             <p style={{ color: 'var(--sv-text-dim)', fontSize: '14px' }}>
-              A senha de <strong>{usuario.email}</strong> foi alterada. Repasse a nova senha ao usuário e oriente a troca no primeiro acesso.
+              A senha de <strong>{usuario.email}</strong> foi alterada. Repasse a nova senha ao usuÃ¡rio e oriente a troca no primeiro acesso.
             </p>
             <button className="btn btn-primary" onClick={onClose} style={{ marginTop: '8px' }}>Fechar</button>
           </div>
@@ -1987,7 +2385,7 @@ function ModalResetSenha({ usuario, onClose }: { usuario: UsuarioItem; onClose: 
                   onChange={(e) => setSenha(e.target.value)}
                   required
                   minLength={6}
-                  placeholder="••••••••"
+                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   style={{ width: '100%', paddingRight: '40px' }}
                   autoFocus
                 />
@@ -2009,7 +2407,7 @@ function ModalResetSenha({ usuario, onClose }: { usuario: UsuarioItem; onClose: 
                 onChange={(e) => setConfirmar(e.target.value)}
                 required
                 minLength={6}
-                placeholder="••••••••"
+                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
               />
             </div>
             <div className="modal-footer" style={{ paddingTop: '8px' }}>
@@ -2058,7 +2456,7 @@ function AbaUsuarios() {
               fontSize: '14px',
               outline: 'none',
             }}
-            placeholder="Buscar por nome ou e-mail…"
+            placeholder="Buscar por nome ou e-mailâ€¦"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
           />
@@ -2066,15 +2464,15 @@ function AbaUsuarios() {
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <p style={{ color: 'var(--sv-text-muted)' }}>Carregandoâ€¦</p>
       ) : usuarios.length === 0 ? (
-        <EmptyState msg={busca ? 'Nenhum usuário encontrado para essa busca.' : 'Nenhum usuário cadastrado.'} />
+        <EmptyState msg={busca ? 'Nenhum usuÃ¡rio encontrado para essa busca.' : 'Nenhum usuÃ¡rio cadastrado.'} />
       ) : (
         <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
           <table className="stock-table">
             <thead>
               <tr>
-                {['Nome', 'E-mail', 'Papel', 'Lojas', 'Status', 'Ações'].map((h) => (
+                {['Nome', 'E-mail', 'Papel', 'Lojas', 'Status', 'AÃ§Ãµes'].map((h) => (
                   <th key={h}>{h}</th>
                 ))}
               </tr>
@@ -2085,7 +2483,7 @@ function AbaUsuarios() {
                   <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{u.nome}</td>
                   <td style={{ color: 'var(--sv-text-dim)' }}>{u.email}</td>
                   <td style={{ color: 'var(--sv-text-dim)' }}>{PAPEL_LABELS[u.papel] || u.papel}</td>
-                  <td style={{ color: 'var(--sv-text-dim)' }}>{u.lojas.length > 0 ? u.lojas.join(', ') : '—'}</td>
+                  <td style={{ color: 'var(--sv-text-dim)' }}>{u.lojas.length > 0 ? u.lojas.join(', ') : 'â€”'}</td>
                   <td>
                     <span style={{
                       display: 'inline-block',
@@ -2104,7 +2502,7 @@ function AbaUsuarios() {
                       className="btn btn-secondary"
                       style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
                       onClick={() => setUsuarioReset(u)}
-                      title="Redefinir a senha deste usuário"
+                      title="Redefinir a senha deste usuÃ¡rio"
                     >
                       <KeyRound size={14} />
                       Resetar senha
@@ -2124,14 +2522,14 @@ function AbaUsuarios() {
   )
 }
 
-// ── Página principal ─────────────────────────────────────────────
+// â”€â”€ PÃ¡gina principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type Aba = 'overview' | 'lojas' | 'assinaturas' | 'planos' | 'auditoria' | 'erros' | 'usuarios'
 
 const ABAS: { id: Aba; label: string; Icon: typeof Shield }[] = [
   { id: 'overview', label: 'Overview', Icon: Shield },
   { id: 'lojas', label: 'Lojas', Icon: Building2 },
-  { id: 'usuarios', label: 'Usuários', Icon: Users },
+  { id: 'usuarios', label: 'UsuÃ¡rios', Icon: Users },
   { id: 'assinaturas', label: 'Assinaturas', Icon: CreditCard },
   { id: 'planos', label: 'Planos', Icon: Package },
   { id: 'auditoria', label: 'Auditoria', Icon: ClipboardList },
@@ -2145,9 +2543,9 @@ export function AdminPage() {
     <div className="page-content">
       <div className="page-header">
         <div>
-          <h2>Painel de Administração</h2>
+          <h2>Painel de AdministraÃ§Ã£o</h2>
           <p style={{ color: 'var(--sv-text-muted)', fontSize: '14px', marginTop: '4px' }}>
-            Controle global da plataforma Social Veículos
+            Controle global da plataforma Social VeÃ­culos
           </p>
         </div>
       </div>

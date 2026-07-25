@@ -186,7 +186,7 @@ export function Equipe() {
           <div className="modal-glass" style={{ maxWidth: 600, width: '100%' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Convidar Membro</h3>
-              <button className="modal-close" onClick={() => setMostrarForm(false)}><XIcon /></button>
+              <button className="modal-close" onClick={() => setMostrarForm(false)} aria-label="Fechar"><XIcon /></button>
             </div>
             
             <form onSubmit={handleConvidar}>
@@ -535,7 +535,7 @@ function EditarAcessosModal({
       <div className="modal-glass" style={{ maxWidth: 480, width: '100%' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Editar Acessos — {membro.nome}</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar">×</button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <ModulosChecklist
@@ -603,7 +603,7 @@ function PermissaoIAModal({ membro, onClose }: { membro: Membro; onClose: () => 
       <div className="modal-glass" style={{ maxWidth: 450, width: '100%' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Permissões de IA — {membro.nome}</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar">×</button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {loading ? (

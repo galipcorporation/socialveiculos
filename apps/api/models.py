@@ -165,6 +165,13 @@ class StatusPagamento(str, enum.Enum):
     ESTORNADO = "estornado"
 
 
+class StatusLancamento(str, enum.Enum):
+    """Rascunho = autosave incompleto do formulário; não conta em saldo/relatórios
+    até ser confirmado (mesmo padrão de StatusVeiculo.RASCUNHO)."""
+    RASCUNHO = "rascunho"
+    CONFIRMADO = "confirmado"
+
+
 class TipoCambio(str, enum.Enum):
     MANUAL = "manual"
     AUTOMATICO = "automatico"
@@ -717,13 +724,18 @@ class LancamentoFinanceiro(Base):
     id = Column(String(36), primary_key=True, default=_uuid)
     loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
     tipo = Column(Enum(TipoLancamento), nullable=False)
-    descricao = Column(String(300), nullable=False)
-    valor = Column(Float, nullable=False)
+    # Nullable: um rascunho (autosave do formulário) pode existir antes de descricao/valor
+    # serem preenchidos; a confirmação exige ambos (ver ConfirmarLancamentoRequest).
+    descricao = Column(String(300), nullable=True)
+    valor = Column(Float, nullable=True)
     data = Column(DateTime, nullable=False, default=_now)
     veiculo_id = Column(String(36), ForeignKey("veiculo.id", ondelete="SET NULL"), nullable=True)
     categoria = Column(String(50), nullable=True)  # mecanica, pintura, pneus, higienizacao, documentacao, outro
     observacoes = Column(Text, nullable=True)
     status_pagamento = Column(Enum(StatusPagamento), nullable=False, default=StatusPagamento.PAGO)
+    # Rascunho = autosave incompleto; excluído por padrão de saldo/relatórios/listagem
+    # até ser confirmado (mesmo padrão de StatusVeiculo.RASCUNHO no estoque).
+    status = Column(Enum(StatusLancamento), nullable=False, default=StatusLancamento.CONFIRMADO)
     created_at = Column(DateTime, default=_now)
 
     deletado_em = Column(DateTime, nullable=True)
@@ -861,6 +873,9 @@ class ModuloHabilitado(Base):
     loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
     nome_modulo = Column(String(50), nullable=False)  # contratos, simulador, marketing
     ativo = Column(Boolean, default=True)
+    # Cortesia = liberado manualmente pelo admin, fora do plano. Sobrevive à troca
+    # de plano; os demais são recalculados a cada troca (origem = o plano).
+    cortesia = Column(Boolean, nullable=False, default=False, server_default="0")
     created_at = Column(DateTime, default=_now)
 
     __table_args__ = (
@@ -1591,8 +1606,9 @@ class LeadTriagem(Base):
     id = Column(String(36), primary_key=True, default=_uuid)
     conversa_id = Column(String(36), ForeignKey("conversa.id", ondelete="CASCADE"), nullable=False, unique=True)
     score = Column(Integer, nullable=False)               # 0-100
-    classificacao = Column(String(20), nullable=False)   # quente | ruido
+    classificacao = Column(String(20), nullable=False)   # quente | ruido | pendente_revisao
     justificativa = Column(Text, nullable=True)
+    precisa_revisao_manual = Column(Boolean, nullable=False, default=False, server_default="0")
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 

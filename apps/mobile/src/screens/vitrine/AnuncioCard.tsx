@@ -20,7 +20,7 @@ interface Props {
   onWhatsapp?: () => void
 }
 
-export function AnuncioCard({ anuncio: a, onPress, onLojaPress, onFavorito, onSeguirLoja, seguindoLoja, onWhatsapp }: Props) {
+export const AnuncioCard = React.memo(function AnuncioCard({ anuncio: a, onPress, onLojaPress, onFavorito, onSeguirLoja, seguindoLoja, onWhatsapp }: Props) {
   const { colors } = useTheme()
   const aceitaTroca = !!a.descricao && semAcento(a.descricao).includes('troca')
 
@@ -83,7 +83,7 @@ export function AnuncioCard({ anuncio: a, onPress, onLojaPress, onFavorito, onSe
       </View>
     </Card>
   )
-}
+})
 
 const styles = StyleSheet.create({
   fav: {

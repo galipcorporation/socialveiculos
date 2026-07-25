@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { FlatList, Linking, View } from 'react-native'
+import React, { useCallback, useState } from 'react'
+import { FlatList, View } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -11,6 +11,7 @@ import { vitrineService, FILTROS_FEED, type FiltroFeed } from '../../services'
 import { useGateLogin } from '../../hooks/useGateLogin'
 import { useToggleFavorito } from '../../hooks/useToggleFavorito'
 import { useDebounce } from '../../hooks/useDebounce'
+import { abrirWhatsapp } from '../../lib/whatsapp'
 import type { AnuncioVitrine } from '../../services/types'
 
 export default function FeedScreen() {
@@ -29,19 +30,24 @@ export default function FeedScreen() {
     queryFn: () => vitrineService.feed(filtro, buscaDebounced),
   })
 
-  const seguirLoja = (lojaId: string, seguindoAgora: boolean) =>
+  const seguirLoja = useCallback((lojaId: string, seguindoAgora: boolean) =>
     comLogin('Entre para seguir lojas.', async () => {
       await vitrineService.alternarSeguir(lojaId, seguindoAgora)
       queryClient.invalidateQueries({ queryKey: ['vitrine'] })
-    })
+    }), [comLogin, queryClient])
 
-  const whatsapp = async (a: AnuncioVitrine) => {
+  const whatsapp = useCallback(async (a: AnuncioVitrine) => {
     if (!a.loja_whatsapp) return
-    const texto = encodeURIComponent(`Olá! Tenho interesse no ${a.marca} ${a.modelo} anunciado na Social Veículos.`)
-    const url = `https://wa.me/55${a.loja_whatsapp.replace(/\D/g, '')}?text=${texto}`
-    const ok = await Linking.canOpenURL(url)
-    if (ok) Linking.openURL(url)
-  }
+    const texto = `Olá! Tenho interesse no ${a.marca} ${a.modelo} anunciado na Social Veículos.`
+    await abrirWhatsapp(a.loja_whatsapp, texto)
+  }, [])
+
+  const abrirDetalhe = useCallback((id: string) => navigation.navigate('CarroDetalhe', { id }), [navigation])
+  const abrirLoja = useCallback((id: string) => navigation.navigate('PerfilLoja', { id }), [navigation])
+  const favoritarItem = useCallback(
+    (id: string, favoritadoAtual: boolean) => favoritar(id, favoritadoAtual),
+    [favoritar]
+  )
 
   return (
     <View style={{ flex: 1 }}>
@@ -68,13 +74,13 @@ export default function FeedScreen() {
           onRefresh={() => queryClient.invalidateQueries({ queryKey: ['vitrine', 'feed'] })}
           ListEmptyComponent={<EmptyState icon="car-outline" title="Nada por aqui" subtitle="Nenhum veículo neste filtro." />}
           renderItem={({ item }) => (
-            <AnuncioCard
-              anuncio={item}
-              onPress={() => navigation.navigate('CarroDetalhe', { id: item.id })}
-              onLojaPress={() => navigation.navigate('PerfilLoja', { id: item.loja_id })}
-              onFavorito={() => favoritar(item.id, item.favoritado_por_mim)}
-              onSeguirLoja={() => seguirLoja(item.loja_id, false)}
-              onWhatsapp={item.loja_whatsapp ? () => whatsapp(item) : undefined}
+            <FeedItem
+              item={item}
+              abrirDetalhe={abrirDetalhe}
+              abrirLoja={abrirLoja}
+              favoritar={favoritarItem}
+              seguirLoja={seguirLoja}
+              whatsapp={whatsapp}
             />
           )}
         />
@@ -82,3 +88,31 @@ export default function FeedScreen() {
     </View>
   )
 }
+
+interface FeedItemProps {
+  item: AnuncioVitrine
+  abrirDetalhe: (id: string) => void
+  abrirLoja: (id: string) => void
+  favoritar: (id: string, favoritadoAtual: boolean) => void
+  seguirLoja: (lojaId: string, seguindoAgora: boolean) => void
+  whatsapp: (a: AnuncioVitrine) => void
+}
+
+const FeedItem = React.memo(function FeedItem({ item, abrirDetalhe, abrirLoja, favoritar, seguirLoja, whatsapp }: FeedItemProps) {
+  const onPress = useCallback(() => abrirDetalhe(item.id), [abrirDetalhe, item.id])
+  const onLojaPress = useCallback(() => abrirLoja(item.loja_id), [abrirLoja, item.loja_id])
+  const onFavorito = useCallback(() => favoritar(item.id, item.favoritado_por_mim), [favoritar, item.id, item.favoritado_por_mim])
+  const onSeguirLoja = useCallback(() => seguirLoja(item.loja_id, false), [seguirLoja, item.loja_id])
+  const onWhatsapp = useCallback(() => whatsapp(item), [whatsapp, item])
+
+  return (
+    <AnuncioCard
+      anuncio={item}
+      onPress={onPress}
+      onLojaPress={onLojaPress}
+      onFavorito={onFavorito}
+      onSeguirLoja={onSeguirLoja}
+      onWhatsapp={item.loja_whatsapp ? onWhatsapp : undefined}
+    />
+  )
+})

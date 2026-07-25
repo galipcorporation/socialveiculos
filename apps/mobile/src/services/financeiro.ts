@@ -9,6 +9,14 @@ export interface LancamentoInput {
   veiculo_nome?: string
 }
 
+/** Autosave: todos os campos opcionais — o usuário pode ainda estar preenchendo. */
+export interface LancamentoRascunhoInput {
+  tipo?: TipoLancamento
+  descricao?: string
+  valor?: number
+  status_pagamento?: 'pago' | 'pendente'
+}
+
 export interface PeriodoFinanceiro {
   mes: number | 'todos' // 0-11 ou 'todos'
   ano: number
@@ -23,6 +31,7 @@ interface LancamentoDTO {
   data: string
   veiculo_nome?: string | null
   status_pagamento: string
+  status?: string | null
   created_at: string
   deletado_em?: string | null
   deletado_por_nome?: string | null
@@ -53,6 +62,7 @@ function mapLancamento(l: LancamentoDTO): Lancamento {
     data: l.data,
     veiculo_nome: l.veiculo_nome ?? undefined,
     status_pagamento: l.status_pagamento === 'pago' ? 'pago' : 'pendente',
+    status: l.status === 'rascunho' ? 'rascunho' : 'confirmado',
     created_at: l.created_at,
     deletado_em: l.deletado_em ?? undefined,
     deletado_por_nome: l.deletado_por_nome ?? undefined,
@@ -106,6 +116,31 @@ export const financeiroService = {
       valor: input.valor,
       status_pagamento: input.status_pagamento,
       veiculo_nome: input.veiculo_nome || null,
+    })
+    return mapLancamento(l)
+  },
+
+  /** Busca o rascunho (autosave) pendente mais recente do usuário nesta loja, se houver. */
+  async obterRascunho(): Promise<Lancamento | null> {
+    const l = await api.get<LancamentoDTO | null>('/financeiro/lancamentos/rascunho')
+    return l ? mapLancamento(l) : null
+  },
+
+  /** Autosave do formulário: cria (1ª chamada) ou atualiza (chamadas seguintes,
+   *  passando o id retornado) o rascunho. Não conta em saldo/relatórios. */
+  async salvarRascunho(input: LancamentoRascunhoInput, rascunhoId?: string): Promise<Lancamento> {
+    const params = rascunhoId ? { rascunho_id: rascunhoId } : undefined
+    const l = await api.post<LancamentoDTO>('/financeiro/lancamentos/rascunho', input, { params })
+    return mapLancamento(l)
+  },
+
+  /** Confirma o rascunho como lançamento definitivo. */
+  async confirmar(idLancamento: string, input: LancamentoInput): Promise<Lancamento> {
+    const l = await api.post<LancamentoDTO>(`/financeiro/lancamentos/${idLancamento}/confirmar`, {
+      tipo: input.tipo,
+      descricao: input.descricao,
+      valor: input.valor,
+      status_pagamento: input.status_pagamento,
     })
     return mapLancamento(l)
   },

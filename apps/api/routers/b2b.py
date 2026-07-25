@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from database import get_db, async_session
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
+from lib_formatacao import formatar_moeda
 from models import (
     utcnow,
     PublicacaoB2B, Comentario, Curtida, PropostaRepasse,
@@ -411,7 +412,7 @@ async def criar_proposta_repasse(
     try:
         from models import Notificacao
         from uuid import uuid4
-        msg_notif = f"A loja {loja_prop_nome} enviou uma proposta de R$ {nova_proposta.valor_proposta:,.2f} para o veículo {veiculo.marca} {veiculo.modelo}."
+        msg_notif = f"A loja {loja_prop_nome} enviou uma proposta de {formatar_moeda(nova_proposta.valor_proposta)} para o veículo {veiculo.marca} {veiculo.modelo}."
         notif = Notificacao(
             id=str(uuid4()),
             loja_id=veiculo.loja_id,

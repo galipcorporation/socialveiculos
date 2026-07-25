@@ -35,8 +35,9 @@ def _now() -> datetime:
 class TriagemOut(BaseModel):
     conversa_id: str
     score: int
-    classificacao: str  # quente | ruido
+    classificacao: str  # quente | ruido | pendente_revisao
     justificativa: Optional[str] = None
+    precisa_revisao_manual: bool = False
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -47,6 +48,7 @@ class TriagemListItem(BaseModel):
     score: int
     classificacao: str
     justificativa: Optional[str] = None
+    precisa_revisao_manual: bool = False
     updated_at: datetime
 
 
@@ -55,7 +57,12 @@ class TriagemListItem(BaseModel):
 async def _classificar_conversa(mensagens: list[Mensagem]) -> dict:
     """Chama Claude para classificar o lead. Retorna score + classificacao + justificativa."""
     if not ANTHROPIC_API_KEY:
-        return {"score": 50, "classificacao": "quente", "justificativa": "IA não configurada — aprovado por padrão."}
+        return {
+            "score": 50,
+            "classificacao": "pendente_revisao",
+            "justificativa": "IA não configurada — classificação pendente, defina manualmente.",
+            "precisa_revisao_manual": True,
+        }
 
     historico = "\n".join(
         f"{'Cliente' if m.autor_id is None else 'Vendedor'}: {m.conteudo}"
@@ -99,7 +106,12 @@ Responda APENAS o JSON, sem mais nada."""
             text = resp.json()["content"][0]["text"].strip()
             return json.loads(text)
     except Exception:
-        return {"score": 50, "classificacao": "quente", "justificativa": "Erro na classificação — aprovado por padrão."}
+        return {
+            "score": 50,
+            "classificacao": "pendente_revisao",
+            "justificativa": "Erro na classificação por IA — defina manualmente.",
+            "precisa_revisao_manual": True,
+        }
 
 
 # ── Endpoint: classificar conversa (chamado ao iniciar ou atualizar) ──
@@ -139,6 +151,7 @@ async def triar_conversa(
         triagem.score = resultado["score"]
         triagem.classificacao = resultado["classificacao"]
         triagem.justificativa = resultado.get("justificativa")
+        triagem.precisa_revisao_manual = resultado.get("precisa_revisao_manual", False)
         triagem.updated_at = agora
     else:
         triagem = LeadTriagem(
@@ -146,6 +159,7 @@ async def triar_conversa(
             score=resultado["score"],
             classificacao=resultado["classificacao"],
             justificativa=resultado.get("justificativa"),
+            precisa_revisao_manual=resultado.get("precisa_revisao_manual", False),
             created_at=agora,
             updated_at=agora,
         )
@@ -160,7 +174,7 @@ async def triar_conversa(
 
 @router.get("/gestor/triagem", response_model=List[TriagemListItem])
 async def listar_triagens(
-    filtro: Optional[str] = None,  # quente | ruido
+    filtro: Optional[str] = None,  # quente | ruido | pendente_revisao
     db: AsyncSession = Depends(get_db),
     ctx: B2BContext = Depends(get_current_b2b_user),
 ):
@@ -174,7 +188,7 @@ async def listar_triagens(
         )
         .order_by(LeadTriagem.score.desc())
     )
-    if filtro in ("quente", "ruido"):
+    if filtro in ("quente", "ruido", "pendente_revisao"):
         stmt = stmt.where(LeadTriagem.classificacao == filtro)
 
     res = await db.execute(stmt)
@@ -185,6 +199,7 @@ async def listar_triagens(
             score=t.score,
             classificacao=t.classificacao,
             justificativa=t.justificativa,
+            precisa_revisao_manual=t.precisa_revisao_manual,
             updated_at=t.updated_at,
         )
         for t in triagens

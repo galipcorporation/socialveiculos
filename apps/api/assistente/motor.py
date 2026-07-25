@@ -5,6 +5,7 @@ import httpx
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
+from lib_formatacao import formatar_moeda
 from models import (
     Loja,
     Lead,
@@ -208,14 +209,14 @@ async def gerar_resposta_ia(
         lead = res_lead.scalar_one_or_none()
         
         if lead:
-            contexto_extra += f"- Dados do Lead no CRM: Nome {cliente.nome}, Etapa atual: {lead.etapa.value}, Valor Estimado da compra: R$ {lead.valor_estimado}\n"
+            contexto_extra += f"- Dados do Lead no CRM: Nome {cliente.nome}, Etapa atual: {lead.etapa.value}, Valor Estimado da compra: {formatar_moeda(lead.valor_estimado)}\n"
             if lead.veiculo_id:
                 # buscar modelo do veículo
                 from models import Veiculo
                 v_res = await db.execute(select(Veiculo).where(Veiculo.id == lead.veiculo_id))
                 veiculo = v_res.scalar_one_or_none()
                 if veiculo:
-                    contexto_extra += f"- Veículo de Interesse: {veiculo.marca} {veiculo.modelo} {veiculo.versao} ({veiculo.ano_modelo}), Preço R$ {veiculo.preco_venda}\n"
+                    contexto_extra += f"- Veículo de Interesse: {veiculo.marca} {veiculo.modelo} {veiculo.versao} ({veiculo.ano_modelo}), Preço {formatar_moeda(veiculo.preco_venda)}\n"
 
             # Buscar simulações ativas
             from models import Simulacao
@@ -227,10 +228,10 @@ async def gerar_resposta_ia(
             simulacao = res_sim.scalar_one_or_none()
             if simulacao and simulacao.resultados:
                 contexto_extra += "- Simulação de Crédito recente realizada:\n"
-                contexto_extra += f"  Entrada desejada: R$ {simulacao.entrada}, Prazo: {simulacao.prazo_desejado} meses.\n"
+                contexto_extra += f"  Entrada desejada: {formatar_moeda(simulacao.entrada)}, Prazo: {simulacao.prazo_desejado} meses.\n"
                 for r in simulacao.resultados:
                     if r.status.value == "aprovado":
-                        contexto_extra += f"  * Banco {r.banco.value}: APROVADO - Parcela: R$ {r.parcela} em {r.prazo}x, Taxa {r.taxa}% a.m.\n"
+                        contexto_extra += f"  * Banco {r.banco.value}: APROVADO - Parcela: {formatar_moeda(r.parcela)} em {r.prazo}x, Taxa {r.taxa}% a.m.\n"
 
     # 4. Montar o prompt do Claude
     prompt_system = (

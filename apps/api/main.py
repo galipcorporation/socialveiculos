@@ -7,7 +7,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -15,6 +15,8 @@ from sqlalchemy import text
 
 from config import settings
 from database import create_all_tables, engine
+from limiter import rate_limit
+from routers.admin import exige_admin_plataforma
 import models  # noqa: F401 — registra todos os modelos no metadata
 import logging
 import json
@@ -182,9 +184,9 @@ async def health():
 
 
 # ── Stats — contagem de entidades no banco ─────────────────────
-@app.get("/v1/stats")
+@app.get("/v1/stats", dependencies=[Depends(exige_admin_plataforma), Depends(rate_limit(10, 60))])
 async def stats():
-    """Retorna contagem das principais entidades do banco."""
+    """Retorna contagem das principais entidades do banco. Restrito a admin da plataforma."""
     from database import async_session
     async with async_session() as session:
         tables = ["loja", "usuario", "veiculo", "cliente_pf", "lead", "plano", "assinatura"]

@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from database import get_db
 from deps import get_current_b2b_user, B2BContext
+from lib_formatacao import formatar_moeda
 from models import Veiculo, MarketingUsage
 from modulos import exige_modulo, Modulo
 from routers.credenciais_ia import resolver_api_key_ia
@@ -67,7 +68,7 @@ def _ficha_veiculo(v: Veiculo) -> str:
     ]
     ficha = " · ".join(p for p in partes if p)
     if v.preco_venda:
-        ficha += f"\nPreço: R$ {v.preco_venda:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        ficha += f"\nPreço: {formatar_moeda(v.preco_venda)}"
     opcionais = []
     try:
         opcionais = json.loads(v.opcionais) if v.opcionais else []

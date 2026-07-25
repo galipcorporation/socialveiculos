@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from config import settings
 from database import get_db
+from lib_formatacao import formatar_moeda
 from limiter import rate_limit
 from models import Veiculo, Loja, Favorito, StatusVeiculo, ClientePF, Lead, EtapaLead, OrigemLead, Notificacao
 from schemas import VeiculoB2CResponse
@@ -196,9 +197,9 @@ async def solicitar_pre_aprovacao(data: PreAprovacaoRequest, db: AsyncSession = 
 
     partes = ["Pedido de pré-aprovação de crédito via vitrine."]
     if data.renda_mensal is not None:
-        partes.append(f"Renda informada: R$ {data.renda_mensal:,.2f}.")
+        partes.append(f"Renda informada: {formatar_moeda(data.renda_mensal)}.")
     if data.entrada is not None:
-        partes.append(f"Entrada pretendida: R$ {data.entrada:,.2f}.")
+        partes.append(f"Entrada pretendida: {formatar_moeda(data.entrada)}.")
 
     lead = Lead(
         loja_id=veiculo.loja_id,

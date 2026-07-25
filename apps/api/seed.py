@@ -8,6 +8,7 @@ Popula o banco com:
 """
 
 import asyncio
+from datetime import timedelta
 from uuid import uuid4
 
 from sqlalchemy.future import select
@@ -26,6 +27,7 @@ from models import (
     StatusAssinatura,
     TipoCambio,
     TipoCombustivel,
+    utcnow,
 )
 
 
@@ -265,9 +267,14 @@ async def seed():
                 loja_id=loja_id,
                 plano_id=plano_id,
                 status=StatusAssinatura.ATIVA,
+                valor_mensal=299.90,
+                # Sem vencimento o acesso até funciona (legado), mas a tela de
+                # Plano & Acesso mostraria "—"; um ano à frente mantém o ambiente
+                # de desenvolvimento sempre liberado.
+                proximo_vencimento=utcnow() + timedelta(days=365),
             ))
             for modulo in ["contratos", "simulador", "marketing", "assistente_ia"]:
-                session.add(ModuloHabilitado(loja_id=loja_id, nome_modulo=modulo))
+                session.add(ModuloHabilitado(loja_id=loja_id, nome_modulo=modulo, cortesia=False))
             print("  [OK] Plano Profissional + assinatura ativa criados")
         else:
             print("  [--] Assinatura ja existe, pulando")

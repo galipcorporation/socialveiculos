@@ -350,7 +350,7 @@ export function VeiculoModal({
       <div className="modal-glass modal-veiculo" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{isEditing ? 'Editar Veículo' : 'Novo Veículo'}</h3>
-          <button className="modal-close" onClick={handleClose}><XIcon /></button>
+          <button className="modal-close" onClick={handleClose} aria-label="Fechar"><XIcon /></button>
         </div>
 
         <div className="modal-tabs">

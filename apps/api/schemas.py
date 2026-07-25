@@ -679,14 +679,15 @@ class LancamentoResponse(BaseModel):
     id: str
     loja_id: str
     tipo: TipoLancamento
-    descricao: str
-    valor: float
+    descricao: Optional[str] = None
+    valor: Optional[float] = None
     data: datetime
     veiculo_id: Optional[str] = None
     veiculo_nome: Optional[str] = None
     categoria: Optional[str] = None
     observacoes: Optional[str] = None
     status_pagamento: str
+    status: str = "confirmado"
     created_at: datetime
     deletado_em: Optional[datetime] = None
     deletado_por_nome: Optional[str] = None
@@ -715,6 +716,34 @@ class LancamentoUpdateRequest(BaseModel):
     valor: Optional[float] = Field(None, gt=0)
     data: Optional[datetime] = None
     veiculo_id: Optional[str] = Field(None, max_length=36)
+    observacoes: Optional[str] = None
+    status_pagamento: Optional[str] = None
+
+
+class LancamentoRascunhoRequest(BaseModel):
+    """Autosave do formulário de lançamento: todos os campos opcionais, pois o
+    usuário pode ainda estar preenchendo (mesmo padrão do cadastro rápido de
+    veículo, que salva StatusVeiculo.RASCUNHO com dados parciais)."""
+    tipo: Optional[TipoLancamento] = None
+    descricao: Optional[str] = Field(None, max_length=300)
+    valor: Optional[float] = Field(None, ge=0)
+    data: Optional[datetime] = None
+    veiculo_id: Optional[str] = Field(None, max_length=36)
+    categoria: Optional[str] = Field(None, max_length=50)
+    observacoes: Optional[str] = None
+    status_pagamento: Optional[str] = None
+
+
+class LancamentoConfirmarRequest(BaseModel):
+    """Confirma um rascunho como lançamento definitivo. Permite completar campos
+    que ainda faltavam no autosave; descricao e valor passam a ser obrigatórios
+    no resultado final (validado no router, não aqui, pois podem já existir no rascunho)."""
+    tipo: Optional[TipoLancamento] = None
+    descricao: Optional[str] = Field(None, min_length=1, max_length=300)
+    valor: Optional[float] = Field(None, gt=0)
+    data: Optional[datetime] = None
+    veiculo_id: Optional[str] = Field(None, max_length=36)
+    categoria: Optional[str] = Field(None, max_length=50)
     observacoes: Optional[str] = None
     status_pagamento: Optional[str] = None
 
@@ -871,6 +900,42 @@ class AdminRenovarAssinaturaRequest(BaseModel):
 
 class AdminSuspenderAssinaturaRequest(BaseModel):
     motivo: Optional[str] = None
+    # Suspender por inadimplência normalmente corta o login inteiro; deixar a
+    # loja entrar sem os módulos é a exceção (ex: negociação em andamento).
+    bloquear_login: bool = True
+
+
+class AdminReativarAssinaturaRequest(BaseModel):
+    motivo: Optional[str] = None
+    # Prazo concedido quando a assinatura reativada já está vencida — sem ele a
+    # loja voltaria ATIVA porém bloqueada pela data, e o worker a expiraria de novo.
+    dias_cortesia: int = Field(default=7, ge=1, le=90)
+
+
+class AdminTrocarPlanoRequest(BaseModel):
+    plano_id: str = Field(..., max_length=36)
+    valor_mensal: Optional[float] = Field(default=None, ge=0)
+    observacoes: Optional[str] = None
+
+
+class AdminCortesiasRequest(BaseModel):
+    """Módulos liberados fora do plano. Substitui a lista inteira de cortesias."""
+    modulos: List[str] = []
+
+
+class AdminDiffModulosResponse(BaseModel):
+    liberados: List[str] = []
+    removidos: List[str] = []
+    mantidos_cortesia: List[str] = []
+
+
+class AdminModuloStatusItem(BaseModel):
+    """Como a UI monta a lista de módulos: origem + se está valendo agora."""
+    modulo: str
+    ativo: bool
+    cortesia: bool          # liberado à mão, fora do plano
+    do_plano: bool          # incluído no plano contratado
+    liberado: bool          # ativo E assinatura em dia (o que a loja enxerga)
 
 
 # ── Admin — catálogo de planos (CRUD) ────────────────────────────
@@ -896,6 +961,11 @@ class AdminAssinaturaDetalheResponse(BaseModel):
     plano: Optional[PlanoResponse] = None
     pagamentos: List[PagamentoResponse] = []
     dias_para_vencer: Optional[int] = None
+    # Estado consolidado — evita a UI reimplementar a regra de "está liberada".
+    acesso_liberado: bool = False
+    loja_ativa: bool = True
+    vencida: bool = False
+    modulos: List[AdminModuloStatusItem] = []
 
 
 # ── Admin — destaque pago (patrocínio na vitrine) ────────────────

@@ -248,7 +248,7 @@ export function VenderModal({
       <div className="modal-glass" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
         <div className="modal-header">
           <h3>Fechar Venda</h3>
-          <button className="modal-close" onClick={onClose}><XIcon /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><XIcon /></button>
         </div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>

@@ -14,6 +14,7 @@ import { RegistrarVendaSheet } from '../../components/RegistrarVendaSheet'
 import { leadsService } from '../../services'
 import { ETAPAS_LEAD, ORIGEM_LEAD_LABEL, type EtapaLead, type Interacao } from '../../services/types'
 import { formatBRL, formatDataHora, formatRelativo, formatTelefone, maskMoedaInput, parseMoedaInput } from '../../lib/format'
+import { abrirWhatsapp } from '../../lib/whatsapp'
 import type { RootScreenProps } from '../../navigation/types'
 
 const ICONE_INTERACAO: Record<Interacao['tipo'], keyof typeof Ionicons.glyphMap> = {
@@ -59,10 +60,7 @@ export default function LeadDetalheScreen({ route }: RootScreenProps<'LeadDetalh
   }
   const whatsapp = () => {
     if (!lead?.cliente?.telefone) return
-    const numero = lead.cliente.telefone.replace(/\D/g, '')
-    Linking.openURL(`https://wa.me/55${numero}`).catch(() =>
-      toast.show('error', 'Não foi possível abrir o WhatsApp.')
-    )
+    abrirWhatsapp(lead.cliente.telefone)
   }
 
   if (q.isError) {

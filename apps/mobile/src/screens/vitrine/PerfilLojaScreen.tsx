@@ -1,5 +1,5 @@
-import React from 'react'
-import { FlatList, Linking, View } from 'react-native'
+import React, { useCallback } from 'react'
+import { FlatList, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -13,7 +13,9 @@ import { vitrineService } from '../../services'
 import { useGateLogin } from '../../hooks/useGateLogin'
 import { useToggleFavorito } from '../../hooks/useToggleFavorito'
 import { useAuthStore } from '../../stores/authStore'
+import { abrirWhatsapp } from '../../lib/whatsapp'
 import type { VitrineScreenProps } from '../../navigation/types'
+import type { AnuncioVitrine } from '../../services/types'
 
 export default function PerfilLojaScreen({ route }: VitrineScreenProps<'PerfilLoja'>) {
   const { id } = route.params
@@ -50,11 +52,11 @@ export default function PerfilLojaScreen({ route }: VitrineScreenProps<'PerfilLo
 
   const whatsapp = async () => {
     if (!loja?.whatsapp) { toast.show('info', 'Loja sem WhatsApp cadastrado.'); return }
-    const url = `https://wa.me/55${loja.whatsapp.replace(/\D/g, '')}`
-    const ok = await Linking.canOpenURL(url)
-    if (ok) Linking.openURL(url)
-    else toast.show('info', 'Não foi possível abrir o WhatsApp.')
+    await abrirWhatsapp(loja.whatsapp)
   }
+
+  const abrirDetalhe = useCallback((carroId: string) => navigation.navigate('CarroDetalhe', { id: carroId }), [navigation])
+  const favoritarItem = useCallback((carroId: string, favoritadoAtual: boolean) => favoritar(carroId, favoritadoAtual), [favoritar])
 
   return (
     <Screen scroll={false} padded={false}>
@@ -103,14 +105,23 @@ export default function PerfilLojaScreen({ route }: VitrineScreenProps<'PerfilLo
               : <EmptyState icon="car-outline" title="Sem veículos" subtitle="Esta loja não tem anúncios ativos." />
           }
           renderItem={({ item }) => (
-            <AnuncioCard
-              anuncio={item}
-              onPress={() => navigation.navigate('CarroDetalhe', { id: item.id })}
-              onFavorito={() => favoritar(item.id, item.favoritado_por_mim)}
-            />
+            <LojaVeiculoItem item={item} abrirDetalhe={abrirDetalhe} favoritar={favoritarItem} />
           )}
         />
       )}
     </Screen>
   )
 }
+
+interface LojaVeiculoItemProps {
+  item: AnuncioVitrine
+  abrirDetalhe: (id: string) => void
+  favoritar: (id: string, favoritadoAtual: boolean) => void
+}
+
+const LojaVeiculoItem = React.memo(function LojaVeiculoItem({ item, abrirDetalhe, favoritar }: LojaVeiculoItemProps) {
+  const onPress = useCallback(() => abrirDetalhe(item.id), [abrirDetalhe, item.id])
+  const onFavorito = useCallback(() => favoritar(item.id, item.favoritado_por_mim), [favoritar, item.id, item.favoritado_por_mim])
+
+  return <AnuncioCard anuncio={item} onPress={onPress} onFavorito={onFavorito} />
+})

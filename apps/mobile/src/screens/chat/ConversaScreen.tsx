@@ -210,7 +210,7 @@ export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
   )
 }
 
-function Bolha({ mensagem }: { mensagem: Mensagem }) {
+const Bolha = React.memo(function Bolha({ mensagem }: { mensagem: Mensagem }) {
   const { colors, dark } = useTheme()
   const minha = mensagem.autor === 'loja'
   return (
@@ -251,7 +251,7 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
       </Txt>
     </View>
   )
-}
+})
 
 const styles = StyleSheet.create({
   contexto: {

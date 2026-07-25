@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { FlatList, Image, Linking, Pressable, View } from 'react-native'
+import { FlatList, Image, Pressable, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -15,6 +15,7 @@ import type {
 } from '../../services/types'
 import { STATUS_PROPOSTA_LABEL } from '../../services/types'
 import { formatBRL, formatRelativo, formatKm, formatTelefone, maskMoedaInput, parseMoedaInput } from '../../lib/format'
+import { abrirWhatsapp } from '../../lib/whatsapp'
 
 type Aba = 'feed' | 'propostas' | 'parceiros'
 
@@ -309,10 +310,7 @@ function ParceirosTab() {
 
   const whatsapp = async (p: LojaParceira) => {
     if (!p.whatsapp) { toast.show('info', 'Loja sem WhatsApp cadastrado.'); return }
-    const url = `https://wa.me/55${p.whatsapp.replace(/\D/g, '')}`
-    const ok = await Linking.canOpenURL(url)
-    if (ok) Linking.openURL(url)
-    else toast.show('info', 'Não foi possível abrir o WhatsApp.')
+    await abrirWhatsapp(p.whatsapp)
   }
 
   return (

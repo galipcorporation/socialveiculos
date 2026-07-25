@@ -23,6 +23,7 @@ export function Favoritos() {
       setFavoritos(data)
     } catch (err) {
       console.error('Erro ao carregar favoritos:', err)
+      useUIStore.getState().showError('Não foi possível carregar seus favoritos. Tente novamente.')
     } finally {
       setLoading(false)
     }
@@ -49,6 +50,7 @@ export function Favoritos() {
       }
     } catch (err) {
       console.error('Erro ao favoritar/desfavoritar:', err)
+      useUIStore.getState().showError('Não foi possível favoritar. Tente novamente.')
     }
   }
 
@@ -68,6 +70,7 @@ export function Favoritos() {
       useUIStore.getState().showToast('Conversa iniciada! Vá para a aba de Mensagens para conversar.', 'success')
     } catch (err) {
       console.error('Erro ao iniciar conversa:', err)
+      useUIStore.getState().showError('Não foi possível iniciar a conversa. Tente novamente.')
     }
   }
 
@@ -96,6 +99,7 @@ export function Favoritos() {
       setFavoritos(prev => prev.map(v =>
         v.loja_id === lojaId ? { ...v, seguindo_loja: seguindo } : v
       ))
+      useUIStore.getState().showError(seguindo ? 'Não foi possível deixar de seguir a loja. Tente novamente.' : 'Não foi possível seguir a loja. Tente novamente.')
     }
   }
 

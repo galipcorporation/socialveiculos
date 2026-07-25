@@ -116,7 +116,7 @@ function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () 
       <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
         <div className="modal-header">
           <h3 className="modal-title">Nova Loja</h3>
-          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-4)' }}>
           {erro && <p style={{ color: 'var(--sv-danger)', fontSize: 'var(--sv-text-sm)' }}>{erro}</p>}
@@ -431,7 +431,7 @@ function ModalEditarLoja({ loja, onClose, onSaved }: { loja: LojaItem; onClose: 
       <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
         <div className="modal-header">
           <h3 className="modal-title">Editar Loja</h3>
-          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-4)' }}>
           {erro && <p style={{ color: 'var(--sv-danger)', fontSize: 'var(--sv-text-sm)' }}>{erro}</p>}
@@ -561,7 +561,7 @@ function ModalAssinaturaLoja({ loja, onClose }: { loja: LojaItem; onClose: () =>
       <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
         <div className="modal-header">
           <h3 className="modal-title">Assinatura — {loja.nome}</h3>
-          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-4)' }}>
           {loading ? (
@@ -929,7 +929,7 @@ function ModalDestaqueLoja({ loja, onClose, onSaved }: { loja: LojaItem; onClose
       <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
         <div className="modal-header">
           <h3 className="modal-title">Destaque na vitrine — {loja.nome}</h3>
-          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-4)' }}>
           {loading ? (
@@ -1265,7 +1265,7 @@ function ModalNovaVersaoContrato({ versaoSugerida, onClose, onSaved }: { versaoS
       <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 900, width: '100%' }}>
         <div className="modal-header">
           <h3 className="modal-title">Nova versão do contrato</h3>
-          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sv-space-4)' }}>
           {erro && <p style={{ color: 'var(--sv-danger)', fontSize: 'var(--sv-text-sm)' }}>{erro}</p>}

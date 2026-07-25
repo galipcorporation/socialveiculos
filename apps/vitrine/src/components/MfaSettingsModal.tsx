@@ -68,7 +68,7 @@ export function MfaSettingsModal({ mfaAtivo, onClose, onChange }: Props) {
   return (
     <div className="vt-modal-overlay" onClick={onClose}>
       <div className="vt-modal-card" onClick={(e) => e.stopPropagation()}>
-        <button className="vt-modal-close" onClick={onClose}>×</button>
+        <button className="vt-modal-close" onClick={onClose} aria-label="Fechar">×</button>
         <div className="vt-modal-header">
           <h3>Verificação em duas etapas</h3>
           <p>Adicione uma camada extra de segurança usando um app autenticador (Google Authenticator, Authy).</p>

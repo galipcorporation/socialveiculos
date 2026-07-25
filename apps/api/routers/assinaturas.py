@@ -7,7 +7,7 @@ módulos e webhook idempotente de pagamento.
 import json
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -16,6 +16,7 @@ from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
 from auth import create_sso_exchange_token
 from modulos import Modulo, modulo_ativo, assinatura_em_dia
+from plano_acesso import proximo_vencimento_apos, reativar_loja, sincronizar_modulos
 from models import (
     Plano,
     Assinatura,
@@ -101,59 +102,23 @@ async def minha_assinatura(
 @router.post("/assinar", response_model=AssinaturaResponse, status_code=status.HTTP_201_CREATED)
 async def assinar_plano(
     data: AssinarPlanoRequest,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    context: B2BContext = Depends(get_current_b2b_user),
+    _context: B2BContext = Depends(get_current_b2b_user),
 ):
     """
-    Contrata um plano para a loja. Cria a assinatura (SUSPENSA até o primeiro
-    pagamento confirmado pelo webhook) e habilita os módulos do plano.
+    Autoatendimento desativado enquanto não há gateway de pagamento.
+
+    A rota criava uma assinatura SUSPENSA que, por ser a mais recente, passava a
+    ser a assinatura vigente da loja — derrubando na hora o acesso de quem já
+    tinha uma ativa registrada pelo admin, sem nenhum pagamento envolvido.
+    A contratação é feita pelo admin (cobrança manual via Pix).
     """
-    plano = (await db.execute(
-        select(Plano).where(Plano.id == data.plano_id, Plano.ativo == True)
-    )).scalar_one_or_none()
-    if not plano:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plano não encontrado ou inativo.")
-
-    # Encerra assinatura ativa anterior, se houver
-    atual = await _assinatura_atual(db, context.loja_id)
-    if atual and atual.status == StatusAssinatura.ATIVA:
-        atual.status = StatusAssinatura.CANCELADA
-        atual.fim = _now()
-
-    assinatura = Assinatura(
-        loja_id=context.loja_id,
-        plano_id=plano.id,
-        status=StatusAssinatura.SUSPENSA,  # aguarda confirmação de pagamento
-        inicio=_now(),
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "A contratação de planos é feita pela nossa equipe. "
+            "Fale com o suporte para contratar ou trocar de plano."
+        ),
     )
-    db.add(assinatura)
-    await db.flush()
-
-    # Habilita (inativos) os módulos incluídos no plano
-    modulos_incluidos = json.loads(plano.modulos_incluidos) if plano.modulos_incluidos else []
-    for nome in modulos_incluidos:
-        existente = (await db.execute(
-            select(ModuloHabilitado).where(
-                ModuloHabilitado.loja_id == context.loja_id,
-                ModuloHabilitado.nome_modulo == nome,
-            )
-        )).scalar_one_or_none()
-        if existente:
-            existente.ativo = True
-        else:
-            db.add(ModuloHabilitado(loja_id=context.loja_id, nome_modulo=nome, ativo=True))
-
-    await registrar_auditoria(
-        db=db, loja_id=context.loja_id, ator_id=context.usuario.id,
-        ator_nome=context.usuario.nome, acao="assinatura.criar",
-        entidade="assinatura", entidade_id=assinatura.id,
-        detalhes=json.dumps({"plano_id": plano.id, "modulos": modulos_incluidos}),
-        ip=request.client.host if request.client else None,
-    )
-    await db.commit()
-    await db.refresh(assinatura)
-    return assinatura
 
 
 # ── 9.2 / 9.3 — Módulos e paywall ──────────────────────────────
@@ -261,11 +226,21 @@ async def webhook_pagamento(
     if data.status == StatusPagamento.PAGO:
         assinatura.status = StatusAssinatura.ATIVA
         assinatura.fim = None
+        # Estende o vencimento e reaplica os módulos do plano — sem isso o
+        # pagamento confirmado deixava a assinatura ATIVA porém vencida, e os
+        # módulos do plano continuavam desligados após uma suspensão.
+        assinatura.proximo_vencimento = proximo_vencimento_apos(assinatura.proximo_vencimento, 1)
+        plano = (await db.execute(
+            select(Plano).where(Plano.id == assinatura.plano_id)
+        )).scalar_one_or_none()
+        await sincronizar_modulos(db, assinatura.loja_id, plano)
+        await reativar_loja(db, assinatura.loja_id)
     elif data.status == StatusPagamento.FALHOU:
         assinatura.status = StatusAssinatura.SUSPENSA
     elif data.status == StatusPagamento.ESTORNADO:
         assinatura.status = StatusAssinatura.CANCELADA
         assinatura.fim = _now()
+        await sincronizar_modulos(db, assinatura.loja_id, None)
 
     await registrar_auditoria(
         db=db, loja_id=assinatura.loja_id, ator_id=None,

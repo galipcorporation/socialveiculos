@@ -24,6 +24,7 @@ from sqlalchemy import func, or_, case
 from datetime import datetime, timezone
 from storage import storage_provider
 from database import get_db
+from lib_formatacao import formatar_moeda
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria, get_optional_user
 from models import Veiculo, Usuario, SolicitacaoAprovacao, StatusAprovacao, TipoAcaoAprovacao, StatusVeiculo, OrigemVeiculo, Negociacao, PublicacaoB2B, Favorito, ClientePF, VeiculoDocumento, TipoDocumentoVeiculo, LojaSeguidora, Loja, utcnow
 from rbac import exige_permissao, Acao, Recurso, can
@@ -712,7 +713,7 @@ async def atualizar_veiculo(
 
         return {
             "status": "APROVACAO_PENDENTE",
-            "message": f"Alteração de preço de venda para R$ {preco_proposto} enviada para aprovação do gestor.",
+            "message": f"Alteração de preço de venda para {formatar_moeda(preco_proposto)} enviada para aprovação do gestor.",
             "veiculo": veiculo
         }
 

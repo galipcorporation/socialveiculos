@@ -273,15 +273,18 @@ export const veiculosService = {
     await api.delete(`/veiculos/${idVeiculo}`)
   },
 
-  /** Envia uma foto local (uri file://) ao storage e associa ao veículo. */
-  async enviarFoto(idVeiculo: string, uri: string): Promise<void> {
-    const nome = uri.split('/').pop() || 'foto.jpg'
+  /** Envia uma mídia local (uri file://, foto ou vídeo) ao storage e associa ao veículo. */
+  async enviarFoto(idVeiculo: string, uri: string, tipo: 'imagem' | 'video' = 'imagem'): Promise<void> {
+    const nome = uri.split('/').pop() || (tipo === 'video' ? 'video.mp4' : 'foto.jpg')
     const ext = nome.split('.').pop()?.toLowerCase()
-    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+    const mime =
+      tipo === 'video'
+        ? ext === 'mov' ? 'video/quicktime' : 'video/mp4'
+        : ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
     const fd = new FormData()
     fd.append('file', { uri, name: nome, type: mime } as unknown as Blob)
     const { url } = await api.post<{ url: string }>('/midias/upload', fd)
-    await api.post(`/veiculos/${idVeiculo}/midias`, { url, tipo: 'foto' })
+    await api.post(`/veiculos/${idVeiculo}/midias`, { url, tipo })
   },
 
   /** Venda: cria contrato + esteira no backend e retorna a esteira criada. */
