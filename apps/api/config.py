@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     resend_api_key: Optional[str] = Field(default=None)
     email_from: str = Field(default="Social Veículos <onboarding@resend.dev>")
 
+    # Dados da contratada no contrato de assinatura B2B (variáveis {{plataforma.*}}).
+    plataforma_razao_social: str = Field(default="Social Veículos")
+    plataforma_cnpj: Optional[str] = Field(default=None)
+    plataforma_endereco: Optional[str] = Field(default=None)
+    plataforma_email: Optional[str] = Field(default=None)
+
     # Banco
     database_url: str = Field(default="sqlite:///./socialveiculos.db")
 

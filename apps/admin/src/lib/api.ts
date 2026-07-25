@@ -127,6 +127,28 @@ class ApiClient {
     a.remove()
     URL.revokeObjectURL(objectUrl)
   }
+
+  /** Busca um arquivo autenticado e devolve a URL de blob — para abrir numa
+   *  aba/iframe (ex.: impressão) em vez de baixar. Quem chama deve revogar. */
+  async blobUrl(path: string, params?: Record<string, string>): Promise<string> {
+    const { token } = useAuthStore.getState()
+    const url = params ? `${path}?${new URLSearchParams(params)}` : path
+    const response = await fetch(`${this.baseUrl}${url}`, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+
+    if (response.status === 401) {
+      useAuthStore.getState().logout()
+      window.location.href = '/login'
+      throw new ApiError('Sessão expirada.', 401)
+    }
+    if (!response.ok) {
+      throw new ApiError(friendlyHttpMessage(response.status), response.status)
+    }
+
+    return URL.createObjectURL(await response.blob())
+  }
 }
 
 export const api = new ApiClient(API_BASE)

@@ -4,6 +4,7 @@ Acesso exclusivo para usuários com papel admin_plataforma.
 """
 
 import csv
+import html as html_lib
 import io
 import json
 import unicodedata
@@ -32,6 +33,9 @@ from schemas import (
     AdminAssinaturaDetalheResponse, AdminVencimentoItem,
     AdminCriarPlanoRequest, AdminEditarPlanoRequest,
     ContratoVersaoResponse, ContratoVersaoCreateRequest,
+    ContratoAssinaturaVariaveisResponse, ContratoAssinaturaVariavelItem,
+    ContratoAssinaturaPreviewRequest, ContratoAssinaturaPreviewResponse,
+    ContratoAssinaturaEnviarRequest, ContratoAssinaturaEnviarResponse,
     DestaquePagamentoResponse, AdminAtivarDestaqueRequest, AdminDesativarDestaqueRequest,
     AdminDestaqueDetalheResponse,
     AdminUsuarioItem, AdminResetSenhaRequest,
@@ -39,6 +43,10 @@ from schemas import (
     AdminFacetaItem, AdminAuditoriaFacetasResponse,
 )
 from auth import hash_password, create_access_token
+from config import settings
+from email_service import enviar_email, render_contrato_para_assinatura
+from lib_formatacao import formatar_moeda
+from pdf_service import html_para_pdf
 from storage import storage_provider
 from modulos import Modulo, assinatura_em_dia
 from plano_acesso import (
@@ -1889,6 +1897,330 @@ async def excluir_plano(
 # ═══════════════════════════════════════════════════════════════
 # Contrato de assinatura — versões (texto editável, TipTap no front)
 # ═══════════════════════════════════════════════════════════════
+
+# Catálogo das variáveis do contrato B2B (Social Veículos ↔ Loja).
+# Deve espelhar apps/admin/src/lib/variaveisContratoAssinatura.ts.
+VARIAVEIS_CONTRATO_ASSINATURA: List[tuple] = [
+    ("loja.nome", "Razão social"),
+    ("loja.cnpj", "CNPJ"),
+    ("loja.endereco", "Endereço"),
+    ("loja.cidade", "Cidade"),
+    ("loja.estado", "Estado"),
+    ("loja.cep", "CEP"),
+    ("loja.telefone", "Telefone"),
+    ("loja.email", "E-mail"),
+    ("responsavel.nome", "Nome"),
+    ("responsavel.email", "E-mail"),
+    ("responsavel.telefone", "Telefone"),
+    ("plano.nome", "Nome do plano"),
+    ("plano.descricao", "Descrição"),
+    ("plano.preco_mensal", "Preço de tabela"),
+    ("plano.modulos", "Módulos inclusos"),
+    ("assinatura.valor_mensal", "Valor mensal contratado"),
+    ("assinatura.inicio", "Início da vigência"),
+    ("assinatura.proximo_vencimento", "Próximo vencimento"),
+    ("assinatura.dia_vencimento", "Dia do vencimento"),
+    ("assinatura.observacoes", "Observações"),
+    ("plataforma.nome", "Razão social"),
+    ("plataforma.cnpj", "CNPJ"),
+    ("plataforma.endereco", "Endereço"),
+    ("plataforma.email", "E-mail"),
+    ("contrato.versao", "Versão"),
+    ("contrato.data", "Data de hoje"),
+    ("contrato.data_aceite", "Data do aceite"),
+]
+
+# Placeholder usado quando o dado ainda não existe no cadastro — mantém o
+# contrato legível em vez de deixar "{{loja.cnpj}}" cru no texto impresso.
+_VAZIO = "____________"
+
+_MODULO_LABEL = {
+    "contratos": "Contratos",
+    "simulador": "Simulador",
+    "marketing": "Marketing",
+    "assistente_ia": "Assistente de IA",
+    "fiscal": "Fiscal (NF-e)",
+    "site": "Site próprio",
+}
+
+
+def _data_br(dt: Optional[datetime]) -> Optional[str]:
+    return dt.strftime("%d/%m/%Y") if dt else None
+
+
+async def resolver_variaveis_contrato_assinatura(
+    db: AsyncSession,
+    loja_id: Optional[str] = None,
+    plano_id: Optional[str] = None,
+    versao: Optional[str] = None,
+) -> Dict[str, str]:
+    """Resolve as variáveis do contrato B2B com os dados reais do lojista.
+
+    Sem loja_id devolve só o que não depende dela (plataforma/data), para o
+    admin escrever o modelo. Campos ausentes viram placeholder, nunca a chave crua.
+    """
+    loja: Optional[Loja] = None
+    assinatura: Optional[Assinatura] = None
+    plano: Optional[Plano] = None
+    gestor: Optional[Usuario] = None
+
+    if loja_id:
+        loja = (await db.execute(select(Loja).where(Loja.id == loja_id))).scalar_one_or_none()
+        if not loja:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loja não encontrada.")
+
+        assinatura = (await db.execute(
+            select(Assinatura)
+            .where(Assinatura.loja_id == loja_id)
+            .order_by(Assinatura.created_at.desc())
+        )).scalars().first()
+
+        # Responsável legal = gestor ativo mais antigo da loja.
+        gestor = (await db.execute(
+            select(Usuario)
+            .join(MembroLoja, MembroLoja.usuario_id == Usuario.id)
+            .where(
+                MembroLoja.loja_id == loja_id,
+                MembroLoja.papel == PapelUsuario.GESTOR,
+                MembroLoja.ativo == True,  # noqa: E712
+            )
+            .order_by(MembroLoja.created_at.asc())
+        )).scalars().first()
+
+    # Plano: o explicitamente pedido (prévia de troca) ou o da assinatura vigente.
+    alvo_plano_id = plano_id or (assinatura.plano_id if assinatura else None)
+    if alvo_plano_id:
+        plano = (await db.execute(select(Plano).where(Plano.id == alvo_plano_id))).scalar_one_or_none()
+
+    modulos = [_MODULO_LABEL.get(m, m) for m in modulos_do_plano(plano)]
+    valor_mensal = (assinatura.valor_mensal if assinatura and assinatura.valor_mensal is not None
+                    else (plano.preco_mensal if plano else None))
+    venc = assinatura.proximo_vencimento if assinatura else None
+
+    bruto: Dict[str, Optional[str]] = {
+        "loja.nome": loja.nome if loja else None,
+        "loja.cnpj": loja.cnpj if loja else None,
+        "loja.endereco": loja.endereco if loja else None,
+        "loja.cidade": loja.cidade if loja else None,
+        "loja.estado": loja.estado if loja else None,
+        "loja.cep": loja.cep if loja else None,
+        "loja.telefone": (loja.telefone or loja.whatsapp) if loja else None,
+        "loja.email": loja.email if loja else None,
+
+        "responsavel.nome": gestor.nome if gestor else None,
+        "responsavel.email": gestor.email if gestor else None,
+        "responsavel.telefone": gestor.telefone if gestor else None,
+
+        "plano.nome": plano.nome if plano else None,
+        "plano.descricao": plano.descricao if plano else None,
+        "plano.preco_mensal": formatar_moeda(plano.preco_mensal) if plano else None,
+        "plano.modulos": ", ".join(modulos) if modulos else None,
+
+        "assinatura.valor_mensal": formatar_moeda(valor_mensal) if valor_mensal is not None else None,
+        "assinatura.inicio": _data_br(assinatura.inicio) if assinatura else None,
+        "assinatura.proximo_vencimento": _data_br(venc),
+        "assinatura.dia_vencimento": str(venc.day) if venc else None,
+        "assinatura.observacoes": assinatura.observacoes if assinatura else None,
+
+        "plataforma.nome": settings.plataforma_razao_social,
+        "plataforma.cnpj": settings.plataforma_cnpj,
+        "plataforma.endereco": settings.plataforma_endereco,
+        "plataforma.email": settings.plataforma_email,
+
+        "contrato.versao": versao or (assinatura.contrato_versao if assinatura else None),
+        "contrato.data": _data_br(utcnow()),
+        "contrato.data_aceite": _data_br(assinatura.contrato_aceito_em) if assinatura else None,
+    }
+    return {k: (v.strip() if isinstance(v, str) and v.strip() else _VAZIO) or _VAZIO
+            for k, v in bruto.items()}
+
+
+# Aceita {{chave}} e {{ chave }}; a chave é sempre pontuada (grupo.campo).
+_RE_VARIAVEL = re.compile(r"\{\{\s*([a-z_]+\.[a-z_]+)\s*\}\}")
+
+
+def aplicar_variaveis_contrato(conteudo_html: str, valores: Dict[str, str]) -> tuple:
+    """Troca {{chave}} pelos valores. Devolve (html, chaves_desconhecidas)."""
+    nao_resolvidas: List[str] = []
+
+    def _sub(m: re.Match) -> str:
+        chave = m.group(1)
+        if chave in valores:
+            return html_lib.escape(valores[chave])
+        nao_resolvidas.append(chave)
+        return m.group(0)
+
+    return _RE_VARIAVEL.sub(_sub, conteudo_html), sorted(set(nao_resolvidas))
+
+
+@router.get(
+    "/contrato-assinatura/variaveis",
+    response_model=ContratoAssinaturaVariaveisResponse,
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def listar_variaveis_contrato_assinatura(
+    loja_id: Optional[str] = None,
+    plano_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Catálogo de variáveis do contrato B2B, já resolvido com os dados da loja
+    quando `loja_id` é informado (é o que alimenta o popover do editor)."""
+    valores = await resolver_variaveis_contrato_assinatura(db, loja_id, plano_id)
+    loja_nome = valores.get("loja.nome") if loja_id else None
+    return ContratoAssinaturaVariaveisResponse(
+        loja_id=loja_id,
+        loja_nome=loja_nome if loja_nome != _VAZIO else None,
+        variaveis=[
+            ContratoAssinaturaVariavelItem(chave=chave, label=label, valor=valores.get(chave, _VAZIO))
+            for chave, label in VARIAVEIS_CONTRATO_ASSINATURA
+        ],
+    )
+
+
+@router.post(
+    "/contrato-assinatura/preview",
+    response_model=ContratoAssinaturaPreviewResponse,
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def preview_contrato_assinatura(
+    data: ContratoAssinaturaPreviewRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Renderiza o texto do contrato com as variáveis já substituídas."""
+    valores = await resolver_variaveis_contrato_assinatura(db, data.loja_id, data.plano_id)
+    conteudo, nao_resolvidas = aplicar_variaveis_contrato(data.conteudo_html, valores)
+    return ContratoAssinaturaPreviewResponse(conteudo_html=conteudo, nao_resolvidas=nao_resolvidas)
+
+
+async def _montar_contrato_resolvido(
+    db: AsyncSession, loja_id: Optional[str], versao_id: Optional[str] = None
+) -> tuple:
+    """Carrega a versão pedida (ou a vigente) e resolve as variáveis da loja.
+    Devolve (html_resolvido, versao)."""
+    if versao_id:
+        stmt = select(ContratoAssinaturaVersao).where(ContratoAssinaturaVersao.id == versao_id)
+    else:
+        stmt = select(ContratoAssinaturaVersao).where(ContratoAssinaturaVersao.vigente == True)  # noqa: E712
+    versao = (await db.execute(stmt)).scalar_one_or_none()
+    if not versao:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="Nenhuma versão vigente do contrato foi cadastrada ainda." if not versao_id
+            else "Versão do contrato não encontrada.",
+        )
+
+    valores = await resolver_variaveis_contrato_assinatura(db, loja_id, versao=versao.versao)
+    conteudo, _ = aplicar_variaveis_contrato(versao.conteudo_html, valores)
+    return conteudo, versao
+
+
+@router.get(
+    "/contrato-assinatura/documento",
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def baixar_contrato_assinatura(
+    loja_id: Optional[str] = None,
+    versao_id: Optional[str] = None,
+    formato: str = "pdf",
+    db: AsyncSession = Depends(get_db),
+):
+    """Contrato com as variáveis resolvidas, em PDF (download/impressão).
+
+    `formato=html` — ou PDF indisponível no ambiente — devolve o HTML, que o
+    navegador imprime com o mesmo layout A4.
+    """
+    conteudo, versao = await _montar_contrato_resolvido(db, loja_id, versao_id)
+    nome_base = f"contrato-{versao.versao}".replace("/", "-").replace(" ", "-")
+
+    if formato == "pdf":
+        pdf = html_para_pdf(conteudo)
+        if pdf:
+            return Response(
+                content=pdf,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'inline; filename="{nome_base}.pdf"'},
+            )
+        # Sem a lib de PDF: não falha, entrega o HTML para o navegador imprimir.
+
+    return Response(
+        content=conteudo,
+        media_type="text/html; charset=utf-8",
+        headers={"Content-Disposition": f'inline; filename="{nome_base}.html"'},
+    )
+
+
+@router.post(
+    "/contrato-assinatura/enviar",
+    response_model=ContratoAssinaturaEnviarResponse,
+)
+async def enviar_contrato_assinatura(
+    data: ContratoAssinaturaEnviarRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """Envia o contrato em PDF ao lojista para assinatura digital.
+
+    O destinatário assina fora da plataforma (ICP-Brasil//plataforma de assinatura)
+    e devolve o arquivo assinado respondendo ao e-mail.
+    """
+    loja = (await db.execute(select(Loja).where(Loja.id == data.loja_id))).scalar_one_or_none()
+    if not loja:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Loja não encontrada.")
+
+    destino = (data.email or "").strip() or loja.email
+    if not destino:
+        # Cai no gestor da loja quando a loja não tem e-mail cadastrado.
+        gestor = (await db.execute(
+            select(Usuario)
+            .join(MembroLoja, MembroLoja.usuario_id == Usuario.id)
+            .where(
+                MembroLoja.loja_id == loja.id,
+                MembroLoja.papel == PapelUsuario.GESTOR,
+                MembroLoja.ativo == True,  # noqa: E712
+            )
+            .order_by(MembroLoja.created_at.asc())
+        )).scalars().first()
+        destino = gestor.email if gestor else None
+    if not destino:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="A loja não tem e-mail cadastrado e não há gestor ativo. Informe um destinatário.",
+        )
+
+    conteudo, versao = await _montar_contrato_resolvido(db, loja.id, data.versao_id)
+
+    pdf = html_para_pdf(conteudo)
+    if not pdf:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Não foi possível gerar o PDF do contrato neste ambiente. Baixe o documento e envie manualmente.",
+        )
+
+    nome_arquivo = f"contrato-{loja.nome}-{versao.versao}.pdf".replace("/", "-").replace(" ", "-")
+    enviado = await enviar_email(
+        to=destino,
+        subject=f"Contrato de prestação de serviço — Social Veículos ({versao.versao})",
+        html=render_contrato_para_assinatura(
+            loja_nome=loja.nome, versao=versao.versao, mensagem=data.mensagem,
+        ),
+        anexos=[(nome_arquivo, pdf)],
+        reply_to=admin.email,
+    )
+    if not enviado:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail="O provedor de e-mail recusou o envio. Tente novamente em instantes.",
+        )
+
+    await registrar_auditoria(
+        db=db, loja_id=loja.id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="contrato_assinatura.enviar", entidade="loja", entidade_id=loja.id,
+        detalhes=json.dumps({"email": destino, "versao": versao.versao}),
+    )
+    await db.commit()
+
+    return ContratoAssinaturaEnviarResponse(enviado=True, email=destino, versao=versao.versao)
+
 
 @router.get(
     "/contrato-assinatura/versoes",

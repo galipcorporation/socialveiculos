@@ -66,10 +66,7 @@ export async function getThemeConfig(host: string): Promise<ThemeConfig> {
   if (!slug) return DEFAULT_MARKETPLACE_CONFIG
 
   try {
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/v1/public/site/${host}`,
-      { credentials: 'omit' }
-    )
+    const response = await fetch(`/v1/public/site/${host}`, { credentials: 'omit' })
     if (!response.ok) return DEFAULT_MARKETPLACE_CONFIG
 
     const siteData = await response.json()

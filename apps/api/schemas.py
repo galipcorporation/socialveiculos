@@ -1052,6 +1052,45 @@ class ContratoVersaoCreateRequest(BaseModel):
     tornar_vigente: bool = True
 
 
+class ContratoAssinaturaVariavelItem(BaseModel):
+    """Uma variável do contrato B2B já resolvida com o dado real da loja."""
+    chave: str
+    label: str
+    valor: str
+
+
+class ContratoAssinaturaVariaveisResponse(BaseModel):
+    """Catálogo de variáveis + valores da loja, para preencher/pré-visualizar o contrato."""
+    loja_id: Optional[str] = None
+    loja_nome: Optional[str] = None
+    variaveis: List[ContratoAssinaturaVariavelItem]
+
+
+class ContratoAssinaturaPreviewRequest(BaseModel):
+    conteudo_html: str = Field(..., min_length=1)
+    loja_id: Optional[str] = Field(default=None, max_length=36)
+    plano_id: Optional[str] = Field(default=None, max_length=36)
+
+
+class ContratoAssinaturaPreviewResponse(BaseModel):
+    conteudo_html: str
+    nao_resolvidas: List[str] = []
+
+
+class ContratoAssinaturaEnviarRequest(BaseModel):
+    """Envia o contrato em PDF para o lojista assinar digitalmente."""
+    loja_id: str = Field(..., max_length=36)
+    versao_id: Optional[str] = Field(default=None, max_length=36)  # nulo = versão vigente
+    email: Optional[str] = Field(default=None, max_length=200)  # nulo = e-mail da loja/gestor
+    mensagem: Optional[str] = Field(default=None, max_length=1000)
+
+
+class ContratoAssinaturaEnviarResponse(BaseModel):
+    enviado: bool
+    email: str
+    versao: str
+
+
 class AdminVencimentoItem(BaseModel):
     loja_id: str
     loja_nome: str

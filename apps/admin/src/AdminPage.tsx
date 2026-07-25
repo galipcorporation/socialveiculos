@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload, KeyRound, FileText, FlaskConical, Play, XCircle, Star, Download } from 'lucide-react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload, KeyRound, FileText, FlaskConical, Play, XCircle, Star, Download, Printer, Send } from 'lucide-react'
 import { api } from './lib/api'
 import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda, mascararTelefone } from './lib/mascaras'
 import { useUIStore } from './stores/uiStore'
 import { RichEditor } from './components/RichEditor'
+import { CATALOGO_VARIAVEIS_ASSINATURA, LABELS_VARIAVEIS_ASSINATURA } from './lib/variaveisContratoAssinatura'
 
 // ── Tipos ────────────────────────────────────────────────────────
 
@@ -568,14 +569,14 @@ function BadgeStatusAssinatura({ status }: { status: string }) {
   )
 }
 
-interface ModalAssinaturaProps {
+interface ModalFinanceiroProps {
   lojaId: string
   lojaNome: string
   onClose: () => void
   onSaved: () => void
 }
 
-function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinaturaProps) {
+function ModalFinanceiro({ lojaId, lojaNome, onClose, onSaved }: ModalFinanceiroProps) {
   const { prompt } = useUIStore()
   const [detalhe, setDetalhe] = useState<AssinaturaDetalhe | null>(null)
   const [planos, setPlanos] = useState<PlanoItem[]>([])
@@ -1255,9 +1256,9 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
   )
 }
 
-// ── Aba Assinaturas (vencimentos) ─────────────────────────────────
+// ── Aba Financeiro (cobrança e vencimentos) ───────────────────────
 
-function AbaAssinaturas() {
+function AbaFinanceiro() {
   const [itens, setItens] = useState<VencimentoItem[]>([])
   const [loading, setLoading] = useState(true)
   const [janela, setJanela] = useState(30)
@@ -1337,7 +1338,7 @@ function AbaAssinaturas() {
       )}
 
       {lojaSelecionada && (
-        <ModalAssinatura
+        <ModalFinanceiro
           lojaId={lojaSelecionada.id}
           lojaNome={lojaSelecionada.nome}
           onClose={() => setLojaSelecionada(null)}
@@ -1700,7 +1701,7 @@ function AbaLojas() {
   const [busca, setBusca] = useState('')
   const [modalAberto, setModalAberto] = useState(false)
   const [lojaEditandoId, setLojaEditandoId] = useState<string | null>(null)
-  const [lojaAssinatura, setLojaAssinatura] = useState<{ id: string; nome: string } | null>(null)
+  const [lojaFinanceiro, setLojaFinanceiro] = useState<{ id: string; nome: string } | null>(null)
   const [toggleLoading, setToggleLoading] = useState<string | null>(null)
   const [impersonarLoading, setImpersonarLoading] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
@@ -1883,10 +1884,10 @@ function AbaLojas() {
                       <button
                         className="btn btn-secondary"
                         style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => setLojaAssinatura({ id: loja.id, nome: loja.nome })}
-                        title="Ativar, renovar ou suspender assinatura (Pix manual)"
+                        onClick={() => setLojaFinanceiro({ id: loja.id, nome: loja.nome })}
+                        title="Ativar, renovar ou suspender a cobrança (Pix manual)"
                       >
-                        <CreditCard size={14} /> Assinatura
+                        <CreditCard size={14} /> Financeiro
                       </button>
                       <button
                         className="btn btn-secondary"
@@ -1908,11 +1909,11 @@ function AbaLojas() {
 
       {modalAberto && <ModalNovaLoja onClose={() => setModalAberto(false)} onSaved={carregar} />}
       {lojaEditandoId && <ModalEditarLoja lojaId={lojaEditandoId} onClose={() => setLojaEditandoId(null)} onSaved={carregar} />}
-      {lojaAssinatura && (
-        <ModalAssinatura
-          lojaId={lojaAssinatura.id}
-          lojaNome={lojaAssinatura.nome}
-          onClose={() => setLojaAssinatura(null)}
+      {lojaFinanceiro && (
+        <ModalFinanceiro
+          lojaId={lojaFinanceiro.id}
+          lojaNome={lojaFinanceiro.nome}
+          onClose={() => setLojaFinanceiro(null)}
           onSaved={carregar}
         />
       )}
@@ -2996,6 +2997,75 @@ function AbaContrato() {
   const [editorAberto, setEditorAberto] = useState(false)
   const [tornarVigenteLoading, setTornarVigenteLoading] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
+
+  // Loja usada para preencher as variáveis ao gerar/imprimir/enviar o documento.
+  const [lojas, setLojas] = useState<LojaItem[]>([])
+  const [lojaSel, setLojaSel] = useState('')
+  const [ocupado, setOcupado] = useState<string | null>(null)
+  const [enviarVersao, setEnviarVersao] = useState<ContratoVersaoItem | null>(null)
+
+  useEffect(() => {
+    api.get<LojaItem[]>('/admin/lojas')
+      .then((ls) => setLojas(ls.filter((l) => l.ativa)))
+      .catch(() => { /* opcional: sem loja o contrato sai com os campos em branco */ })
+  }, [])
+
+  const paramsDoc = (versaoId: string) => {
+    const p: Record<string, string> = { versao_id: versaoId }
+    if (lojaSel) p.loja_id = lojaSel
+    return p
+  }
+
+  const baixarPdf = async (v: ContratoVersaoItem) => {
+    setOcupado(`pdf-${v.id}`)
+    setErro(null)
+    try {
+      await api.download('/admin/contrato-assinatura/documento', paramsDoc(v.id), `contrato-${v.versao}.pdf`)
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao gerar o PDF.')
+    } finally {
+      setOcupado(null)
+    }
+  }
+
+  // Impressão rápida: carrega o PDF num iframe oculto e dispara o print do
+  // navegador — sem passar por download nem abrir aba nova.
+  const imprimir = async (v: ContratoVersaoItem) => {
+    setOcupado(`print-${v.id}`)
+    setErro(null)
+    let objectUrl: string | null = null
+    try {
+      objectUrl = await api.blobUrl('/admin/contrato-assinatura/documento', paramsDoc(v.id))
+      const frame = document.createElement('iframe')
+      frame.style.position = 'fixed'
+      frame.style.right = '0'
+      frame.style.bottom = '0'
+      frame.style.width = '0'
+      frame.style.height = '0'
+      frame.style.border = '0'
+      frame.src = objectUrl
+      frame.onload = () => {
+        try {
+          frame.contentWindow?.focus()
+          frame.contentWindow?.print()
+        } catch {
+          setErro('O navegador bloqueou a impressão. Baixe o PDF e imprima por ele.')
+        }
+        // Só limpa depois do diálogo de impressão abrir; remover antes cancela o print.
+        window.setTimeout(() => {
+          frame.remove()
+          if (objectUrl) URL.revokeObjectURL(objectUrl)
+        }, 60000)
+      }
+      document.body.appendChild(frame)
+    } catch (err: any) {
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      setErro(err.message || 'Erro ao preparar a impressão.')
+    } finally {
+      setOcupado(null)
+    }
+  }
 
   const carregar = useCallback(() => {
     setLoading(true)
@@ -3041,6 +3111,29 @@ function AbaContrato() {
         <ErroAlerta msg={erro} onFechar={() => setErro(null)} />
       )}
 
+      {aviso && (
+        <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', marginBottom: 16, background: 'color-mix(in srgb, var(--sv-success) 12%, var(--sv-surface))', border: '1px solid color-mix(in srgb, var(--sv-success) 30%, var(--sv-border))', borderLeft: '3px solid var(--sv-success)', borderRadius: 'var(--sv-radius)', fontSize: 14 }}>
+          <CheckCircle size={16} style={{ color: 'var(--sv-success)', flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>{aviso}</span>
+          <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => setAviso(null)}>Fechar</button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <label style={{ fontSize: 13, color: 'var(--sv-text-muted)' }}>Preencher com os dados de:</label>
+        <select
+          className="form-input"
+          value={lojaSel}
+          onChange={(e) => setLojaSel(e.target.value)}
+          style={{ maxWidth: 280 }}
+        >
+          <option value="">Nenhuma loja — campos em branco</option>
+          {lojas.map((l) => (
+            <option key={l.id} value={l.id}>{l.nome}</option>
+          ))}
+        </select>
+      </div>
+
       {loading ? (
         <LoadingState />
       ) : versoes.length === 0 ? (
@@ -3074,16 +3167,44 @@ function AbaContrato() {
                   </td>
                   <td style={{ color: 'var(--sv-text-dim)' }}>{fmtData(v.created_at)}</td>
                   <td>
-                    {!v.vigente && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button
                         className="btn btn-secondary"
-                        style={{ padding: '4px 10px', fontSize: '12px' }}
-                        onClick={() => tornarVigente(v.id, v.versao)}
-                        disabled={tornarVigenteLoading === v.id}
+                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => baixarPdf(v)}
+                        disabled={ocupado === `pdf-${v.id}`}
+                        title="Baixar o contrato em PDF"
                       >
-                        {tornarVigenteLoading === v.id ? 'Aplicando…' : 'Tornar vigente'}
+                        <Download size={14} /> {ocupado === `pdf-${v.id}` ? 'Gerando…' : 'PDF'}
                       </button>
-                    )}
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => imprimir(v)}
+                        disabled={ocupado === `print-${v.id}`}
+                        title="Imprimir agora"
+                      >
+                        <Printer size={14} /> {ocupado === `print-${v.id}` ? 'Abrindo…' : 'Imprimir'}
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => { setAviso(null); setEnviarVersao(v) }}
+                        title="Enviar por e-mail para assinatura digital"
+                      >
+                        <Mail size={14} /> Enviar
+                      </button>
+                      {!v.vigente && (
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '12px' }}
+                          onClick={() => tornarVigente(v.id, v.versao)}
+                          disabled={tornarVigenteLoading === v.id}
+                        >
+                          {tornarVigenteLoading === v.id ? 'Aplicando…' : 'Tornar vigente'}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -3099,8 +3220,130 @@ function AbaContrato() {
           onSaved={() => { setEditorAberto(false); carregar() }}
         />
       )}
+
+      {enviarVersao && (
+        <ModalEnviarContrato
+          versao={enviarVersao}
+          lojas={lojas}
+          lojaInicial={lojaSel}
+          onClose={() => setEnviarVersao(null)}
+          onEnviado={(email) => {
+            setEnviarVersao(null)
+            setAviso(`Contrato enviado para ${email}. O lojista devolve o arquivo assinado respondendo ao e-mail.`)
+          }}
+        />
+      )}
     </div>
   )
+}
+
+function ModalEnviarContrato({ versao, lojas, lojaInicial, onClose, onEnviado }: {
+  versao: ContratoVersaoItem
+  lojas: LojaItem[]
+  lojaInicial: string
+  onClose: () => void
+  onEnviado: (email: string) => void
+}) {
+  const [lojaId, setLojaId] = useState(lojaInicial)
+  const [email, setEmail] = useState('')
+  const [mensagem, setMensagem] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!lojaId) {
+      setErro('Escolha a loja destinatária — o contrato é preenchido com os dados dela.')
+      return
+    }
+    setLoading(true)
+    setErro(null)
+    try {
+      const r = await api.post<{ enviado: boolean; email: string }>('/admin/contrato-assinatura/enviar', {
+        loja_id: lojaId,
+        versao_id: versao.id,
+        email: email.trim() || undefined,
+        mensagem: mensagem.trim() || undefined,
+      })
+      onEnviado(r.email)
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao enviar o contrato.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">Enviar contrato para assinatura</h3>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
+        </div>
+        <form onSubmit={submit} className="modal-body modal-form-grid">
+          {erro && <p className="span-2" style={{ color: 'var(--sv-error)', fontSize: 14, margin: 0 }}>{erro}</p>}
+
+          <p className="span-2" style={{ fontSize: 13, color: 'var(--sv-text-muted)', margin: 0 }}>
+            O PDF da versão <strong>{versao.versao}</strong> vai em anexo, já preenchido com os dados da loja.
+            O lojista assina digitalmente e devolve respondendo ao e-mail.
+          </p>
+
+          <div className="form-group span-2">
+            <label>Loja destinatária</label>
+            <select className="form-input" value={lojaId} onChange={(e) => setLojaId(e.target.value)} required>
+              <option value="">Selecione…</option>
+              {lojas.map((l) => (
+                <option key={l.id} value={l.id}>{l.nome}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group span-2">
+            <label>E-mail (opcional)</label>
+            <input
+              className="form-input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Em branco: usa o e-mail da loja ou do gestor"
+              maxLength={200}
+            />
+          </div>
+
+          <div className="form-group span-2">
+            <label>Mensagem (opcional)</label>
+            <textarea
+              className="form-input"
+              value={mensagem}
+              onChange={(e) => setMensagem(e.target.value)}
+              rows={3}
+              maxLength={1000}
+              placeholder="Um recado curto que aparece no corpo do e-mail."
+            />
+          </div>
+
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {loading ? <span className="spinner" /> : <><Send size={15} /> Enviar</>}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+interface VariavelResolvida {
+  chave: string
+  label: string
+  valor: string
+}
+
+interface VariaveisContratoResponse {
+  loja_id?: string | null
+  loja_nome?: string | null
+  variaveis: VariavelResolvida[]
 }
 
 function ModalNovaVersaoContrato({ versaoSugerida, onClose, onSaved }: { versaoSugerida?: string; onClose: () => void; onSaved: () => void }) {
@@ -3109,6 +3352,45 @@ function ModalNovaVersaoContrato({ versaoSugerida, onClose, onSaved }: { versaoS
   const [tornarVigente, setTornarVigente] = useState(true)
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+
+  // Loja de referência: as variáveis são resolvidas com os dados reais dela,
+  // para o admin conferir como o contrato sai antes de salvar a versão.
+  const [lojas, setLojas] = useState<LojaItem[]>([])
+  const [lojaRef, setLojaRef] = useState('')
+  const [valores, setValores] = useState<Record<string, string>>({})
+  const [preview, setPreview] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+
+  useEffect(() => {
+    api.get<LojaItem[]>('/admin/lojas')
+      .then((ls) => setLojas(ls.filter((l) => l.ativa)))
+      .catch(() => { /* selector opcional — o editor funciona sem ele */ })
+  }, [])
+
+  useEffect(() => {
+    api.get<VariaveisContratoResponse>('/admin/contrato-assinatura/variaveis', lojaRef ? { loja_id: lojaRef } : undefined)
+      .then((r) => setValores(Object.fromEntries(r.variaveis.map((v) => [v.chave, v.valor]))))
+      .catch(() => setValores({}))
+  }, [lojaRef])
+
+  const verPreview = async () => {
+    setPreviewLoading(true)
+    setErro(null)
+    try {
+      const r = await api.post<{ conteudo_html: string; nao_resolvidas: string[] }>(
+        '/admin/contrato-assinatura/preview',
+        { conteudo_html: conteudoHtml, loja_id: lojaRef || undefined },
+      )
+      setPreview(r.conteudo_html)
+      if (r.nao_resolvidas.length) {
+        setErro(`Variáveis desconhecidas (saem como texto cru): ${r.nao_resolvidas.join(', ')}`)
+      }
+    } catch (err: any) {
+      setErro(err.message || 'Erro ao gerar a pré-visualização.')
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -3156,19 +3438,65 @@ function ModalNovaVersaoContrato({ versaoSugerida, onClose, onSaved }: { versaoS
           </label>
 
           <div className="form-group span-2">
+            <label>Loja de referência (pré-visualização)</label>
+            <select className="form-input" value={lojaRef} onChange={(e) => { setLojaRef(e.target.value); setPreview(null) }}>
+              <option value="">Nenhuma — mostrar as variáveis em branco</option>
+              {lojas.map((l) => (
+                <option key={l.id} value={l.id}>{l.nome}</option>
+              ))}
+            </select>
+            <span style={{ fontSize: 12, color: 'var(--sv-text-dim)', marginTop: 4 }}>
+              O texto é salvo com as variáveis; a loja escolhida serve só para conferir como fica preenchido.
+            </span>
+          </div>
+
+          <div className="form-group span-2">
             <label>Texto do contrato</label>
             <RichEditor
               value={conteudoHtml}
               onChange={setConteudoHtml}
-              variaveis={[]}
-              labels={{}}
+              variaveis={CATALOGO_VARIAVEIS_ASSINATURA}
+              labels={LABELS_VARIAVEIS_ASSINATURA}
               minHeight={320}
               placeholder="Digite o texto do contrato…"
             />
           </div>
 
+          {Object.keys(valores).length > 0 && (
+            <details className="span-2" style={{ border: '1px solid var(--sv-border)', borderRadius: 'var(--sv-radius-md)', padding: '10px 12px' }}>
+              <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--sv-text-muted)' }}>
+                Valores das variáveis {lojaRef ? 'para a loja selecionada' : '(sem loja selecionada)'}
+              </summary>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8, marginTop: 10 }}>
+                {CATALOGO_VARIAVEIS_ASSINATURA.map((g) => (
+                  <div key={g.grupo}>
+                    <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--sv-text-dim)', margin: '0 0 4px' }}>{g.grupo}</p>
+                    {g.itens.map((it) => (
+                      <p key={it.chave} style={{ fontSize: 12, margin: '0 0 2px', color: 'var(--sv-text-muted)' }}>
+                        {it.label}: <span style={{ color: 'var(--sv-text)' }}>{valores[it.chave] || '—'}</span>
+                      </p>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {preview && (
+            <div className="span-2" style={{ border: '1px solid var(--sv-border)', borderRadius: 'var(--sv-radius-md)', padding: 16, background: 'var(--sv-surface)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <strong style={{ fontSize: 13 }}>Pré-visualização</strong>
+                <button type="button" className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => setPreview(null)}>Fechar</button>
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: preview }} />
+            </div>
+          )}
+
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
+            <button type="button" className="btn btn-secondary" onClick={verPreview} disabled={previewLoading || loading}>
+              {previewLoading ? 'Gerando…' : 'Pré-visualizar'}
+            </button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? <span className="spinner" /> : 'Salvar'}
             </button>
@@ -3265,13 +3593,13 @@ function AbaTestes() {
 
 // ── Página principal ─────────────────────────────────────────────
 
-type Aba = 'overview' | 'lojas' | 'assinaturas' | 'planos' | 'contrato' | 'auditoria' | 'erros' | 'usuarios' | 'testes'
+type Aba = 'overview' | 'lojas' | 'financeiro' | 'planos' | 'contrato' | 'auditoria' | 'erros' | 'usuarios' | 'testes'
 
 const ABAS: { id: Aba; label: string; Icon: typeof Shield }[] = [
   { id: 'overview', label: 'Overview', Icon: Shield },
   { id: 'lojas', label: 'Lojas', Icon: Building2 },
   { id: 'usuarios', label: 'Usuários', Icon: Users },
-  { id: 'assinaturas', label: 'Assinaturas', Icon: CreditCard },
+  { id: 'financeiro', label: 'Financeiro', Icon: CreditCard },
   { id: 'planos', label: 'Planos', Icon: Package },
   { id: 'contrato', label: 'Contrato', Icon: FileText },
   { id: 'auditoria', label: 'Auditoria', Icon: ClipboardList },
@@ -3310,7 +3638,7 @@ export function AdminPage() {
       {aba === 'overview' && <AbaOverview />}
       {aba === 'lojas' && <AbaLojas />}
       {aba === 'usuarios' && <AbaUsuarios />}
-      {aba === 'assinaturas' && <AbaAssinaturas />}
+      {aba === 'financeiro' && <AbaFinanceiro />}
       {aba === 'planos' && <AbaPlanos />}
       {aba === 'contrato' && <AbaContrato />}
       {aba === 'auditoria' && <AbaAuditoria />}
