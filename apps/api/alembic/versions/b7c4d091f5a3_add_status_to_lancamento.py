@@ -20,14 +20,16 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     # status: RASCUNHO (autosave incompleto) / CONFIRMADO (definitivo, conta em
     # saldo/relatórios). Mesmo padrão de StatusVeiculo.RASCUNHO no estoque.
-    # sa.Enum cria o tipo nativo no Postgres automaticamente (create_type=True
-    # por padrão); no SQLite vira VARCHAR sem restrição — portável entre os dois
-    # (ver migrations-sqlite-only-baseline-postgres.md).
+    # No Postgres, o tipo enum nativo precisa existir ANTES do ALTER TABLE.
+    # batch_alter_table não chama create_type automaticamente neste cenário.
+    status_enum = sa.Enum('RASCUNHO', 'CONFIRMADO', name='statuslancamento')
+    status_enum.create(op.get_bind(), checkfirst=True)
+
     with op.batch_alter_table('lancamento_financeiro') as batch_op:
         batch_op.add_column(
             sa.Column(
                 'status',
-                sa.Enum('RASCUNHO', 'CONFIRMADO', name='statuslancamento'),
+                sa.Enum('RASCUNHO', 'CONFIRMADO', name='statuslancamento', create_type=False),
                 nullable=False,
                 server_default='CONFIRMADO',
             )
