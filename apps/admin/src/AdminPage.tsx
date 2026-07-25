@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload, KeyRound, FileText, FlaskConical, Play, XCircle, Star } from 'lucide-react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload, KeyRound, FileText, FlaskConical, Play, XCircle, Star, Download } from 'lucide-react'
 import { api } from './lib/api'
-import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda } from './lib/mascaras'
+import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda, mascararTelefone } from './lib/mascaras'
 import { useUIStore } from './stores/uiStore'
 import { RichEditor } from './components/RichEditor'
 
@@ -94,6 +94,27 @@ function EmptyState({ msg }: { msg: string }) {
   )
 }
 
+function LoadingState({ msg = 'Carregando…' }: { msg?: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '48px 0', textAlign: 'center' }}>
+      <span className="spinner" />
+      <p style={{ color: 'var(--sv-text-muted)', fontSize: '14px', margin: 0 }}>{msg}</p>
+    </div>
+  )
+}
+
+function ErroAlerta({ msg, onFechar }: { msg: string; onFechar?: () => void }) {
+  return (
+    <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', marginBottom: '16px', background: 'color-mix(in srgb, var(--sv-error) 12%, var(--sv-surface))', border: '1px solid color-mix(in srgb, var(--sv-error) 30%, var(--sv-border))', borderLeft: '3px solid var(--sv-error)', borderRadius: 'var(--sv-radius)', fontSize: '14px', color: 'var(--sv-text)' }}>
+      <AlertTriangle size={16} style={{ color: 'var(--sv-error)', flexShrink: 0 }} />
+      <span style={{ flex: 1 }}>{msg}</span>
+      {onFechar && (
+        <button onClick={onFechar} aria-label="Fechar aviso" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--sv-text-muted)', display: 'flex', padding: '2px' }}><X size={14} /></button>
+      )}
+    </div>
+  )
+}
+
 // ── Modal Nova Loja ──────────────────────────────────────────────
 
 function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
@@ -135,12 +156,12 @@ function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
+      <div className="modal-container glass-card modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">Nova Loja</h3>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
         </div>
-        <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <form onSubmit={submit} className="modal-body modal-form-grid">
           {erro && (
             <div className="login-error-alert" style={{ margin: 0 }}>
               <AlertTriangle size={16} />
@@ -148,32 +169,28 @@ function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () 
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px', gap: '12px' }}>
-            <div className="form-group">
-              <label>Nome da Loja</label>
-              <input value={form.nome} onChange={set('nome')} required placeholder="Auto Premium SP" />
-            </div>
-            <div className="form-group">
-              <label>CNPJ</label>
-              <input value={form.cnpj} onChange={set('cnpj')} placeholder="00.000.000/0000-00" />
-            </div>
+          <div className="form-group">
+            <label>Nome da Loja</label>
+            <input value={form.nome} onChange={set('nome')} required placeholder="Auto Premium SP" />
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: '12px' }}>
-            <div className="form-group">
-              <label>Cidade</label>
-              <input value={form.cidade} onChange={set('cidade')} placeholder="São Paulo" />
-            </div>
-            <div className="form-group">
-              <label>UF</label>
-              <input value={form.estado} onChange={set('estado')} maxLength={2} placeholder="SP" style={{ textTransform: 'uppercase' }} />
-            </div>
+          <div className="form-group">
+            <label>CNPJ</label>
+            <input value={form.cnpj} onChange={set('cnpj')} placeholder="00.000.000/0000-00" />
           </div>
-
-          <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '8px 0' }} />
-          <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 0 }}>Gestor inicial</p>
 
           <div className="form-group">
+            <label>Cidade</label>
+            <input value={form.cidade} onChange={set('cidade')} placeholder="São Paulo" />
+          </div>
+          <div className="form-group">
+            <label>UF</label>
+            <input value={form.estado} onChange={set('estado')} maxLength={2} placeholder="SP" style={{ textTransform: 'uppercase' }} />
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '8px 0 0' }} />
+          <p className="form-section-title span-2">Gestor inicial</p>
+
+          <div className="form-group span-2">
             <label>Nome do Gestor</label>
             <input value={form.gestor_nome} onChange={set('gestor_nome')} required placeholder="João Silva" />
           </div>
@@ -186,7 +203,7 @@ function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () 
             <input type="password" value={form.gestor_senha} onChange={set('gestor_senha')} required minLength={6} placeholder="••••••••" />
           </div>
 
-          <div className="modal-footer" style={{ paddingTop: '16px' }}>
+          <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? <span className="spinner" /> : 'Criar Loja'}
@@ -228,11 +245,11 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
       .then((data) => {
         setForm({
           nome: data.nome || '',
-          cnpj: data.cnpj || '',
+          cnpj: data.cnpj ? mascararCNPJ(data.cnpj) : '',
           cidade: data.cidade || '',
           estado: data.estado || '',
-          telefone: data.telefone || '',
-          whatsapp: data.whatsapp || '',
+          telefone: data.telefone ? mascararTelefone(data.telefone) : '',
+          whatsapp: data.whatsapp ? mascararTelefone(data.whatsapp) : '',
           modulos_ativos: data.modulos_ativos || [],
         })
         setLogoUrl(data.logo_url || null)
@@ -263,6 +280,10 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
       val = capitalizarNome(val)
     } else if (field === 'cnpj') {
       val = mascararCNPJ(val)
+    } else if (field === 'telefone' || field === 'whatsapp') {
+      val = mascararTelefone(val)
+    } else if (field === 'estado') {
+      val = val.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 2)
     }
     setForm((f) => ({ ...f, [field]: val }))
   }
@@ -290,7 +311,7 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
   if (loading) {
     return (
       <div className="modal-overlay">
-        <div className="modal-container glass-card" style={{ maxWidth: 560, padding: 32, textAlign: 'center' }}>
+        <div className="modal-container glass-card modal-sm" style={{ padding: 32, textAlign: 'center', alignItems: 'center' }}>
           <span className="spinner" />
           <p style={{ marginTop: 12, color: 'var(--sv-text-dim)' }}>Carregando dados da loja...</p>
         </div>
@@ -300,12 +321,12 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+      <div className="modal-container glass-card modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">Editar Loja & Módulos</h3>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
         </div>
-        <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '75vh', overflowY: 'auto' }}>
+        <form onSubmit={submit} className="modal-body modal-form-grid">
           {erro && (
             <div className="login-error-alert" style={{ margin: 0 }}>
               <AlertTriangle size={16} />
@@ -313,19 +334,17 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px', gap: '12px' }}>
-            <div className="form-group">
-              <label>Nome da Loja</label>
-              <input value={form.nome} onChange={set('nome')} required placeholder="Auto Premium SP" />
-            </div>
-            <div className="form-group">
-              <label>CNPJ</label>
-              <input value={form.cnpj} onChange={set('cnpj')} placeholder="00.000.000/0000-00" />
-            </div>
+          <div className="form-group">
+            <label>Nome da Loja</label>
+            <input value={form.nome} onChange={set('nome')} required placeholder="Auto Premium SP" />
+          </div>
+          <div className="form-group">
+            <label>CNPJ</label>
+            <input value={form.cnpj} onChange={set('cnpj')} placeholder="00.000.000/0000-00" />
           </div>
 
           {/* Logo da loja — usada em contratos, vitrine e marca-d'água padrão */}
-          <div className="form-group">
+          <div className="form-group span-2">
             <label>Logo da loja</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
               {logoUrl && (
@@ -346,34 +365,30 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: '12px' }}>
-            <div className="form-group">
-              <label>Cidade</label>
-              <input value={form.cidade} onChange={set('cidade')} placeholder="São Paulo" />
-            </div>
-            <div className="form-group">
-              <label>UF</label>
-              <input value={form.estado} onChange={set('estado')} maxLength={2} placeholder="SP" style={{ textTransform: 'uppercase' }} />
-            </div>
+          <div className="form-group">
+            <label>Cidade</label>
+            <input value={form.cidade} onChange={set('cidade')} placeholder="São Paulo" />
+          </div>
+          <div className="form-group">
+            <label>UF</label>
+            <input value={form.estado} onChange={set('estado')} maxLength={2} placeholder="SP" style={{ textTransform: 'uppercase' }} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div className="form-group">
-              <label>Telefone</label>
-              <input value={form.telefone} onChange={set('telefone')} placeholder="(11) 4002-8922" />
-            </div>
-            <div className="form-group">
-              <label>WhatsApp</label>
-              <input value={form.whatsapp} onChange={set('whatsapp')} placeholder="5511999999999" />
-            </div>
+          <div className="form-group">
+            <label>Telefone</label>
+            <input value={form.telefone} onChange={set('telefone')} placeholder="(11) 4002-8922" />
+          </div>
+          <div className="form-group">
+            <label>WhatsApp</label>
+            <input value={form.whatsapp} onChange={set('whatsapp')} placeholder="(11) 99999-9999" />
           </div>
 
-          <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '8px 0' }} />
-          <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 0 }}>Módulos</p>
+          <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '8px 0 0' }} />
+          <p className="form-section-title span-2">Módulos</p>
 
           {/* Somente leitura: quem manda nos módulos é o plano contratado, editável
               em "Plano & Acesso". Editar aqui e lá ao mesmo tempo se sobrescrevia. */}
-          <div style={{
+          <div className="span-2" style={{
             padding: '13px 15px', border: '1px solid var(--sv-border)',
             borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim, rgba(255,255,255,0.02))',
           }}>
@@ -404,7 +419,7 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
             )}
           </div>
 
-          <div className="modal-footer" style={{ paddingTop: '16px' }}>
+          <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? <span className="spinner" /> : 'Salvar Alterações'}
@@ -533,6 +548,14 @@ function fmtDataHora(iso?: string | null) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+// Logs precisam do horário, não só da data
+function fmtDataHoraCompleta(iso?: string | null) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+}
+
 function BadgeStatusAssinatura({ status }: { status: string }) {
   return (
     <span style={{
@@ -596,7 +619,13 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
           observacoes: det.assinatura?.observacoes || '',
         }))
       })
-      .catch((err) => setErro(err.message || 'Erro ao carregar o plano da loja.'))
+      .catch((err) => {
+        // Sem estado válido não dá para renderizar a tela: limpar evita que um
+        // reload falho (executar() chama carregar() após cada ação) deixe o
+        // modal montado em cima do detalhe anterior, já obsoleto.
+        setDetalhe(null)
+        setErro(err.message || 'Erro ao carregar o plano da loja.')
+      })
       .finally(() => setLoading(false))
   }, [lojaId])
 
@@ -743,7 +772,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
   if (loading) {
     return (
       <div className="modal-overlay">
-        <div className="modal-container glass-card" style={{ maxWidth: 680, padding: 32, textAlign: 'center' }}>
+        <div className="modal-container glass-card modal-sm" style={{ padding: 32, textAlign: 'center', alignItems: 'center' }}>
           <span className="spinner" />
           <p style={{ marginTop: 12, color: 'var(--sv-text-dim)' }}>Carregando plano e acesso...</p>
         </div>
@@ -762,7 +791,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
+      <div className="modal-container glass-card modal-xl" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h3 className="modal-title">Plano &amp; Acesso</h3>
@@ -773,7 +802,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
           </div>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
         </div>
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '78vh', overflowY: 'auto' }}>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {erro && (
             <div className="login-error-alert" style={{ margin: 0 }}>
               <AlertTriangle size={16} />
@@ -920,7 +949,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
           </div>
 
           {/* Histórico de pagamentos */}
-          {detalhe && detalhe.pagamentos.length > 0 && (
+          {detalhe && (detalhe.pagamentos?.length ?? 0) > 0 && (
             <div>
               <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 8 }}>Histórico de Pagamentos</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1043,9 +1072,9 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
               <p style={{ fontSize: 12, color: 'var(--sv-text-muted)', margin: '0 0 13px', lineHeight: 1.55 }}>
                 Os módulos do plano ligam sozinhos. Você pode liberar um <strong>extra de cortesia</strong> — ele sobrevive à troca de plano.
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 9 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 9 }}>
                 {MODULOS_CATALOGO.map((cat) => {
-                  const st = detalhe.modulos.find((m) => m.modulo === cat.key)
+                  const st = (detalhe.modulos || []).find((m) => m.modulo === cat.key)
                   const doPlano = !!st?.do_plano
                   const cortesia = !!st?.cortesia
                   const ligado = !!st?.ativo
@@ -1168,7 +1197,7 @@ function ModalAssinatura({ lojaId, lojaNome, onClose, onSaved }: ModalAssinatura
                 </span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: semPlano ? '1fr 1fr' : '1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: semPlano ? 'repeat(auto-fit, minmax(220px, 1fr))' : '1fr', gap: 12 }}>
                 {semPlano && (
                   <div className="form-group">
                     <label>Versão do contrato aceito</label>
@@ -1233,11 +1262,14 @@ function AbaAssinaturas() {
   const [loading, setLoading] = useState(true)
   const [janela, setJanela] = useState(30)
   const [lojaSelecionada, setLojaSelecionada] = useState<{ id: string; nome: string } | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
 
   const carregar = useCallback(() => {
     setLoading(true)
+    setErro(null)
     api.get<VencimentoItem[]>('/admin/assinaturas/vencendo', { dias: String(janela) })
       .then(setItens)
+      .catch((err: any) => setErro(err?.message || 'Erro ao carregar as assinaturas.'))
       .finally(() => setLoading(false))
   }, [janela])
 
@@ -1245,6 +1277,7 @@ function AbaAssinaturas() {
 
   return (
     <div style={{ marginTop: '24px' }}>
+      {erro && <ErroAlerta msg={erro} onFechar={() => setErro(null)} />}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
         <p style={{ color: 'var(--sv-text-dim)', fontSize: 14, margin: 0 }}>Janela:</p>
         {[7, 30, 90].map((d) => (
@@ -1260,7 +1293,7 @@ function AbaAssinaturas() {
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <LoadingState />
       ) : itens.length === 0 ? (
         <EmptyState msg="Nenhuma assinatura vencendo ou vencida nessa janela." />
       ) : (
@@ -1395,7 +1428,7 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
   if (loading) {
     return (
       <div className="modal-overlay">
-        <div className="modal-container glass-card" style={{ maxWidth: 620, padding: 32, textAlign: 'center' }}>
+        <div className="modal-container glass-card modal-sm" style={{ padding: 32, textAlign: 'center', alignItems: 'center' }}>
           <span className="spinner" />
           <p style={{ marginTop: 12, color: 'var(--sv-text-dim)' }}>Carregando plano...</p>
         </div>
@@ -1405,12 +1438,12 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 620 }}>
+      <div className="modal-container glass-card modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">{planoId ? 'Editar Plano' : 'Novo Plano'}</h3>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
         </div>
-        <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '75vh', overflowY: 'auto' }}>
+        <form onSubmit={submit} className="modal-body modal-form-grid">
           {erro && (
             <div className="login-error-alert" style={{ margin: 0 }}>
               <AlertTriangle size={16} />
@@ -1418,18 +1451,16 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '12px' }}>
-            <div className="form-group">
-              <label>Nome do Plano</label>
-              <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} required placeholder="Profissional" />
-            </div>
-            <div className="form-group">
-              <label>Preço (R$/mês)</label>
-              <input type="text" inputMode="numeric" value={form.preco_mensal} onChange={(e) => setForm((f) => ({ ...f, preco_mensal: mascararMoeda(e.target.value) }))} required placeholder="299,90" />
-            </div>
+          <div className="form-group">
+            <label>Nome do Plano</label>
+            <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} required placeholder="Profissional" />
+          </div>
+          <div className="form-group">
+            <label>Preço (R$/mês)</label>
+            <input type="text" inputMode="numeric" value={form.preco_mensal} onChange={(e) => setForm((f) => ({ ...f, preco_mensal: mascararMoeda(e.target.value) }))} required placeholder="299,90" />
           </div>
 
-          <div className="form-group">
+          <div className="form-group span-2">
             <label>Descrição</label>
             <textarea
               value={form.descricao}
@@ -1440,10 +1471,10 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
             />
           </div>
 
-          <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '8px 0' }} />
-          <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 0 }}>Módulos Incluídos</p>
+          <hr style={{ border: 'none', borderTop: '1px solid var(--sv-border)', margin: '8px 0 0' }} />
+          <p className="form-section-title span-2">Módulos Incluídos</p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div className="span-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '8px' }}>
             {TODOS_MODULOS.map((m) => {
               const ativo = form.modulos_incluidos.includes(m.key)
               return (
@@ -1463,7 +1494,7 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
             })}
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--sv-text)', cursor: 'pointer' }}>
+          <label className="span-2" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--sv-text)', cursor: 'pointer' }}>
             <input
               type="checkbox"
               checked={form.ativo}
@@ -1472,7 +1503,7 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
             Plano ativo (visível para contratação)
           </label>
 
-          <div className="modal-footer" style={{ paddingTop: '16px' }}>
+          <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? <span className="spinner" /> : planoId ? 'Salvar Alterações' : 'Criar Plano'}
@@ -1495,7 +1526,10 @@ function AbaPlanos() {
 
   const carregar = useCallback(() => {
     setLoading(true)
-    api.get<PlanoItem[]>('/admin/planos').then(setPlanos).finally(() => setLoading(false))
+    api.get<PlanoItem[]>('/admin/planos')
+      .then(setPlanos)
+      .catch((err: any) => setErro(err?.message || 'Erro ao carregar os planos.'))
+      .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
@@ -1536,11 +1570,7 @@ function AbaPlanos() {
   return (
     <div style={{ marginTop: '24px' }}>
       {erro && (
-        <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', marginBottom: '16px', background: 'color-mix(in srgb, var(--sv-error) 12%, var(--sv-surface))', border: '1px solid color-mix(in srgb, var(--sv-error) 30%, var(--sv-border))', borderLeft: '3px solid var(--sv-error)', borderRadius: 'var(--sv-radius)', fontSize: '14px', color: 'var(--sv-text)' }}>
-          <AlertTriangle size={16} style={{ color: 'var(--sv-error)', flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>{erro}</span>
-          <button onClick={() => setErro(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--sv-text-muted)', display: 'flex', padding: '2px' }}><X size={14} /></button>
-        </div>
+        <ErroAlerta msg={erro} onFechar={() => setErro(null)} />
       )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
@@ -1550,7 +1580,7 @@ function AbaPlanos() {
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <LoadingState />
       ) : planos.length === 0 ? (
         <EmptyState msg="Nenhum plano cadastrado ainda. Crie o primeiro para poder ativar assinaturas." />
       ) : (
@@ -1637,12 +1667,17 @@ function AbaPlanos() {
 function AbaOverview() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
-    api.get<Stats>('/admin/stats').then(setStats).finally(() => setLoading(false))
+    api.get<Stats>('/admin/stats')
+      .then(setStats)
+      .catch((err: any) => setErro(err?.message || 'Erro ao carregar as estatísticas.'))
+      .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <p style={{ color: 'var(--sv-text-muted)', padding: '32px' }}>Carregando…</p>
+  if (loading) return <LoadingState />
+  if (erro) return <div style={{ marginTop: '24px' }}><ErroAlerta msg={erro} /></div>
   if (!stats) return <EmptyState msg="Não foi possível carregar as estatísticas." />
 
   return (
@@ -1659,6 +1694,7 @@ function AbaOverview() {
 // ── Aba Lojas ────────────────────────────────────────────────────
 
 function AbaLojas() {
+  const { confirm } = useUIStore()
   const [lojas, setLojas] = useState<LojaItem[]>([])
   const [loading, setLoading] = useState(true)
   const [busca, setBusca] = useState('')
@@ -1666,26 +1702,44 @@ function AbaLojas() {
   const [lojaEditandoId, setLojaEditandoId] = useState<string | null>(null)
   const [lojaAssinatura, setLojaAssinatura] = useState<{ id: string; nome: string } | null>(null)
   const [toggleLoading, setToggleLoading] = useState<string | null>(null)
+  const [impersonarLoading, setImpersonarLoading] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
 
   const carregar = useCallback(() => {
     setLoading(true)
-    api.get<LojaItem[]>('/admin/lojas').then(setLojas).finally(() => setLoading(false))
+    api.get<LojaItem[]>('/admin/lojas')
+      .then(setLojas)
+      .catch((err: any) => setErro(err?.message || 'Erro ao carregar as lojas.'))
+      .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
 
   const toggleStatus = async (loja: LojaItem) => {
+    if (loja.ativa) {
+      const ok = await confirm({
+        title: 'Desativar loja',
+        message: `Desativar "${loja.nome}"? Os usuários dela perdem o acesso ao sistema até a loja ser reativada.`,
+        confirmText: 'Desativar',
+        danger: true,
+      })
+      if (!ok) return
+    }
     setToggleLoading(loja.id)
+    setErro(null)
     try {
       await api.patch(`/admin/lojas/${loja.id}/status`, { ativa: !loja.ativa })
       carregar()
+    } catch (err: any) {
+      setErro(err?.message || 'Erro ao alterar o status da loja.')
+      setTimeout(() => setErro(null), 6000)
     } finally {
       setToggleLoading(null)
     }
   }
 
   const impersonar = async (loja: LojaItem) => {
+    setImpersonarLoading(loja.id)
     try {
       const res = await api.post<{ access_token: string; loja_nome: string }>(`/admin/lojas/${loja.id}/impersonar`, {})
       const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -1695,6 +1749,8 @@ function AbaLojas() {
     } catch (err: any) {
       setErro(err.message || 'Erro ao impersonar loja.')
       setTimeout(() => setErro(null), 6000)
+    } finally {
+      setImpersonarLoading(null)
     }
   }
 
@@ -1705,11 +1761,7 @@ function AbaLojas() {
   return (
     <div style={{ marginTop: '24px' }}>
       {erro && (
-        <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', marginBottom: '16px', background: 'color-mix(in srgb, var(--sv-error) 12%, var(--sv-surface))', border: '1px solid color-mix(in srgb, var(--sv-error) 30%, var(--sv-border))', borderLeft: '3px solid var(--sv-error)', borderRadius: 'var(--sv-radius)', fontSize: '14px', color: 'var(--sv-text)' }}>
-          <AlertTriangle size={16} style={{ color: 'var(--sv-error)', flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>{erro}</span>
-          <button onClick={() => setErro(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--sv-text-muted)', display: 'flex', padding: '2px' }}><X size={14} /></button>
-        </div>
+        <ErroAlerta msg={erro} onFechar={() => setErro(null)} />
       )}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
@@ -1737,7 +1789,7 @@ function AbaLojas() {
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <LoadingState />
       ) : lojasFiltradas.length === 0 ? (
         <EmptyState msg={busca ? 'Nenhuma loja encontrada para essa busca.' : 'Nenhuma loja cadastrada.'} />
       ) : (
@@ -1840,9 +1892,10 @@ function AbaLojas() {
                         className="btn btn-secondary"
                         style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
                         onClick={() => impersonar(loja)}
+                        disabled={impersonarLoading === loja.id}
                         title="Observar como gestor desta loja"
                       >
-                        <Eye size={14} /> Observar
+                        <Eye size={14} /> {impersonarLoading === loja.id ? 'Abrindo…' : 'Observar'}
                       </button>
                     </div>
                   </td>
@@ -1869,46 +1922,374 @@ function AbaLojas() {
 
 // ── Aba Auditoria ────────────────────────────────────────────────
 
+interface AuditoriaLogItem extends LogItem {
+  ator_id?: string | null
+  ip?: string | null
+  loja_nome?: string | null
+}
+
+interface AuditoriaPage {
+  itens: AuditoriaLogItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+interface FacetaItem {
+  valor: string
+  label: string
+  total: number
+}
+
+interface AuditoriaFacetas {
+  acoes: FacetaItem[]
+  modulos: FacetaItem[]
+  entidades: FacetaItem[]
+  atores: FacetaItem[]
+  lojas: FacetaItem[]
+}
+
+interface FiltrosAuditoria {
+  busca: string
+  acao: string
+  entidade: string
+  ator: string
+  loja_id: string
+  data_de: string
+  data_ate: string
+}
+
+const FILTROS_VAZIOS: FiltrosAuditoria = {
+  busca: '', acao: '', entidade: '', ator: '', loja_id: '', data_de: '', data_ate: '',
+}
+
+/** Verbo final da ação ("veiculo.criar" → "criar") define a cor do badge. */
+function corDaAcao(acao: string): { bg: string; cor: string } {
+  const verbo = acao.split('.').pop() || ''
+  if (/^(criar|cadastrar|adicionar|ativar|aprovar|login)/.test(verbo)) {
+    return { bg: 'rgba(34, 197, 94, 0.12)', cor: '#4ade80' }
+  }
+  if (/^(excluir|deletar|remover|cancelar|desativar|recusar|reprovar|suspender)/.test(verbo)) {
+    return { bg: 'rgba(239, 68, 68, 0.12)', cor: '#f87171' }
+  }
+  if (/^(editar|atualizar|alterar|mover|trocar|solicitar|reset)/.test(verbo)) {
+    return { bg: 'rgba(245, 158, 11, 0.12)', cor: '#fbbf24' }
+  }
+  return { bg: 'rgba(148, 163, 184, 0.12)', cor: 'var(--sv-text-dim)' }
+}
+
+/** "Hoje 14:32" / "Ontem 09:10" / "23/07 16:05" — leitura rápida no dia a dia. */
+function fmtDataRelativa(iso?: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return '—'
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const hoje = new Date()
+  const mesmoDia = (a: Date, b: Date) =>
+    a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
+  if (mesmoDia(d, hoje)) return `Hoje ${hora}`
+  const ontem = new Date(hoje)
+  ontem.setDate(hoje.getDate() - 1)
+  if (mesmoDia(d, ontem)) return `Ontem ${hora}`
+  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${hora}`
+}
+
+function isoDiasAtras(dias: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - dias)
+  return d.toISOString().slice(0, 10)
+}
+
+function ModalDetalheLog({ log, onClose }: { log: AuditoriaLogItem; onClose: () => void }) {
+  let detalhesFmt = log.detalhes || ''
+  try {
+    if (log.detalhes) detalhesFmt = JSON.stringify(JSON.parse(log.detalhes), null, 2)
+  } catch { /* não é JSON: mostra cru */ }
+
+  const linhas: [string, string][] = [
+    ['Ação', log.acao],
+    ['Data', fmtDataHoraCompleta(log.created_at)],
+    ['Usuário', log.ator_nome || '—'],
+    ['Loja', log.loja_nome || '—'],
+    ['Entidade', log.entidade || '—'],
+    ['ID da entidade', log.entidade_id || '—'],
+    ['IP', log.ip || '—'],
+  ]
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card modal-sm" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">Detalhe do registro</h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '8px 16px', fontSize: '14px' }}>
+            {linhas.map(([label, valor]) => (
+              <Fragment key={label}>
+                <span style={{ color: 'var(--sv-text-muted)' }}>{label}</span>
+                <span style={{ color: 'var(--sv-text)', wordBreak: 'break-all' }}>{valor}</span>
+              </Fragment>
+            ))}
+          </div>
+          {detalhesFmt && (
+            <div>
+              <span style={{ color: 'var(--sv-text-muted)', fontSize: '14px' }}>Detalhes</span>
+              <pre style={{
+                marginTop: '6px', padding: '12px', maxHeight: '260px', overflow: 'auto',
+                background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--sv-border)',
+                borderRadius: 'var(--sv-radius)', color: 'var(--sv-text-dim)',
+                fontSize: '12px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+              }}>{detalhesFmt}</pre>
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const ESTILO_CAMPO_FILTRO: React.CSSProperties = {
+  height: '40px',
+  padding: '0 12px',
+  background: 'rgba(255, 255, 255, 0.02)',
+  border: '1px solid var(--sv-border)',
+  borderRadius: 'var(--sv-radius)',
+  color: 'var(--sv-text)',
+  fontSize: '14px',
+  outline: 'none',
+}
+
+const POR_PAG_AUDITORIA = 25
+
 function AbaAuditoria() {
-  const [logs, setLogs] = useState<LogItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [logs, setLogs] = useState<AuditoriaLogItem[]>([])
+  const [total, setTotal] = useState(0)
+  const [facetas, setFacetas] = useState<AuditoriaFacetas | null>(null)
+  const [filtros, setFiltros] = useState<FiltrosAuditoria>(FILTROS_VAZIOS)
+  const [buscaInput, setBuscaInput] = useState('')
   const [pagina, setPagina] = useState(1)
-  const POR_PAG = 20
+  const [loading, setLoading] = useState(true)
+  const [exportando, setExportando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+  const [selecionado, setSelecionado] = useState<AuditoriaLogItem | null>(null)
+
+  // Só os filtros preenchidos viram query string.
+  const params = useCallback((extra?: Record<string, string>) => {
+    const p: Record<string, string> = {}
+    for (const [k, v] of Object.entries(filtros)) if (v) p[k] = v
+    return { ...p, ...extra }
+  }, [filtros])
 
   useEffect(() => {
-    api.get<LogItem[]>('/admin/auditoria?limit=200').then(setLogs).finally(() => setLoading(false))
+    api.get<AuditoriaFacetas>('/admin/auditoria/facetas')
+      .then(setFacetas)
+      .catch(() => { /* filtros seguem utilizáveis sem as facetas */ })
   }, [])
 
-  const inicio = (pagina - 1) * POR_PAG
-  const paginas = Math.ceil(logs.length / POR_PAG)
-  const slice = logs.slice(inicio, inicio + POR_PAG)
+  // Debounce só na busca textual; os selects aplicam na hora.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setFiltros((f) => (f.busca === buscaInput ? f : { ...f, busca: buscaInput }))
+      setPagina(1)
+    }, 350)
+    return () => clearTimeout(t)
+  }, [buscaInput])
+
+  useEffect(() => {
+    setLoading(true)
+    api.get<AuditoriaPage>('/admin/auditoria', params({
+      limit: String(POR_PAG_AUDITORIA),
+      offset: String((pagina - 1) * POR_PAG_AUDITORIA),
+    }))
+      .then((r) => { setLogs(r.itens); setTotal(r.total) })
+      .catch((err: any) => setErro(err?.message || 'Erro ao carregar os logs de auditoria.'))
+      .finally(() => setLoading(false))
+  }, [params, pagina])
+
+  const set = (campo: keyof FiltrosAuditoria, valor: string) => {
+    setFiltros((f) => ({ ...f, [campo]: valor }))
+    setPagina(1)
+  }
+
+  const periodoRapido = (dias: number | null) => {
+    setFiltros((f) => ({
+      ...f,
+      data_de: dias === null ? '' : isoDiasAtras(dias),
+      data_ate: '',
+    }))
+    setPagina(1)
+  }
+
+  const limpar = () => {
+    setFiltros(FILTROS_VAZIOS)
+    setBuscaInput('')
+    setPagina(1)
+  }
+
+  const exportar = async () => {
+    setExportando(true)
+    try {
+      await api.download('/admin/auditoria/export', params(), 'auditoria.csv')
+    } catch (err: any) {
+      setErro(err?.message || 'Erro ao exportar o CSV.')
+    } finally {
+      setExportando(false)
+    }
+  }
+
+  const temFiltro = Object.values(filtros).some(Boolean)
+  const paginas = Math.max(1, Math.ceil(total / POR_PAG_AUDITORIA))
+  const periodoAtivo = (dias: number) => filtros.data_de === isoDiasAtras(dias) && !filtros.data_ate
 
   return (
     <div style={{ marginTop: '24px' }}>
+      {erro && <ErroAlerta msg={erro} onFechar={() => setErro(null)} />}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '12px', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 240, maxWidth: 360 }}>
+          <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--sv-text-muted)' }} />
+          <input
+            style={{ ...ESTILO_CAMPO_FILTRO, width: '100%', padding: '0 16px 0 36px' }}
+            placeholder="Buscar por ação, usuário, ID, IP…"
+            value={buscaInput}
+            onChange={(e) => setBuscaInput(e.target.value)}
+          />
+        </div>
+
+        <select style={ESTILO_CAMPO_FILTRO} value={filtros.acao} onChange={(e) => set('acao', e.target.value)}>
+          <option value="">Todas as ações</option>
+          {facetas?.modulos.map((m) => (
+            <option key={m.valor} value={m.valor}>{m.label} ({m.total})</option>
+          ))}
+          {facetas?.acoes.length ? <option disabled>──────────</option> : null}
+          {facetas?.acoes.map((a) => (
+            <option key={a.valor} value={a.valor}>{a.label} ({a.total})</option>
+          ))}
+        </select>
+
+        <select style={ESTILO_CAMPO_FILTRO} value={filtros.ator} onChange={(e) => set('ator', e.target.value)}>
+          <option value="">Todos os usuários</option>
+          {facetas?.atores.map((a) => (
+            <option key={a.valor} value={a.valor}>{a.label} ({a.total})</option>
+          ))}
+        </select>
+
+        <select style={ESTILO_CAMPO_FILTRO} value={filtros.loja_id} onChange={(e) => set('loja_id', e.target.value)}>
+          <option value="">Todas as lojas</option>
+          {facetas?.lojas.map((l) => (
+            <option key={l.valor} value={l.valor}>{l.label} ({l.total})</option>
+          ))}
+        </select>
+
+        <select style={ESTILO_CAMPO_FILTRO} value={filtros.entidade} onChange={(e) => set('entidade', e.target.value)}>
+          <option value="">Todas as entidades</option>
+          {facetas?.entidades.map((e2) => (
+            <option key={e2.valor} value={e2.valor}>{e2.label} ({e2.total})</option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px', alignItems: 'center' }}>
+        {[{ label: 'Hoje', dias: 0 }, { label: '7 dias', dias: 7 }, { label: '30 dias', dias: 30 }].map((p) => (
+          <button
+            key={p.label}
+            className={periodoAtivo(p.dias) ? 'btn btn-primary' : 'btn btn-secondary'}
+            style={{ padding: '6px 14px', fontSize: '13px' }}
+            onClick={() => periodoRapido(periodoAtivo(p.dias) ? null : p.dias)}
+          >
+            {p.label}
+          </button>
+        ))}
+
+        <input
+          type="date"
+          style={{ ...ESTILO_CAMPO_FILTRO, height: '34px' }}
+          value={filtros.data_de}
+          max={filtros.data_ate || undefined}
+          onChange={(e) => set('data_de', e.target.value)}
+          title="Data inicial"
+        />
+        <span style={{ color: 'var(--sv-text-muted)', fontSize: '13px' }}>até</span>
+        <input
+          type="date"
+          style={{ ...ESTILO_CAMPO_FILTRO, height: '34px' }}
+          value={filtros.data_ate}
+          min={filtros.data_de || undefined}
+          onChange={(e) => set('data_ate', e.target.value)}
+          title="Data final"
+        />
+
+        {temFiltro && (
+          <button className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={limpar}>
+            <X size={14} /> Limpar
+          </button>
+        )}
+
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ color: 'var(--sv-text-muted)', fontSize: '13px' }}>
+            {total.toLocaleString('pt-BR')} {total === 1 ? 'registro' : 'registros'}
+          </span>
+          <button
+            className="btn btn-secondary"
+            style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={exportar}
+            disabled={exportando || total === 0}
+            title="Baixar em CSV os registros que casam com os filtros atuais"
+          >
+            <Download size={14} /> {exportando ? 'Exportando…' : 'Exportar CSV'}
+          </button>
+        </div>
+      </div>
+
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <LoadingState />
       ) : logs.length === 0 ? (
-        <EmptyState msg="Nenhum log de auditoria registrado." />
+        <EmptyState msg={temFiltro ? 'Nenhum registro para os filtros aplicados.' : 'Nenhum log de auditoria registrado.'} />
       ) : (
         <>
           <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
             <table className="stock-table">
               <thead>
                 <tr>
-                  {['Ação', 'Entidade', 'Usuário', 'Data'].map((h) => (
-                    <th key={h}>{h}</th>
+                  {['Ação', 'Entidade', 'Usuário', 'Loja', 'Data', ''].map((h, i) => (
+                    <th key={h || i}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {slice.map((log) => (
-                  <tr key={log.id}>
-                    <td style={{ color: 'var(--sv-text)', fontFamily: 'monospace', fontSize: '12px' }}>{log.acao}</td>
-                    <td style={{ color: 'var(--sv-text-dim)' }}>{log.entidade || '—'}</td>
-                    <td style={{ color: 'var(--sv-text-dim)' }}>{log.ator_nome || '—'}</td>
-                    <td style={{ color: 'var(--sv-text-dim)' }}>{fmtData(log.created_at)}</td>
-                  </tr>
-                ))}
+                {logs.map((log) => {
+                  const { bg, cor } = corDaAcao(log.acao)
+                  return (
+                    <tr key={log.id} style={{ cursor: 'pointer' }} onClick={() => setSelecionado(log)}>
+                      <td>
+                        <span style={{
+                          display: 'inline-block', padding: '3px 8px', borderRadius: '6px',
+                          background: bg, color: cor, fontFamily: 'monospace', fontSize: '12px',
+                        }}>{log.acao}</span>
+                      </td>
+                      <td style={{ color: 'var(--sv-text-dim)' }}>{log.entidade || '—'}</td>
+                      <td style={{ color: 'var(--sv-text-dim)' }}>{log.ator_nome || '—'}</td>
+                      <td style={{ color: 'var(--sv-text-dim)' }}>{log.loja_nome || '—'}</td>
+                      <td style={{ color: 'var(--sv-text-dim)', whiteSpace: 'nowrap' }} title={fmtDataHoraCompleta(log.created_at)}>
+                        {fmtDataRelativa(log.created_at)}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                          onClick={(e) => { e.stopPropagation(); setSelecionado(log) }}
+                          title="Ver detalhes do registro"
+                        >
+                          <Eye size={14} /> Detalhes
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -1916,11 +2297,13 @@ function AbaAuditoria() {
             <div style={{ display: 'flex', gap: '8px', marginTop: '16px', alignItems: 'center' }}>
               <button className="btn btn-secondary" disabled={pagina === 1} onClick={() => setPagina((p) => p - 1)}>Anterior</button>
               <span style={{ color: 'var(--sv-text-muted)', fontSize: '14px' }}>{pagina} / {paginas}</span>
-              <button className="btn btn-secondary" disabled={pagina === paginas} onClick={() => setPagina((p) => p + 1)}>Próxima</button>
+              <button className="btn btn-secondary" disabled={pagina >= paginas} onClick={() => setPagina((p) => p + 1)}>Próxima</button>
             </div>
           )}
         </>
       )}
+
+      {selecionado && <ModalDetalheLog log={selecionado} onClose={() => setSelecionado(null)} />}
     </div>
   )
 }
@@ -1980,14 +2363,14 @@ function ModalContatoErro({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+      <div className="modal-container glass-card modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">Entrar em Contato</h3>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
         </div>
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          
-          <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '12px', borderRadius: 'var(--sv-radius)', fontSize: '13px', border: '1px solid var(--sv-border)' }}>
+        <div className="modal-body modal-form-grid">
+
+          <div className="span-2" style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '12px', borderRadius: 'var(--sv-radius)', fontSize: '13px', border: '1px solid var(--sv-border)' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '8px' }}>
               <span style={{ color: 'var(--sv-text-muted)' }}>Usuário:</span>
               <strong style={{ color: 'var(--sv-text)' }}>{erro.user_name}</strong>
@@ -2000,7 +2383,7 @@ function ModalContatoErro({
             </div>
           </div>
 
-          <div className="form-group">
+          <div className="form-group span-2">
             <label style={{ marginBottom: '8px', display: 'block', color: 'var(--sv-text)' }}>Selecione o Template da Mensagem</label>
             <div style={{ display: 'flex', gap: '16px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px', color: 'var(--sv-text-dim)' }}>
@@ -2026,7 +2409,7 @@ function ModalContatoErro({
             </div>
           </div>
 
-          <div className="form-group">
+          <div className="form-group span-2">
             <label>Mensagem</label>
             <textarea
               value={mensagem}
@@ -2047,7 +2430,7 @@ function ModalContatoErro({
             />
           </div>
 
-          <div className="modal-footer" style={{ paddingTop: '16px' }}>
+          <div className="modal-footer">
             <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
             <button className="btn btn-primary" onClick={handleEnviar}>
               Abrir no E-mail
@@ -2066,14 +2449,18 @@ function AbaErros() {
   const [pagina, setPagina] = useState(1)
   const [subAba, setSubAba] = useState<'ativos' | 'ocultados'>('ativos')
   const [erroSelecionado, setErroSelecionado] = useState<ErroSelecionado | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+  const [acaoLoading, setAcaoLoading] = useState<string | null>(null)
+  const [loteLoading, setLoteLoading] = useState(false)
   const POR_PAG = 20
 
   const carregar = useCallback(() => {
     setLoading(true)
+    setErro(null)
     const endpoint = subAba === 'ativos' ? '/admin/erros?limit=200' : '/admin/erros/ocultados?limit=200'
     api.get<LogItem[]>(endpoint)
       .then(setLogs)
-      .catch((err) => console.error(err))
+      .catch((err: any) => setErro(err?.message || 'Erro ao carregar os registros de erro.'))
       .finally(() => setLoading(false))
   }, [subAba])
 
@@ -2083,42 +2470,58 @@ function AbaErros() {
   }, [carregar])
 
   const toggleVisibilidade = async (logId: string, atualVisivel: boolean) => {
+    setAcaoLoading(logId)
+    setErro(null)
     try {
       await api.patch(`/admin/erros/${logId}/visibilidade`, { visivel: !atualVisivel })
       setLogs((prev) => prev.filter((log) => log.id !== logId))
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      setErro(err?.message || 'Erro ao alterar a visibilidade do registro.')
+    } finally {
+      setAcaoLoading(null)
     }
   }
 
   const toggleAjusteIA = async (logId: string, atualAjuste: boolean) => {
+    setAcaoLoading(logId)
+    setErro(null)
     try {
       await api.patch(`/admin/erros/${logId}/ajusteia`, { ajusteia: !atualAjuste })
       setLogs((prev) => prev.map((log) => log.id === logId ? { ...log, ajusteia: !atualAjuste } : log))
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      setErro(err?.message || 'Erro ao marcar o ajuste por IA.')
+    } finally {
+      setAcaoLoading(null)
     }
   }
 
   const ocultarTodos = async () => {
     const ok = await confirm({ title: 'Ocultar erros', message: 'Deseja ocultar todos os erros ativos desta visualização?', confirmText: 'Ocultar' })
     if (!ok) return
+    setLoteLoading(true)
+    setErro(null)
     try {
       await api.post('/admin/erros/ocultar-todos', {})
       setLogs([])
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      setErro(err?.message || 'Erro ao ocultar os registros.')
+    } finally {
+      setLoteLoading(false)
     }
   }
 
   const restaurarTodos = async () => {
     const ok = await confirm({ title: 'Restaurar erros', message: 'Deseja restaurar todos os erros ocultados para a visualização ativa?', confirmText: 'Restaurar' })
     if (!ok) return
+    setLoteLoading(true)
+    setErro(null)
     try {
       await api.post('/admin/erros/restaurar-todos', {})
       setLogs([])
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      setErro(err?.message || 'Erro ao restaurar os registros.')
+    } finally {
+      setLoteLoading(false)
     }
   }
 
@@ -2128,7 +2531,8 @@ function AbaErros() {
 
   return (
     <div style={{ marginTop: '24px' }}>
-      
+      {erro && <ErroAlerta msg={erro} onFechar={() => setErro(null)} />}
+
       {/* Sub-abas & Ações em Lote */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
         <div className="crm-tabs" style={{ margin: 0, padding: 0, background: 'transparent', border: 'none' }}>
@@ -2154,9 +2558,10 @@ function AbaErros() {
               className="btn btn-secondary"
               style={{ fontSize: '12px', padding: '8px 14px' }}
               onClick={ocultarTodos}
+              disabled={loteLoading}
             >
               <EyeOff size={14} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }} />
-              Ocultar todos os ativos
+              {loteLoading ? 'Ocultando…' : 'Ocultar todos os ativos'}
             </button>
           )}
           {subAba === 'ocultados' && logs.length > 0 && (
@@ -2164,12 +2569,13 @@ function AbaErros() {
               className="btn btn-secondary"
               style={{ fontSize: '12px', padding: '8px 14px' }}
               onClick={restaurarTodos}
+              disabled={loteLoading}
             >
               <Eye size={14} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }} />
-              Restaurar todos os ocultados
+              {loteLoading ? 'Restaurando…' : 'Restaurar todos os ocultados'}
             </button>
           )}
-          <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '8px 14px' }} onClick={carregar}>
+          <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '8px 14px' }} onClick={carregar} disabled={loading} title="Recarregar">
             <RefreshCw size={14} />
           </button>
         </div>
@@ -2194,7 +2600,7 @@ function AbaErros() {
       )}
 
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <LoadingState />
       ) : logs.length === 0 ? (
         <EmptyState msg={subAba === 'ativos' ? "Nenhum erro de servidor ativo registrado." : "Nenhum erro ocultado."} />
       ) : (
@@ -2257,10 +2663,11 @@ function AbaErros() {
                       <td>
                         <button
                           onClick={() => toggleAjusteIA(log.id, !!log.ajusteia)}
+                          disabled={acaoLoading === log.id}
                           style={{
                             background: 'none',
                             border: 'none',
-                            cursor: 'pointer',
+                            cursor: acaoLoading === log.id ? 'wait' : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px',
@@ -2280,7 +2687,7 @@ function AbaErros() {
                           <span>{log.ajusteia ? 'Resolvido (IA)' : 'Pendente'}</span>
                         </button>
                       </td>
-                      <td style={{ color: 'var(--sv-text-dim)' }}>{fmtData(log.created_at)}</td>
+                      <td style={{ color: 'var(--sv-text-dim)' }}>{fmtDataHoraCompleta(log.created_at)}</td>
                       <td>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           {subAba === 'ativos' ? (
@@ -2295,7 +2702,7 @@ function AbaErros() {
                                     status: det.status ?? 500,
                                     user_name: user_name || 'Anônimo',
                                     user_email: user_email || '',
-                                    date: fmtData(log.created_at)
+                                    date: fmtDataHoraCompleta(log.created_at)
                                   })}
                                   title="Entrar em contato com o usuário"
                                 >
@@ -2306,6 +2713,7 @@ function AbaErros() {
                                 className="btn btn-secondary"
                                 style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
                                 onClick={() => toggleVisibilidade(log.id, true)}
+                                disabled={acaoLoading === log.id}
                                 title="Ocultar da listagem ativa"
                               >
                                 <EyeOff size={14} /> Ocultar
@@ -2316,6 +2724,7 @@ function AbaErros() {
                               className="btn btn-secondary"
                               style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
                               onClick={() => toggleVisibilidade(log.id, false)}
+                              disabled={acaoLoading === log.id}
                               title="Restaurar para listagem ativa"
                             >
                               <Eye size={14} /> Restaurar
@@ -2395,7 +2804,7 @@ function ModalResetSenha({ usuario, onClose }: { usuario: UsuarioItem; onClose: 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+      <div className="modal-container glass-card modal-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">Redefinir senha</h3>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
@@ -2472,12 +2881,15 @@ function AbaUsuarios() {
   const [loading, setLoading] = useState(true)
   const [busca, setBusca] = useState('')
   const [usuarioReset, setUsuarioReset] = useState<UsuarioItem | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => {
       setLoading(true)
+      setErro(null)
       api.get<UsuarioItem[]>(`/admin/usuarios?busca=${encodeURIComponent(busca)}`)
         .then(setUsuarios)
+        .catch((err: any) => setErro(err?.message || 'Erro ao carregar os usuários.'))
         .finally(() => setLoading(false))
     }, 300)
     return () => clearTimeout(t)
@@ -2485,6 +2897,7 @@ function AbaUsuarios() {
 
   return (
     <div style={{ marginTop: '24px' }}>
+      {erro && <ErroAlerta msg={erro} onFechar={() => setErro(null)} />}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
           <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--sv-text-muted)' }} />
@@ -2508,7 +2921,7 @@ function AbaUsuarios() {
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <LoadingState />
       ) : usuarios.length === 0 ? (
         <EmptyState msg={busca ? 'Nenhum usuário encontrado para essa busca.' : 'Nenhum usuário cadastrado.'} />
       ) : (
@@ -2577,6 +2990,7 @@ interface ContratoVersaoItem {
 }
 
 function AbaContrato() {
+  const { confirm } = useUIStore()
   const [versoes, setVersoes] = useState<ContratoVersaoItem[]>([])
   const [loading, setLoading] = useState(true)
   const [editorAberto, setEditorAberto] = useState(false)
@@ -2585,12 +2999,21 @@ function AbaContrato() {
 
   const carregar = useCallback(() => {
     setLoading(true)
-    api.get<ContratoVersaoItem[]>('/admin/contrato-assinatura/versoes').then(setVersoes).finally(() => setLoading(false))
+    api.get<ContratoVersaoItem[]>('/admin/contrato-assinatura/versoes')
+      .then(setVersoes)
+      .catch((err: any) => setErro(err?.message || 'Erro ao carregar as versões do contrato.'))
+      .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
 
-  const tornarVigente = async (id: string) => {
+  const tornarVigente = async (id: string, versao: string) => {
+    const ok = await confirm({
+      title: 'Tornar versão vigente',
+      message: `A versão "${versao}" passará a ser usada por padrão em todas as novas assinaturas. Confirmar?`,
+      confirmText: 'Tornar vigente',
+    })
+    if (!ok) return
     setTornarVigenteLoading(id)
     setErro(null)
     try {
@@ -2615,15 +3038,11 @@ function AbaContrato() {
       </div>
 
       {erro && (
-        <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', marginBottom: '16px', background: 'color-mix(in srgb, var(--sv-error) 12%, var(--sv-surface))', border: '1px solid color-mix(in srgb, var(--sv-error) 30%, var(--sv-border))', borderLeft: '3px solid var(--sv-error)', borderRadius: 'var(--sv-radius)', fontSize: '14px', color: 'var(--sv-text)' }}>
-          <AlertTriangle size={16} style={{ color: 'var(--sv-error)', flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>{erro}</span>
-          <button onClick={() => setErro(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--sv-text-muted)', display: 'flex', padding: '2px' }}><X size={14} /></button>
-        </div>
+        <ErroAlerta msg={erro} onFechar={() => setErro(null)} />
       )}
 
       {loading ? (
-        <p style={{ color: 'var(--sv-text-muted)' }}>Carregando…</p>
+        <LoadingState />
       ) : versoes.length === 0 ? (
         <EmptyState msg="Nenhuma versão do contrato cadastrada ainda. Clique em “Nova versão” para colar o texto atual." />
       ) : (
@@ -2659,10 +3078,10 @@ function AbaContrato() {
                       <button
                         className="btn btn-secondary"
                         style={{ padding: '4px 10px', fontSize: '12px' }}
-                        onClick={() => tornarVigente(v.id)}
+                        onClick={() => tornarVigente(v.id, v.versao)}
                         disabled={tornarVigenteLoading === v.id}
                       >
-                        Tornar vigente
+                        {tornarVigenteLoading === v.id ? 'Aplicando…' : 'Tornar vigente'}
                       </button>
                     )}
                   </td>
@@ -2711,13 +3130,13 @@ function ModalNovaVersaoContrato({ versaoSugerida, onClose, onSaved }: { versaoS
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 900, width: '100%' }}>
+      <div className="modal-container glass-card modal-xl" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">Nova versão do contrato</h3>
           <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
         </div>
-        <form onSubmit={submit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {erro && <p style={{ color: 'var(--sv-error)', fontSize: '14px' }}>{erro}</p>}
+        <form onSubmit={submit} className="modal-body modal-form-grid">
+          {erro && <p className="span-2" style={{ color: 'var(--sv-error)', fontSize: '14px', margin: 0 }}>{erro}</p>}
 
           <div className="form-group">
             <label>Identificador da versão</label>
@@ -2731,7 +3150,12 @@ function ModalNovaVersaoContrato({ versaoSugerida, onClose, onSaved }: { versaoS
             />
           </div>
 
-          <div className="form-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '14px', alignSelf: 'end', paddingBottom: 10 }}>
+            <input type="checkbox" checked={tornarVigente} onChange={(e) => setTornarVigente(e.target.checked)} />
+            Tornar esta a versão vigente
+          </label>
+
+          <div className="form-group span-2">
             <label>Texto do contrato</label>
             <RichEditor
               value={conteudoHtml}
@@ -2743,12 +3167,7 @@ function ModalNovaVersaoContrato({ versaoSugerida, onClose, onSaved }: { versaoS
             />
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '14px' }}>
-            <input type="checkbox" checked={tornarVigente} onChange={(e) => setTornarVigente(e.target.checked)} />
-            Tornar esta a versão vigente
-          </label>
-
-          <div className="modal-footer" style={{ paddingTop: '16px' }}>
+          <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? <span className="spinner" /> : 'Salvar'}
@@ -2808,7 +3227,7 @@ function AbaTestes() {
           disabled={rodando}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: rodando ? 'wait' : 'pointer' }}
         >
-          <Play size={16} />
+          {rodando ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <Play size={16} />}
           {rodando ? 'Rodando…' : 'Rodar testes'}
         </button>
       </div>
@@ -2821,9 +3240,7 @@ function AbaTestes() {
       )}
 
       {rodando && !resultado && (
-        <p style={{ marginTop: 20, color: 'var(--sv-text-muted)', fontSize: '14px' }}>
-          Executando a suíte (pode levar alguns segundos)…
-        </p>
+        <LoadingState msg="Executando a suíte (pode levar alguns segundos)…" />
       )}
 
       {resultado && (

@@ -19,7 +19,7 @@ from models import (
     utcnow,
     PublicacaoB2B, Comentario, Curtida, PropostaRepasse,
     Conversa, Mensagem, Loja, Veiculo, StatusVeiculo,
-    StatusPropostaRepasse, TipoConversa, StatusNegociacaoConversa, Usuario, MembroLoja
+    StatusPropostaRepasse, TipoConversa, Usuario, MembroLoja
 )
 from schemas import (
     PublicacaoB2BResponse, ComentarioB2BResponse, ComentarioB2BCreateRequest,

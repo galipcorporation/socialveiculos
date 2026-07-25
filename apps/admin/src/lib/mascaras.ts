@@ -51,6 +51,63 @@ export function parseMoeda(val: string): number {
 }
 
 /**
+ * Aplica máscara de CPF: 000.000.000-00
+ */
+export function mascararCPF(val: string): string {
+  const limpo = val.replace(/\D/g, '').slice(0, 11)
+  return limpo
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+}
+
+/**
+ * Valida CPF (11 dígitos + dígitos verificadores).
+ */
+export function validarCPF(val: string): boolean {
+  const cpf = (val || '').replace(/\D/g, '')
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false
+  const calcDV = (base: string, pesoInicial: number): number => {
+    let soma = 0
+    for (let i = 0; i < base.length; i++) {
+      soma += parseInt(base[i], 10) * (pesoInicial - i)
+    }
+    const resto = (soma * 10) % 11
+    return resto === 10 ? 0 : resto
+  }
+  const dv1 = calcDV(cpf.slice(0, 9), 10)
+  const dv2 = calcDV(cpf.slice(0, 10), 11)
+  return dv1 === parseInt(cpf[9], 10) && dv2 === parseInt(cpf[10], 10)
+}
+
+/**
+ * Aplica máscara de Telefone brasileiro: (00) 00000-0000 ou (00) 0000-0000
+ */
+export function mascararTelefone(val: string): string {
+  const limpo = val.replace(/\D/g, '')
+  if (limpo.length <= 10) {
+    return limpo
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d{1,4})$/, '$1-$2')
+      .substring(0, 14)
+  }
+  return limpo
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d{4})$/, '$1-$2')
+    .substring(0, 15)
+}
+
+/**
+ * Aplica máscara de CEP: 00000-000
+ */
+export function mascararCEP(val: string): string {
+  const limpo = val.replace(/\D/g, '')
+  return limpo
+    .replace(/(\d{5})(\d)/, '$1-$2')
+    .substring(0, 9)
+}
+
+/**
  * Aplica máscara de CNPJ: 00.000.000/0000-00
  */
 export function mascararCNPJ(val: string): string {

@@ -28,6 +28,7 @@ interface MembroDTO {
 function mapMembro(m: MembroDTO): Membro {
   return {
     id: m.id,
+    usuario_id: m.usuario_id,
     nome: m.nome,
     email: m.email,
     telefone: m.telefone ?? undefined,

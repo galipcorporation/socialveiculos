@@ -407,7 +407,11 @@ export interface ResumoFinanceiro {
 export type Papel = 'gestor' | 'vendedor'
 
 export interface Membro {
+  /** ID do vínculo MembroLoja — é o que as rotas /equipe/{id} usam. */
   id: string
+  /** ID do Usuario por trás do vínculo — é o que as rotas que gravam
+   *  vendedor_id (comissão, venda) esperam. Não confundir com `id`. */
+  usuario_id: string
   nome: string
   email: string
   telefone?: string

@@ -1,10 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "PRERENDER_API_URL=https://socialveiculos-api.fly.dev pnpm build",
-  "outputDirectory": "dist",
-  "rewrites": [
-    { "source": "/v1/:path*", "destination": "https://socialveiculos-api.fly.dev/v1/:path*" },
-    { "source": "/static/:path*", "destination": "https://socialveiculos-api.fly.dev/static/:path*" },
-    { "source": "/((?!v1/|static/|assets/|.*\\..*).*)", "destination": "/index.html" }
+  "buildCommand": "PRERENDER_API_URL=https://socialveiculos-api.fly.dev pnpm --filter @sv/site build",
+  "outputDirectory": "apps/site/dist",
+  "routes": [
+    { "src": "/v1/(.*)", "dest": "https://socialveiculos-api.fly.dev/v1/$1" },
+    { "src": "/static/(.*)", "dest": "https://socialveiculos-api.fly.dev/static/$1" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }

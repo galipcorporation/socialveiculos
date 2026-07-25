@@ -1794,12 +1794,74 @@ a:hover {
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* ── Container do modal + escala de larguras ─────────────────────
+   `.modal-container` era usada no TSX sem existir no CSS: cada modal
+   compensava com um `style={{ maxWidth: N }}` inline diferente, o que
+   deixava todos estreitos e compridos. Agora a largura vem da escala
+   .modal-sm/md/lg/xl e a base garante altura e responsividade.       */
+
+.modal-container {
+  width: 100%;
+  max-width: var(--sv-modal-w, 680px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--sv-radius-xl);
+  animation: modal-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Escala padrão — use conforme o volume de campos do formulário. */
+.modal-container.modal-sm { --sv-modal-w: 480px; }  /* confirmação, reset de senha */
+.modal-container.modal-md { --sv-modal-w: 680px; }  /* formulário curto */
+.modal-container.modal-lg { --sv-modal-w: 900px; }  /* formulário com muitos campos */
+.modal-container.modal-xl { --sv-modal-w: 1100px; } /* abas, tabelas, editor */
+
+/* Nunca ultrapassar a viewport (o overlay já reserva 24px de padding). */
+@media (max-width: 1148px) {
+  .modal-container { max-width: calc(100vw - 32px); }
+}
+
+/* ── Grid de formulário reutilizável ─────────────────────────────
+   2 colunas para campos curtos (CNPJ, UF, CEP, telefone, datas,
+   valores). Campos longos (nome, e-mail, textarea, editor) usam
+   .span-2. Colapsa para 1 coluna no mobile.                        */
+
+.modal-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.modal-form-grid > .span-2 { grid-column: 1 / -1; }
+
+/* Blocos que ocupam a largura toda por natureza. */
+.modal-form-grid > hr,
+.modal-form-grid > .login-error-alert,
+.modal-form-grid > .modal-footer,
+.modal-form-grid > .form-section-title { grid-column: 1 / -1; }
+
+.modal-form-grid .form-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sv-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .modal-form-grid { grid-template-columns: 1fr; }
+}
+
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 24px 28px;
   border-bottom: 1px solid var(--sv-border);
+  flex-shrink: 0;
 }
 
 .modal-header h3 {
@@ -1837,6 +1899,7 @@ a:hover {
   padding: 28px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
 }
 
 .modal-footer {
@@ -1846,6 +1909,14 @@ a:hover {
   gap: 12px;
   padding: 20px 28px;
   border-top: 1px solid var(--sv-border);
+  flex-shrink: 0;
+}
+
+/* Rodapé embutido no fim do body (padrão do admin): sem borda dupla. */
+.modal-body > .modal-footer,
+.modal-form-grid > .modal-footer {
+  padding: 16px 0 0;
+  margin-top: 4px;
 }
 
 /* ── Módulos Habilitados (modal Editar Loja) ────────────────── */

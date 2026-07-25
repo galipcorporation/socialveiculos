@@ -3,16 +3,18 @@ Social Veículos — Rotas de Administração Global da Plataforma (/v1/admin/*)
 Acesso exclusivo para usuários com papel admin_plataforma.
 """
 
+import csv
+import io
 import json
 import unicodedata
 import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from database import get_db
 from deps import get_current_active_user, registrar_auditoria
@@ -33,6 +35,8 @@ from schemas import (
     DestaquePagamentoResponse, AdminAtivarDestaqueRequest, AdminDesativarDestaqueRequest,
     AdminDestaqueDetalheResponse,
     AdminUsuarioItem, AdminResetSenhaRequest,
+    AdminLogAuditoriaItem, AdminAuditoriaPageResponse,
+    AdminFacetaItem, AdminAuditoriaFacetasResponse,
 )
 from auth import hash_password, create_access_token
 from storage import storage_provider
@@ -578,21 +582,249 @@ async def get_stats_globais(
     }
 
 
+def _filtros_auditoria(
+    busca: Optional[str],
+    acao: Optional[str],
+    entidade: Optional[str],
+    ator: Optional[str],
+    loja_id: Optional[str],
+    data_de: Optional[str],
+    data_ate: Optional[str],
+):
+    """Monta a lista de condições WHERE compartilhada entre listagem, contagem e export."""
+    cond = [LogAuditoria.acao != "erro.servidor"]
+
+    if acao:
+        # "veiculo" casa com veiculo.criar, veiculo.editar… ; "veiculo.criar" casa exato.
+        cond.append(LogAuditoria.acao.like(f"{acao}.%") if "." not in acao else LogAuditoria.acao == acao)
+    if entidade:
+        cond.append(LogAuditoria.entidade == entidade)
+    if ator:
+        # Casa pelo nome (ver facetas): o mesmo usuário pode ter vários ator_id.
+        cond.append(LogAuditoria.ator_nome == ator)
+    if loja_id:
+        cond.append(LogAuditoria.loja_id == loja_id)
+
+    if data_de:
+        try:
+            cond.append(LogAuditoria.created_at >= datetime.fromisoformat(data_de))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="data_de inválida (use AAAA-MM-DD).")
+    if data_ate:
+        try:
+            fim = datetime.fromisoformat(data_ate)
+            # Data sem hora = dia inteiro.
+            if fim.hour == 0 and fim.minute == 0 and fim.second == 0:
+                fim = fim + timedelta(days=1)
+            cond.append(LogAuditoria.created_at < fim)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="data_ate inválida (use AAAA-MM-DD).")
+
+    if busca:
+        termo = f"%{busca.strip()}%"
+        cond.append(
+            or_(
+                LogAuditoria.acao.ilike(termo),
+                LogAuditoria.entidade.ilike(termo),
+                LogAuditoria.entidade_id.ilike(termo),
+                LogAuditoria.ator_nome.ilike(termo),
+                LogAuditoria.detalhes.ilike(termo),
+                LogAuditoria.ip.ilike(termo),
+            )
+        )
+
+    return cond
+
+
 @router.get(
     "/auditoria",
-    response_model=List[LogAuditoriaResponse],
+    response_model=AdminAuditoriaPageResponse,
     dependencies=[Depends(exige_admin_plataforma)]
 )
 async def get_logs_auditoria_globais(
-    limit: int = 100,
+    busca: Optional[str] = None,
+    acao: Optional[str] = None,
+    entidade: Optional[str] = None,
+    ator: Optional[str] = None,
+    loja_id: Optional[str] = None,
+    data_de: Optional[str] = None,
+    data_ate: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Retorna os logs de auditoria globais de toda a plataforma (histórico de ações).
+    Logs de auditoria globais da plataforma, com filtros e paginação server-side.
+
+    Erros de servidor (`erro.servidor`) ficam de fora — têm aba própria.
     """
-    stmt = select(LogAuditoria).order_by(LogAuditoria.created_at.desc()).limit(limit)
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+    cond = _filtros_auditoria(busca, acao, entidade, ator, loja_id, data_de, data_ate)
+
+    total = (await db.execute(
+        select(func.count()).select_from(LogAuditoria).where(*cond)
+    )).scalar() or 0
+
+    res = await db.execute(
+        select(LogAuditoria)
+        .where(*cond)
+        .order_by(LogAuditoria.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    logs = res.scalars().all()
+
+    # Resolve nome da loja num único SELECT (evita N+1 por linha).
+    ids_lojas = {log.loja_id for log in logs if log.loja_id}
+    nomes_lojas: Dict[str, str] = {}
+    if ids_lojas:
+        res_lojas = await db.execute(select(Loja.id, Loja.nome).where(Loja.id.in_(ids_lojas)))
+        nomes_lojas = {lid: nome for lid, nome in res_lojas.all()}
+
+    itens = []
+    for log in logs:
+        item = LogAuditoriaResponse.model_validate(log)
+        itens.append(AdminLogAuditoriaItem(
+            **item.model_dump(),
+            loja_nome=nomes_lojas.get(log.loja_id or ""),
+        ))
+
+    return AdminAuditoriaPageResponse(itens=itens, total=total, limit=limit, offset=offset)
+
+
+@router.get(
+    "/auditoria/facetas",
+    response_model=AdminAuditoriaFacetasResponse,
+    dependencies=[Depends(exige_admin_plataforma)]
+)
+async def get_facetas_auditoria(db: AsyncSession = Depends(get_db)):
+    """
+    Valores existentes para popular os selects de filtro (ações, entidades, atores, lojas).
+    """
+    base = LogAuditoria.acao != "erro.servidor"
+
+    res_acoes = await db.execute(
+        select(LogAuditoria.acao, func.count().label("qtd"))
+        .where(base)
+        .group_by(LogAuditoria.acao)
+        .order_by(func.count().desc())
+    )
+    acoes = [AdminFacetaItem(valor=a, label=a, total=q) for a, q in res_acoes.all() if a]
+
+    # Prefixos ("veiculo", "lead"…) agregam todas as sub-ações num filtro só.
+    modulos: Dict[str, int] = {}
+    for f in acoes:
+        prefixo = f.valor.split(".")[0]
+        modulos[prefixo] = modulos.get(prefixo, 0) + (f.total or 0)
+
+    res_ent = await db.execute(
+        select(LogAuditoria.entidade, func.count())
+        .where(base, LogAuditoria.entidade.isnot(None))
+        .group_by(LogAuditoria.entidade)
+        .order_by(func.count().desc())
+    )
+    entidades = [AdminFacetaItem(valor=e, label=e, total=q) for e, q in res_ent.all() if e]
+
+    # Agrupa por NOME, não por ator_id: reseeds de banco geram vários ids para a
+    # mesma pessoa, e o admin filtra pensando em "quem", não no uuid.
+    res_atores = await db.execute(
+        select(LogAuditoria.ator_nome, func.count())
+        .where(base, LogAuditoria.ator_nome.isnot(None), LogAuditoria.ator_nome != "")
+        .group_by(LogAuditoria.ator_nome)
+        .order_by(func.count().desc())
+    )
+    atores = [
+        AdminFacetaItem(valor=nome, label=nome, total=q)
+        for nome, q in res_atores.all() if nome
+    ]
+
+    res_lojas_ids = await db.execute(
+        select(LogAuditoria.loja_id, func.count())
+        .where(base, LogAuditoria.loja_id.isnot(None))
+        .group_by(LogAuditoria.loja_id)
+        .order_by(func.count().desc())
+    )
+    linhas_lojas = res_lojas_ids.all()
+    nomes: Dict[str, str] = {}
+    if linhas_lojas:
+        res_nomes = await db.execute(
+            select(Loja.id, Loja.nome).where(Loja.id.in_([lid for lid, _ in linhas_lojas]))
+        )
+        nomes = {lid: nome for lid, nome in res_nomes.all()}
+    # Só lojas que ainda existem — ids órfãos de bases antigas virariam uuid cru no select.
+    lojas = [
+        AdminFacetaItem(valor=lid, label=nomes[lid], total=q)
+        for lid, q in linhas_lojas if lid and lid in nomes
+    ]
+
+    return AdminAuditoriaFacetasResponse(
+        acoes=acoes,
+        modulos=[
+            AdminFacetaItem(valor=m, label=m, total=q)
+            for m, q in sorted(modulos.items(), key=lambda kv: -kv[1])
+        ],
+        entidades=entidades,
+        atores=atores,
+        lojas=lojas,
+    )
+
+
+@router.get(
+    "/auditoria/export",
+    dependencies=[Depends(exige_admin_plataforma)]
+)
+async def exportar_auditoria_csv(
+    busca: Optional[str] = None,
+    acao: Optional[str] = None,
+    entidade: Optional[str] = None,
+    ator: Optional[str] = None,
+    loja_id: Optional[str] = None,
+    data_de: Optional[str] = None,
+    data_ate: Optional[str] = None,
+    limit: int = 5000,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Exporta em CSV os logs que casam com os filtros atuais (teto de 5.000 linhas).
+    """
+    limit = max(1, min(limit, 5000))
+    cond = _filtros_auditoria(busca, acao, entidade, ator, loja_id, data_de, data_ate)
+
+    res = await db.execute(
+        select(LogAuditoria).where(*cond).order_by(LogAuditoria.created_at.desc()).limit(limit)
+    )
+    logs = res.scalars().all()
+
+    ids_lojas = {log.loja_id for log in logs if log.loja_id}
+    nomes_lojas: Dict[str, str] = {}
+    if ids_lojas:
+        res_lojas = await db.execute(select(Loja.id, Loja.nome).where(Loja.id.in_(ids_lojas)))
+        nomes_lojas = {lid: nome for lid, nome in res_lojas.all()}
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";")
+    writer.writerow(["Data", "Ação", "Entidade", "ID entidade", "Usuário", "Loja", "IP", "Detalhes"])
+    for log in logs:
+        writer.writerow([
+            log.created_at.strftime("%d/%m/%Y %H:%M:%S") if log.created_at else "",
+            log.acao,
+            log.entidade or "",
+            log.entidade_id or "",
+            log.ator_nome or "",
+            nomes_lojas.get(log.loja_id or "", ""),
+            log.ip or "",
+            (log.detalhes or "").replace("\n", " "),
+        ])
+
+    # BOM para o Excel abrir acentuação corretamente.
+    conteudo = "﻿" + buffer.getvalue()
+    nome = f"auditoria-{datetime.now().strftime('%Y%m%d-%H%M')}.csv"
+    return Response(
+        content=conteudo,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{nome}"'},
+    )
 
 
 # ── Erros reportados pelo front-end ─────────────────────────────

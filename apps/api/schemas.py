@@ -355,6 +355,8 @@ class SolicitacaoAprovacaoResponse(BaseModel):
     veiculo_placa: Optional[str] = None
     veiculo_ano: Optional[int] = None
     veiculo_cor: Optional[str] = None
+    # Preço vigente do veículo — referência para julgar a alteração de preço proposta.
+    veiculo_preco_venda: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 
@@ -414,6 +416,35 @@ class LogAuditoriaResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AdminLogAuditoriaItem(LogAuditoriaResponse):
+    """Log de auditoria com o nome da loja já resolvido (evita lookup no front)."""
+    loja_nome: Optional[str] = None
+
+
+class AdminAuditoriaPageResponse(BaseModel):
+    """Página de logs de auditoria com o total de registros que casam com os filtros."""
+    itens: List[AdminLogAuditoriaItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class AdminFacetaItem(BaseModel):
+    """Valor disponível num filtro da auditoria, com quantas ocorrências tem."""
+    valor: str
+    label: str
+    total: int = 0
+
+
+class AdminAuditoriaFacetasResponse(BaseModel):
+    """Opções para popular os selects de filtro da aba Auditoria."""
+    acoes: List[AdminFacetaItem] = []
+    modulos: List[AdminFacetaItem] = []
+    entidades: List[AdminFacetaItem] = []
+    atores: List[AdminFacetaItem] = []
+    lojas: List[AdminFacetaItem] = []
 
 
 # ── Clientes (CRM) ─────────────────────────────────────────────
@@ -1509,6 +1540,9 @@ class VenderVeiculoRequest(BaseModel):
     financiado: Optional[bool] = False
     lead_id: Optional[str] = None
     template_id: Optional[str] = None
+    # Vendedor responsável pela venda (Usuario.id). Ausente = quem está
+    # registrando a venda. Só gestor/admin pode atribuir a terceiros (B088).
+    vendedor_id: Optional[str] = None
 
 
 class VenderVeiculoResponse(BaseModel):

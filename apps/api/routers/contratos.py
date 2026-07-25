@@ -28,9 +28,10 @@ from models import (
     StatusVeiculo, LancamentoFinanceiro, TipoLancamento,
     EsteiraPosVenda, EstagioPosVenda, OrigemLead, OrigemVeiculo, ComissaoVenda, MembroLoja,
     TemplateContrato, PublicacaoB2B, PropostaRepasse, StatusPropostaRepasse,
-    EtapaLead, Lead,
+    EtapaLead, Lead, Usuario,
 )
 from pos_venda_template import montar_checklist
+from rbac import Acao, Recurso, can
 from schemas import (
     ContratoCreateRequest,
     ContratoUpdateRequest,
@@ -536,6 +537,38 @@ async def vender_veiculo(
     if veiculo.status == StatusVeiculo.VENDIDO:
         raise HTTPException(status_code=400, detail="Veículo já está vendido")
 
+    # 0. Vendedor responsável (B088) — resolvido ANTES de qualquer escrita.
+    #    Ausente = quem está registrando (comportamento histórico).
+    #    Só gestor/admin atribui a terceiros; vendedor só a si mesmo (403).
+    #    O vínculo é validado na loja do contexto (isolamento multi-tenant).
+    vendedor_id = ctx.usuario.id
+    vendedor_nome_atribuido: Optional[str] = None
+    if body.vendedor_id and body.vendedor_id != ctx.usuario.id:
+        # Atribuir a venda a terceiro é escrita financeira (cria a ComissaoVenda
+        # de outra pessoa): Acao.CRIAR em Recurso.FINANCEIRO = gestor/admin.
+        # O bypass de módulo em can() só concede VER, nunca CRIAR — vendedor com
+        # o módulo "financeiro" liberado continua sem poder atribuir.
+        if not can(ctx.usuario, Acao.CRIAR, Recurso.FINANCEIRO):
+            raise HTTPException(
+                status_code=403,
+                detail="Somente gestor ou admin pode atribuir a venda a outro vendedor.",
+            )
+        vinculo_res = await db.execute(
+            select(Usuario.nome)
+            .join(MembroLoja, MembroLoja.usuario_id == Usuario.id)
+            .where(
+                MembroLoja.usuario_id == body.vendedor_id,
+                MembroLoja.loja_id == ctx.loja.id,
+            )
+        )
+        vendedor_nome_atribuido = vinculo_res.scalar_one_or_none()
+        if vendedor_nome_atribuido is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Vendedor não encontrado nesta loja.",
+            )
+        vendedor_id = body.vendedor_id
+
     # 1. Cliente: existente ou cadastro rápido no ato
     if body.cliente_id:
         stmt_cli = select(ClientePF).where(
@@ -704,7 +737,7 @@ async def vender_veiculo(
         veiculo_id=veiculo.id,
         contrato_id=contrato.id,
         comprador_id=cliente.id,
-        vendedor_id=ctx.usuario.id,
+        vendedor_id=vendedor_id,
         origem=origem,
         lead_id=body.lead_id,
     )
@@ -724,9 +757,11 @@ async def vender_veiculo(
     #    com % 0 a comissão aparece no financeiro como "definir %").
     #    O excedente da troca (composto > venda) soma na comissão — volta ao
     #    cliente não existe na prática.
+    #    O % é o do vendedor ATRIBUÍDO (vendedor_id), não o de quem registra
+    #    a venda (B088).
     membro_res = await db.execute(
         select(MembroLoja.percentual_comissao).where(
-            MembroLoja.usuario_id == ctx.usuario.id,
+            MembroLoja.usuario_id == vendedor_id,
             MembroLoja.loja_id == ctx.loja.id,
         )
     )
@@ -738,7 +773,7 @@ async def vender_veiculo(
     )
     comissao = ComissaoVenda(
         loja_id=ctx.loja.id,
-        vendedor_id=ctx.usuario.id,
+        vendedor_id=vendedor_id,
         veiculo_id=veiculo.id,
         esteira_id=esteira.id,
         valor_venda=valor_venda,
@@ -754,6 +789,11 @@ async def vender_veiculo(
 
     detalhe_trocas = f" {len(trocas_criadas)} veículo(s) recebidos em troca." if trocas_criadas else ""
     detalhe_excedente = f" Excedente de {formatar_moeda(excedente)} somado à comissão do vendedor." if excedente > 0 else ""
+    detalhe_vendedor = (
+        f" Venda atribuída a {vendedor_nome_atribuido} (comissão de {percentual}%)."
+        if vendedor_nome_atribuido
+        else ""
+    )
     await registrar_auditoria(
         db=db,
         loja_id=ctx.loja.id,
@@ -765,7 +805,7 @@ async def vender_veiculo(
         detalhes=(
             f"Veículo {veiculo.marca} {veiculo.modelo} vendido para {cliente.nome}. "
             f"Contrato {numero}. Esteira pós-venda {esteira.id} aberta."
-            f"{detalhe_trocas}{detalhe_excedente}"
+            f"{detalhe_trocas}{detalhe_excedente}{detalhe_vendedor}"
         ),
     )
 

@@ -32,6 +32,7 @@ async def _build_solicitacao_response(db: AsyncSession, s: SolicitacaoAprovacao)
         resp.veiculo_placa = v.placa
         resp.veiculo_ano = v.ano_modelo
         resp.veiculo_cor = v.cor
+        resp.veiculo_preco_venda = v.preco_venda
     return resp
 
 

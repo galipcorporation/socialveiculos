@@ -39,7 +39,9 @@ export interface OutroPagamento {
 export interface RegistrarVendaInput {
   comprador_nome: string
   valor_venda: number
-  vendedor_nome?: string
+  /** Usuario.id do vendedor responsável. Ausente = quem está registrando.
+   *  Só gestor/admin pode atribuir a outro (o backend devolve 403). */
+  vendedor_id?: string
   valor_dinheiro?: number
   valor_financiado?: number
   valor_troca?: number
@@ -133,6 +135,8 @@ interface SolicitacaoDTO {
   dados_novos?: string | null
   veiculo_marca?: string | null
   veiculo_modelo?: string | null
+  /** Preço vigente do veículo — referência para o preço proposto. */
+  veiculo_preco_venda?: number | null
   created_at: string
   updated_at: string
 }
@@ -329,6 +333,7 @@ export const veiculosService = {
       trocas,
       template_id: input.template_id || null,
       lead_id: input.lead_id || null,
+      vendedor_id: input.vendedor_id || null,
     })
     if (resp.esteira_id) {
       return esteiraService.obter(resp.esteira_id)
@@ -423,6 +428,7 @@ export const veiculosService = {
       motivo: s.motivo?.trim() || 'Não informado',
       solicitante_nome: s.requisitante?.nome ?? 'Não informado',
       novo_preco: precoProposto(s.dados_novos),
+      preco_atual: s.veiculo_preco_venda ?? undefined,
       status: STATUS_SOL[s.status],
       created_at: s.created_at,
       resolvida_em: s.status !== 'pendente' ? s.updated_at : undefined,

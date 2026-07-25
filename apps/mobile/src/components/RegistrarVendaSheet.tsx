@@ -34,7 +34,9 @@ export function RegistrarVendaSheet({
   const [comprador, setComprador] = useState(compradorInicial ?? '')
   const [compradorAberto, setCompradorAberto] = useState(false)
   const [valor, setValor] = useState(veiculo?.preco_venda ? maskMoedaInput(String(Math.round(veiculo.preco_venda * 100))) : '')
-  const [vendedor, setVendedor] = useState(user?.nome ?? '')
+  // Vendedor responsável: guardamos o Usuario.id (não o nome — nome é ambíguo
+  // e o backend precisa da chave para creditar a comissão certa — B088).
+  const [vendedorId, setVendedorId] = useState(user?.id ?? '')
   const [vendedorAberto, setVendedorAberto] = useState(false)
   const [veiculoSelecionado, setVeiculoSelecionado] = useState<Veiculo | undefined>(veiculo)
   const [veiculoAberto, setVeiculoAberto] = useState(false)
@@ -89,7 +91,7 @@ export function RegistrarVendaSheet({
       return veiculosService.registrarVenda(veiculoSelecionado.id, {
         comprador_nome: comprador.trim(),
         valor_venda: vTotal,
-        vendedor_nome: vendedor || undefined,
+        vendedor_id: vendedorId || undefined,
         valor_dinheiro: parseMoedaInput(dinheiro) || undefined,
         valor_financiado: parseMoedaInput(financiado) || undefined,
         valor_troca: parseMoedaInput(troca) || undefined,
@@ -110,10 +112,16 @@ export function RegistrarVendaSheet({
     onError: (err) => toast.show('error', extractErrorDetails(err).message),
   })
 
-  // Comissão prevista (para transparência ao vendedor)
-  const membro = (equipeQ.data ?? []).find((m) => m.nome === vendedor)
+  // Comissão prevista (para transparência ao vendedor). Casada por Usuario.id,
+  // que é a mesma chave enviada ao backend — a UI não pode mostrar o % de um
+  // membro e o backend creditar outro (B088).
+  const membro = (equipeQ.data ?? []).find((m) => m.usuario_id === vendedorId)
   const comissaoPct = membro?.percentual_comissao ?? null
   const comissaoPrev = comissaoPct ? (vTotal * comissaoPct) / 100 : null
+
+  // Só gestor/admin pode atribuir a venda a terceiros (o backend devolve 403).
+  const podeAtribuir = user?.papel === 'gestor' || user?.papel === 'admin_plataforma'
+  const vendedorNome = membro?.nome ?? (vendedorId === user?.id ? user?.nome ?? '' : '')
 
   const valido = !!veiculoSelecionado && comprador.trim().length >= 3 && vTotal > 0
 
@@ -187,7 +195,19 @@ export function RegistrarVendaSheet({
           />
         )}
 
-        <SelectField label="Vendedor responsável" value={vendedor} onPress={() => setVendedorAberto(true)} icon="people-outline" />
+        {podeAtribuir ? (
+          <SelectField label="Vendedor responsável" value={vendedorNome || undefined} placeholder="Selecionar vendedor…" onPress={() => setVendedorAberto(true)} icon="people-outline" />
+        ) : (
+          // Vendedor só registra venda para si mesmo — o backend recusa (403)
+          // atribuição a terceiros, então nem oferecemos a escolha.
+          <View style={{ gap: 6 }}>
+            <Txt variant="captionMedium" color="textDim">Vendedor responsável</Txt>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <Ionicons name="people-outline" size={18} color={colors.textMuted} />
+              <Txt variant="body">{vendedorNome}</Txt>
+            </View>
+          </View>
+        )}
         {comissaoPrev != null && vTotal > 0 && (
           <Txt variant="caption" color="textMuted">Comissão prevista: {formatBRL(comissaoPrev)} ({comissaoPct}%).</Txt>
         )}
@@ -198,9 +218,9 @@ export function RegistrarVendaSheet({
         visible={vendedorAberto}
         onClose={() => setVendedorAberto(false)}
         title="Vendedor responsável"
-        selected={vendedor}
-        options={(equipeQ.data ?? []).filter((m) => m.ativo).map((m) => ({ value: m.nome, label: m.nome, sublabel: m.papel === 'gestor' ? 'Gestor' : 'Vendedor' }))}
-        onSelect={setVendedor}
+        selected={vendedorId}
+        options={(equipeQ.data ?? []).filter((m) => m.ativo).map((m) => ({ value: m.usuario_id, label: m.nome, sublabel: m.papel === 'gestor' ? 'Gestor' : 'Vendedor' }))}
+        onSelect={setVendedorId}
       />
       <OptionSheet
         visible={templateAberto}

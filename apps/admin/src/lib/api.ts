@@ -95,6 +95,38 @@ class ApiClient {
   delete<T>(path: string): Promise<T> {
     return this.request<T>(path, { method: 'DELETE' })
   }
+
+  /** Baixa um arquivo autenticado (CSV, PDF…) e dispara o "salvar como" do browser. */
+  async download(path: string, params?: Record<string, string>, nomePadrao = 'download'): Promise<void> {
+    const { token } = useAuthStore.getState()
+    const url = params ? `${path}?${new URLSearchParams(params)}` : path
+    const response = await fetch(`${this.baseUrl}${url}`, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+
+    if (response.status === 401) {
+      useAuthStore.getState().logout()
+      window.location.href = '/login'
+      throw new ApiError('Sessão expirada.', 401)
+    }
+    if (!response.ok) {
+      throw new ApiError(friendlyHttpMessage(response.status), response.status)
+    }
+
+    // Nome vindo do Content-Disposition tem prioridade sobre o padrão.
+    const disposicao = response.headers.get('Content-Disposition') || ''
+    const match = disposicao.match(/filename="?([^";]+)"?/)
+    const blob = await response.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.download = match?.[1] || nomePadrao
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(objectUrl)
+  }
 }
 
 export const api = new ApiClient(API_BASE)

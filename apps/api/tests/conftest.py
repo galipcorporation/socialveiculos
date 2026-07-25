@@ -7,6 +7,11 @@ autenticação de ponta a ponta, que é onde moram os bugs históricos (B015/B01
 
 Requer que o seed já tenha rodado (contas admin/gestor demo). Se o banco não
 estiver seedado, os testes que dependem disso são pulados com mensagem clara.
+
+As credenciais vêm de env vars (TESTE_ADMIN_* / TESTE_GESTOR_*) porque a suíte
+também roda no container de produção, pelo botão "Rodar testes" do painel admin,
+onde as senhas não são as do seed local. Sem essas vars, cai no padrão de dev.
+Ver documentos/tarefa/TESTES-EM-PRODUCAO.md.
 """
 import asyncio
 import os
@@ -24,10 +29,10 @@ from httpx import ASGITransport  # noqa: E402
 from main import app  # noqa: E402
 
 
-ADMIN_EMAIL = "victorbelocorreia@gmail.com"
-ADMIN_SENHA = os.environ.get("OWNER_SENHA", "admin123")
-GESTOR_EMAIL = "gestor@autopremium.com.br"
-GESTOR_SENHA = "demo123"
+ADMIN_EMAIL = os.environ.get("TESTE_ADMIN_EMAIL", "victorbelocorreia@gmail.com")
+ADMIN_SENHA = os.environ.get("TESTE_ADMIN_SENHA") or os.environ.get("OWNER_SENHA", "admin123")
+GESTOR_EMAIL = os.environ.get("TESTE_GESTOR_EMAIL", "gestor@autopremium.com.br")
+GESTOR_SENHA = os.environ.get("TESTE_GESTOR_SENHA", "demo123")
 
 
 @pytest.fixture(scope="session")

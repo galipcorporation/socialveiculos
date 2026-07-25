@@ -25,8 +25,13 @@ interface SolicitacaoAprovacao {
   veiculo_placa?: string
   veiculo_ano?: number
   veiculo_cor?: string
+  /** Preço vigente do veículo — referência para o preço proposto. */
+  veiculo_preco_venda?: number | null
   motivo?: string
 }
+
+const formatBRL = (v?: number | null) =>
+  v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 export function Aprovacoes() {
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoAprovacao[]>([])
@@ -267,9 +272,14 @@ export function Aprovacoes() {
                         </span>
                       ) : (
                         <span>
+                          Preço Atual:{' '}
+                          <strong style={{ color: 'var(--sv-text)', fontSize: '14px' }}>
+                            {formatBRL(item.veiculo_preco_venda)}
+                          </strong>
+                          {' → '}
                           Preço Proposto:{' '}
                           <strong style={{ color: 'var(--sv-primary-text)', fontSize: '14px' }}>
-                            R$ {precoProposto?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            {formatBRL(precoProposto)}
                           </strong>
                         </span>
                       )}
