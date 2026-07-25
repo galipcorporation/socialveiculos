@@ -28,15 +28,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def _tem_coluna(tabela: str, coluna: str) -> bool:
-    bind = op.get_bind()
-    if bind.dialect.name == 'postgresql':
-        row = bind.execute(
-            sa.text("SELECT 1 FROM information_schema.columns WHERE table_name = :t AND column_name = :c"),
-            {"t": tabela, "c": coluna},
-        ).fetchone()
-        return row is not None
-    cols = [r[1] for r in bind.exec_driver_sql("PRAGMA table_info(modulo_habilitado)").fetchall()]
-    return coluna in cols
+    insp = sa.inspect(op.get_bind())
+    return coluna in [c["name"] for c in insp.get_columns(tabela)]
 
 
 def upgrade() -> None:
