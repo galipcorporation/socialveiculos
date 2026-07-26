@@ -620,6 +620,23 @@ a {
 .vt-card-caption .name { font-weight: 700; }
 .vt-card-price { color: var(--vt-success); font-weight: 800; }
 
+.vt-car-card-details-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.vt-car-card-details-link:hover .name {
+  color: var(--vt-primary);
+}
+
+.vt-car-card-media-link {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+
 /* Specs em linha */
 .vt-car-card-specs {
   display: flex;

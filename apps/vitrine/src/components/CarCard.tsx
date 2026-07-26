@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 
 export interface Midia {
   id: string
@@ -140,14 +140,20 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
       {/* Mídia — 1:1 */}
       <div className="vt-car-card-image">
         {currentMidia && !imgError ? (
-          currentMidia.tipo === 'video'
-            ? <video src={currentMidia.url} controls muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <img src={currentMidia.thumb_url || currentMidia.url} alt={`${veiculo.marca} ${veiculo.modelo}`} loading="lazy" decoding="async" onError={() => setImgError(true)} />
+          currentMidia.tipo === 'video' ? (
+            <video src={currentMidia.url} controls muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <Link to={`/carro/${veiculo.id}`} className="vt-car-card-media-link" style={{ width: '100%', height: '100%', display: 'block' }}>
+              <img src={currentMidia.thumb_url || currentMidia.url} alt={`${veiculo.marca} ${veiculo.modelo}`} loading="lazy" decoding="async" onError={() => setImgError(true)} />
+            </Link>
+          )
         ) : (
-          <div className="vt-car-card-placeholder">
-            <CarIcon />
-            <span>Sem foto disponível</span>
-          </div>
+          <Link to={`/carro/${veiculo.id}`} className="vt-car-card-media-link" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="vt-car-card-placeholder">
+              <CarIcon />
+              <span>Sem foto disponível</span>
+            </div>
+          </Link>
         )}
 
         {/* badges */}
@@ -217,35 +223,37 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
           <div className="vt-card-likes">{veiculo.total_favoritos} curtidas</div>
         )}
 
-        <div className="vt-card-caption">
-          <span className="name">{veiculo.marca} {veiculo.modelo}</span>
-          {veiculo.versao && ` ${veiculo.versao}`}
-          {' · '}
-          <span className="vt-card-price">{formatCurrency(veiculo.preco_venda)}</span>
-        </div>
+        <Link to={`/carro/${veiculo.id}`} className="vt-car-card-details-link" style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+          <div className="vt-card-caption">
+            <span className="name">{veiculo.marca} {veiculo.modelo}</span>
+            {veiculo.versao && ` ${veiculo.versao}`}
+            {' · '}
+            <span className="vt-card-price">{formatCurrency(veiculo.preco_venda)}</span>
+          </div>
 
-        <div className="vt-car-card-specs">
-          <div className="vt-car-card-spec">
-            <label>KM</label>
-            <span>{formatKm(veiculo.km)}</span>
-          </div>
-          <div className="vt-car-card-spec">
-            <label>Ano</label>
-            <span>{timeAgo(veiculo)}</span>
-          </div>
-          {veiculo.cambio && (
+          <div className="vt-car-card-specs">
             <div className="vt-car-card-spec">
-              <label>Câmbio</label>
-              <span style={{ textTransform: 'capitalize' }}>{veiculo.cambio}</span>
+              <label>KM</label>
+              <span>{formatKm(veiculo.km)}</span>
             </div>
-          )}
-          {veiculo.combustivel && (
             <div className="vt-car-card-spec">
-              <label>Combustível</label>
-              <span style={{ textTransform: 'capitalize' }}>{veiculo.combustivel}</span>
+              <label>Ano</label>
+              <span>{timeAgo(veiculo)}</span>
             </div>
-          )}
-        </div>
+            {veiculo.cambio && (
+              <div className="vt-car-card-spec">
+                <label>Câmbio</label>
+                <span style={{ textTransform: 'capitalize' }}>{veiculo.cambio}</span>
+              </div>
+            )}
+            {veiculo.combustivel && (
+              <div className="vt-car-card-spec">
+                <label>Combustível</label>
+                <span style={{ textTransform: 'capitalize' }}>{veiculo.combustivel}</span>
+              </div>
+            )}
+          </div>
+        </Link>
 
         {indisponivel ? (
           <div className="vt-card-cta">
