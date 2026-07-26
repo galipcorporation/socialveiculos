@@ -107,6 +107,14 @@ export const REGRAS_TIPO: Record<TipoVeiculo, RegraTipo> = {
   outro: { placa: true, km: true, cambio: true, combustivel: true, portas: true, versao: true, uso: 'km', fipe: false },
 }
 
+export const getRegraTipo = (tipo?: string | null): RegraTipo => {
+  if (tipo) {
+    const t = tipo.toLowerCase().trim() as TipoVeiculo
+    if (t in REGRAS_TIPO) return REGRAS_TIPO[t]
+  }
+  return REGRAS_TIPO.carro
+}
+
 // Opcionais sugeridos por tipo — moto não tem porta elétrica, barco não tem airbag.
 const OPCIONAIS_AUTOMOVEL = [
   'Ar condicionado', 'Direção hidráulica', 'Vidros elétricos', 'Travas elétricas',

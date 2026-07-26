@@ -174,7 +174,11 @@ function mapVeiculo(v: VeiculoDTO): Veiculo {
     cor: v.cor ?? undefined,
     cambio: v.cambio ?? undefined,
     combustivel: v.combustivel ?? undefined,
-    tipo: (v.tipo as Veiculo['tipo']) ?? 'carro',
+    tipo: (() => {
+      const raw = (v.tipo || '').toLowerCase().trim()
+      const validos: Veiculo['tipo'][] = ['carro', 'moto', 'caminhao', 'barco', 'jet', 'aeronave', 'reboque', 'outro']
+      return validos.includes(raw as Veiculo['tipo']) ? (raw as Veiculo['tipo']) : 'carro'
+    })(),
     portas: v.portas ?? undefined,
     preco_venda: v.preco_venda ?? undefined,
     preco_custo: v.preco_custo ?? undefined,

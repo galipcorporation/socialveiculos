@@ -13,7 +13,7 @@ import {
 } from '../../components/ui'
 import { fipeService, veiculosService, type VeiculoInput } from '../../services'
 import {
-  ANOS, DESCRICAO_PLACEHOLDER, OPCIONAIS_POR_TIPO, REGRAS_TIPO, TIPOS_VEICULO,
+  ANOS, DESCRICAO_PLACEHOLDER, OPCIONAIS_POR_TIPO, REGRAS_TIPO, TIPOS_VEICULO, getRegraTipo,
   type TipoMidia, type TipoVeiculo,
 } from '../../services/types'
 import { formatNumber, maskMoedaInput, maskPlaca, parseMoedaInput } from '../../lib/format'
@@ -131,13 +131,14 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
   useEffect(() => {
     const v = existenteQ.data
     if (!v) return
+    const tipoValido = (v.tipo && REGRAS_TIPO[v.tipo as TipoVeiculo] ? v.tipo : 'carro') as TipoVeiculo
     setForm({
-      tipo: v.tipo,
+      tipo: tipoValido,
       placa: v.placa ?? '',
-      marca: v.marca,
-      modelo: v.modelo,
+      marca: v.marca ?? '',
+      modelo: v.modelo ?? '',
       versao: v.versao ?? '',
-      anoModelo: v.ano_modelo,
+      anoModelo: v.ano_modelo ?? null,
       cor: v.cor ?? '',
       km: v.km != null ? String(v.km) : '',
       cambio: v.cambio ?? '',
@@ -154,7 +155,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
     })
   }, [existenteQ.data])
 
-  const regra = REGRAS_TIPO[form.tipo]
+  const regra = getRegraTipo(form.tipo)
   const set = <K extends keyof FormState>(campo: K, valor: FormState[K]) => {
     setForm((f) => ({ ...f, [campo]: valor }))
     if (erros[campo]) setErros((e) => ({ ...e, [campo]: undefined }))
@@ -590,7 +591,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
 
               {/* Input para adicionar novos */}
               <Input
-                placeholder={`Digitar opcional (ex: ${OPCIONAIS_POR_TIPO[form.tipo][0]})...`}
+                placeholder={`Digitar opcional (ex: ${(OPCIONAIS_POR_TIPO[form.tipo] ?? OPCIONAIS_POR_TIPO.carro)[0] ?? 'Ar condicionado'})...`}
                 value={txtOpcional}
                 onChangeText={(text) => {
                   if (text.includes(',')) {
@@ -626,7 +627,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
                 Sugestões comuns (toque para adicionar/remover):
               </Txt>
               <View style={styles.sugestoesContainer}>
-                {OPCIONAIS_POR_TIPO[form.tipo].map((sug) => {
+                {(OPCIONAIS_POR_TIPO[form.tipo] ?? OPCIONAIS_POR_TIPO.carro).map((sug) => {
                   const jaSelecionado = opcionaisList.includes(sug)
                   return (
                     <Pressable
@@ -662,7 +663,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
             </View>
             <Input
               label="Descrição"
-              placeholder={DESCRICAO_PLACEHOLDER[form.tipo]}
+              placeholder={DESCRICAO_PLACEHOLDER[form.tipo] ?? DESCRICAO_PLACEHOLDER.carro}
               value={form.descricao}
               onChangeText={(t) => set('descricao', t)}
               multiline
