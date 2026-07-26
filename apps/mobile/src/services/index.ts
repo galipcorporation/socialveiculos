@@ -35,8 +35,8 @@ export type {
   TomAssistente, AutonomiaAssistente, SessaoAssistente,
   ConversaAssistente, MensagemAssistente, ConfigAssistente,
 } from './assistente'
-export { vitrineService, FILTROS_FEED } from './vitrine'
-export type { FiltroFeed } from './vitrine'
+export { vitrineService, FILTROS_FEED, FILTROS_AVANCADOS_VAZIO, contarFiltrosAtivos } from './vitrine'
+export type { FiltroFeed, FiltrosAvancados, OrdenacaoBusca } from './vitrine'
 export { simuladorService, BANCOS_SIM } from './simulador'
 export type { BancoSim, ResultadoBanco, SimulacaoInput } from './simulador'
 export * from './types'

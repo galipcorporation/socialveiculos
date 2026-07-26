@@ -16,6 +16,59 @@ export const FILTROS_FEED: { value: FiltroFeed; label: string }[] = [
   { value: 'moto', label: 'Motos' },
 ]
 
+export type OrdenacaoBusca = 'relevancia' | 'preco_asc' | 'preco_desc' | 'km_asc' | 'ano_desc'
+
+/**
+ * Filtros da busca avançada. `marca`, `tipo`, `carroceria`, `preco_max` e parte da
+ * ordenação são resolvidos pelo backend (/marketplace/feed); o resto (faixa de ano,
+ * km, câmbio, combustível, cor, preço mínimo) é filtrado aqui — o endpoint público
+ * ainda não aceita esses parâmetros.
+ */
+export interface FiltrosAvancados {
+  tipo?: TipoVeiculo
+  marca?: string
+  carroceria?: string
+  preco_min?: number
+  preco_max?: number
+  ano_min?: number
+  ano_max?: number
+  km_max?: number
+  cambio?: string
+  combustivel?: string
+  cor?: string
+  ordenacao?: OrdenacaoBusca
+}
+
+export const FILTROS_AVANCADOS_VAZIO: FiltrosAvancados = {}
+
+/** Quantos critérios estão ativos — alimenta o badge do botão de filtros. */
+export function contarFiltrosAtivos(f: FiltrosAvancados): number {
+  return [
+    f.tipo, f.marca, f.carroceria, f.preco_min, f.preco_max,
+    f.ano_min, f.ano_max, f.km_max, f.cambio, f.combustivel, f.cor,
+    f.ordenacao && f.ordenacao !== 'relevancia' ? f.ordenacao : undefined,
+  ].filter((v) => v != null && v !== '').length
+}
+
+function temFiltroLocal(f: FiltrosAvancados): boolean {
+  return [f.preco_min, f.ano_min, f.ano_max, f.km_max, f.cambio, f.combustivel, f.cor]
+    .some((v) => v != null && v !== '')
+}
+
+function aplicarFiltrosLocais(lista: AnuncioVitrine[], f: FiltrosAvancados): AnuncioVitrine[] {
+  return lista.filter((a) => {
+    if (f.preco_min != null && (a.preco_venda ?? 0) < f.preco_min) return false
+    if (f.preco_max != null && (a.preco_venda ?? Infinity) > f.preco_max) return false
+    if (f.ano_min != null && a.ano_modelo < f.ano_min) return false
+    if (f.ano_max != null && a.ano_modelo > f.ano_max) return false
+    if (f.km_max != null && (a.km ?? 0) > f.km_max) return false
+    if (f.cambio && a.cambio?.toLowerCase() !== f.cambio.toLowerCase()) return false
+    if (f.combustivel && a.combustivel?.toLowerCase() !== f.combustivel.toLowerCase()) return false
+    if (f.cor && !(a.cor ?? '').toLowerCase().includes(f.cor.toLowerCase())) return false
+    return true
+  })
+}
+
 interface VeiculoB2CDTO {
   id: string
   loja_id: string
@@ -147,11 +200,19 @@ export const vitrineService = {
   },
 
   // ── Feed / detalhe ───────────────────────────────────────
-  async feed(filtro: FiltroFeed = 'todos', busca = ''): Promise<AnuncioVitrine[]> {
+  async feed(filtro: FiltroFeed = 'todos', busca = '', avancado: FiltrosAvancados = {}): Promise<AnuncioVitrine[]> {
     const params: Record<string, string> = {}
     if (busca.trim()) params.q = busca.trim()
     if (filtro === 'carro' || filtro === 'moto') params.tipo = filtro
+    else if (avancado.tipo) params.tipo = avancado.tipo
     if (filtro === 'ofertas' || filtro === 'novidades') params.ordenacao = filtro
+    else if (avancado.ordenacao) params.ordenacao = avancado.ordenacao
+    if (avancado.marca) params.marca = avancado.marca
+    if (avancado.carroceria) params.carroceria = avancado.carroceria
+    if (avancado.preco_max != null) params.preco_max = String(avancado.preco_max)
+    // O feed público pagina em 12 por padrão; com filtros locais (ano/km/câmbio…)
+    // precisamos de um lote maior para não devolver uma lista quase vazia.
+    if (temFiltroLocal(avancado)) params.per_page = '50'
 
     const data = await api.get<VeiculoB2CDTO[]>('/marketplace/feed', params)
     let lista = data.map(mapAnuncio)
@@ -161,7 +222,22 @@ export const vitrineService = {
     else if (filtro === 'ofertas') lista = lista.filter((a) => a.oferta)
     else if (filtro === 'novidades') lista = lista.filter((a) => a.novidade)
 
+    lista = aplicarFiltrosLocais(lista, avancado)
+
+    if (avancado.ordenacao === 'preco_asc') return lista.sort((a, b) => (a.preco_venda ?? Infinity) - (b.preco_venda ?? Infinity))
+    if (avancado.ordenacao === 'preco_desc') return lista.sort((a, b) => (b.preco_venda ?? -Infinity) - (a.preco_venda ?? -Infinity))
+    if (avancado.ordenacao === 'km_asc') return lista.sort((a, b) => (a.km ?? Infinity) - (b.km ?? Infinity))
+    if (avancado.ordenacao === 'ano_desc') return lista.sort((a, b) => b.ano_modelo - a.ano_modelo)
     return lista.sort((a, b) => b.created_at.localeCompare(a.created_at))
+  },
+
+  /** Carrocerias com anúncios publicados — alimenta o filtro de carroceria. */
+  async categorias(): Promise<string[]> {
+    try {
+      return await api.get<string[]>('/marketplace/categorias')
+    } catch {
+      return []
+    }
   },
 
   async detalhe(id: string): Promise<AnuncioVitrine | undefined> {

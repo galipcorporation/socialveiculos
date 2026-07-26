@@ -460,16 +460,21 @@ async def iniciar_conversa_b2c(
         await db.flush() # Gerar ID da conversa
         nova_conversa_criada = True
 
-    # 3. Adicionar mensagem inicial
+    # 3. Adicionar mensagem inicial — SÓ quando a conversa acabou de nascer.
+    # Reabrir o chat de um veículo já negociado ("Conversar" de novo) não pode
+    # reenviar a saudação: o cliente vê a mesma frase repetida e a loja recebe
+    # uma notificação vazia de conteúdo novo.
     msg_texto = (data.mensagem and data.mensagem.strip()) or f"Olá, tenho interesse no veículo {veiculo.marca} {veiculo.modelo}."
-    nova_msg = Mensagem(
-        conversa_id=conversa.id,
-        autor_id=current_user.id,
-        conteudo=msg_texto
-    )
-    db.add(nova_msg)
-    conversa.updated_at = utcnow()
-    await db.flush()
+    nova_msg: Optional[Mensagem] = None
+    if nova_conversa_criada:
+        nova_msg = Mensagem(
+            conversa_id=conversa.id,
+            autor_id=current_user.id,
+            conteudo=msg_texto
+        )
+        db.add(nova_msg)
+        conversa.updated_at = utcnow()
+        await db.flush()
 
     # 4. Criar Lead e ClientePF automaticamente se for nova conversa
     if nova_conversa_criada:
@@ -509,43 +514,58 @@ async def iniciar_conversa_b2c(
     loja_res = await db.execute(loja_stmt)
     loja = loja_res.scalar_one_or_none()
 
-    # Transmitir via websocket para usuários da loja associada, se conectados
-    msg_dict = {
-        "id": nova_msg.id,
-        "conversa_id": conversa.id,
-        "autor_id": current_user.id,
-        "autor_nome": current_user.nome,
-        "conteudo": nova_msg.conteudo,
-        "lida": False,
-        "created_at": nova_msg.created_at.isoformat() if nova_msg.created_at else None
-    }
-    # Criar Notificação para a loja (gestores/vendedores)
-    try:
-        from models import Notificacao
-        from uuid import uuid4
-        notif = Notificacao(
-            id=str(uuid4()),
-            loja_id=conversa.loja_id,
-            titulo="Nova Mensagem de Cliente",
-            conteudo=f"{current_user.nome}: {nova_msg.conteudo[:60]}",
-            tipo="chat_b2c",
-            link=f"chat:{conversa.id}",
-        )
-        db.add(notif)
-        await db.flush()
-        # Push remoto para os membros da loja (não notifica o próprio cliente)
-        from push import enviar_push_loja
-        await enviar_push_loja(
-            db, conversa.loja_id,
-            titulo="Nova mensagem de cliente",
-            corpo=f"{current_user.nome}: {nova_msg.conteudo[:60]}",
-            link=f"chat:{conversa.id}", tipo="chat_b2c",
-        )
-    except Exception as e:
-        print(f"[ERRO Notificacao B2C REST] {e}")
+    # Só há o que transmitir/notificar quando a saudação foi realmente criada.
+    if nova_msg is not None:
+        # Transmitir via websocket para usuários da loja associada, se conectados
+        msg_dict = {
+            "id": nova_msg.id,
+            "conversa_id": conversa.id,
+            "autor_id": current_user.id,
+            "autor_nome": current_user.nome,
+            "conteudo": nova_msg.conteudo,
+            "lida": False,
+            "created_at": nova_msg.created_at.isoformat() if nova_msg.created_at else None
+        }
+        # Criar Notificação para a loja (gestores/vendedores)
+        try:
+            from models import Notificacao
+            from uuid import uuid4
+            notif = Notificacao(
+                id=str(uuid4()),
+                loja_id=conversa.loja_id,
+                titulo="Nova Mensagem de Cliente",
+                conteudo=f"{current_user.nome}: {nova_msg.conteudo[:60]}",
+                tipo="chat_b2c",
+                link=f"chat:{conversa.id}",
+            )
+            db.add(notif)
+            await db.flush()
+            # Push remoto para os membros da loja (não notifica o próprio cliente)
+            from push import enviar_push_loja
+            await enviar_push_loja(
+                db, conversa.loja_id,
+                titulo="Nova mensagem de cliente",
+                corpo=f"{current_user.nome}: {nova_msg.conteudo[:60]}",
+                link=f"chat:{conversa.id}", tipo="chat_b2c",
+            )
+        except Exception as e:
+            print(f"[ERRO Notificacao B2C REST] {e}")
 
-    # Broadcast para todos os membros da loja e o próprio cliente
-    await manager.broadcast_to_conversation(conversa.id, msg_dict, db)
+        # Broadcast para todos os membros da loja e o próprio cliente
+        await manager.broadcast_to_conversation(conversa.id, msg_dict, db)
+
+    # Ao reabrir uma conversa existente não há saudação nova: o preview tem de
+    # mostrar a última mensagem real, senão a lista "volta no tempo".
+    ultima_msg = nova_msg
+    if ultima_msg is None:
+        ult_stmt = (
+            select(Mensagem)
+            .where(Mensagem.conversa_id == conversa.id)
+            .order_by(Mensagem.created_at.desc())
+            .limit(1)
+        )
+        ult_res = await db.execute(ult_stmt)
+        ultima_msg = ult_res.scalar_one_or_none()
 
     # Construir a resposta ANTES de commitar para evitar expiração dos objetos (MissingGreenlet)
     response = ConversaB2CResponse(
@@ -561,8 +581,8 @@ async def iniciar_conversa_b2c(
         ativa=conversa.ativa,
         created_at=conversa.created_at,
         updated_at=conversa.updated_at,
-        ultima_mensagem=nova_msg.conteudo,
-        ultima_mensagem_data=nova_msg.created_at
+        ultima_mensagem=ultima_msg.conteudo if ultima_msg else None,
+        ultima_mensagem_data=ultima_msg.created_at if ultima_msg else None
     )
 
     await db.commit()
