@@ -38,3 +38,22 @@ export function capitalizarNome(val: string): string {
     })
     .join('')
 }
+/**
+ * Aplica máscara de moeda R$ em centavos (ex: 15000 -> 150,00 -> "R$ 150,00" ou apenas o valor numérico formatado)
+ */
+export function mascararMoeda(val: string | number): string {
+  const numStr = String(val).replace(/\D/g, '')
+  if (!numStr) return ''
+  const centavos = parseFloat(numStr) / 100
+  return centavos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+/**
+ * Extrai o valor numérico (float) de uma string formatada em moeda BRL.
+ */
+export function desmascararMoeda(val: string): number | undefined {
+  const numStr = val.replace(/\D/g, '')
+  if (!numStr) return undefined
+  return parseFloat(numStr) / 100
+}
+

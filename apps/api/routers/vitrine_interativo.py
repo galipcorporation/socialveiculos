@@ -424,16 +424,17 @@ async def iniciar_conversa_b2c(
     Inicia uma conversa B2C associada a um veículo, enviando a mensagem inicial.
     Cria automaticamente ClientePF e Lead no CRM da loja se for o primeiro contato.
     """
-    # 1. Validar veículo (só permite conversa sobre carro publicado/disponível)
+    # 1. Validar veículo (permite conversa sobre carro publicado e ativo)
     v_stmt = select(Veiculo).where(
         Veiculo.id == data.veiculo_id,
         Veiculo.publicado_marketplace == True,
-        Veiculo.status == StatusVeiculo.DISPONIVEL,
+        Veiculo.status.in_([StatusVeiculo.DISPONIVEL, StatusVeiculo.REPASSE, "disponivel", "repasse"])
     )
     v_res = await db.execute(v_stmt)
     veiculo = v_res.scalar_one_or_none()
     if not veiculo:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Veículo não encontrado ou não disponível.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Veículo não encontrado ou não disponível para contato.")
+
 
     # loja_id sempre derivado do veículo — nunca confiar no valor enviado pelo cliente
     loja_id = veiculo.loja_id

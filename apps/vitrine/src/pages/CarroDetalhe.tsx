@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { fetchVeiculo, carroMeta, formatBRL, type Veiculo, type Midia } from '../lib/loaders'
 import { getSSGData } from '../lib/ssgData'
@@ -7,6 +7,8 @@ import { whatsappLojaLink } from '../lib/contato'
 import { api } from '../lib/api'
 import { BottomNav } from '../components/BottomNav'
 import { ContatoVitrineModal } from '../components/ContatoVitrineModal'
+import { useAuthStore } from '../stores/authStore'
+import { mascararTelefone, capitalizarNome, mascararMoeda, desmascararMoeda } from '../lib/mascaras'
 
 /** Modal de pré-aprovação de crédito (M017) — captura o interesse do comprador
  *  e encaminha à loja como lead. Não simula parcela (sem parceria com banco). */
@@ -26,8 +28,8 @@ function PreAprovacaoModal({ veiculoId, onClose }: { veiculoId: string; onClose:
         nome: form.nome.trim(),
         telefone: form.telefone.trim(),
         email: form.email.trim() || undefined,
-        renda_mensal: form.renda_mensal ? Number(form.renda_mensal) : undefined,
-        entrada: form.entrada ? Number(form.entrada) : undefined,
+        renda_mensal: desmascararMoeda(form.renda_mensal),
+        entrada: desmascararMoeda(form.entrada),
       })
       setOk(true)
     } catch (err) {
@@ -39,7 +41,7 @@ function PreAprovacaoModal({ veiculoId, onClose }: { veiculoId: string; onClose:
 
   return (
     <div className="vt-modal-overlay" onClick={onClose}>
-      <div className="vt-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+      <div className="vt-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
         <button className="vt-modal-close" onClick={onClose} aria-label="Fechar">×</button>
         {ok ? (
           <div style={{ textAlign: 'center', padding: '1rem 0' }}>
@@ -53,23 +55,77 @@ function PreAprovacaoModal({ veiculoId, onClose }: { veiculoId: string; onClose:
           </div>
         ) : (
           <form onSubmit={enviar}>
-            <h3 style={{ marginBottom: 4 }}>Simular financiamento</h3>
-            <p style={{ color: 'var(--vt-text-dim)', fontSize: 13, marginBottom: 16 }}>
-              Preencha seus dados e a loja retorna com as condições. Não é uma aprovação automática.
-            </p>
-            <input className="vt-input" placeholder="Seu nome" required value={form.nome}
-              onChange={(e) => setForm({ ...form, nome: e.target.value })} />
-            <input className="vt-input" placeholder="WhatsApp / telefone" required value={form.telefone}
-              onChange={(e) => setForm({ ...form, telefone: e.target.value })} style={{ marginTop: 10 }} />
-            <input className="vt-input" placeholder="E-mail (opcional)" type="email" value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })} style={{ marginTop: 10 }} />
-            <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-              <input className="vt-input" placeholder="Renda mensal (R$)" inputMode="numeric" value={form.renda_mensal}
-                onChange={(e) => setForm({ ...form, renda_mensal: e.target.value.replace(/\D/g, '') })} />
-              <input className="vt-input" placeholder="Entrada (R$)" inputMode="numeric" value={form.entrada}
-                onChange={(e) => setForm({ ...form, entrada: e.target.value.replace(/\D/g, '') })} />
+            <div className="vt-modal-header">
+              <h3>Simular financiamento</h3>
+              <p>
+                Preencha seus dados e a loja retorna com as condições. Não é uma aprovação automática.
+              </p>
             </div>
-            {erro && <p style={{ color: 'var(--vt-error, #dc2626)', fontSize: 13, marginTop: 10 }}>{erro}</p>}
+
+            {erro && <div className="vt-modal-error">{erro}</div>}
+
+            <div className="vt-form-group">
+              <label htmlFor="vt-sim-nome">Seu nome completo</label>
+              <input
+                id="vt-sim-nome"
+                className="vt-input"
+                placeholder="Ex: João da Silva"
+                required
+                value={form.nome}
+                onChange={(e) => setForm({ ...form, nome: capitalizarNome(e.target.value) })}
+              />
+            </div>
+
+            <div className="vt-form-group">
+              <label htmlFor="vt-sim-tel">WhatsApp / Telefone</label>
+              <input
+                id="vt-sim-tel"
+                className="vt-input"
+                placeholder="(00) 00000-0000"
+                required
+                value={form.telefone}
+                onChange={(e) => setForm({ ...form, telefone: mascararTelefone(e.target.value) })}
+              />
+            </div>
+
+            <div className="vt-form-group">
+              <label htmlFor="vt-sim-email">E-mail (opcional)</label>
+              <input
+                id="vt-sim-email"
+                className="vt-input"
+                placeholder="seuemail@exemplo.com"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="vt-form-group">
+                <label htmlFor="vt-sim-renda">Renda mensal</label>
+                <input
+                  id="vt-sim-renda"
+                  className="vt-input"
+                  placeholder="R$ 0,00"
+                  inputMode="numeric"
+                  value={form.renda_mensal}
+                  onChange={(e) => setForm({ ...form, renda_mensal: mascararMoeda(e.target.value) })}
+                />
+              </div>
+
+              <div className="vt-form-group">
+                <label htmlFor="vt-sim-entrada">Entrada pretendida</label>
+                <input
+                  id="vt-sim-entrada"
+                  className="vt-input"
+                  placeholder="R$ 0,00"
+                  inputMode="numeric"
+                  value={form.entrada}
+                  onChange={(e) => setForm({ ...form, entrada: mascararMoeda(e.target.value) })}
+                />
+              </div>
+            </div>
+
             <button className="vt-btn vt-btn-primary vt-btn-block" type="submit" disabled={enviando} style={{ marginTop: 16 }}>
               {enviando ? 'Enviando…' : 'Quero simular financiamento'}
             </button>
@@ -91,12 +147,16 @@ function MidiaView({ midia, className }: { midia: Midia; className?: string }) {
 /** Aceita dados pré-carregados (prerender) p/ render imediato sem fetch. */
 export function CarroDetalhe({ initialData }: { initialData?: Veiculo | null }) {
   const { id } = useParams()
+  const navigate = useNavigate()
+  const { isAuthenticated, openLoginModal } = useAuthStore()
   const seed = initialData ?? getSSGData<Veiculo>()
   const [veiculo, setVeiculo] = useState<Veiculo | null>(seed)
   const [loading, setLoading] = useState(!seed)
   const [erro, setErro] = useState(false)
   const [modalCredito, setModalCredito] = useState(false)
   const [modalContato, setModalContato] = useState(false)
+  const [iniciandoChat, setIniciandoChat] = useState(false)
+  const [erroChat, setErroChat] = useState('')
 
   useEffect(() => {
     if (seed && seed.id === id) return
@@ -112,6 +172,31 @@ export function CarroDetalhe({ initialData }: { initialData?: Veiculo | null }) 
       alive = false
     }
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleConversar = async () => {
+    if (!veiculo) return
+    if (!isAuthenticated) {
+      openLoginModal('login')
+      return
+    }
+
+    setIniciandoChat(true)
+    setErroChat('')
+
+    try {
+      const msg = `Olá, estou interessado no veículo ${veiculo.marca} ${veiculo.modelo} (${veiculo.ano_modelo}).`
+      const res = await api.post<{ id: string }>('/vitrine/conversas', {
+        veiculo_id: veiculo.id,
+        loja_id: veiculo.loja_id,
+        mensagem: msg
+      })
+      navigate('/mensagens', { state: { conversaId: res.id } })
+    } catch (err) {
+      setErroChat(err instanceof Error ? err.message : 'Não foi possível iniciar a conversa.')
+    } finally {
+      setIniciandoChat(false)
+    }
+  }
 
   if (loading) {
     return <div className="vt-detail">Carregando…</div>
@@ -210,22 +295,44 @@ export function CarroDetalhe({ initialData }: { initialData?: Veiculo | null }) 
             </div>
           )}
 
-          <button
-            className="vt-btn vt-btn-primary vt-btn-block"
-            style={{ marginTop: '1.5rem' }}
-            onClick={() => setModalCredito(true)}
-          >
-            Simular financiamento
-          </button>
+          {erroChat && (
+            <div className="vt-modal-error" style={{ marginTop: '1rem', marginBottom: 0 }}>
+              {erroChat}
+            </div>
+          )}
 
-          <button
-            type="button"
-            className="vt-btn vt-btn-outline vt-btn-block"
-            style={{ marginTop: '0.75rem' }}
-            onClick={() => setModalContato(true)}
-          >
-            Chamar no WhatsApp
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <button
+              type="button"
+              className="vt-btn vt-btn-primary vt-btn-block"
+              disabled={iniciandoChat}
+              onClick={handleConversar}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+              </svg>
+              {iniciandoChat ? 'Iniciando conversa…' : 'Conversar no Chat'}
+            </button>
+
+            <button
+              type="button"
+              className="vt-btn vt-btn-outline vt-btn-block"
+              onClick={() => setModalContato(true)}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M.06 24l1.7-6.2A11.9 11.9 0 1 1 12 24a11.9 11.9 0 0 1-5.7-1.5L.06 24zM6.6 20l.4.2a9.9 9.9 0 1 0-3.4-3.4l.2.4-1 3.7 3.8-.9z"/>
+              </svg>
+              Chamar no WhatsApp
+            </button>
+
+            <button
+              type="button"
+              className="vt-btn vt-btn-outline vt-btn-block"
+              onClick={() => setModalCredito(true)}
+            >
+              Simular financiamento
+            </button>
+          </div>
         </div>
       </div>
 
@@ -246,3 +353,4 @@ export function CarroDetalhe({ initialData }: { initialData?: Veiculo | null }) 
     </div>
   )
 }
+

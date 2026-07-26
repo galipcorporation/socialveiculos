@@ -325,8 +325,11 @@ export function Feed() {
       navigate('/mensagens', { state: { conversaId: res.id } })
     } catch (err) {
       console.error('Erro ao iniciar conversa:', err)
+      const msgErro = err instanceof Error ? err.message : 'Não foi possível iniciar a conversa com a loja.'
+      useUIStore.getState().showError(msgErro)
     }
   }
+
 
   const handleSeguir = async (lojaId: string, seguindo: boolean) => {
     if (!isAuthenticated) { openLoginModal('login'); return }

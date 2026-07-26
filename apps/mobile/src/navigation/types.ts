@@ -25,6 +25,7 @@ export type RootStackParamList = {
   Equipe: undefined
   Simulador: { precoInicial?: number } | undefined
   Configuracoes: undefined
+  Ajuda: undefined
   PerfilLoja: undefined
   CredenciaisBanco: undefined
   CredenciaisIA: undefined

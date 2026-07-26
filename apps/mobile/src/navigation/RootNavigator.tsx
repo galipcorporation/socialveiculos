@@ -26,6 +26,7 @@ import FinanceiroScreen from '../screens/financeiro/FinanceiroScreen'
 import EquipeScreen from '../screens/equipe/EquipeScreen'
 import SimuladorScreen from '../screens/ferramentas/SimuladorScreen'
 import ConfiguracoesScreen from '../screens/mais/ConfiguracoesScreen'
+import AjudaScreen from '../screens/mais/AjudaScreen'
 import PerfilLojaScreen from '../screens/mais/config/PerfilLojaScreen'
 import CredenciaisBancoScreen from '../screens/mais/config/CredenciaisBancoScreen'
 import CredenciaisIAScreen from '../screens/mais/config/CredenciaisIAScreen'
@@ -41,6 +42,7 @@ import AssistenteIAScreen from '../screens/ferramentas/AssistenteIAScreen'
 import ConversaAssistenteScreen from '../screens/ferramentas/ConversaAssistenteScreen'
 import AssistenteConfigScreen from '../screens/ferramentas/AssistenteConfigScreen'
 import RedeSocialScreen from '../screens/rede/RedeSocialScreen'
+import { AssistiveTouch } from '../components/ui'
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
 export const navigationRef = createNavigationContainerRef<RootStackParamList>()
@@ -137,6 +139,7 @@ export default function RootNavigator() {
             <Stack.Screen name="Equipe" component={EquipeScreen} />
             <Stack.Screen name="Simulador" component={SimuladorScreen} />
             <Stack.Screen name="Configuracoes" component={ConfiguracoesScreen} />
+            <Stack.Screen name="Ajuda" component={AjudaScreen} />
             <Stack.Screen name="PerfilLoja" component={PerfilLojaScreen} />
             <Stack.Screen name="CredenciaisBanco" component={CredenciaisBancoScreen} />
             <Stack.Screen name="CredenciaisIA" component={CredenciaisIAScreen} />
@@ -157,6 +160,8 @@ export default function RootNavigator() {
           <Stack.Screen name="Login" component={LoginScreen} options={{ animation: 'fade' }} />
         )}
       </Stack.Navigator>
+      {lojistaLogado && experiencia === 'lojista' ? <AssistiveTouch /> : null}
     </NavigationContainer>
   )
 }
+

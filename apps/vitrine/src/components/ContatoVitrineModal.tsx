@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../lib/api'
 import { whatsappLojaLink } from '../lib/contato'
+import { mascararTelefone, capitalizarNome } from '../lib/mascaras'
 
 export interface ContatoVitrineModalProps {
   veiculoId: string
@@ -28,7 +29,7 @@ export function ContatoVitrineModal({ veiculoId, veiculoInfo, onClose }: Contato
         setForm((f) => ({
           ...f,
           nome: parsed.nome || '',
-          telefone: parsed.telefone || '',
+          telefone: mascararTelefone(parsed.telefone || ''),
           email: parsed.email || '',
         }))
       }
@@ -88,55 +89,71 @@ export function ContatoVitrineModal({ veiculoId, veiculoInfo, onClose }: Contato
 
   return (
     <div className="vt-modal-overlay" onClick={onClose}>
-      <div className="vt-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+      <div className="vt-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
         <button className="vt-modal-close" onClick={onClose} aria-label="Fechar">
           ×
         </button>
-        <form onSubmit={enviar}>
-          <h3 style={{ marginBottom: 4 }}>Falar com a loja</h3>
-          <p style={{ color: 'var(--vt-text-dim)', fontSize: 13, marginBottom: 16 }}>
+        <div className="vt-modal-header">
+          <h3>Falar com a loja</h3>
+          <p>
             Informe seus dados de contato para ser atendido pelo vendedor do{' '}
             <strong>
               {veiculoInfo.marca} {veiculoInfo.modelo}
             </strong>.
           </p>
+        </div>
 
-          <input
-            className="vt-input"
-            placeholder="Seu nome completo"
-            required
-            value={form.nome}
-            onChange={(e) => setForm({ ...form, nome: e.target.value })}
-          />
+        {erro && <div className="vt-modal-error">{erro}</div>}
 
-          <input
-            className="vt-input"
-            placeholder="WhatsApp / Telefone (com DDD)"
-            required
-            value={form.telefone}
-            onChange={(e) => setForm({ ...form, telefone: e.target.value })}
-            style={{ marginTop: 10 }}
-          />
+        <form onSubmit={enviar}>
+          <div className="vt-form-group">
+            <label htmlFor="vt-lead-nome">Seu nome completo</label>
+            <input
+              id="vt-lead-nome"
+              className="vt-input"
+              placeholder="Ex: João da Silva"
+              required
+              value={form.nome}
+              onChange={(e) => setForm({ ...form, nome: capitalizarNome(e.target.value) })}
+            />
+          </div>
 
-          <input
-            className="vt-input"
-            placeholder="E-mail (opcional)"
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            style={{ marginTop: 10 }}
-          />
+          <div className="vt-form-group">
+            <label htmlFor="vt-lead-tel">WhatsApp / Telefone</label>
+            <input
+              id="vt-lead-tel"
+              className="vt-input"
+              placeholder="(00) 00000-0000"
+              required
+              value={form.telefone}
+              onChange={(e) => setForm({ ...form, telefone: mascararTelefone(e.target.value) })}
+            />
+          </div>
 
-          <textarea
-            className="vt-input"
-            placeholder="Dúvida ou mensagem rápida (opcional)"
-            rows={2}
-            value={form.mensagem}
-            onChange={(e) => setForm({ ...form, mensagem: e.target.value })}
-            style={{ marginTop: 10, resize: 'vertical' }}
-          />
+          <div className="vt-form-group">
+            <label htmlFor="vt-lead-email">E-mail (opcional)</label>
+            <input
+              id="vt-lead-email"
+              className="vt-input"
+              placeholder="seuemail@exemplo.com"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </div>
 
-          {erro && <p style={{ color: 'var(--vt-error, #dc2626)', fontSize: 13, marginTop: 10 }}>{erro}</p>}
+          <div className="vt-form-group">
+            <label htmlFor="vt-lead-msg">Dúvida ou mensagem rápida (opcional)</label>
+            <textarea
+              id="vt-lead-msg"
+              className="vt-input"
+              placeholder="Ex: Aceita troca? Qual o menor valor?"
+              rows={2}
+              value={form.mensagem}
+              onChange={(e) => setForm({ ...form, mensagem: e.target.value })}
+              style={{ resize: 'vertical' }}
+            />
+          </div>
 
           <button
             className="vt-btn vt-btn-primary vt-btn-block"
@@ -151,3 +168,4 @@ export function ContatoVitrineModal({ veiculoId, veiculoInfo, onClose }: Contato
     </div>
   )
 }
+

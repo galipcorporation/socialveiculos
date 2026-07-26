@@ -32,6 +32,7 @@ export default function MaisScreen() {
         { icon: 'wallet-outline', label: 'Financeiro', onPress: () => navigation.navigate('Financeiro') },
         { icon: 'people-outline', label: 'Equipe', onPress: () => navigation.navigate('Equipe') },
         { icon: 'clipboard-outline', label: 'Pós-venda', onPress: () => navigation.navigate('PosVenda') },
+        { icon: 'help-circle-outline', label: 'Ajuda', onPress: () => navigation.navigate('Ajuda') },
         // Marketing é premium: atalho só existe se a loja contratou.
         ...(liberado('marketing')
           ? [{ icon: 'sparkles-outline' as const, label: 'Marketing', onPress: () => navigation.navigate('Marketing') }]
@@ -46,6 +47,7 @@ export default function MaisScreen() {
           : []),
         { icon: 'ribbon-outline', label: 'Comissões', onPress: () => navigation.navigate('Comissoes') },
         { icon: 'pricetags-outline', label: 'FIPE', onPress: () => navigation.navigate('Fipe') },
+        { icon: 'help-circle-outline', label: 'Ajuda', onPress: () => navigation.navigate('Ajuda') },
       ]
 
   return (
