@@ -72,14 +72,16 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
                 <Ionicons name={a.favoritado_por_mim ? 'heart' : 'heart-outline'} size={22} color={a.favoritado_por_mim ? colors.error : '#fff'} />
               </Pressable>
               <View style={styles.badges}>
-                {a.oferta && <Badge label="Oferta" tone="error" size="sm" />}
                 {a.novidade && <Badge label="Novo" tone="success" size="sm" />}
               </View>
             </View>
 
             <View style={{ padding: spacing.md, gap: spacing.md }}>
               <View>
-                <Txt style={{ fontFamily: fonts.displayBold, fontSize: 22, color: colors.text }}>{a.marca} {a.modelo}</Txt>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {a.oferta && <Badge label="Oferta" tone="error" size="sm" />}
+                  <Txt style={{ fontFamily: fonts.displayBold, fontSize: 22, color: colors.text, flex: 1 }}>{a.marca} {a.modelo}</Txt>
+                </View>
                 {a.versao ? <Txt variant="body" color="textDim">{a.versao}</Txt> : null}
                 <Txt style={{ fontFamily: fonts.displayExtraBold, fontSize: 26, color: colors.primaryText, marginTop: 6 }}>
                   {a.preco_venda != null ? formatBRL(a.preco_venda) : 'Sob consulta'}

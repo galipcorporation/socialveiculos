@@ -62,7 +62,6 @@ export const AnuncioCard = React.memo(function AnuncioCard({ anuncio: a, onPress
           />
         </Pressable>
         <View style={styles.badges}>
-          {a.oferta && <Badge label="Oferta" tone="error" size="sm" />}
           {a.novidade && <Badge label="Novo" tone="success" size="sm" />}
           {aceitaTroca && <Badge label="Aceita troca" tone="info" size="sm" />}
         </View>
@@ -70,7 +69,10 @@ export const AnuncioCard = React.memo(function AnuncioCard({ anuncio: a, onPress
 
       {/* Info */}
       <View style={{ padding: spacing.sm, gap: 2 }}>
-        <Txt variant="bodySemibold" numberOfLines={1}>{a.marca} {a.modelo}</Txt>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {a.oferta && <Badge label="Oferta" tone="error" size="sm" />}
+          <Txt variant="bodySemibold" numberOfLines={1} style={{ flex: 1 }}>{a.marca} {a.modelo}</Txt>
+        </View>
         {a.versao ? <Txt variant="caption" color="textDim" numberOfLines={1}>{a.versao}</Txt> : null}
         <Txt variant="caption" color="textMuted" numberOfLines={1}>
           {[a.ano_modelo, a.km != null ? formatKm(a.km) : null, a.cor].filter(Boolean).join(' · ')}
