@@ -7,10 +7,24 @@ import { buscarCEP } from '../lib/cep'
 
 /* ── Types ───────────────────────────────────────────────────── */
 
+/* Cliente embutido no lead — o backend devolve o cadastro completo (ClienteSimples
+   em schemas.py), não só nome/telefone. */
 interface ClientSimples {
   id: string
   nome: string
   telefone?: string
+  email?: string
+  cpf?: string
+  rg?: string
+  data_nascimento?: string
+  renda_mensal?: number
+  cep?: string
+  endereco?: string
+  numero?: string
+  bairro?: string
+  cidade?: string
+  estado?: string
+  observacoes?: string
 }
 
 interface Negociacao {
@@ -25,17 +39,62 @@ interface Negociacao {
   updated_at: string
 }
 
+type TipoInteracao = 'nota' | 'ligacao' | 'whatsapp' | 'visita' | 'email' | 'proposta' | 'sistema'
+
+interface Interacao {
+  id: string
+  lead_id: string
+  tipo: TipoInteracao
+  texto: string
+  autor_nome?: string
+  created_at: string
+  updated_at: string
+}
+
+type MotivoPerda =
+  | 'preco' | 'credito_negado' | 'comprou_concorrente'
+  | 'sem_resposta' | 'desistiu' | 'veiculo_vendido' | 'outro'
+
+const MOTIVO_PERDA_LABELS: Record<MotivoPerda, string> = {
+  preco: 'Preço',
+  credito_negado: 'Crédito negado',
+  comprou_concorrente: 'Comprou no concorrente',
+  sem_resposta: 'Sem resposta',
+  desistiu: 'Desistiu da compra',
+  veiculo_vendido: 'Veículo já vendido',
+  outro: 'Outro',
+}
+
+const TIPO_INTERACAO_LABELS: Record<TipoInteracao, string> = {
+  nota: 'Nota',
+  ligacao: 'Ligação',
+  whatsapp: 'WhatsApp',
+  visita: 'Visita',
+  email: 'E-mail',
+  proposta: 'Proposta',
+  sistema: 'Sistema',
+}
+
+// Tipos que o usuário pode registrar (sistema é gerado pelo backend).
+const TIPOS_INTERACAO_EDITAVEIS: TipoInteracao[] = ['nota', 'ligacao', 'whatsapp', 'visita', 'email']
+
 interface Lead {
   id: string
   loja_id: string
   cliente_id: string
   veiculo_id?: string
   etapa: 'lead' | 'proposta' | 'negociacao' | 'fechamento' | 'perdido'
-  origem: 'manual' | 'vitrine' | 'simulador' | 'whatsapp'
+  origem: 'manual' | 'vitrine' | 'simulador' | 'whatsapp' | 'repasse' | 'site_proprio' | 'pre_aprovacao'
   valor_proposta?: number
   observacoes?: string
+  responsavel_id?: string
+  responsavel_nome?: string
+  proximo_contato?: string
+  motivo_perda?: MotivoPerda
+  motivo_perda_detalhe?: string
   cliente?: ClientSimples
   negociacoes?: Negociacao[]
+  interacoes?: Interacao[]
   created_at: string
   updated_at: string
 }
@@ -195,11 +254,14 @@ const ETAPA_LABELS: Record<string, string> = {
   perdido: 'Perdido',
 }
 
-const ORIGEM_LABELS: Record<string, string> = {
+const ORIGEM_LABELS: Record<Lead['origem'], string> = {
   manual: 'Manual',
   vitrine: 'Vitrine',
   simulador: 'Simulador',
   whatsapp: 'WhatsApp',
+  repasse: 'Repasse',
+  site_proprio: 'Site próprio',
+  pre_aprovacao: 'Pré-aprovação',
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -276,6 +338,7 @@ function KanbanTab({ addToast }: { addToast: (type: ToastType, message: string, 
   const [showLeadModal, setShowLeadModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
+  const [perdaPendente, setPerdaPendente] = useState<{ leadId: string } | null>(null)
 
   // Board ref for scroll control
   const boardRef = useRef<HTMLDivElement>(null)
@@ -318,10 +381,11 @@ function KanbanTab({ addToast }: { addToast: (type: ToastType, message: string, 
     setDraggedOverColumn(etapa)
   }
 
-  const handleDrop = async (etapa: 'lead' | 'proposta' | 'negociacao' | 'fechamento' | 'perdido') => {
-    if (!draggedLeadId) return
-    const leadId = draggedLeadId
-
+  const moverLead = async (
+    leadId: string,
+    etapa: 'lead' | 'proposta' | 'negociacao' | 'fechamento' | 'perdido',
+    perda?: { motivo_perda: MotivoPerda; motivo_perda_detalhe?: string },
+  ) => {
     // Optimistic Update
     const oldColumns = [...columns]
     let leadToMove: Lead | null = null
@@ -348,7 +412,7 @@ function KanbanTab({ addToast }: { addToast: (type: ToastType, message: string, 
     }
 
     try {
-      await api.patch(`/leads/${leadId}/etapa`, { etapa })
+      await api.patch(`/leads/${leadId}/etapa`, { etapa, ...(perda ?? {}) })
       addToast('success', `Lead movido para "${ETAPA_LABELS[etapa]}"`)
     } catch (err) {
       setColumns(oldColumns)
@@ -358,6 +422,20 @@ function KanbanTab({ addToast }: { addToast: (type: ToastType, message: string, 
       handleDragEnd()
       fetchKanban()
     }
+  }
+
+  const handleDrop = async (etapa: 'lead' | 'proposta' | 'negociacao' | 'fechamento' | 'perdido') => {
+    if (!draggedLeadId) return
+    const leadId = draggedLeadId
+
+    // "Perdido" sem motivo não alimenta o relatório de funil: pergunta antes.
+    if (etapa === 'perdido') {
+      setPerdaPendente({ leadId })
+      handleDragEnd()
+      return
+    }
+
+    await moverLead(leadId, etapa)
   }
 
   return (
@@ -473,6 +551,71 @@ function KanbanTab({ addToast }: { addToast: (type: ToastType, message: string, 
           addToast={addToast}
         />
       )}
+
+      {/* Motivo da perda — exigido ao mover para "Perdido" */}
+      {perdaPendente && (
+        <MotivoPerdaModal
+          onClose={() => { setPerdaPendente(null); fetchKanban() }}
+          onConfirm={async (motivo, detalhe) => {
+            const { leadId } = perdaPendente
+            setPerdaPendente(null)
+            await moverLead(leadId, 'perdido', {
+              motivo_perda: motivo,
+              motivo_perda_detalhe: detalhe,
+            })
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MOTIVO DA PERDA MODAL
+   ══════════════════════════════════════════════════════════════ */
+
+function MotivoPerdaModal({
+  onClose,
+  onConfirm,
+}: {
+  onClose: () => void
+  onConfirm: (motivo: MotivoPerda, detalhe?: string) => void
+}) {
+  const [motivo, setMotivo] = useState<MotivoPerda>('preco')
+  const [detalhe, setDetalhe] = useState('')
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-glass" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Por que o lead foi perdido?</h3>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><XIcon /></button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group">
+            <label>Motivo</label>
+            <select value={motivo} onChange={e => setMotivo(e.target.value as MotivoPerda)}>
+              {(Object.keys(MOTIVO_PERDA_LABELS) as MotivoPerda[]).map(m => (
+                <option key={m} value={m}>{MOTIVO_PERDA_LABELS[m]}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Detalhe (opcional)</label>
+            <textarea
+              placeholder="Ex.: achou R$ 3 mil mais barato na concorrência"
+              value={detalhe}
+              onChange={e => setDetalhe(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={() => onConfirm(motivo, detalhe.trim() || undefined)}>
+            Marcar como perdido
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -503,7 +646,7 @@ function NovoLeadModal({
   const [showCriarVeiculo, setShowCriarVeiculo] = useState(false)
 
   const [etapa, setEtapa] = useState<'lead' | 'proposta' | 'negociacao' | 'fechamento' | 'perdido'>('lead')
-  const [origem, setOrigem] = useState<'manual' | 'vitrine' | 'simulador' | 'whatsapp'>('manual')
+  const [origem, setOrigem] = useState<Lead['origem']>('manual')
   const [valorProposta, setValorProposta] = useState(0)
   const [valorPropostaStr, setValorPropostaStr] = useState('')
   const [observacoes, setObservacoes] = useState('')
@@ -717,7 +860,7 @@ function NovoLeadModal({
             {/* Origem */}
             <div className="form-group">
               <label>Origem do Lead</label>
-              <select value={origem} onChange={e => setOrigem(e.target.value as any)}>
+              <select value={origem} onChange={e => setOrigem(e.target.value as Lead['origem'])}>
                 {Object.entries(ORIGEM_LABELS).map(([k, v]) => (
                   <option key={k} value={k}>{v}</option>
                 ))}
@@ -832,6 +975,18 @@ function LeadDetailModal({
   const [parcelas, setParcelas] = useState(1)
   const [obsProposta, setObsProposta] = useState('')
   const [submittingProposta, setSubmittingProposta] = useState(false)
+  const [editandoProposta, setEditandoProposta] = useState<Negociacao | null>(null)
+
+  // Timeline
+  const [registrandoInteracao, setRegistrandoInteracao] = useState(false)
+  const [editandoInteracao, setEditandoInteracao] = useState<Interacao | null>(null)
+  const [tipoInteracao, setTipoInteracao] = useState<TipoInteracao>('nota')
+  const [textoInteracao, setTextoInteracao] = useState('')
+  const [savingInteracao, setSavingInteracao] = useState(false)
+
+  // Edição do cadastro do cliente sem sair do lead
+  const [editandoCliente, setEditandoCliente] = useState(false)
+  const [clienteCompleto, setClienteCompleto] = useState<Cliente | null>(null)
 
   const fetchLeadDetails = useCallback(async () => {
     setLoading(true)
@@ -873,6 +1028,26 @@ function LeadDetailModal({
     fetchPropostas()
   }, [fetchLeadDetails, fetchPropostas])
 
+  const limparFormProposta = () => {
+    setValorEntrada(0)
+    setValorEntradaStr('')
+    setValorProp(0)
+    setValorPropStr('')
+    setObsProposta('')
+    setParcelas(1)
+    setEditandoProposta(null)
+  }
+
+  const iniciarEdicaoProposta = (p: Negociacao) => {
+    setEditandoProposta(p)
+    setValorProp(p.valor_proposta || 0)
+    setValorPropStr(mascararMoeda(p.valor_proposta || 0))
+    setValorEntrada(p.valor_entrada || 0)
+    setValorEntradaStr(p.valor_entrada ? mascararMoeda(p.valor_entrada) : '')
+    setParcelas(p.parcelas || 1)
+    setObsProposta(p.observacoes || '')
+  }
+
   const handleAddProposta = async () => {
     if (!valorProp) {
       addToast('error', 'Valor proposto é obrigatório.')
@@ -881,26 +1056,118 @@ function LeadDetailModal({
 
     setSubmittingProposta(true)
     try {
-      await api.post(`/leads/${leadId}/negociacoes`, {
+      const corpo = {
         veiculo_id: lead?.veiculo_id || null,
         valor_proposta: valorProp,
         valor_entrada: valorEntrada || 0,
         parcelas,
         observacoes: obsProposta || null,
-      })
-      addToast('success', 'Proposta registrada com sucesso!')
-      setValorEntrada(0)
-      setValorEntradaStr('')
-      setValorProp(0)
-      setValorPropStr('')
-      setObsProposta('')
+      }
+      if (editandoProposta) {
+        await api.patch(`/leads/${leadId}/negociacoes/${editandoProposta.id}`, corpo)
+        addToast('success', 'Proposta atualizada com sucesso!')
+      } else {
+        await api.post(`/leads/${leadId}/negociacoes`, corpo)
+        addToast('success', 'Proposta registrada com sucesso!')
+      }
+      limparFormProposta()
       fetchPropostas()
+      fetchLeadDetails()
       onUpdated()
     } catch (err) {
       const { message, details } = extractErrorDetails(err)
-      addToast('error', message || 'Erro ao criar proposta', details)
+      addToast('error', message || 'Erro ao salvar proposta', details)
     } finally {
       setSubmittingProposta(false)
+    }
+  }
+
+  const handleDeleteProposta = async (p: Negociacao) => {
+    const ok = await useUIStore.getState().confirm({
+      title: 'Excluir proposta',
+      message: `A proposta de ${formatCurrency(p.valor_proposta)} será removida do histórico. Esta ação não pode ser desfeita.`,
+      confirmText: 'Excluir',
+      cancelText: 'Cancelar',
+    })
+    if (!ok) return
+    try {
+      await api.delete(`/leads/${leadId}/negociacoes/${p.id}`)
+      addToast('success', 'Proposta excluída.')
+      if (editandoProposta?.id === p.id) limparFormProposta()
+      fetchPropostas()
+      fetchLeadDetails()
+      onUpdated()
+    } catch (err) {
+      const { message, details } = extractErrorDetails(err)
+      addToast('error', message || 'Erro ao excluir proposta', details)
+    }
+  }
+
+  // O lead traz o cliente resumido; o modal de edição precisa do registro completo.
+  const abrirEdicaoCliente = async () => {
+    if (!lead?.cliente_id) return
+    try {
+      const c = await api.get<Cliente>(`/clientes/${lead.cliente_id}`)
+      setClienteCompleto(c)
+      setEditandoCliente(true)
+    } catch (err) {
+      const { message, details } = extractErrorDetails(err)
+      addToast('error', message || 'Erro ao carregar dados do cliente', details)
+    }
+  }
+
+  const cancelarInteracao = () => {
+    setRegistrandoInteracao(false)
+    setEditandoInteracao(null)
+    setTextoInteracao('')
+    setTipoInteracao('nota')
+  }
+
+  const iniciarEdicaoInteracao = (i: Interacao) => {
+    setEditandoInteracao(i)
+    setTipoInteracao(i.tipo === 'sistema' ? 'nota' : i.tipo)
+    setTextoInteracao(i.texto)
+    setRegistrandoInteracao(true)
+  }
+
+  const handleSalvarInteracao = async () => {
+    setSavingInteracao(true)
+    try {
+      const corpo = { tipo: tipoInteracao, texto: textoInteracao.trim() }
+      if (editandoInteracao) {
+        await api.patch(`/leads/${leadId}/interacoes/${editandoInteracao.id}`, corpo)
+        addToast('success', 'Interação atualizada.')
+      } else {
+        await api.post(`/leads/${leadId}/interacoes`, corpo)
+        addToast('success', 'Interação registrada.')
+      }
+      cancelarInteracao()
+      fetchLeadDetails()
+      onUpdated()
+    } catch (err) {
+      const { message, details } = extractErrorDetails(err)
+      addToast('error', message || 'Erro ao salvar interação', details)
+    } finally {
+      setSavingInteracao(false)
+    }
+  }
+
+  const handleDeleteInteracao = async (i: Interacao) => {
+    const ok = await useUIStore.getState().confirm({
+      title: 'Excluir interação',
+      message: 'Esta anotação será removida do histórico do lead.',
+      confirmText: 'Excluir',
+      cancelText: 'Cancelar',
+    })
+    if (!ok) return
+    try {
+      await api.delete(`/leads/${leadId}/interacoes/${i.id}`)
+      addToast('success', 'Interação excluída.')
+      fetchLeadDetails()
+      onUpdated()
+    } catch (err) {
+      const { message, details } = extractErrorDetails(err)
+      addToast('error', message || 'Erro ao excluir interação', details)
     }
   }
 
@@ -939,15 +1206,27 @@ function LeadDetailModal({
               {/* Informações Básicas */}
               <div className="form-grid">
                 <div>
-                  <h4 style={{ fontSize: 16, fontWeight: 700, color: 'var(--sv-primary-text)', marginBottom: 8 }}>
-                    {lead.cliente?.nome}
-                  </h4>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <h4 style={{ fontSize: 16, fontWeight: 700, color: 'var(--sv-primary-text)' }}>
+                      {lead.cliente?.nome}
+                    </h4>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={abrirEdicaoCliente}
+                      title="Editar dados do cliente"
+                    >
+                      Editar dados
+                    </button>
+                  </div>
                   <p style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>
-                    Telefone: {lead.cliente?.telefone || 'Não informado'}
-                  </p>
-                  <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', marginTop: 4 }}>
                     Origem: <strong>{ORIGEM_LABELS[lead.origem]}</strong>
+                    {lead.responsavel_nome ? <> · Responsável: <strong>{lead.responsavel_nome}</strong></> : null}
                   </p>
+                  {lead.proximo_contato && (
+                    <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', marginTop: 4 }}>
+                      Próximo contato: <strong>{formatDate(lead.proximo_contato)}</strong>
+                    </p>
+                  )}
                 </div>
                 <div>
                   <h4 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Veículo de Interesse</h4>
@@ -966,6 +1245,42 @@ function LeadDetailModal({
                 </div>
               </div>
 
+              {/* Dados cadastrais do cliente — vinham vazios antes (B): o lead
+                  só expunha nome/telefone mesmo tendo tudo no banco. */}
+              <div className="dados-cliente-grid">
+                <DadoLead label="CPF" valor={lead.cliente?.cpf ? mascararCPF(lead.cliente.cpf) : ''} />
+                <DadoLead label="Telefone" valor={lead.cliente?.telefone ? mascararTelefone(lead.cliente.telefone) : ''} />
+                <DadoLead label="E-mail" valor={lead.cliente?.email} />
+                <DadoLead label="RG" valor={lead.cliente?.rg} />
+                <DadoLead label="Nascimento" valor={lead.cliente?.data_nascimento ? formatDate(lead.cliente.data_nascimento) : ''} />
+                <DadoLead label="Renda mensal" valor={lead.cliente?.renda_mensal ? formatCurrency(lead.cliente.renda_mensal) : ''} />
+                <DadoLead label="CEP" valor={lead.cliente?.cep ? mascararCEP(lead.cliente.cep) : ''} />
+                <DadoLead
+                  label="Endereço"
+                  valor={[lead.cliente?.endereco, lead.cliente?.numero, lead.cliente?.bairro].filter(Boolean).join(', ')}
+                />
+                <DadoLead
+                  label="Cidade/UF"
+                  valor={lead.cliente?.cidade ? `${lead.cliente.cidade}${lead.cliente.estado ? `/${lead.cliente.estado}` : ''}` : ''}
+                />
+              </div>
+
+              {lead.etapa === 'perdido' && lead.motivo_perda && (
+                <div style={{
+                  background: 'color-mix(in srgb, var(--sv-error) 12%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--sv-error) 35%, transparent)',
+                  padding: 12,
+                  borderRadius: 'var(--sv-radius)',
+                }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--sv-error)' }}>
+                    Perdido — {MOTIVO_PERDA_LABELS[lead.motivo_perda]}
+                  </span>
+                  {lead.motivo_perda_detalhe && (
+                    <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', marginTop: 4 }}>{lead.motivo_perda_detalhe}</p>
+                  )}
+                </div>
+              )}
+
               {lead.observacoes && (
                 <div style={{ background: 'var(--sv-surface-dim)', padding: 12, borderRadius: 'var(--sv-radius)', border: '1px solid var(--sv-border)' }}>
                   <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--sv-text-muted)' }}>Observações do Lead:</span>
@@ -975,7 +1290,9 @@ function LeadDetailModal({
 
               {/* Registro de Nova Proposta */}
               <div className="propostas-section">
-                <h4 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Registrar Nova Proposta</h4>
+                <h4 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>
+                  {editandoProposta ? 'Editar Proposta' : 'Registrar Nova Proposta'}
+                </h4>
                 <div className="form-grid">
                   <div className="form-group">
                     <label>Valor da Proposta (R$)</label>
@@ -1025,9 +1342,14 @@ function LeadDetailModal({
                       onChange={e => setObsProposta(e.target.value)}
                     />
                   </div>
-                  <div className="full-width" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                  <div className="full-width" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                    {editandoProposta && (
+                      <button className="btn btn-outline" onClick={limparFormProposta}>Cancelar edição</button>
+                    )}
                     <button className="btn btn-primary" onClick={handleAddProposta} disabled={submittingProposta}>
-                      {submittingProposta ? 'Registrando...' : 'Enviar Proposta'}
+                      {submittingProposta
+                        ? 'Salvando...'
+                        : editandoProposta ? 'Salvar Alterações' : 'Enviar Proposta'}
                     </button>
                   </div>
                 </div>
@@ -1044,7 +1366,25 @@ function LeadDetailModal({
                       <div key={p.id} className="proposta-history-item">
                         <div className="proposta-history-header">
                           <span>Proposta: {formatCurrency(p.valor_proposta)}</span>
-                          <span className="proposta-history-date">{formatDate(p.created_at)}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span className="proposta-history-date">{formatDate(p.created_at)}</span>
+                            <button
+                              className="icon-btn"
+                              onClick={() => iniciarEdicaoProposta(p)}
+                              title="Editar proposta"
+                              aria-label="Editar proposta"
+                            >
+                              <EditIcon />
+                            </button>
+                            <button
+                              className="icon-btn icon-btn-danger"
+                              onClick={() => handleDeleteProposta(p)}
+                              title="Excluir proposta"
+                              aria-label="Excluir proposta"
+                            >
+                              <TrashIcon />
+                            </button>
+                          </div>
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--sv-text-dim)' }}>
                           Entrada: {formatCurrency(p.valor_entrada)} · Parcelas: {p.parcelas || 1}x
@@ -1057,6 +1397,93 @@ function LeadDetailModal({
                   </div>
                 ) : (
                   <p style={{ fontSize: 13, color: 'var(--sv-text-muted)', marginTop: 8 }}>Nenhuma proposta registrada para este lead.</p>
+                )}
+              </div>
+
+              {/* Timeline de interações */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <h4 style={{ fontSize: 15, fontWeight: 700 }}>Histórico de Interações</h4>
+                  <button className="btn btn-outline btn-sm" onClick={() => setRegistrandoInteracao(true)}>
+                    + Registrar interação
+                  </button>
+                </div>
+
+                {registrandoInteracao && (
+                  <div className="form-grid" style={{ marginBottom: 12 }}>
+                    <div className="form-group">
+                      <label>Tipo</label>
+                      <select
+                        value={tipoInteracao}
+                        onChange={e => setTipoInteracao(e.target.value as TipoInteracao)}
+                      >
+                        {TIPOS_INTERACAO_EDITAVEIS.map(t => (
+                          <option key={t} value={t}>{TIPO_INTERACAO_LABELS[t]}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group full-width">
+                      <label>O que aconteceu?</label>
+                      <textarea
+                        placeholder="Ex.: cliente pediu fotos do motor, retorna na sexta"
+                        value={textoInteracao}
+                        onChange={e => setTextoInteracao(e.target.value)}
+                      />
+                    </div>
+                    <div className="full-width" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button className="btn btn-outline" onClick={cancelarInteracao}>Cancelar</button>
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleSalvarInteracao}
+                        disabled={savingInteracao || textoInteracao.trim().length < 3}
+                      >
+                        {savingInteracao ? 'Salvando...' : editandoInteracao ? 'Salvar alterações' : 'Registrar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {lead.interacoes && lead.interacoes.length > 0 ? (
+                  <div className="timeline-lead">
+                    {[...lead.interacoes].reverse().map(i => (
+                      <div key={i.id} className="timeline-lead-item">
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 13, color: 'var(--sv-text)' }}>
+                            <strong style={{ color: 'var(--sv-text-muted)', fontSize: 11, textTransform: 'uppercase' }}>
+                              {TIPO_INTERACAO_LABELS[i.tipo]}
+                            </strong>{' '}
+                            {i.texto}
+                          </p>
+                          <span style={{ fontSize: 11, color: 'var(--sv-text-muted)' }}>
+                            {formatDate(i.created_at)}{i.autor_nome ? ` · ${i.autor_nome}` : ''}
+                          </span>
+                        </div>
+                        {/* Marcos automáticos do sistema não são editáveis. */}
+                        {i.tipo !== 'sistema' && (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button
+                              className="icon-btn"
+                              onClick={() => iniciarEdicaoInteracao(i)}
+                              title="Editar interação"
+                              aria-label="Editar interação"
+                            >
+                              <EditIcon />
+                            </button>
+                            <button
+                              className="icon-btn icon-btn-danger"
+                              onClick={() => handleDeleteInteracao(i)}
+                              title="Excluir interação"
+                              aria-label="Excluir interação"
+                            >
+                              <TrashIcon />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 13, color: 'var(--sv-text-muted)' }}>Nenhuma interação registrada.</p>
                 )}
               </div>
             </div>
@@ -1072,6 +1499,34 @@ function LeadDetailModal({
           <button className="btn btn-outline" onClick={onClose}>Fechar</button>
         </div>
       </div>
+
+      {/* Edição do cadastro do cliente sem sair do lead */}
+      {editandoCliente && (
+        <ClienteModal
+          cliente={clienteCompleto}
+          onClose={() => { setEditandoCliente(false); setClienteCompleto(null) }}
+          onSaved={() => {
+            setEditandoCliente(false)
+            setClienteCompleto(null)
+            addToast('success', 'Dados do cliente atualizados!')
+            fetchLeadDetails()
+            onUpdated()
+          }}
+          onError={msg => addToast('error', msg)}
+        />
+      )}
+    </div>
+  )
+}
+
+/* Linha rótulo/valor dos dados cadastrais do lead. */
+function DadoLead({ label, valor }: { label: string; valor?: string | null }) {
+  return (
+    <div className="dado-lead">
+      <span className="dado-lead-label">{label}</span>
+      <span className={valor ? 'dado-lead-valor' : 'dado-lead-vazio'}>
+        {valor || 'Não informado'}
+      </span>
     </div>
   )
 }

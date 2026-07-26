@@ -78,6 +78,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
   const [txtOpcional, setTxtOpcional] = useState('')
   const [consultandoPlaca, setConsultandoPlaca] = useState(false)
   const [marcaCod, setMarcaCod] = useState('')
+  const [modeloCod, setModeloCod] = useState('')
   const [rapido] = useState(!editando)
   const [secaoAberta, setSecaoAberta] = useState<'detalhes' | 'identificacao' | 'opcionais' | 'descricao' | null>(null)
 
@@ -175,6 +176,41 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
     enabled: regra.fipe && !!marcaCod,
     staleTime: 1000 * 60 * 60,
   })
+  // Anos reais do modelo na FIPE ("2020 Gasolina"), em vez da lista genérica 1990→hoje.
+  const anosQ = useQuery({
+    queryKey: ['fipe', 'anos', tipoFipe, marcaCod, modeloCod],
+    queryFn: () => fipeService.anos(tipoFipe, marcaCod, modeloCod),
+    enabled: regra.fipe && !!marcaCod && !!modeloCod,
+    staleTime: 1000 * 60 * 60,
+  })
+
+  // Opções do sheet de ano: FIPE quando há modelo selecionado, senão a lista estática.
+  // O nome vem como "2020 Gasolina" ou "32000 Zero Km" (32000 = zero km na FIPE).
+  // O mesmo ano aparece uma vez por combustível — deduplicamos, já que o formulário
+  // guarda só o número do ano e o combustível é campo próprio.
+  const opcoesAno = useMemo(() => {
+    const fipe = anosQ.data ?? []
+    if (fipe.length === 0) return ANOS.map((a) => ({ value: String(a), label: String(a) }))
+    const anoZeroKm = new Date().getFullYear() + 1
+    const vistos = new Set<string>()
+    const out: { value: string; label: string }[] = []
+    for (const a of fipe) {
+      const bruto = parseInt(a.nome, 10)
+      const ano = !bruto || bruto === 32000 ? anoZeroKm : bruto
+      const value = String(ano)
+      if (vistos.has(value)) continue
+      vistos.add(value)
+      out.push({ value, label: bruto === 32000 ? `${anoZeroKm} (zero km)` : value })
+    }
+    return out
+  }, [anosQ.data])
+
+  /** Combustível declarado no nome do ano FIPE ("2020 Gasolina" → "Gasolina"). */
+  const combustivelDoAno = (ano: number): string | null => {
+    const item = (anosQ.data ?? []).find((a) => parseInt(a.nome, 10) === ano)
+    const nome = item?.nome.replace(/^\d+\s*/, '').trim()
+    return nome && COMBUSTIVEIS.includes(nome) ? nome : null
+  }
 
   // Trocar de tipo invalida a marca/modelo escolhidos no catálogo anterior
   // (Honda de carro ≠ Honda de moto na FIPE). Não mexe em veículo já carregado.
@@ -183,6 +219,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
     if (tipoAnterior.current === form.tipo) return
     tipoAnterior.current = form.tipo
     setMarcaCod('')
+    setModeloCod('')
     setForm((f) => ({ ...f, marca: '', modelo: '' }))
   }, [form.tipo])
 
@@ -200,6 +237,17 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
       })
     if (match) setMarcaCod(match.codigo)
   }, [regra.fipe, marcaCod, form.marca, marcasQ.data])
+
+  // Mesma recuperação para o modelo — destrava a lista de anos da FIPE ao editar
+  // um veículo salvo ou depois de preencher pela placa.
+  useEffect(() => {
+    if (!regra.fipe || modeloCod || !form.modelo.trim() || !modelosQ.data) return
+    const alvo = normalizar(form.modelo)
+    const match =
+      modelosQ.data.find((m) => normalizar(m.nome) === alvo) ??
+      modelosQ.data.find((m) => normalizar(m.nome).startsWith(alvo))
+    if (match) setModeloCod(match.codigo)
+  }, [regra.fipe, modeloCod, form.modelo, modelosQ.data])
 
   const [carregandoFotos, setCarregandoFotos] = useState(false)
 
@@ -436,6 +484,7 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
               <SelectField
                 label="Ano modelo *"
                 value={form.anoModelo ? String(form.anoModelo) : undefined}
+                placeholder={anosQ.isLoading ? 'Carregando…' : 'Selecione o ano'}
                 onPress={() => setSheet('ano')}
                 error={erros.anoModelo}
                 containerStyle={{ flex: 1 }}
@@ -709,7 +758,8 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
         onSelect={(cod) => {
           const nome = marcasQ.data?.find((m) => m.codigo === cod)?.nome ?? ''
           setMarcaCod(cod)
-          // Marca nova invalida o modelo antigo.
+          // Marca nova invalida o modelo antigo (e, com ele, os anos da FIPE).
+          setModeloCod('')
           setForm((f) => ({ ...f, marca: nome, modelo: '' }))
           setErros((e) => ({ ...e, marca: undefined }))
         }}
@@ -723,19 +773,36 @@ export default function VeiculoFormScreen({ route }: RootScreenProps<'VeiculoFor
         carregando={modelosQ.isLoading}
         vazioTexto="Nenhum modelo para esta marca."
         options={(modelosQ.data ?? []).map((m) => ({ value: m.codigo, label: m.nome }))}
-        selected={modelosQ.data?.find((m) => m.nome === form.modelo)?.codigo}
+        selected={modeloCod || undefined}
         onSelect={(cod) => {
           const nome = modelosQ.data?.find((m) => m.codigo === cod)?.nome ?? ''
-          set('modelo', nome)
+          setModeloCod(cod)
+          // Modelo novo → os anos vêm da FIPE; o ano antigo pode não existir nessa lista.
+          setForm((f) => ({ ...f, modelo: nome, anoModelo: null }))
+          setErros((e) => ({ ...e, modelo: undefined }))
         }}
       />
       <OptionSheet
         visible={sheet === 'ano'}
         onClose={() => setSheet(null)}
         title="Ano modelo"
+        buscavel
+        buscaPlaceholder="Buscar ano…"
+        carregando={anosQ.isLoading}
         selected={form.anoModelo ? String(form.anoModelo) : undefined}
-        options={ANOS.map((a) => ({ value: String(a), label: String(a) }))}
-        onSelect={(a) => set('anoModelo', parseInt(a, 10))}
+        options={opcoesAno}
+        onSelect={(a) => {
+          const ano = parseInt(a, 10)
+          // A FIPE já sabe o combustível deste ano — só preenche se o usuário
+          // ainda não escolheu, para não sobrescrever o que ele digitou.
+          const comb = combustivelDoAno(ano)
+          setForm((f) => ({
+            ...f,
+            anoModelo: ano,
+            combustivel: !f.combustivel && comb ? comb : f.combustivel,
+          }))
+          setErros((e) => ({ ...e, anoModelo: undefined }))
+        }}
       />
       <OptionSheet
         visible={sheet === 'cambio'}

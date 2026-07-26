@@ -38,3 +38,33 @@ export async function abrirWhatsapp(numero: string, mensagem?: string): Promise<
     }
   }
 }
+
+/**
+ * Registra o lead automaticamente no CRM + Notificação da loja antes de abrir o WhatsApp no mobile.
+ */
+export async function abrirWhatsappComLead(veiculoId: string, lojaWhatsapp: string, textoDefault: string): Promise<void> {
+  // Importação dinâmica/em tempo de execução ou leitura da loja de autenticação do mobile
+  const { useAuthStore } = require('../stores/authStore')
+  const { vitrineService } = require('../services/vitrine')
+
+  const user = useAuthStore.getState().user
+  const nome = user?.nome || 'Comprador da Vitrine App'
+  const telefone = user?.telefone || '11999999999'
+
+  try {
+    const res = await vitrineService.cadastrarLead(veiculoId, nome, telefone)
+    if (res.whatsapp_url) {
+      try {
+        await Linking.openURL(res.whatsapp_url)
+        return
+      } catch {
+        // Fallback
+      }
+    }
+  } catch {
+    // Silencioso se der erro no lead em background, para não travar a experiência do usuário
+  }
+
+  await abrirWhatsapp(lojaWhatsapp, textoDefault)
+}
+

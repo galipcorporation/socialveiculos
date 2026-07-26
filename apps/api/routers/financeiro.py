@@ -49,6 +49,7 @@ from schemas import (
     DashboardKpisResponse,
     MetricasResponse,
     RankingVeiculoResponse,
+    VendasPorMesResponse,
 )
 
 router = APIRouter(prefix="/v1", tags=["Dashboard, Métricas & Financeiro"])
@@ -64,6 +65,62 @@ def _inicio_mes_corrente() -> datetime:
     # mesmo em comparação (500 no /dashboard/kpis). Ver ARMADILHAS-PRODUCAO.md #1.
     agora = datetime.now(timezone.utc)
     return datetime(agora.year, agora.month, 1)
+
+
+_MESES_PT = ("jan", "fev", "mar", "abr", "mai", "jun",
+             "jul", "ago", "set", "out", "nov", "dez")
+
+
+def _inicio_mes(ano: int, mes: int) -> datetime:
+    # NAIVE UTC pelo mesmo motivo de _inicio_mes_corrente(). Ver ARMADILHAS-PRODUCAO.md #1.
+    return datetime(ano, mes, 1)
+
+
+async def _vendas_por_mes(
+    db: AsyncSession,
+    loja_id: str,
+    vendedor_id: Optional[str] = None,
+    meses: int = 6,
+) -> List[VendasPorMesResponse]:
+    """Série de vendas dos últimos `meses` meses (mais antigo → atual).
+
+    Conta ComissaoVenda.created_at, mesma fonte do KPI `vendas_mes` (B051).
+    A agregação por mês é feita em Python de propósito: `date_trunc`/`strftime`
+    divergem entre Postgres e SQLite, então a query só filtra por intervalo.
+    Meses sem venda entram com zero para o gráfico não ficar com buracos.
+    """
+    agora = datetime.now(timezone.utc)
+
+    # Primeiro dia do mês mais antigo da janela.
+    ano, mes = agora.year, agora.month
+    total_meses = ano * 12 + (mes - 1) - (meses - 1)
+    inicio = _inicio_mes(total_meses // 12, total_meses % 12 + 1)
+
+    stmt = select(ComissaoVenda.created_at).where(
+        ComissaoVenda.loja_id == loja_id,
+        ComissaoVenda.created_at >= inicio,
+    )
+    if vendedor_id is not None:
+        stmt = stmt.where(ComissaoVenda.vendedor_id == vendedor_id)
+
+    contagem: dict[tuple[int, int], int] = {}
+    for (criado_em,) in (await db.execute(stmt)).all():
+        if criado_em is None:
+            continue
+        chave = (criado_em.year, criado_em.month)
+        contagem[chave] = contagem.get(chave, 0) + 1
+
+    serie: List[VendasPorMesResponse] = []
+    for i in range(meses):
+        m = total_meses + i
+        ano_m, mes_m = m // 12, m % 12 + 1
+        serie.append(
+            VendasPorMesResponse(
+                mes=_MESES_PT[mes_m - 1],
+                total=contagem.get((ano_m, mes_m), 0),
+            )
+        )
+    return serie
 
 
 async def _calcular_resumo(
@@ -218,6 +275,10 @@ async def get_dashboard_kpis(
             veiculos_publicados=veiculos_publicados,
             minhas_comissoes_pendentes=comissoes_pendentes,
             minhas_comissoes_pagas_mes=comissoes_pagas_mes,
+            # 🔒 só as vendas dele: o gráfico não pode expor o volume da loja
+            vendas_por_mes=await _vendas_por_mes(
+                db, loja_id, vendedor_id=context.usuario.id
+            ),
         )
 
     # ── Escopo GESTOR/ADMIN: comportamento original ──
@@ -253,6 +314,7 @@ async def get_dashboard_kpis(
         vendas_mes=vendas_mes,
         receita_mes=receita_mes,
         veiculos_publicados=veiculos_publicados,
+        vendas_por_mes=await _vendas_por_mes(db, loja_id),
     )
 
 

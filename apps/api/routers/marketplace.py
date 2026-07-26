@@ -212,12 +212,86 @@ async def solicitar_pre_aprovacao(data: PreAprovacaoRequest, db: AsyncSession = 
     db.add(lead)
     await db.flush()
 
+from urllib.parse import quote
+
+
+# ── Captura de Lead da Vitrine (M108) ──────────────────────────
+class LeadVitrineRequest(BaseModel):
+    veiculo_id: str
+    nome: str = Field(..., min_length=2, max_length=200)
+    telefone: str = Field(..., min_length=8, max_length=20)
+    email: Optional[str] = Field(None, max_length=200)
+    mensagem: Optional[str] = Field(None, max_length=1000)
+
+
+@router.post("/lead-vitrine", dependencies=[Depends(rate_limit(10, 60))])
+async def cadastrar_lead_vitrine(data: LeadVitrineRequest, db: AsyncSession = Depends(get_db)):
+    """Formulário público de contato da Vitrine → Lead no CRM da loja dona do veículo.
+    Gera notificação em tempo real para a loja e devolve o link formatado do WhatsApp."""
+    res = await db.execute(
+        select(Veiculo).where(
+            Veiculo.id == data.veiculo_id,
+            Veiculo.publicado_marketplace == True,
+            Veiculo.status == StatusVeiculo.DISPONIVEL,
+        )
+    )
+    veiculo = res.scalar_one_or_none()
+    if not veiculo:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Veículo não encontrado ou indisponível.")
+
+    # Buscar informações da loja (para número do WhatsApp)
+    res_loja = await db.execute(select(Loja).where(Loja.id == veiculo.loja_id))
+    loja = res_loja.scalar_one_or_none()
+
+    # Reaproveita ClientePF pelo telefone na loja, ou cria (sem exigir login).
+    res_cliente = await db.execute(
+        select(ClientePF).where(ClientePF.loja_id == veiculo.loja_id, ClientePF.telefone == data.telefone)
+    )
+    cliente = res_cliente.scalar_one_or_none()
+    if not cliente:
+        cliente = ClientePF(loja_id=veiculo.loja_id, nome=data.nome, telefone=data.telefone, email=data.email)
+        db.add(cliente)
+        await db.flush()
+    elif data.nome and cliente.nome != data.nome:
+        cliente.nome = data.nome
+        if data.email:
+            cliente.email = data.email
+        await db.flush()
+
+    obs = f"Lead vindo da Vitrine/Showcase. Mensagem inicial: {data.mensagem}" if data.mensagem else "Lead vindo da Vitrine/Showcase."
+
+    lead = Lead(
+        loja_id=veiculo.loja_id,
+        cliente_id=cliente.id,
+        veiculo_id=veiculo.id,
+        origem=OrigemLead.VITRINE,
+        etapa=EtapaLead.LEAD,
+        valor_estimado=veiculo.preco_venda or 0.0,
+        observacoes=obs,
+    )
+    db.add(lead)
+    await db.flush()
+
     db.add(Notificacao(
         loja_id=veiculo.loja_id,
-        titulo="Novo interessado em financiamento",
-        conteudo=f"{cliente.nome} demonstrou interesse em financiar {veiculo.marca} {veiculo.modelo}. Entre em contato para dar sequência.",
+        titulo=f"Novo lead da Vitrine: {cliente.nome}",
+        conteudo=f"{cliente.nome} ({cliente.telefone}) demonstrou interesse no veículo {veiculo.marca} {veiculo.modelo} {veiculo.ano_modelo or ''}.",
         tipo="lead",
         link=f"lead:{lead.id}",
     ))
     await db.commit()
-    return {"ok": True, "mensagem": "Recebemos seu pedido! A loja entrará em contato para dar sequência ao financiamento."}
+
+    # Monta URL do WhatsApp se a loja tiver telefone cadastrado
+    num_wa = (loja.whatsapp if loja and loja.whatsapp else None) or (loja.telefone if loja and loja.telefone else None)
+    num_limpo = "".join(filter(str.isdigit, num_wa or "")) if num_wa else ""
+    
+    msg_wa = f"Olá! Meu nome é {cliente.nome}. Tenho interesse no {veiculo.marca} {veiculo.modelo} {veiculo.ano_modelo or ''} que vi na Vitrine."
+    whatsapp_url = f"https://wa.me/{num_limpo}?text={quote(msg_wa)}" if num_limpo else None
+
+    return {
+        "ok": True,
+        "lead_id": lead.id,
+        "whatsapp_url": whatsapp_url,
+        "mensagem": "Lead cadastrado com sucesso no CRM da loja."
+    }
+

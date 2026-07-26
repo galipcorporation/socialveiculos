@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional, List, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
-from models import StatusVeiculo, OrigemVeiculo, TipoCambio, TipoCombustivel, TipoMidia, StatusAprovacao, TipoAcaoAprovacao, PapelUsuario, TipoLancamento, EtapaLead, OrigemLead, StatusAssinatura, StatusPagamento, StatusPropostaRepasse, TipoConversa, StatusNegociacaoConversa, BancoSimulador, StatusSimulacao, StatusResultadoBanco, TipoContrato, StatusContrato
+from models import StatusVeiculo, OrigemVeiculo, TipoCambio, TipoCombustivel, TipoMidia, StatusAprovacao, TipoAcaoAprovacao, PapelUsuario, TipoLancamento, EtapaLead, OrigemLead, StatusAssinatura, StatusPagamento, StatusPropostaRepasse, TipoConversa, StatusNegociacaoConversa, BancoSimulador, StatusSimulacao, StatusResultadoBanco, TipoContrato, StatusContrato, TipoInteracao, MotivoPerda
 
 
 # ── Validação e sanitização (CRM Clientes) ─────────────────────
@@ -395,8 +395,15 @@ class LojaResponse(BaseModel):
     destaque: bool = False
     destaque_ate: Optional[datetime] = None
     created_at: datetime
+    total_veiculos: int = 0
+    seguindo: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SeguirParceiroResponse(BaseModel):
+    seguindo: bool
+    loja_id: str
 
 
 # ── Auditoria ──────────────────────────────────────────────────
@@ -561,12 +568,50 @@ class ClienteUpdateRequest(_ClienteValidatorsMixin):
 # ── CRM Leads & Negociações ────────────────────────────────────
 
 class ClienteSimples(BaseModel):
-    """Resumo do cliente embutido no card de lead (Kanban)."""
+    """
+    Cliente embutido no lead. No mobile o lead É o cadastro do cliente — não há
+    tela separada de clientes — então os dados essenciais precisam vir aqui.
+    """
     id: str
     nome: str
     telefone: Optional[str] = None
+    email: Optional[str] = None
+    cpf: Optional[str] = None
+    rg: Optional[str] = None
+    data_nascimento: Optional[datetime] = None
+    renda_mensal: Optional[float] = None
+    cep: Optional[str] = None
+    endereco: Optional[str] = None
+    numero: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    observacoes: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InteracaoResponse(BaseModel):
+    id: str
+    lead_id: str
+    tipo: TipoInteracao
+    texto: str
+    autor_id: Optional[str] = None
+    autor_nome: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InteracaoCreateRequest(BaseModel):
+    tipo: TipoInteracao = TipoInteracao.NOTA
+    texto: str = Field(..., min_length=1, max_length=2000)
+
+
+class InteracaoUpdateRequest(BaseModel):
+    tipo: Optional[TipoInteracao] = None
+    texto: Optional[str] = Field(None, min_length=1, max_length=2000)
 
 
 class NegociacaoResponse(BaseModel):
@@ -591,6 +636,15 @@ class NegociacaoCreateRequest(BaseModel):
     observacoes: Optional[str] = None
 
 
+class NegociacaoUpdateRequest(BaseModel):
+    """Correção de uma proposta já registrada (vendedor pode; excluir é do gestor)."""
+    veiculo_id: Optional[str] = Field(None, max_length=36)
+    valor_proposta: Optional[float] = Field(None, ge=0)
+    valor_entrada: Optional[float] = Field(None, ge=0)
+    parcelas: Optional[int] = Field(None, ge=1, le=120)
+    observacoes: Optional[str] = None
+
+
 class LeadResponse(BaseModel):
     id: str
     loja_id: str
@@ -600,21 +654,46 @@ class LeadResponse(BaseModel):
     origem: OrigemLead
     valor_proposta: Optional[float] = None
     observacoes: Optional[str] = None
+    responsavel_id: Optional[str] = None
+    responsavel_nome: Optional[str] = None
+    proximo_contato: Optional[datetime] = None
+    motivo_perda: Optional[MotivoPerda] = None
+    motivo_perda_detalhe: Optional[str] = None
     cliente: Optional[ClienteSimples] = None
     negociacoes: List[NegociacaoResponse] = []
+    interacoes: List[InteracaoResponse] = []
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
+class ClienteInlineLead(ClienteCreateRequest):
+    """
+    Cadastro do cliente feito de dentro do lead (fluxo do mobile, que não tem
+    tela de clientes). Ou se informa cliente_id, ou este bloco.
+    Herda toda a validação de ClienteCreateRequest (CPF/CNPJ com dígito, UF, etc.).
+    """
+    pass
+
+
 class LeadCreateRequest(BaseModel):
-    cliente_id: str = Field(..., max_length=36)
+    # cliente_id (existente) OU cliente (cadastro inline, usado pelo mobile).
+    cliente_id: Optional[str] = Field(None, max_length=36)
+    cliente: Optional[ClienteInlineLead] = None
     veiculo_id: Optional[str] = Field(None, max_length=36)
     etapa: EtapaLead = EtapaLead.LEAD
     origem: OrigemLead = OrigemLead.MANUAL
     valor_proposta: Optional[float] = Field(None, ge=0)
     observacoes: Optional[str] = None
+    responsavel_id: Optional[str] = Field(None, max_length=36)
+    proximo_contato: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def _exige_cliente(self):
+        if not self.cliente_id and not self.cliente:
+            raise ValueError("Informe cliente_id ou os dados do cliente.")
+        return self
 
 
 class LeadUpdateRequest(BaseModel):
@@ -622,10 +701,17 @@ class LeadUpdateRequest(BaseModel):
     origem: Optional[OrigemLead] = None
     valor_proposta: Optional[float] = Field(None, ge=0)
     observacoes: Optional[str] = None
+    responsavel_id: Optional[str] = Field(None, max_length=36)
+    proximo_contato: Optional[datetime] = None
+    motivo_perda: Optional[MotivoPerda] = None
+    motivo_perda_detalhe: Optional[str] = None
 
 
 class LeadMoverEtapaRequest(BaseModel):
     etapa: EtapaLead
+    # Ao cair em PERDIDO o funil precisa saber por quê.
+    motivo_perda: Optional[MotivoPerda] = None
+    motivo_perda_detalhe: Optional[str] = None
 
 
 class KanbanColunaResponse(BaseModel):
@@ -849,6 +935,12 @@ class FinanceiroResumoResponse(BaseModel):
 
 # ── Dashboard & Métricas ───────────────────────────────────────
 
+class VendasPorMesResponse(BaseModel):
+    """Um ponto da série de vendas dos últimos meses (gráfico de barras)."""
+    mes: str    # rótulo curto do mês, ex.: "jul"
+    total: int  # vendas fechadas no mês
+
+
 class DashboardKpisResponse(BaseModel):
     """KPIs reais da loja. Zeros quando a loja ainda não tem dados (estado vazio).
 
@@ -865,6 +957,9 @@ class DashboardKpisResponse(BaseModel):
     # Campos pessoais (só quando escopo == "vendedor")
     minhas_comissoes_pendentes: Optional[float] = None
     minhas_comissoes_pagas_mes: Optional[float] = None
+    # Série do gráfico de barras (últimos 6 meses, do mais antigo ao atual).
+    # Segue o escopo: vendedor vê só as vendas dele.
+    vendas_por_mes: List[VendasPorMesResponse] = []
 
 
 class RankingVeiculoResponse(BaseModel):
@@ -1732,6 +1827,7 @@ class EsteiraResumoResponse(BaseModel):
     origem: Optional[OrigemLead] = None
     veiculo: Optional[VeiculoResumo] = None
     comprador: Optional[CompradorResumo] = None
+    valor_venda: Optional[float] = None
     proximo_item: Optional[str] = None       # título do próximo pendente
     prazo_mais_proximo: Optional[datetime] = None
     tem_vencido: bool = False

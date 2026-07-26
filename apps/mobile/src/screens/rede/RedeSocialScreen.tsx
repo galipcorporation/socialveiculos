@@ -14,6 +14,7 @@ import type {
   ComentarioRepasse, LojaParceira, PropostaRepasse, PublicacaoRepasse, StatusProposta,
 } from '../../services/types'
 import { STATUS_PROPOSTA_LABEL } from '../../services/types'
+import { extractErrorDetails } from '../../lib/api'
 import { formatBRL, formatRelativo, formatKm, formatTelefone, maskMoedaInput, parseMoedaInput } from '../../lib/format'
 import { abrirWhatsapp } from '../../lib/whatsapp'
 
@@ -65,14 +66,22 @@ function FeedTab() {
   const [comentarPub, setComentarPub] = useState<PublicacaoRepasse | null>(null)
 
   const curtir = async (id: string) => {
-    await repassesService.curtir(id)
-    queryClient.invalidateQueries({ queryKey: ['repasses', 'feed'] })
+    try {
+      await repassesService.curtir(id)
+      queryClient.invalidateQueries({ queryKey: ['repasses', 'feed'] })
+    } catch (e) {
+      toast.show('error', extractErrorDetails(e).message)
+    }
   }
 
   const conversar = async (p: PublicacaoRepasse) => {
-    const convId = await chatService.abrirConversaParceiro(p.loja_id)
-    queryClient.invalidateQueries({ queryKey: ['chat'] })
-    navigation.navigate('Conversa', { id: convId, nome: p.loja_nome })
+    try {
+      const convId = await chatService.abrirConversaParceiro(p.loja_id)
+      queryClient.invalidateQueries({ queryKey: ['chat'] })
+      navigation.navigate('Conversa', { id: convId, nome: p.loja_nome })
+    } catch (e) {
+      toast.show('error', extractErrorDetails(e).message)
+    }
   }
 
   const abrirProposta = (p: PublicacaoRepasse) => {
@@ -91,6 +100,8 @@ function FeedTab() {
       queryClient.invalidateQueries({ queryKey: ['repasses', 'propostas'] })
       toast.show('success', 'Proposta enviada.')
       setProposta(null)
+    } catch (e) {
+      toast.show('error', extractErrorDetails(e).message)
     } finally {
       setEnviando(false)
     }
@@ -231,15 +242,23 @@ function PropostasTab() {
   const q = useQuery({ queryKey: ['repasses', 'propostas'], queryFn: () => repassesService.propostas() })
 
   const responder = async (p: PropostaRepasse, aceitar: boolean) => {
-    await repassesService.responderProposta(p.id, aceitar)
-    queryClient.invalidateQueries({ queryKey: ['repasses', 'propostas'] })
-    toast.show('success', aceitar ? 'Proposta aceita.' : 'Proposta rejeitada.')
+    try {
+      await repassesService.responderProposta(p.id, aceitar)
+      queryClient.invalidateQueries({ queryKey: ['repasses', 'propostas'] })
+      toast.show('success', aceitar ? 'Proposta aceita.' : 'Proposta rejeitada.')
+    } catch (e) {
+      toast.show('error', extractErrorDetails(e).message)
+    }
   }
 
   const cancelar = async (p: PropostaRepasse) => {
-    await repassesService.cancelarProposta(p.id)
-    queryClient.invalidateQueries({ queryKey: ['repasses', 'propostas'] })
-    toast.show('success', 'Proposta cancelada.')
+    try {
+      await repassesService.cancelarProposta(p.id)
+      queryClient.invalidateQueries({ queryKey: ['repasses', 'propostas'] })
+      toast.show('success', 'Proposta cancelada.')
+    } catch (e) {
+      toast.show('error', extractErrorDetails(e).message)
+    }
   }
 
   if (q.isLoading) return <View style={{ padding: spacing.md }}>{[0, 1].map((i) => <SkeletonCard key={i} withImage={false} />)}</View>
@@ -298,8 +317,13 @@ function ParceirosTab() {
   })
 
   const favoritar = async (p: LojaParceira) => {
-    await repassesService.favoritarParceiro(p.id)
-    queryClient.invalidateQueries({ queryKey: ['repasses', 'parceiros'] })
+    try {
+      const seguindo = await repassesService.favoritarParceiro(p.id)
+      queryClient.invalidateQueries({ queryKey: ['repasses', 'parceiros'] })
+      toast.show('success', seguindo ? `${p.nome} adicionada aos favoritos.` : `${p.nome} removida dos favoritos.`)
+    } catch {
+      toast.show('error', 'Não foi possível atualizar o favorito.')
+    }
   }
 
   const conversar = async (p: LojaParceira) => {

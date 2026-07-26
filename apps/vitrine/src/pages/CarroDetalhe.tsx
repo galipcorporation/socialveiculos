@@ -6,6 +6,7 @@ import { getSSGData } from '../lib/ssgData'
 import { whatsappLojaLink } from '../lib/contato'
 import { api } from '../lib/api'
 import { BottomNav } from '../components/BottomNav'
+import { ContatoVitrineModal } from '../components/ContatoVitrineModal'
 
 /** Modal de pré-aprovação de crédito (M017) — captura o interesse do comprador
  *  e encaminha à loja como lead. Não simula parcela (sem parceria com banco). */
@@ -95,6 +96,7 @@ export function CarroDetalhe({ initialData }: { initialData?: Veiculo | null }) 
   const [loading, setLoading] = useState(!seed)
   const [erro, setErro] = useState(false)
   const [modalCredito, setModalCredito] = useState(false)
+  const [modalContato, setModalContato] = useState(false)
 
   useEffect(() => {
     if (seed && seed.id === id) return
@@ -118,8 +120,8 @@ export function CarroDetalhe({ initialData }: { initialData?: Veiculo | null }) 
     return (
       <div className="vt-detail">
         Veículo não encontrado ou não está mais disponível.{' '}
-        <Link to="/" className="vt-detail-back">
-          Voltar ao feed
+        <Link to="/" style={{ color: 'var(--vt-primary)' }}>
+          Voltar ao início
         </Link>
       </div>
     )
@@ -136,11 +138,6 @@ export function CarroDetalhe({ initialData }: { initialData?: Veiculo | null }) 
       return []
     }
   })()
-
-  const whatsappHref = whatsappLojaLink(
-    veiculo.loja_whatsapp,
-    `Olá! Tenho interesse no ${veiculo.marca} ${veiculo.modelo} ${veiculo.ano_modelo}.`,
-  )
 
   return (
     <div className="vt-detail">
@@ -221,21 +218,30 @@ export function CarroDetalhe({ initialData }: { initialData?: Veiculo | null }) 
             Simular financiamento
           </button>
 
-          {whatsappHref && (
-            <a
-              href={whatsappHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="vt-btn vt-btn-outline vt-btn-block"
-              style={{ marginTop: '0.75rem' }}
-            >
-              Chamar no WhatsApp
-            </a>
-          )}
+          <button
+            type="button"
+            className="vt-btn vt-btn-outline vt-btn-block"
+            style={{ marginTop: '0.75rem' }}
+            onClick={() => setModalContato(true)}
+          >
+            Chamar no WhatsApp
+          </button>
         </div>
       </div>
 
       {modalCredito && <PreAprovacaoModal veiculoId={veiculo.id} onClose={() => setModalCredito(false)} />}
+      {modalContato && (
+        <ContatoVitrineModal
+          veiculoId={veiculo.id}
+          veiculoInfo={{
+            marca: veiculo.marca,
+            modelo: veiculo.modelo,
+            ano_modelo: veiculo.ano_modelo,
+            loja_whatsapp: veiculo.loja_whatsapp,
+          }}
+          onClose={() => setModalContato(false)}
+        />
+      )}
       <BottomNav />
     </div>
   )

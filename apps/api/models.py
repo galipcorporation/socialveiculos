@@ -94,6 +94,28 @@ class EtapaLead(str, enum.Enum):
     PERDIDO = "perdido"
 
 
+class TipoInteracao(str, enum.Enum):
+    """Tipo de toque registrado na timeline do lead."""
+    NOTA = "nota"
+    LIGACAO = "ligacao"
+    WHATSAPP = "whatsapp"
+    VISITA = "visita"
+    EMAIL = "email"
+    PROPOSTA = "proposta"
+    SISTEMA = "sistema"   # gerado pelo próprio sistema (criação, mudança de etapa)
+
+
+class MotivoPerda(str, enum.Enum):
+    """Por que o lead foi perdido — alimenta o relatório de funil."""
+    PRECO = "preco"
+    CREDITO_NEGADO = "credito_negado"
+    COMPROU_CONCORRENTE = "comprou_concorrente"
+    SEM_RESPOSTA = "sem_resposta"
+    DESISTIU = "desistiu"
+    VEICULO_VENDIDO = "veiculo_vendido"
+    OUTRO = "outro"
+
+
 class OrigemLead(str, enum.Enum):
     VITRINE = "vitrine"
     MANUAL = "manual"
@@ -532,18 +554,59 @@ class Lead(Base):
     valor_proposta = Column(Float, nullable=True)
     observacoes = Column(Text, nullable=True)
 
+    # Responsável pelo lead — sem dono, ninguém cobra o follow-up.
+    responsavel_id = Column(String(36), ForeignKey("usuario.id", ondelete="SET NULL"), nullable=True)
+    # Próximo contato agendado (data do follow-up).
+    proximo_contato = Column(DateTime, nullable=True)
+    # Só preenchidos quando etapa == PERDIDO.
+    motivo_perda = Column(Enum(MotivoPerda), nullable=True)
+    motivo_perda_detalhe = Column(Text, nullable=True)
+
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
     # Relationships
     loja = relationship("Loja", back_populates="leads")
     cliente = relationship("ClientePF", back_populates="leads")
+    responsavel = relationship("Usuario", foreign_keys=[responsavel_id])
     negociacoes = relationship("Negociacao", back_populates="lead", cascade="all, delete-orphan")
+    interacoes = relationship(
+        "InteracaoLead",
+        back_populates="lead",
+        cascade="all, delete-orphan",
+        order_by="InteracaoLead.created_at",
+    )
 
     __table_args__ = (
         Index("ix_lead_loja", "loja_id"),
         Index("ix_lead_etapa", "etapa"),
         Index("ix_lead_cliente", "cliente_id"),
+        Index("ix_lead_responsavel", "responsavel_id"),
+        Index("ix_lead_proximo_contato", "proximo_contato"),
+    )
+
+
+class InteracaoLead(Base):
+    """Timeline do lead — cada toque com o cliente (nota, ligação, visita…)."""
+    __tablename__ = "interacao_lead"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    lead_id = Column(String(36), ForeignKey("lead.id", ondelete="CASCADE"), nullable=False)
+    autor_id = Column(String(36), ForeignKey("usuario.id", ondelete="SET NULL"), nullable=True)
+    # Desnormalizado: o nome sobrevive à saída do vendedor da equipe.
+    autor_nome = Column(String(150), nullable=True)
+
+    tipo = Column(Enum(TipoInteracao), default=TipoInteracao.NOTA, nullable=False)
+    texto = Column(Text, nullable=False)
+
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+    lead = relationship("Lead", back_populates="interacoes")
+
+    __table_args__ = (
+        Index("ix_interacao_lead", "lead_id"),
+        Index("ix_interacao_created", "created_at"),
     )
 
 

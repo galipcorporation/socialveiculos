@@ -90,10 +90,10 @@ export default function PosVendaScreen() {
 
 function EsteiraCard({ esteira, onPress }: { esteira: Esteira; onPress: () => void }) {
   const { colors } = useTheme()
-  const total = esteira.itens.length
-  const feitos = esteira.itens.filter((i) => i.status === 'concluido').length
-  const vencidos = esteira.itens.filter((i) => i.vencido).length
-  const proximo = esteira.itens.find((i) => i.status !== 'concluido' && i.status !== 'nao_aplicavel')
+  const total = esteira.total_itens ?? esteira.itens.length
+  const feitos = esteira.concluidos ?? esteira.itens.filter((i) => i.status === 'concluido').length
+  const vencidos = esteira.tem_vencido ? (esteira.itens.filter((i) => i.vencido).length || 1) : esteira.itens.filter((i) => i.vencido).length
+  const proximoTitulo = esteira.proximo_item || esteira.itens.find((i) => i.status !== 'concluido' && i.status !== 'nao_aplicavel')?.titulo
 
   return (
     <Card onPress={onPress} style={{ marginBottom: spacing.sm }}>
@@ -101,7 +101,7 @@ function EsteiraCard({ esteira, onPress }: { esteira: Esteira; onPress: () => vo
         <View style={{ flex: 1 }}>
           <Txt variant="bodySemibold" numberOfLines={1}>{esteira.veiculo_nome}</Txt>
           <Txt variant="caption" color="textDim" numberOfLines={1}>
-            {esteira.comprador_nome} · {formatBRL(esteira.valor_venda)}
+            {esteira.comprador_nome}{esteira.valor_venda != null ? ` · ${formatBRL(esteira.valor_venda)}` : ''}
           </Txt>
         </View>
         <Badge label={LABEL_ESTAGIO[esteira.estagio]} tone={TONE_ESTAGIO_ESTEIRA[esteira.estagio]} size="sm" />
@@ -113,17 +113,19 @@ function EsteiraCard({ esteira, onPress }: { esteira: Esteira; onPress: () => vo
         style={{ marginTop: spacing.sm }}
       />
       <View style={styles.rodape}>
-        <Txt variant="caption" color="textMuted">
-          {feitos}/{total} etapas · aberta em {formatData(esteira.aberta_em)}
+        <Txt variant="caption" color="textMuted" numberOfLines={1} style={styles.rodapeEsq}>
+          {feitos}/{total} etapas · {formatData(esteira.aberta_em)}
         </Txt>
         {vencidos > 0 ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={styles.rodapeDir}>
             <Ionicons name="warning" size={13} color={colors.error} />
-            <Txt variant="caption" color="error">{vencidos} vencido{vencidos > 1 ? 's' : ''}</Txt>
+            <Txt variant="caption" color="error" numberOfLines={1}>
+              {vencidos} vencido{vencidos > 1 ? 's' : ''}
+            </Txt>
           </View>
-        ) : proximo ? (
-          <Txt variant="caption" color="textDim" numberOfLines={1} style={{ maxWidth: '55%' }}>
-            Próximo: {proximo.titulo}
+        ) : proximoTitulo ? (
+          <Txt variant="caption" color="textDim" numberOfLines={1} style={styles.rodapeDir}>
+            Próximo: {proximoTitulo}
           </Txt>
         ) : null}
       </View>
@@ -137,6 +139,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.sm,
     marginTop: spacing.xs,
   },
+  rodapeEsq: { flexShrink: 1 },
+  rodapeDir: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
 })

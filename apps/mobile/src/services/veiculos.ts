@@ -2,7 +2,7 @@ import { api } from '../lib/api'
 import { esteiraService } from './esteira'
 import { isFoto } from './types'
 import type {
-  CategoriaCusto, CustoVeiculo, DocumentoVenda, Esteira, Midia, SolicitacaoAprovacao,
+  ArquivoUpload, CategoriaCusto, CustoVeiculo, DocumentoVenda, Esteira, Midia, SolicitacaoAprovacao,
   TipoDocumentoVenda, TipoMidia, TipoSolicitacao, Veiculo, VeiculoStatus,
 } from './types'
 
@@ -203,6 +203,7 @@ function mapDoc(d: DocumentoDTO): DocumentoVenda {
     id: d.id,
     veiculo_id: '',
     tipo: (d.tipo as TipoDocumentoVenda) ?? 'outro',
+    url: d.url,
     nome_arquivo: d.nome,
     visivel_comprador: d.visivel_comprador,
     created_at: d.created_at,
@@ -385,13 +386,19 @@ export const veiculosService = {
     return (r.documentos ?? []).map((d) => ({ ...mapDoc(d), veiculo_id: idVeiculo }))
   },
 
-  async adicionarDocumento(idVeiculo: string, input: { tipo: TipoDocumentoVenda; nome_arquivo: string; visivel_comprador: boolean }): Promise<DocumentoVenda> {
-    const d = await api.post<DocumentoDTO>(`/veiculos/${idVeiculo}/documentos`, {
-      tipo: input.tipo,
-      nome: input.nome_arquivo.trim(),
-      url: '',
-      visivel_comprador: input.visivel_comprador,
-    })
+  async adicionarDocumento(
+    idVeiculo: string,
+    input: { tipo: TipoDocumentoVenda; visivel_comprador: boolean; arquivo: ArquivoUpload },
+  ): Promise<DocumentoVenda> {
+    const form = new FormData()
+    form.append('file', {
+      uri: input.arquivo.uri,
+      name: input.arquivo.nome,
+      type: input.arquivo.mimeType || 'application/octet-stream',
+    } as unknown as Blob)
+    form.append('tipo', input.tipo)
+    form.append('visivel_comprador', String(input.visivel_comprador))
+    const d = await api.post<DocumentoDTO>(`/veiculos/${idVeiculo}/documentos/upload`, form)
     return { ...mapDoc(d), veiculo_id: idVeiculo }
   },
 

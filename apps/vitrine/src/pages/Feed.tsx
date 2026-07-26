@@ -9,6 +9,7 @@ import { api } from '../lib/api'
 import { whatsappLojaLink } from '../lib/contato'
 import { CarCard } from '../components/CarCard'
 import { BottomNav } from '../components/BottomNav'
+import { ContatoVitrineModal } from '../components/ContatoVitrineModal'
 
 
 /* ── Types ───────────────────────────────────────────────────── */
@@ -345,14 +346,10 @@ export function Feed() {
     }
   }
 
+  const [veiculoContato, setVeiculoContato] = useState<Veiculo | null>(null)
+
   const handleWhatsApp = (veiculo: Veiculo) => {
-    const text = `Olá! Vi o carro ${veiculo.marca} ${veiculo.modelo} (${veiculo.ano_fabricacao}/${veiculo.ano_modelo}) na Vitrine do Social Veículos e gostaria de mais informações.`
-    const link = whatsappLojaLink(veiculo.loja_whatsapp, text)
-    if (!link) {
-      useUIStore.getState().showToast('Esta loja não tem WhatsApp cadastrado. Use o chat interno.', 'info')
-      return
-    }
-    window.open(link, '_blank')
+    setVeiculoContato(veiculo)
   }
 
 
@@ -669,6 +666,19 @@ export function Feed() {
           mfaAtivo={!!user.mfa_ativo}
           onClose={() => setShowMfaModal(false)}
           onChange={(ativo) => updateUser({ mfa_ativo: ativo })}
+        />
+      )}
+
+      {veiculoContato && (
+        <ContatoVitrineModal
+          veiculoId={veiculoContato.id}
+          veiculoInfo={{
+            marca: veiculoContato.marca,
+            modelo: veiculoContato.modelo,
+            ano_modelo: veiculoContato.ano_modelo,
+            loja_whatsapp: veiculoContato.loja_whatsapp,
+          }}
+          onClose={() => setVeiculoContato(null)}
         />
       )}
     </>

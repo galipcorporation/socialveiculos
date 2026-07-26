@@ -22,7 +22,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy import func, or_, case
 
 from datetime import datetime, timezone
-from storage import storage_provider
+from storage import storage_provider, detectar_tipo_por_conteudo, sanitizar_nome_arquivo
 from database import get_db
 from lib_formatacao import formatar_moeda
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria, get_optional_user
@@ -1296,6 +1296,21 @@ async def adicionar_documento(
     )
 
 
+# PDF e imagens (foto do documento tirada no celular). octet-stream é o que
+# alguns Androids mandam pelo seletor de arquivos — aceito aqui como "não sei o
+# tipo" e resolvido pelos magic bytes, nunca pela extensão do nome enviado.
+DOC_MIMES_PERMITIDOS = {
+    "application/pdf": ".pdf",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/heic": ".heic",
+    "image/heif": ".heif",
+    "image/webp": ".webp",
+    "application/octet-stream": ".pdf",
+}
+ERRO_DOC_FORMATO = "Formato não suportado. Envie PDF ou imagem (JPG, PNG, HEIC, WebP)."
+
+
 @router.post("/veiculos/{veiculo_id}/documentos/upload", response_model=VeiculoDocumentoResponse, status_code=201)
 async def upload_documento(
     veiculo_id: str,
@@ -1305,9 +1320,10 @@ async def upload_documento(
     ctx: B2BContext = Depends(get_current_b2b_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload de PDF como documento do veículo."""
-    if file.content_type not in ("application/pdf", "application/octet-stream"):
-        raise HTTPException(status_code=400, detail="Apenas arquivos PDF são permitidos.")
+    """Upload de PDF ou imagem como documento do veículo."""
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type not in DOC_MIMES_PERMITIDOS:
+        raise HTTPException(status_code=400, detail=ERRO_DOC_FORMATO)
 
     content = await file.read()
     if len(content) > 20 * 1024 * 1024:
@@ -1318,16 +1334,37 @@ async def upload_documento(
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Veículo não encontrado")
 
+    # O Content-Type do multipart é escolhido pelo cliente: quem manda os bytes
+    # decide o rótulo. Só os magic bytes provam o formato — é o que impede um
+    # HTML com <script> renomeado para .pdf de ser servido como documento.
+    tipo_real = detectar_tipo_por_conteudo(content)
+    if tipo_real is None:
+        raise HTTPException(status_code=400, detail=ERRO_DOC_FORMATO)
+    # octet-stream (seletor de arquivos de vários Androids) não diz o formato;
+    # nos demais casos o rótulo tem que bater com o conteúdo, senão é forjado.
+    if content_type != "application/octet-stream" and tipo_real != content_type:
+        # jpeg/jpg e heic/heif são o mesmo formato com rótulos diferentes.
+        equivalentes = {("image/heic", "image/heif"), ("image/heif", "image/heic")}
+        if (tipo_real, content_type) not in equivalentes:
+            raise HTTPException(status_code=400, detail=ERRO_DOC_FORMATO)
+    content_type = tipo_real
+
+    nome_arquivo = sanitizar_nome_arquivo(
+        file.filename, padrao=f"documento{DOC_MIMES_PERMITIDOS[content_type]}"
+    )
+
     url = await storage_provider.upload_file(
-        content, file.filename or "documento.pdf", "application/pdf",
+        content, nome_arquivo, content_type,
         prefixo=f"lojas/{ctx.loja.id}/documentos",
+        # Documento é para baixar, nunca para renderizar na origem do bucket.
+        forcar_download=True,
     )
     tipo_enum = TipoDocumentoVeiculo(tipo) if tipo in TipoDocumentoVeiculo._value2member_map_ else TipoDocumentoVeiculo.OUTRO
     doc = VeiculoDocumento(
         veiculo_id=veiculo_id,
         loja_id=ctx.loja.id,
         tipo=tipo_enum,
-        nome=file.filename or "documento.pdf",
+        nome=nome_arquivo,
         url=url,
         visivel_comprador=visivel_comprador,
     )

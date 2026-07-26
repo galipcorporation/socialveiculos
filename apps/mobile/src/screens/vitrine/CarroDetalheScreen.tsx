@@ -14,7 +14,7 @@ import { vitrineService } from '../../services'
 import { useGateLogin } from '../../hooks/useGateLogin'
 import { useToggleFavorito } from '../../hooks/useToggleFavorito'
 import { formatBRL, formatKm } from '../../lib/format'
-import { abrirWhatsapp } from '../../lib/whatsapp'
+import { abrirWhatsapp, abrirWhatsappComLead } from '../../lib/whatsapp'
 import type { VitrineScreenProps } from '../../navigation/types'
 
 export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroDetalhe'>) {
@@ -53,7 +53,7 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
   const whatsapp = async () => {
     if (!a?.loja_whatsapp) { toast.show('info', 'Loja sem WhatsApp cadastrado.'); return }
     const texto = `Olá! Tenho interesse no ${a.marca} ${a.modelo} anunciado na Social Veículos.`
-    await abrirWhatsapp(a.loja_whatsapp, texto)
+    await abrirWhatsappComLead(a.id, a.loja_whatsapp, texto)
   }
 
   return (

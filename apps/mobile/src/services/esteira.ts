@@ -36,12 +36,16 @@ interface EsteiraResumoDTO {
   estagio: EstagioEsteira
   veiculo?: VeiculoResumoDTO | null
   comprador?: CompradorResumoDTO | null
+  valor_venda?: number | null
+  proximo_item?: string | null
+  tem_vencido?: boolean | null
+  total_itens?: number | null
+  concluidos?: number | null
   aberta_em?: string | null
 }
 interface EsteiraDetalheDTO extends EsteiraResumoDTO {
   vendedor_id?: string | null
   vendedor_nome?: string | null
-  valor_venda?: number | null
   comissao_valor?: number | null
   comissao_percentual?: number | null
   comissao_id?: string | null
@@ -109,6 +113,10 @@ function mapDetalhe(d: EsteiraDetalheDTO): Esteira {
     comissao_id: d.comissao_id ?? undefined,
     comissao_paga: comissaoPaga(d, itens),
     itens,
+    total_itens: d.total_itens ?? (d.itens ? d.itens.length : 0),
+    concluidos: d.concluidos ?? (d.itens ? d.itens.filter((i) => i.status === 'concluido').length : 0),
+    proximo_item: d.proximo_item ?? undefined,
+    tem_vencido: d.tem_vencido ?? false,
     aberta_em: d.aberta_em ?? new Date().toISOString(),
     concluida_em: d.concluida_em ?? null,
   }
@@ -122,10 +130,14 @@ function mapResumo(r: EsteiraResumoDTO): Esteira {
     veiculo_id: r.veiculo?.id,
     comprador_nome: r.comprador?.nome ?? '—',
     vendedor_nome: undefined,
-    valor_venda: undefined,
+    valor_venda: r.valor_venda ?? undefined,
     comissao_valor: undefined,
     comissao_paga: null,
     itens: [],
+    total_itens: r.total_itens ?? 0,
+    concluidos: r.concluidos ?? 0,
+    proximo_item: r.proximo_item ?? undefined,
+    tem_vencido: r.tem_vencido ?? false,
     aberta_em: r.aberta_em ?? new Date().toISOString(),
     concluida_em: null,
   }

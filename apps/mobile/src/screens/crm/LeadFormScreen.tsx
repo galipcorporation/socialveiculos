@@ -7,7 +7,12 @@ import {
 } from '../../components/ui'
 import { leadsService, veiculosService } from '../../services'
 import { ORIGEM_LEAD_LABEL, type OrigemLead } from '../../services/types'
-import { formatBRL, maskMoedaInput, maskTelefoneInput, parseMoedaInput } from '../../lib/format'
+import {
+  formatBRL, maskCEP, maskCPF, maskData, maskMoedaInput, maskTelefoneInput,
+  parseMoedaInput,
+} from '../../lib/format'
+import { dataBRparaISO, validarCPF, validarEmail } from '../../lib/validacao'
+import { buscarCep } from '../../lib/cep'
 import type { RootScreenProps } from '../../navigation/types'
 
 export default function LeadFormScreen({ route }: RootScreenProps<'LeadForm'>) {
@@ -17,12 +22,21 @@ export default function LeadFormScreen({ route }: RootScreenProps<'LeadForm'>) {
 
   const [nome, setNome] = useState('')
   const [telefone, setTelefone] = useState('')
+  const [cpf, setCpf] = useState('')
+  const [email, setEmail] = useState('')
+  const [nascimento, setNascimento] = useState('')
+  const [renda, setRenda] = useState('')
+  const [cep, setCep] = useState('')
+  const [cidade, setCidade] = useState('')
+  const [estado, setEstado] = useState('')
   const [origem, setOrigem] = useState<OrigemLead>('manual')
   const [veiculoId, setVeiculoId] = useState<string | undefined>(route.params?.veiculoId)
   const [valor, setValor] = useState('')
   const [obs, setObs] = useState('')
   const [sheet, setSheet] = useState<'origem' | 'veiculo' | null>(null)
   const [erroNome, setErroNome] = useState<string | undefined>()
+  const [erroCpf, setErroCpf] = useState<string | undefined>()
+  const [erroEmail, setErroEmail] = useState<string | undefined>()
 
   const veiculosQ = useQuery({
     queryKey: ['veiculos', 'lista'],
@@ -33,15 +47,33 @@ export default function LeadFormScreen({ route }: RootScreenProps<'LeadForm'>) {
   )
   const veiculoSel = disponiveis.find((v) => v.id === veiculoId)
 
+  // Ao completar 8 dígitos busca no ViaCEP e preenche cidade/UF (falha silenciosa).
+  const preencherPorCep = async (texto: string) => {
+    const mascarado = maskCEP(texto)
+    setCep(mascarado)
+    if (mascarado.replace(/\D/g, '').length !== 8) return
+    const endereco = await buscarCep(mascarado)
+    if (!endereco) return
+    if (endereco.cidade) setCidade(endereco.cidade)
+    if (endereco.estado) setEstado(endereco.estado)
+  }
+
   const mut = useMutation({
     mutationFn: () =>
       leadsService.criar({
-        cliente_nome: nome.trim(),
-        cliente_telefone: telefone.replace(/\D/g, '') || undefined,
+        nome: nome.trim(),
+        telefone: telefone.replace(/\D/g, '') || undefined,
+        cpf: cpf.replace(/\D/g, '') || undefined,
+        email: email.trim() || undefined,
+        data_nascimento: dataBRparaISO(nascimento),
+        renda_mensal: renda ? parseMoedaInput(renda) : undefined,
+        cep: cep.replace(/\D/g, '') || undefined,
+        cidade: cidade.trim() || undefined,
+        estado: estado.trim().toUpperCase() || undefined,
         origem,
         veiculo_id: veiculoId,
         valor_proposta: valor ? parseMoedaInput(valor) : undefined,
-        observacoes: obs.trim() || undefined,
+        lead_observacoes: obs.trim() || undefined,
       }),
     onSuccess: (lead) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
@@ -56,6 +88,16 @@ export default function LeadFormScreen({ route }: RootScreenProps<'LeadForm'>) {
   const salvar = () => {
     if (nome.trim().length < 3) {
       setErroNome('Informe o nome do cliente.')
+      return
+    }
+    // CPF e e-mail são opcionais, mas se preenchidos precisam ser válidos —
+    // senão o backend devolve 422 e o vendedor não entende o motivo.
+    if (cpf.trim() && !validarCPF(cpf)) {
+      setErroCpf('CPF inválido.')
+      return
+    }
+    if (email.trim() && !validarEmail(email)) {
+      setErroEmail('E-mail inválido.')
       return
     }
     mut.mutate()
@@ -85,6 +127,73 @@ export default function LeadFormScreen({ route }: RootScreenProps<'LeadForm'>) {
             icon="call-outline"
             value={telefone}
             onChangeText={(t) => setTelefone(maskTelefoneInput(t))}
+          />
+          <Input
+            label="CPF"
+            placeholder="000.000.000-00"
+            keyboardType="number-pad"
+            icon="card-outline"
+            value={cpf}
+            onChangeText={(t) => {
+              setCpf(maskCPF(t))
+              setErroCpf(undefined)
+            }}
+            error={erroCpf}
+            hint="Necessário para financiamento e contrato."
+          />
+          <Input
+            label="E-mail"
+            placeholder="cliente@email.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            icon="mail-outline"
+            value={email}
+            onChangeText={(t) => {
+              setEmail(t)
+              setErroEmail(undefined)
+            }}
+            error={erroEmail}
+          />
+          <Input
+            label="Data de nascimento"
+            placeholder="DD/MM/AAAA"
+            keyboardType="number-pad"
+            icon="calendar-outline"
+            value={nascimento}
+            onChangeText={(t) => setNascimento(maskData(t))}
+          />
+          <Input
+            label="Renda mensal"
+            placeholder="0,00"
+            keyboardType="numeric"
+            icon="wallet-outline"
+            value={renda}
+            onChangeText={(t) => setRenda(maskMoedaInput(t))}
+            hint="Usada na simulação de financiamento."
+          />
+          <Input
+            label="CEP"
+            placeholder="00000-000"
+            keyboardType="number-pad"
+            icon="location-outline"
+            value={cep}
+            onChangeText={preencherPorCep}
+            hint="Preenche cidade e UF automaticamente."
+          />
+          <Input
+            label="Cidade"
+            placeholder="Ex.: Porto Alegre"
+            icon="business-outline"
+            value={cidade}
+            onChangeText={setCidade}
+          />
+          <Input
+            label="Estado (UF)"
+            placeholder="RS"
+            autoCapitalize="characters"
+            maxLength={2}
+            value={estado}
+            onChangeText={(t) => setEstado(t.replace(/[^A-Za-z]/g, '').toUpperCase())}
           />
         </Card>
 

@@ -11,7 +11,7 @@ import { vitrineService, FILTROS_FEED, type FiltroFeed } from '../../services'
 import { useGateLogin } from '../../hooks/useGateLogin'
 import { useToggleFavorito } from '../../hooks/useToggleFavorito'
 import { useDebounce } from '../../hooks/useDebounce'
-import { abrirWhatsapp } from '../../lib/whatsapp'
+import { abrirWhatsapp, abrirWhatsappComLead } from '../../lib/whatsapp'
 import type { AnuncioVitrine } from '../../services/types'
 
 export default function FeedScreen() {
@@ -42,7 +42,7 @@ export default function FeedScreen() {
   const whatsapp = useCallback(async (a: AnuncioVitrine) => {
     if (!a.loja_whatsapp) return
     const texto = `Olá! Tenho interesse no ${a.marca} ${a.modelo} anunciado na Social Veículos.`
-    await abrirWhatsapp(a.loja_whatsapp, texto)
+    await abrirWhatsappComLead(a.id, a.loja_whatsapp, texto)
   }, [])
 
   const abrirDetalhe = useCallback((id: string) => navigation.navigate('CarroDetalhe', { id }), [navigation])

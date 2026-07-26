@@ -3523,6 +3523,96 @@ a:hover {
   padding-top: 4px;
 }
 
+/* Dados cadastrais do cliente dentro do detalhe do lead */
+.dados-cliente-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px 20px;
+  background: var(--sv-surface-dim);
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius);
+  padding: 14px;
+}
+
+.dado-lead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dado-lead-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sv-text-muted);
+}
+
+.dado-lead-valor {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sv-text);
+  overflow-wrap: anywhere;
+}
+
+.dado-lead-vazio {
+  font-size: 13px;
+  color: var(--sv-text-muted);
+}
+
+/* Timeline de interações do lead */
+.timeline-lead {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.timeline-lead-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--sv-overlay-soft);
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius);
+  padding: 10px 12px;
+}
+
+/* Botão-ícone discreto (editar/excluir em listas) */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: var(--sv-radius-sm, 6px);
+  background: transparent;
+  color: var(--sv-text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.icon-btn:hover {
+  background: var(--sv-overlay);
+  border-color: var(--sv-border);
+  color: var(--sv-text);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--sv-primary);
+  outline-offset: 1px;
+}
+
+.icon-btn-danger:hover {
+  color: var(--sv-error);
+  border-color: color-mix(in srgb, var(--sv-error) 40%, transparent);
+  background: color-mix(in srgb, var(--sv-error) 12%, transparent);
+}
+
 /* Autocomplete inside Lead modal */
 .autocomplete-search-result {
   max-height: 150px;

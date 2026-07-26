@@ -172,6 +172,16 @@ export const vitrineService = {
     }
   },
 
+  async cadastrarLead(veiculoId: string, nome: string, telefone: string, email?: string, mensagem?: string): Promise<{ ok: boolean; whatsapp_url?: string }> {
+    return api.post<{ ok: boolean; whatsapp_url?: string }>('/marketplace/lead-vitrine', {
+      veiculo_id: veiculoId,
+      nome: nome.trim(),
+      telefone: telefone.trim(),
+      email: email?.trim() || undefined,
+      mensagem: mensagem?.trim() || undefined,
+    })
+  },
+
   // ── Favoritos ────────────────────────────────────────────
   async favoritos(): Promise<AnuncioVitrine[]> {
     const data = await api.get<VeiculoB2CDTO[]>('/vitrine/favoritos')

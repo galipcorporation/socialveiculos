@@ -171,7 +171,7 @@ export const repassesService = {
   },
 
   async favoritarParceiro(id: string): Promise<boolean> {
-    const r = await api.post<{ seguindo: boolean }>(`/b2b/parceiros/${id}/seguir`).catch(() => ({ seguindo: false }))
+    const r = await api.post<{ seguindo: boolean }>(`/b2b/parceiros/${id}/seguir`)
     return r.seguindo
   },
 

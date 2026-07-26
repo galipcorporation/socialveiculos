@@ -19,14 +19,14 @@ from models import (
     utcnow,
     PublicacaoB2B, Comentario, Curtida, PropostaRepasse,
     Conversa, Mensagem, Loja, Veiculo, StatusVeiculo,
-    StatusPropostaRepasse, TipoConversa, Usuario, MembroLoja
+    StatusPropostaRepasse, TipoConversa, Usuario, MembroLoja, LojaSeguidora
 )
 from schemas import (
     PublicacaoB2BResponse, ComentarioB2BResponse, ComentarioB2BCreateRequest,
     PropostaRepasseResponse, PropostaRepasseCreateRequest, PropostaRepasseStatusRequest,
     ConversaB2BResponse, MensagemB2BResponse, MensagemB2BCreateRequest,
     ConversaStatusManualRequest, VeiculoResumo,
-    LojaResponse
+    LojaResponse, SeguirParceiroResponse
 )
 from auth import decode_access_token
 
@@ -139,7 +139,11 @@ async def listar_repasses(
         )
         .where(
             PublicacaoB2B.ativa == True,
-            Veiculo.status == StatusVeiculo.REPASSE
+            Veiculo.status == StatusVeiculo.REPASSE,
+            # O feed é de repasses de parceiros: a própria loja não pode propor
+            # para si mesma (POST /propostas bloqueia), então esconder aqui evita
+            # um botão "Propor" que só devolve 400.
+            PublicacaoB2B.loja_id != context.loja_id
         )
     )
 
@@ -700,7 +704,71 @@ async def listar_parceiros(
 
     stmt = stmt.order_by(Loja.nome.asc())
     res = await db.execute(stmt)
-    return res.scalars().all()
+    lojas = res.scalars().all()
+    if not lojas:
+        return []
+
+    loja_ids = [l.id for l in lojas]
+
+    # Batch: total de veículos disponíveis por loja (evita N+1)
+    res_totais = await db.execute(
+        select(Veiculo.loja_id, func.count(Veiculo.id))
+        .where(Veiculo.loja_id.in_(loja_ids), Veiculo.status == StatusVeiculo.DISPONIVEL)
+        .group_by(Veiculo.loja_id)
+    )
+    totais = dict(res_totais.all())
+
+    # Batch: quais dessas lojas o usuário já favoritou
+    res_seg = await db.execute(
+        select(LojaSeguidora.loja_id).where(
+            LojaSeguidora.usuario_id == context.usuario.id,
+            LojaSeguidora.loja_id.in_(loja_ids),
+        )
+    )
+    seguidas = {row[0] for row in res_seg.all()}
+
+    return [
+        LojaResponse.model_validate(l).model_copy(
+            update={"total_veiculos": totais.get(l.id, 0), "seguindo": l.id in seguidas}
+        )
+        for l in lojas
+    ]
+
+
+@router.post("/parceiros/{loja_id}/seguir", response_model=SeguirParceiroResponse)
+async def alternar_favorito_parceiro(
+    loja_id: str,
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user)
+):
+    """
+    Alterna (toggle) o favorito do usuário sobre uma loja parceira.
+    Reaproveita loja_seguida: uma linha por (usuario, loja).
+    """
+    if loja_id == context.loja_id:
+        raise HTTPException(status_code=400, detail="Não é possível favoritar a própria loja.")
+
+    loja = await db.get(Loja, loja_id)
+    if not loja or not loja.ativa:
+        raise HTTPException(status_code=404, detail="Loja não encontrada.")
+
+    res = await db.execute(
+        select(LojaSeguidora).where(
+            LojaSeguidora.usuario_id == context.usuario.id,
+            LojaSeguidora.loja_id == loja_id,
+        )
+    )
+    existente = res.scalar_one_or_none()
+
+    if existente:
+        await db.delete(existente)
+        seguindo = False
+    else:
+        db.add(LojaSeguidora(usuario_id=context.usuario.id, loja_id=loja_id))
+        seguindo = True
+
+    await db.commit()
+    return SeguirParceiroResponse(seguindo=seguindo, loja_id=loja_id)
 
 
 # ───────────────────────────────────────────────────────────────

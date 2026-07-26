@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
-import { Pressable, ScrollView, Share, StyleSheet, Switch, View } from 'react-native'
+import { Linking, Pressable, ScrollView, Share, StyleSheet, Switch, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import * as DocumentPicker from 'expo-document-picker'
+import * as ImagePicker from 'expo-image-picker'
 import { useNavigation } from '@react-navigation/native'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -14,9 +16,11 @@ import { VehiclePhoto } from '../../components/VehiclePhoto'
 import { RegistrarVendaSheet } from '../../components/RegistrarVendaSheet'
 import { CATEGORIAS_CUSTO, veiculosService } from '../../services'
 import {
-  STATUS_VEICULO_LABEL, TIPOS_DOC_VENDA, type CategoriaCusto, type TipoDocumentoVenda,
-  type TipoSolicitacao, type Veiculo, type VeiculoStatus,
+  STATUS_VEICULO_LABEL, TIPOS_DOC_VENDA, type ArquivoUpload, type CategoriaCusto,
+  type TipoDocumentoVenda, type TipoSolicitacao, type Veiculo, type VeiculoStatus,
 } from '../../services/types'
+
+const MAX_DOC_BYTES = 20 * 1024 * 1024
 import { formatBRL, formatKm, formatPlaca, maskMoedaInput, parseMoedaInput } from '../../lib/format'
 import { useAuthStore } from '../../stores/authStore'
 import type { RootScreenProps } from '../../navigation/types'
@@ -422,15 +426,44 @@ function DocumentosCard({ veiculo }: { veiculo: Veiculo }) {
   const [aberto, setAberto] = useState(false)
   const [tipo, setTipo] = useState<TipoDocumentoVenda>('contrato')
   const [tipoSheet, setTipoSheet] = useState(false)
-  const [nome, setNome] = useState('')
+  const [arquivo, setArquivo] = useState<ArquivoUpload | null>(null)
   const [visivel, setVisivel] = useState(true)
 
   const q = useQuery({ queryKey: ['veiculos', veiculo.id, 'documentos'], queryFn: () => veiculosService.documentos(veiculo.id) })
   const docs = q.data ?? []
 
+  const fecharSheet = () => { setAberto(false); setArquivo(null) }
+
+  const escolherArquivo = async () => {
+    const res = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', 'image/*'],
+      copyToCacheDirectory: true,
+    })
+    if (res.canceled || !res.assets?.[0]) return
+    const a = res.assets[0]
+    if (a.size && a.size > MAX_DOC_BYTES) { toast.show('error', 'Arquivo muito grande. Máximo 20MB.'); return }
+    setArquivo({ uri: a.uri, nome: a.name, mimeType: a.mimeType, tamanho: a.size ?? undefined })
+  }
+
+  const tirarFoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync()
+    if (!perm.granted) { toast.show('error', 'Permita o acesso à câmera para fotografar o documento.'); return }
+    const res = await ImagePicker.launchCameraAsync({ quality: 0.7 })
+    if (res.canceled || !res.assets?.[0]) return
+    const a = res.assets[0]
+    if (a.fileSize && a.fileSize > MAX_DOC_BYTES) { toast.show('error', 'Arquivo muito grande. Máximo 20MB.'); return }
+    setArquivo({
+      uri: a.uri,
+      nome: a.fileName || `documento-${Date.now()}.jpg`,
+      mimeType: a.mimeType || 'image/jpeg',
+      tamanho: a.fileSize ?? undefined,
+    })
+  }
+
   const addMut = useMutation({
-    mutationFn: () => veiculosService.adicionarDocumento(veiculo.id, { tipo, nome_arquivo: nome.trim(), visivel_comprador: visivel }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['veiculos', veiculo.id, 'documentos'] }); toast.show('success', 'Documento anexado.'); setNome(''); setAberto(false) },
+    mutationFn: () => veiculosService.adicionarDocumento(veiculo.id, { tipo, visivel_comprador: visivel, arquivo: arquivo! }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['veiculos', veiculo.id, 'documentos'] }); toast.show('success', 'Documento anexado.'); fecharSheet() },
+    onError: (e) => toast.show('error', e instanceof Error ? e.message : 'Não foi possível anexar o documento.'),
   })
   const remMut = useMutation({
     mutationFn: (id: string) => veiculosService.removerDocumento(veiculo.id, id),
@@ -451,13 +484,17 @@ function DocumentosCard({ veiculo }: { veiculo: Veiculo }) {
         docs.map((d) => (
           <View key={d.id} style={styles.linha}>
             <Ionicons name="document-text-outline" size={18} color={colors.textDim} />
-            <View style={{ flex: 1 }}>
+            <Pressable
+              style={{ flex: 1 }}
+              disabled={!d.url}
+              onPress={() => { if (d.url) Linking.openURL(d.url).catch(() => toast.show('error', 'Não foi possível abrir o documento.')) }}
+            >
               <Txt variant="captionMedium" numberOfLines={1}>{d.nome_arquivo}</Txt>
               <Txt variant="caption" color="textMuted">
                 {TIPOS_DOC_VENDA.find((t) => t.value === d.tipo)?.label}
                 {d.visivel_comprador ? ' · visível ao comprador' : ' · interno'}
               </Txt>
-            </View>
+            </Pressable>
             <Pressable onPress={() => remMut.mutate(d.id)} hitSlop={8}>
               <Ionicons name="trash-outline" size={16} color={colors.error} />
             </Pressable>
@@ -465,15 +502,45 @@ function DocumentosCard({ veiculo }: { veiculo: Veiculo }) {
         ))
       )}
 
-      <Sheet visible={aberto} onClose={() => setAberto(false)} title="Anexar documento">
+      <Sheet visible={aberto} onClose={fecharSheet} title="Anexar documento">
         <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
           <SelectField label="Tipo" value={TIPOS_DOC_VENDA.find((t) => t.value === tipo)?.label} onPress={() => setTipoSheet(true)} />
-          <Input label="Nome do arquivo" value={nome} onChangeText={setNome} placeholder="ex.: contrato-assinado.pdf" autoCapitalize="none" hint="No app real, aqui abre o seletor de arquivos." />
+
+          <Txt variant="caption" color="textDim">Arquivo</Txt>
+          {arquivo ? (
+            <View style={styles.linha}>
+              <Ionicons
+                name={arquivo.mimeType?.startsWith('image/') ? 'image-outline' : 'document-text-outline'}
+                size={18}
+                color={colors.textDim}
+              />
+              <View style={{ flex: 1 }}>
+                <Txt variant="captionMedium" numberOfLines={1}>{arquivo.nome}</Txt>
+                {arquivo.tamanho ? (
+                  <Txt variant="caption" color="textMuted">{(arquivo.tamanho / 1024 / 1024).toFixed(1)} MB</Txt>
+                ) : null}
+              </View>
+              <Pressable onPress={() => setArquivo(null)} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <Button title="Escolher arquivo" variant="outline" icon="folder-open-outline" onPress={escolherArquivo} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button title="Tirar foto" variant="outline" icon="camera-outline" onPress={tirarFoto} />
+              </View>
+            </View>
+          )}
+          <Txt variant="caption" color="textMuted">PDF ou imagem (JPG, PNG, HEIC, WebP). Máximo 20MB.</Txt>
+
           <Pressable onPress={() => setVisivel((v) => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: 4 }}>
             <Ionicons name={visivel ? 'checkbox' : 'square-outline'} size={22} color={visivel ? colors.primary : colors.textMuted} />
             <Txt variant="body">Visível ao comprador na Carteira</Txt>
           </Pressable>
-          <Button title="Anexar documento" icon="document-attach-outline" loading={addMut.isPending} disabled={nome.trim().length < 3} onPress={() => addMut.mutate()} />
+          <Button title="Anexar documento" icon="document-attach-outline" loading={addMut.isPending} disabled={!arquivo} onPress={() => addMut.mutate()} />
         </View>
         <OptionSheet
           visible={tipoSheet}

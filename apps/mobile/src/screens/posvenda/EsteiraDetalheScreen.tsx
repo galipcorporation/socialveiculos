@@ -112,8 +112,9 @@ export default function EsteiraDetalheScreen({ route }: RootScreenProps<'Esteira
     )
   }
 
-  const total = e?.itens.length ?? 0
-  const feitos = e?.itens.filter((i) => i.status === 'concluido').length ?? 0
+  const aplicaveis = e?.itens.filter((i) => i.status !== 'nao_aplicavel') ?? []
+  const total = e?.total_itens ?? aplicaveis.length
+  const feitos = e?.concluidos ?? aplicaveis.filter((i) => i.status === 'concluido').length
 
   return (
     <Screen scroll={false} padded={false}>
@@ -192,13 +193,14 @@ export default function EsteiraDetalheScreen({ route }: RootScreenProps<'Esteira
           ORDEM.map((cat) => {
             const itens = e.itens.filter((i) => i.categoria === cat)
             if (itens.length === 0) return null
-            const concluidos = itens.filter((i) => i.status === 'concluido').length
+            const catAplicaveis = itens.filter((i) => i.status !== 'nao_aplicavel')
+            const concluidos = catAplicaveis.filter((i) => i.status === 'concluido').length
             return (
               <Card key={cat} padded={false}>
                 <View style={styles.catHeader}>
                   <Txt variant="title">{CATEGORIA_ITEM_LABEL[cat]}</Txt>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                    <Txt variant="caption" color="textMuted">{concluidos}/{itens.length}</Txt>
+                    <Txt variant="caption" color="textMuted">{concluidos}/{catAplicaveis.length}</Txt>
                     {gestor && e.estagio !== 'concluido' && (
                       <Pressable onPress={() => setAddCat(cat)} hitSlop={8}>
                         <Ionicons name="add-circle-outline" size={20} color={colors.primary} />

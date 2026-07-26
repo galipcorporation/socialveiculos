@@ -7,6 +7,7 @@ export {
 } from './Badge'
 export { Input, SearchBar, SelectField } from './Inputs'
 export { Sheet, OptionSheet, type SheetOption } from './Sheet'
+export { ConfirmSheet } from './ConfirmSheet'
 export { Skeleton, SkeletonCard, EmptyState, ErrorState, ProgressBar } from './Feedback'
 export { FilterChips, SegmentedControl, type ChipOption } from './Chips'
 export { Avatar, Fab, KpiCard } from './Misc'

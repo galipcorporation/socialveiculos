@@ -1,11 +1,77 @@
 import asyncio
 import io
 import os
+import re
+import unicodedata
 import uuid
 import boto3
 from botocore.exceptions import ClientError
 
 from config import settings
+
+
+# Assinaturas de arquivo (magic bytes). O Content-Type do multipart é escolhido
+# pelo cliente e não prova nada — um HTML com <script> renomeado para .pdf chega
+# como "application/pdf" e passa por qualquer whitelist de MIME. Aqui olhamos os
+# bytes reais antes de gravar, para que o tipo declarado seja o tipo de fato.
+def _casa_webp(c: bytes) -> bool:
+    return c[:4] == b"RIFF" and c[8:12] == b"WEBP"
+
+
+def _casa_heic(c: bytes) -> bool:
+    # ISO-BMFF: bytes 4..8 = "ftyp", seguido da marca (heic/heix/mif1/msf1...).
+    return c[4:8] == b"ftyp" and c[8:12] in (
+        b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1", b"heim", b"heis",
+    )
+
+
+ASSINATURAS_ARQUIVO = {
+    "application/pdf": lambda c: c[:5] == b"%PDF-",
+    "image/jpeg": lambda c: c[:3] == b"\xff\xd8\xff",
+    "image/png": lambda c: c[:8] == b"\x89PNG\r\n\x1a\n",
+    "image/webp": _casa_webp,
+    "image/heic": _casa_heic,
+    "image/heif": _casa_heic,
+}
+
+
+def conteudo_confere_com_tipo(conteudo: bytes, content_type: str) -> bool:
+    """
+    True se os bytes batem com a assinatura esperada para o content_type.
+    Tipo sem assinatura conhecida devolve False — quem valida decide se aceita;
+    a política aqui é negar o que não se consegue provar.
+    """
+    checagem = ASSINATURAS_ARQUIVO.get(content_type)
+    return bool(checagem and checagem(conteudo))
+
+
+def detectar_tipo_por_conteudo(conteudo: bytes) -> str | None:
+    """Content-Type real dos bytes, ou None se não for um formato conhecido."""
+    for mime, checagem in ASSINATURAS_ARQUIVO.items():
+        # heic/heif compartilham assinatura; o primeiro match (heic) serve.
+        if checagem(conteudo):
+            return mime
+    return None
+
+
+_NOME_INVALIDO = re.compile(r'[\x00-\x1f\x7f<>:"/\\|?*]')
+
+
+def sanitizar_nome_arquivo(nome: str | None, padrao: str = "documento") -> str:
+    """
+    Nome de arquivo vindo do cliente é entrada de usuário: vai para o banco e é
+    renderizado no gestor web. Tira diretório, caracteres de controle/HTML e
+    limita o tamanho. Não define onde o arquivo é gravado (isso é UUID no
+    generate_filename) — serve só para exibição.
+    """
+    nome = (nome or "").strip()
+    nome = nome.replace("\\", "/").split("/")[-1]  # descarta qualquer caminho
+    nome = unicodedata.normalize("NFC", nome)
+    nome = _NOME_INVALIDO.sub("", nome).strip(" .")
+    if not nome:
+        return padrao
+    base, ext = os.path.splitext(nome)
+    return f"{base[:120]}{ext[:10]}"
 
 # Thumbnail das fotos de veículo: WebP com no máximo THUMB_MAX_WIDTH de largura.
 # 640px cobre os cards das listas (Estoque, feed, vitrine) inclusive em telas 2x;
@@ -99,7 +165,8 @@ class StorageProvider:
         return f"{prefixo}/{unique_filename}" if prefixo else unique_filename
 
     async def upload_file(
-        self, file_content: bytes, filename: str, content_type: str, prefixo: str = ""
+        self, file_content: bytes, filename: str, content_type: str, prefixo: str = "",
+        forcar_download: bool = False,
     ) -> str:
         """
         Faz upload do arquivo e retorna a URL pública de acesso.
@@ -107,19 +174,30 @@ class StorageProvider:
         prefixo: "pasta" virtual no storage (ex.: "lojas/<id>/veiculos"). Serve
         para organizar/isolar os arquivos por loja e tipo — navegação no painel
         e exclusão em lote (LGPD). Vazio = raiz do bucket.
+
+        forcar_download: grava Content-Disposition: attachment, para o navegador
+        baixar em vez de renderizar. Usar em arquivo enviado por usuário que não
+        precisa abrir inline (documentos) — se algum dia um tipo perigoso passar
+        pela validação, ele desce como arquivo em vez de executar na origem.
         """
         unique_filename = self._build_key(prefixo, self.generate_filename(filename, content_type))
-        return await self._put(unique_filename, file_content, content_type)
+        return await self._put(
+            unique_filename, file_content, content_type, forcar_download=forcar_download
+        )
 
-    async def _put(self, key: str, content: bytes, content_type: str) -> str:
+    async def _put(
+        self, key: str, content: bytes, content_type: str, forcar_download: bool = False
+    ) -> str:
         """Grava bytes numa Key do storage ativo e retorna a URL pública."""
         if self.use_s3:
             try:
+                extra = {"ContentDisposition": "attachment"} if forcar_download else {}
                 self.s3_client.put_object(
                     Bucket=self.bucket_name,
                     Key=key,
                     Body=content,
-                    ContentType=content_type
+                    ContentType=content_type,
+                    **extra,
                 )
                 if settings.s3_public_url:
                     return f"{settings.s3_public_url.rstrip('/')}/{key}"
@@ -131,6 +209,9 @@ class StorageProvider:
                 raise e
         else:
             # Salvar localmente (criando as "pastas" do prefixo, ex.: lojas/<id>/veiculos)
+            # forcar_download não se aplica aqui: o StaticFiles do /static serve
+            # inline e não guarda metadado por arquivo. Só afeta dev — em produção
+            # o storage é S3/R2, onde o header é gravado no objeto.
             file_path = os.path.join(self.local_dir, *key.split("/"))
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "wb") as f:

@@ -173,7 +173,9 @@ export const ANOS: number[] = (() => {
 
 // ── CRM ────────────────────────────────────────────────────
 export type EtapaLead = 'lead' | 'proposta' | 'negociacao' | 'fechamento' | 'perdido'
-export type OrigemLead = 'manual' | 'vitrine' | 'simulador' | 'whatsapp'
+export type OrigemLead =
+  | 'manual' | 'vitrine' | 'simulador' | 'whatsapp'
+  | 'repasse' | 'site_proprio' | 'pre_aprovacao'
 
 export interface Cliente {
   id: string
@@ -187,6 +189,7 @@ export interface Cliente {
   renda_mensal?: number
   cep?: string
   endereco?: string
+  numero?: string
   bairro?: string
   cidade?: string
   estado?: string
@@ -194,14 +197,39 @@ export interface Cliente {
   created_at: string
 }
 
+export type TipoInteracao = 'nota' | 'ligacao' | 'whatsapp' | 'visita' | 'email' | 'proposta' | 'sistema'
+
 export interface Interacao {
   id: string
   lead_id: string
-  tipo: 'nota' | 'ligacao' | 'whatsapp' | 'visita' | 'proposta' | 'sistema'
+  tipo: TipoInteracao
   texto: string
   autor?: string
   created_at: string
 }
+
+// Tipos de interação que o usuário pode registrar (sistema é só do backend).
+export const TIPOS_INTERACAO: { value: TipoInteracao; label: string }[] = [
+  { value: 'nota', label: 'Nota' },
+  { value: 'ligacao', label: 'Ligação' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'visita', label: 'Visita' },
+  { value: 'email', label: 'E-mail' },
+]
+
+export type MotivoPerda =
+  | 'preco' | 'credito_negado' | 'comprou_concorrente'
+  | 'sem_resposta' | 'desistiu' | 'veiculo_vendido' | 'outro'
+
+export const MOTIVOS_PERDA: { value: MotivoPerda; label: string }[] = [
+  { value: 'preco', label: 'Preço' },
+  { value: 'credito_negado', label: 'Crédito negado' },
+  { value: 'comprou_concorrente', label: 'Comprou no concorrente' },
+  { value: 'sem_resposta', label: 'Sem resposta' },
+  { value: 'desistiu', label: 'Desistiu da compra' },
+  { value: 'veiculo_vendido', label: 'Veículo já vendido' },
+  { value: 'outro', label: 'Outro' },
+]
 
 export interface Lead {
   id: string
@@ -212,9 +240,15 @@ export interface Lead {
   origem: OrigemLead
   valor_proposta?: number
   observacoes?: string
+  responsavel_id?: string
+  responsavel_nome?: string
+  proximo_contato?: string
+  motivo_perda?: MotivoPerda
+  motivo_perda_detalhe?: string
   cliente?: Cliente
   veiculo?: Veiculo
   interacoes?: Interacao[]
+  negociacoes?: Negociacao[]
   created_at: string
   updated_at: string
 }
@@ -232,6 +266,9 @@ export const ORIGEM_LEAD_LABEL: Record<OrigemLead, string> = {
   vitrine: 'Vitrine',
   simulador: 'Simulador',
   whatsapp: 'WhatsApp',
+  repasse: 'Repasse',
+  site_proprio: 'Site próprio',
+  pre_aprovacao: 'Pré-aprovação',
 }
 
 // ── Custos de preparação do veículo — M058 ─────────────────
@@ -257,11 +294,20 @@ export const TIPOS_DOC_VENDA: { value: TipoDocumentoVenda; label: string }[] = [
   { value: 'outro', label: 'Outro' },
 ]
 
+/** Arquivo escolhido no seletor (DocumentPicker/ImagePicker) pronto pra multipart. */
+export interface ArquivoUpload {
+  uri: string
+  nome: string
+  mimeType?: string
+  tamanho?: number
+}
+
 export interface DocumentoVenda {
   id: string
   veiculo_id: string
   tipo: TipoDocumentoVenda
   nome_arquivo: string
+  url: string
   visivel_comprador: boolean
   created_at: string
 }
@@ -363,6 +409,10 @@ export interface Esteira {
   comissao_id?: string
   comissao_paga?: boolean | null
   itens: ItemChecklist[]
+  total_itens?: number
+  concluidos?: number
+  proximo_item?: string | null
+  tem_vencido?: boolean
   aberta_em: string
   concluida_em?: string | null
 }

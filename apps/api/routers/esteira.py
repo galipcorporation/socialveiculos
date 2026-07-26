@@ -298,6 +298,18 @@ async def listar_board(
     res = await db.execute(stmt)
     esteiras = res.scalars().all()
 
+    veiculo_ids = [e.veiculo_id for e in esteiras if e.veiculo_id]
+    valores_venda: dict = {}
+    if veiculo_ids:
+        res_com = await db.execute(
+            select(ComissaoVenda.veiculo_id, ComissaoVenda.valor_venda).where(
+                ComissaoVenda.veiculo_id.in_(veiculo_ids)
+            )
+        )
+        for v_id, val in res_com.all():
+            if v_id and val is not None:
+                valores_venda[v_id] = val
+
     cards: List[EsteiraResumoResponse] = []
     for e in esteiras:
         aplicaveis = [i for i in e.itens if i.status != StatusItemChecklist.NAO_APLICAVEL]
@@ -318,6 +330,7 @@ async def listar_board(
             id=e.id, estagio=e.estagio, origem=e.origem,
             veiculo=_veiculo_resumo(e.veiculo),
             comprador=_comprador_resumo(e.comprador),
+            valor_venda=valores_venda.get(e.veiculo_id),
             proximo_item=proximo.titulo if proximo else None,
             prazo_mais_proximo=min(prazos) if prazos else None,
             tem_vencido=bool(vencidos),
