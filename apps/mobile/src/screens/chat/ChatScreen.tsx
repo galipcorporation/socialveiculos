@@ -12,6 +12,7 @@ import { Card } from '../../components/ui'
 import { chatService } from '../../services'
 import type { Conversa, TipoConversa } from '../../services/types'
 import { formatRelativo } from '../../lib/format'
+import { useChatSocket } from '../../hooks/useChatSocket'
 
 const STATUS_NEGOCIACAO_LABEL: Record<string, string> = {
   pendente: 'Pendente',
@@ -38,6 +39,12 @@ export default function ChatScreen() {
     queryKey: ['chat', 'conversas'],
     queryFn: () => chatService.conversas(),
   })
+
+  // A lista mistura os dois domínios (cliente e parceiro), então ouve os dois
+  // canais para o preview e o badge de não lidas mudarem na hora.
+  const chavesLista = [['chat', 'conversas'], ['chat', 'nao-lidas']] as const
+  useChatSocket({ canal: 'vitrine', chavesInvalidar: chavesLista })
+  useChatSocket({ canal: 'b2b', chavesInvalidar: chavesLista })
 
   const todas = q.data ?? []
   const conversas = todas.filter((c) => c.tipo === aba)

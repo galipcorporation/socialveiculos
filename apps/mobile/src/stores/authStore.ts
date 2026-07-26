@@ -2,6 +2,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useExperienciaStore } from './experienciaStore'
 
 export interface User {
   id: string
@@ -40,8 +41,12 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       login: (token, refreshToken, user) =>
         set({ token, refreshToken, user, isAuthenticated: true }),
-      logout: () =>
-        set({ token: null, refreshToken: null, user: null, isAuthenticated: false }),
+      // Sair do painel devolve o app à Vitrine: sem isso a experiência segue
+      // 'lojista' no AsyncStorage e o RootNavigator reabre direto no Login.
+      logout: () => {
+        useExperienciaStore.getState().escolher('comprador')
+        set({ token: null, refreshToken: null, user: null, isAuthenticated: false })
+      },
       setToken: (token) => set({ token }),
       // Rotas que devolvem o usuário sem resolver MembroLoja mandam
       // loja_id/modulos vazios; trocar o objeto inteiro apagaria o vínculo e

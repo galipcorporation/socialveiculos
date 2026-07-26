@@ -11,6 +11,7 @@ import {
 import { vitrineService } from '../../services'
 import { useAuthStore } from '../../stores/authStore'
 import { useGateLogin } from '../../hooks/useGateLogin'
+import { useChatSocket } from '../../hooks/useChatSocket'
 import { formatRelativo } from '../../lib/format'
 
 export default function MensagensScreen() {
@@ -23,6 +24,13 @@ export default function MensagensScreen() {
   const q = useQuery({
     queryKey: ['vitrine', 'conversas'],
     queryFn: () => vitrineService.conversas(),
+    enabled: isAuth,
+  })
+
+  // Antes do early return de visitante: hooks não podem ficar condicionais.
+  useChatSocket({
+    canal: 'vitrine',
+    chavesInvalidar: [['vitrine', 'conversas']],
     enabled: isAuth,
   })
 

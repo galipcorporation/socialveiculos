@@ -31,7 +31,9 @@ export default function MainTabs() {
   const { data: naoLidas } = useQuery({
     queryKey: ['chat', 'nao-lidas'],
     queryFn: () => chatService.totalNaoLidas(),
-    staleTime: 45_000,
+    // Sem staleTime: o WebSocket do chat invalida esta chave a cada mensagem e
+    // um cache "fresco" engoliria o invalidate, segurando o badge por 45s.
+    // O refetch periódico fica só como rede de segurança se o socket cair.
     refetchInterval: 60_000,
   })
 

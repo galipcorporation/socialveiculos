@@ -11,6 +11,7 @@ import { AppHeader, Screen, Skeleton, Txt } from '../../components/ui'
 import { chatService } from '../../services'
 import type { Mensagem } from '../../services/types'
 import { formatHora } from '../../lib/format'
+import { useChatSocket } from '../../hooks/useChatSocket'
 import type { RootScreenProps } from '../../navigation/types'
 
 const STATUS_NEGOCIACAO_LABEL: Record<string, string> = {
@@ -51,6 +52,16 @@ export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
   const q = useQuery({
     queryKey: ['chat', 'mensagens', id],
     queryFn: () => chatService.mensagens(id),
+  })
+
+  // Tempo real: a conversa com parceiro trafega no WS B2B; a de cliente, no B2C.
+  useChatSocket({
+    canal: tipo === 'parceiro' ? 'b2b' : 'vitrine',
+    chaveMensagens: ['chat', 'mensagens', id],
+    conversaId: id,
+    chavesInvalidar: [['chat', 'conversas'], ['chat', 'nao-lidas']],
+    autorProprio: 'loja',
+    autorRemoto: 'cliente',
   })
 
   useEffect(() => {

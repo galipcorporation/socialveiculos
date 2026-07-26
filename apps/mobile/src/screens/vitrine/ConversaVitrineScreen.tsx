@@ -9,6 +9,7 @@ import { AppHeader, Screen, Skeleton, Txt } from '../../components/ui'
 import { vitrineService } from '../../services'
 import type { Mensagem } from '../../services/types'
 import { formatHora } from '../../lib/format'
+import { useChatSocket } from '../../hooks/useChatSocket'
 import type { VitrineScreenProps } from '../../navigation/types'
 
 export default function ConversaVitrineScreen({ route }: VitrineScreenProps<'ConversaVitrine'>) {
@@ -20,6 +21,16 @@ export default function ConversaVitrineScreen({ route }: VitrineScreenProps<'Con
   const [texto, setTexto] = useState('')
 
   const q = useQuery({ queryKey: ['vitrine', 'mensagens', id], queryFn: () => vitrineService.mensagens(id) })
+
+  // Do lado do comprador as bolhas se invertem: quem escreve aqui é o cliente.
+  useChatSocket({
+    canal: 'vitrine',
+    chaveMensagens: ['vitrine', 'mensagens', id],
+    conversaId: id,
+    chavesInvalidar: [['vitrine', 'conversas']],
+    autorProprio: 'cliente',
+    autorRemoto: 'loja',
+  })
 
   useEffect(() => {
     vitrineService.marcarLidas(id).then(() => queryClient.invalidateQueries({ queryKey: ['vitrine', 'conversas'] }))
