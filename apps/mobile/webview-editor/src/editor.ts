@@ -41,14 +41,22 @@ const Variavel = Node.create({
     return [{ tag: 'span[data-var]' }]
   },
   renderHTML({ HTMLAttributes }) {
-    return ['span', mergeAttributes(HTMLAttributes, { 'data-var': HTMLAttributes.chave, class: 'rich-var' }), HTMLAttributes.label || HTMLAttributes.chave]
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, {
+        'data-var': HTMLAttributes.chave,
+        class: 'rich-var',
+        contenteditable: 'false',
+      }),
+      HTMLAttributes.label || HTMLAttributes.chave,
+    ]
   },
 })
 
 function toEditorHtml(saved: string, labels: Record<string, string>): string {
   return saved.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_m, chave) => {
     const label = labels[chave] || chave
-    return `<span data-var="${chave}">${label}</span>`
+    return `<span data-var="${chave}" contenteditable="false" class="rich-var">${label}</span>`
   })
 }
 
@@ -107,11 +115,28 @@ function renderVariaveis(grupos: VarGroup[]) {
       chip.type = 'button'
       chip.className = 're-var-chip' + (isPersonalizado ? ' custom' : '')
       chip.textContent = it.label
-      chip.onclick = () => {
-        editor?.chain().focus().insertContent({ type: 'variavel', attrs: { chave: it.chave, label: it.label } }).run()
+
+      let emExecucao = false
+      const inserter = (e: Event) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (!editor || emExecucao) return
+        emExecucao = true
+        setTimeout(() => { emExecucao = false }, 300)
+
         document.getElementById('var-menu')!.classList.remove('open')
         medirAltura()
+
+        editor.chain()
+          .focus()
+          .insertContent({ type: 'variavel', attrs: { chave: it.chave, label: it.label } })
+          .insertContent(' ')
+          .run()
       }
+
+      chip.addEventListener('touchend', inserter)
+      chip.addEventListener('click', inserter)
+
       if (isPersonalizado) {
         const rm = document.createElement('span')
         rm.className = 'rm'
@@ -181,52 +206,82 @@ function iniciar(msg: InitMessage) {
     onTransaction: atualizarBotoesAtivos,
   })
 
+  const dispararComando = (cmd: string) => {
+    if (!editor) return
+    const chain = editor.chain().focus()
+    switch (cmd) {
+      case 'bold': chain.toggleBold().run(); break
+      case 'italic': chain.toggleItalic().run(); break
+      case 'strike': chain.toggleStrike().run(); break
+      case 'bulletList': chain.toggleBulletList().run(); break
+      case 'orderedList': chain.toggleOrderedList().run(); break
+      case 'alignLeft': chain.setTextAlign('left').run(); break
+      case 'alignCenter': chain.setTextAlign('center').run(); break
+      case 'alignJustify': chain.setTextAlign('justify').run(); break
+      case 'table': chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); break
+      case 'undo': chain.undo().run(); break
+      case 'redo': chain.redo().run(); break
+    }
+    atualizarBotoesAtivos()
+  }
+
   document.querySelectorAll<HTMLElement>('[data-cmd]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      if (!editor) return
-      const cmd = btn.dataset.cmd!
-      const chain = editor.chain().focus()
-      switch (cmd) {
-        case 'bold': chain.toggleBold().run(); break
-        case 'italic': chain.toggleItalic().run(); break
-        case 'strike': chain.toggleStrike().run(); break
-        case 'bulletList': chain.toggleBulletList().run(); break
-        case 'orderedList': chain.toggleOrderedList().run(); break
-        case 'alignLeft': chain.setTextAlign('left').run(); break
-        case 'alignCenter': chain.setTextAlign('center').run(); break
-        case 'alignJustify': chain.setTextAlign('justify').run(); break
-        case 'table': chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); break
-        case 'undo': chain.undo().run(); break
-        case 'redo': chain.redo().run(); break
-      }
-      atualizarBotoesAtivos()
-    })
+    const fn = (e: Event) => {
+      e.preventDefault()
+      dispararComando(btn.dataset.cmd!)
+    }
+    btn.addEventListener('touchend', fn)
+    btn.addEventListener('click', fn)
   })
 
-  document.getElementById('var-btn')!.addEventListener('click', () => {
+  const toggleVarMenu = (e: Event) => {
+    e.preventDefault()
     document.getElementById('var-menu')!.classList.toggle('open')
-    // Mede na hora: a WebView precisa crescer/encolher junto com o menu.
     medirAltura()
-  })
-  document.getElementById('var-close')!.addEventListener('click', () => {
+  }
+  const closeVarMenu = (e: Event) => {
+    e.preventDefault()
     document.getElementById('var-menu')!.classList.remove('open')
     medirAltura()
-  })
+  }
 
-  // Tocar em qualquer ponto da área de conteúdo abre o teclado. Sem isso, o
-  // toque no padding (fora da caixa do ProseMirror) não foca nada e o teclado
-  // nunca sobe — que é como o editor parecia "morto" no celular.
-  document.getElementById('editor')!.addEventListener('pointerdown', (ev) => {
-    if (!editor || editor.isFocused) return
-    // Só trata o toque em área vazia; dentro do texto o próprio ProseMirror
-    // posiciona o cursor onde o dedo caiu.
-    if ((ev.target as HTMLElement).closest('.ProseMirror')) return
-    ev.preventDefault()
-    // Foca o nó do DOM primeiro: em WebView o `focus()` do elemento é o que
-    // efetivamente abre o teclado; o comando do TipTap só posiciona o cursor.
-    document.querySelector<HTMLElement>('.ProseMirror')?.focus()
-    editor.commands.focus('end')
-  })
+  const varBtn = document.getElementById('var-btn')!
+  varBtn.addEventListener('touchend', toggleVarMenu)
+  varBtn.addEventListener('click', toggleVarMenu)
+
+  const varClose = document.getElementById('var-close')!
+  varClose.addEventListener('touchend', closeVarMenu)
+  varClose.addEventListener('click', closeVarMenu)
+
+  // Trata toque dentro do editor de texto e seleção de pílula de variável
+  const tratarToqueNoEditor = (ev: Event) => {
+    const target = ev.target as HTMLElement
+    if (target.closest('.re-toolbar') || target.closest('.re-var-menu')) return
+
+    const varEl = target.closest('.rich-var')
+    if (varEl && editor) {
+      ev.preventDefault()
+      try {
+        const pos = editor.view.posAtDOM(varEl, 0)
+        if (typeof pos === 'number' && pos >= 0) {
+          editor.chain().focus().setNodeSelection(pos).run()
+          return
+        }
+      } catch {}
+    }
+
+    const pm = document.querySelector<HTMLElement>('.ProseMirror')
+    if (pm) {
+      pm.focus()
+      if (editor && !editor.isFocused) {
+        editor.commands.focus()
+      }
+    }
+  }
+
+  const elEditor = document.getElementById('editor')!
+  elEditor.addEventListener('touchend', tratarToqueNoEditor)
+  elEditor.addEventListener('click', tratarToqueNoEditor)
 
   observarAltura()
   postToRN({ type: 'ready' })

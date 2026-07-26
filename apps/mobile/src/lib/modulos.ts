@@ -24,13 +24,14 @@ export const MODULOS: ModuloDef[] = [
   { key: 'estoque', label: 'Estoque', base: true },
   { key: 'crm', label: 'CRM Kanban', base: true },
   { key: 'financeiro', label: 'Financeiro', base: true },
+  { key: 'contratos', label: 'Contratos', base: true },
   { key: 'simulador', label: 'Simulador de Crédito' },
-  { key: 'contratos', label: 'Contratos' },
   { key: 'marketing', label: 'Marketing' },
   { key: 'assistente_ia', label: 'Assistente de IA' },
   { key: 'fiscal', label: 'Fiscal / NF-e' },
   { key: 'site', label: 'Meu Site' },
 ]
+
 
 export const TODOS_MODULOS: ModuloKey[] = MODULOS.map((m) => m.key)
 

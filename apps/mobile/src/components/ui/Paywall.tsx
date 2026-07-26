@@ -24,7 +24,7 @@ export function Paywall({ titulo, descricao }: { titulo: string; descricao: stri
       <Txt variant="caption" color="textDim" align="center">{descricao}</Txt>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.xs }}>
         <Ionicons name="lock-closed" size={13} color={colors.textMuted} />
-        <Txt variant="caption" color="textMuted">Recurso Premium — fale com o suporte para liberar</Txt>
+        <Txt variant="caption" color="textMuted">Recurso Premium — Fale com seu consultor para habilitar</Txt>
       </View>
     </Card>
   )

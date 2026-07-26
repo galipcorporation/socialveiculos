@@ -92,8 +92,26 @@ export function AssistiveTouch() {
 
   const todasAcoes = [
     {
+      id: 'home',
+      label: 'Início (Home)',
+      sublabel: 'Voltar para a tela inicial do aplicativo',
+      icon: 'home-outline' as const,
+      color: '#3b82f6',
+      visible: true,
+      action: () => navegarPara('MainTabs', { screen: 'Inicio' }),
+    },
+    {
+      id: 'contratos',
+      label: 'Contratos',
+      sublabel: 'Contratos de compra e venda + PDF',
+      icon: 'document-text-outline' as const,
+      color: '#10b981',
+      visible: true,
+      action: () => navegarPara('Contratos'),
+    },
+    {
       id: 'rede_social',
-      label: 'Rede Social (B2B)',
+      label: 'Rede Social',
       sublabel: 'Feed de repasses, propostas e parceiros',
       icon: 'git-network-outline' as const,
       color: '#6366f1',
@@ -115,7 +133,7 @@ export function AssistiveTouch() {
       sublabel: 'Calcule parcelas para o cliente na hora',
       icon: 'calculator-outline' as const,
       color: '#06b6d4',
-      visible: liberado('simulador'),
+      visible: true,
       action: () => navegarPara('Simulador'),
     },
     {
@@ -151,7 +169,7 @@ export function AssistiveTouch() {
       sublabel: 'Receitas, despesas e comissões da loja',
       icon: 'wallet-outline' as const,
       color: '#ec4899',
-      visible: liberado('financeiro'),
+      visible: true,
       action: () => navegarPara('Financeiro'),
     },
     {
@@ -160,17 +178,8 @@ export function AssistiveTouch() {
       sublabel: 'Copiloto para abordagem e objeções',
       icon: 'chatbubble-ellipses-outline' as const,
       color: '#8b5cf6',
-      visible: liberado('assistente_ia'),
+      visible: true,
       action: () => navegarPara('AssistenteIA'),
-    },
-    {
-      id: 'contratos',
-      label: 'Contratos',
-      sublabel: 'Contratos de compra e venda + PDF',
-      icon: 'document-text-outline' as const,
-      color: '#10b981',
-      visible: liberado('contratos'),
-      action: () => navegarPara('Contratos'),
     },
     {
       id: 'fiscal',
@@ -178,7 +187,7 @@ export function AssistiveTouch() {
       sublabel: 'Emitir e acompanhar NF-e de venda',
       icon: 'receipt-outline' as const,
       color: '#f59e0b',
-      visible: liberado('fiscal'),
+      visible: true,
       action: () => navegarPara('NotasFiscais'),
     },
     {
@@ -187,8 +196,17 @@ export function AssistiveTouch() {
       sublabel: 'Gere legendas para redes sociais',
       icon: 'sparkles-outline' as const,
       color: '#8b5cf6',
-      visible: liberado('marketing'),
+      visible: true,
       action: () => navegarPara('Marketing'),
+    },
+    {
+      id: 'ajuda',
+      label: 'Ajuda & Suporte',
+      sublabel: 'Central de ajuda e atendimento',
+      icon: 'help-circle-outline' as const,
+      color: '#3b82f6',
+      visible: true,
+      action: () => navegarPara('Ajuda'),
     },
     {
       id: 'site',
@@ -196,12 +214,14 @@ export function AssistiveTouch() {
       sublabel: 'Construtor do site white-label da loja',
       icon: 'globe-outline' as const,
       color: '#10b981',
-      visible: gestor && liberado('site'),
+      visible: gestor,
       action: () => navegarPara('MeuSite'),
     },
   ]
 
+
   const acoes = todasAcoes.filter((a) => a.visible)
+
 
   return (
     <>

@@ -41,11 +41,20 @@ const DEFAULT_MARKETPLACE_CONFIG: ThemeConfig = {
 
 export function detectarTipoSite(host: string): 'marketplace' | 'white-label' {
   if (!host) return 'marketplace'
-  const parts = host.split('.')
-  // socialveiculos.com.br = marketplace
-  // {slug}.socialveiculos.com.br = white-label
+  const h = host.toLowerCase()
+  if (
+    h.endsWith('.vercel.app') ||
+    h.includes('localhost') ||
+    h.includes('127.0.0.1') ||
+    h === 'socialveiculos.com.br' ||
+    h === 'www.socialveiculos.com.br'
+  ) {
+    return 'marketplace'
+  }
+  const parts = h.split('.')
   return parts.length > 2 ? 'white-label' : 'marketplace'
 }
+
 
 export function extrairSlugDoHost(host: string): string | null {
   if (!host) return null

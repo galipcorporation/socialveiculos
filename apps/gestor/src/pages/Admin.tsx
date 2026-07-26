@@ -1166,7 +1166,7 @@ function AbaContrato() {
     <div style={{ marginTop: 'var(--sv-space-6)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sv-space-4)' }}>
         <p style={{ color: 'var(--sv-text-muted)', fontSize: 'var(--sv-text-sm)', maxWidth: 480 }}>
-          Texto do contrato de assinatura B2B (Social Veículos ↔ Loja). A versão vigente é a usada por padrão ao ativar uma nova assinatura.
+          Texto do contrato de assinatura (Social Veículos ↔ Loja). A versão vigente é a usada por padrão ao ativar uma nova assinatura.
         </p>
         <button className="btn btn-primary" onClick={() => setEditorAberto(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Plus size={16} /> Nova versão

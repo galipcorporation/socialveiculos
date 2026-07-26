@@ -532,7 +532,7 @@ async def iniciar_conversa_b2c(
             link=f"chat:{conversa.id}",
         )
         db.add(notif)
-        await db.commit()
+        await db.flush()
         # Push remoto para os membros da loja (não notifica o próprio cliente)
         from push import enviar_push_loja
         await enviar_push_loja(

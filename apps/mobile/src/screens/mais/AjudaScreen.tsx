@@ -51,11 +51,11 @@ export default function AjudaScreen() {
   )
 
   const falarSuporteWhatsApp = () => {
-    abrirWhatsapp('5511999999999', 'Olá, preciso de suporte com o aplicativo Social Veículos.')
+    abrirWhatsapp('5517991110057', 'Olá, preciso de suporte com o aplicativo Social Veículos.')
   }
 
   const enviarEmailSuporte = () => {
-    Linking.openURL('mailto:suporte@socialveiculos.com.br?subject=Suporte%20App%20Social%20Veiculos').catch(() => {})
+    Linking.openURL('mailto:suporte@socialveiculos.com.br?subject=Suporte%20App%20Social%20Veiculos').catch(() => { })
   }
 
   return (

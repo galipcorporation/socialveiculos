@@ -13,6 +13,8 @@ import { useExperienciaStore } from '../../stores/experienciaStore'
 import { useModulosLiberados } from '../../hooks/useModulosLiberados'
 import { unregisterPush } from '../../lib/push'
 
+import type { ModuloKey } from '../../lib/modulos'
+
 export default function MaisScreen() {
   const { colors } = useTheme()
   const navigation = useNavigation()
@@ -23,32 +25,30 @@ export default function MaisScreen() {
   const trocarExperiencia = useExperienciaStore((s) => s.trocar)
   const [sairAberto, setSairAberto] = useState(false)
 
-  // Só aparece se a loja contratou (admin) E o vendedor tem acesso (gestor).
   const { liberado, gestor } = useModulosLiberados()
   const sep = { borderTopWidth: 1, borderTopColor: colors.border }
 
-  const atalhos: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }[] = gestor
-    ? [
-        { icon: 'wallet-outline', label: 'Financeiro', onPress: () => navigation.navigate('Financeiro') },
-        { icon: 'people-outline', label: 'Equipe', onPress: () => navigation.navigate('Equipe') },
-        { icon: 'clipboard-outline', label: 'Pós-venda', onPress: () => navigation.navigate('PosVenda') },
-        { icon: 'help-circle-outline', label: 'Ajuda', onPress: () => navigation.navigate('Ajuda') },
-        // Marketing é premium: atalho só existe se a loja contratou.
-        ...(liberado('marketing')
-          ? [{ icon: 'sparkles-outline' as const, label: 'Marketing', onPress: () => navigation.navigate('Marketing') }]
-          : []),
-      ]
-    : [
-        ...(liberado('simulador')
-          ? [{ icon: 'calculator-outline' as const, label: 'Simulador', onPress: () => navigation.navigate('Simulador') }]
-          : []),
-        ...(liberado('assistente_ia')
-          ? [{ icon: 'chatbubble-ellipses-outline' as const, label: 'Assistente IA', onPress: () => navigation.navigate('AssistenteIA') }]
-          : []),
-        { icon: 'ribbon-outline', label: 'Comissões', onPress: () => navigation.navigate('Comissoes') },
-        { icon: 'pricetags-outline', label: 'FIPE', onPress: () => navigation.navigate('Fipe') },
-        { icon: 'help-circle-outline', label: 'Ajuda', onPress: () => navigation.navigate('Ajuda') },
-      ]
+  // Estado para exibir paywall/alerta de módulo bloqueado
+  const [moduloBloqueado, setModuloBloqueado] = useState<string | null>(null)
+
+  const atalhos: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }[] = [
+    { icon: 'document-text-outline', label: 'Contratos', onPress: () => abrirFerramenta('contratos', 'Contratos') },
+    { icon: 'calculator-outline', label: 'Simulador', onPress: () => abrirFerramenta('simulador', 'Simulador') },
+    { icon: 'clipboard-outline', label: 'Pós-venda', onPress: () => navigation.navigate('PosVenda') },
+    { icon: 'wallet-outline', label: 'Financeiro', onPress: () => abrirFerramenta('financeiro', 'Financeiro') },
+    { icon: 'pricetags-outline', label: 'FIPE', onPress: () => navigation.navigate('Fipe') },
+    { icon: 'help-circle-outline', label: 'Ajuda', onPress: () => navigation.navigate('Ajuda') },
+  ]
+
+
+  const abrirFerramenta = (chave: ModuloKey, screenName: string) => {
+    if (liberado(chave)) {
+      navigation.navigate(screenName as any)
+    } else {
+      setModuloBloqueado(chave)
+    }
+  }
+
 
   return (
     <Screen scroll={false} padded={false}>
@@ -114,16 +114,15 @@ export default function MaisScreen() {
             chevron
             onPress={() => navigation.navigate('Comissoes')}
           />
-          {liberado('financeiro') && (
-            <ListRow
-              icon="wallet-outline"
-              iconColor={colors.success}
-              title="Financeiro"
-              subtitle="Receitas, despesas e comissões da loja"
-              chevron
-              onPress={() => navigation.navigate('Financeiro')}
-            />
-          )}
+          <ListRow
+            icon="wallet-outline"
+            iconColor={colors.success}
+            title="Financeiro"
+            subtitle="Receitas, despesas e comissões da loja"
+            chevron
+            onPress={() => abrirFerramenta('financeiro', 'Financeiro')}
+            right={!liberado('financeiro') ? <Badge label="Bloqueado" tone="neutral" size="sm" /> : undefined}
+          />
           {gestor && (
             <ListRow
               icon="people-outline"
@@ -159,17 +158,26 @@ export default function MaisScreen() {
           <Txt variant="label" color="textMuted" style={{ padding: spacing.md, paddingBottom: spacing.xs, textTransform: 'uppercase' }}>
             Ferramentas
           </Txt>
-          {liberado('simulador') && (
-            <ListRow
-              icon="calculator-outline"
-              iconColor={colors.primary}
-              title="Simulador de financiamento"
-              subtitle="Calcule parcelas para o cliente na hora"
-              chevron
-              onPress={() => navigation.navigate('Simulador')}
-              style={{ borderTopWidth: 0 }}
-            />
-          )}
+          <ListRow
+            icon="document-text-outline"
+            iconColor={colors.success}
+            title="Contratos"
+            subtitle="Contratos de compra e venda + PDF"
+            chevron
+            onPress={() => abrirFerramenta('contratos', 'Contratos')}
+            style={{ borderTopWidth: 0 }}
+            right={!liberado('contratos') ? <Badge label="Bloqueado" tone="neutral" size="sm" /> : undefined}
+          />
+          <ListRow
+            icon="calculator-outline"
+            iconColor={colors.primary}
+            title="Simulador de financiamento"
+            subtitle="Calcule parcelas para o cliente na hora"
+            chevron
+            onPress={() => abrirFerramenta('simulador', 'Simulador')}
+            style={sep}
+            right={!liberado('simulador') ? <Badge label="Bloqueado" tone="neutral" size="sm" /> : undefined}
+          />
           <ListRow
             icon="pricetags-outline"
             iconColor={colors.info}
@@ -177,83 +185,101 @@ export default function MaisScreen() {
             subtitle="Valor de referência por marca/modelo/ano"
             chevron
             onPress={() => navigation.navigate('Fipe')}
-            // Sem o Simulador acima, a FIPE é a 1ª linha e não leva borda.
-            style={liberado('simulador') ? sep : { borderTopWidth: 0 }}
+            style={sep}
           />
-          {liberado('contratos') && (
-            <ListRow
-              icon="document-text-outline"
-              iconColor={colors.success}
-              title="Contratos"
-              subtitle="Contratos de compra e venda + PDF"
-              chevron
-              onPress={() => navigation.navigate('Contratos')}
-              style={sep}
-            />
-          )}
-          {liberado('fiscal') && (
-            <ListRow
-              icon="receipt-outline"
-              iconColor={colors.warning}
-              title="Notas Fiscais"
-              subtitle="Emitir e acompanhar NF-e de venda"
-              chevron
-              onPress={() => navigation.navigate('NotasFiscais')}
-              style={sep}
-            />
-          )}
-          {liberado('marketing') && (
-            <ListRow
-              icon="sparkles-outline"
-              iconColor={colors.primary}
-              title="Marketing IA"
-              subtitle="Gere legendas para redes sociais"
-              chevron
-              onPress={() => navigation.navigate('Marketing')}
-              style={sep}
-            />
-          )}
-          {liberado('assistente_ia') && (
-            <ListRow
-              icon="chatbubble-ellipses-outline"
-              iconColor={colors.info}
-              title="Assistente do Vendedor"
-              subtitle="Copiloto de IA para abordagem e objeções"
-              chevron
-              onPress={() => navigation.navigate('AssistenteIA')}
-              style={sep}
-            />
-          )}
-          {gestor && liberado('site') && (
+          <ListRow
+            icon="receipt-outline"
+            iconColor={colors.warning}
+            title="Notas Fiscais"
+            subtitle="Emitir e acompanhar NF-e de venda"
+            chevron
+            onPress={() => abrirFerramenta('fiscal', 'NotasFiscais')}
+            style={sep}
+            right={!liberado('fiscal') ? <Badge label="Bloqueado" tone="neutral" size="sm" /> : undefined}
+          />
+          <ListRow
+            icon="sparkles-outline"
+            iconColor={colors.primary}
+            title="Marketing IA"
+            subtitle="Gere legendas para redes sociais"
+            chevron
+            onPress={() => abrirFerramenta('marketing', 'Marketing')}
+            style={sep}
+            right={!liberado('marketing') ? <Badge label="Bloqueado" tone="neutral" size="sm" /> : undefined}
+          />
+          <ListRow
+            icon="chatbubble-ellipses-outline"
+            iconColor={colors.info}
+            title="Assistente do Vendedor"
+            subtitle="Copiloto de IA para abordagem e objeções"
+            chevron
+            onPress={() => abrirFerramenta('assistente_ia', 'AssistenteIA')}
+            style={sep}
+            right={!liberado('assistente_ia') ? <Badge label="Bloqueado" tone="neutral" size="sm" /> : undefined}
+          />
+          {gestor && (
             <ListRow
               icon="globe-outline"
               iconColor={colors.success}
               title="Meu Site"
               subtitle="Construtor do site white-label da loja"
               chevron
-              onPress={() => navigation.navigate('MeuSite')}
+              onPress={() => abrirFerramenta('site', 'MeuSite')}
               style={sep}
+              right={!liberado('site') ? <Badge label="Bloqueado" tone="neutral" size="sm" /> : undefined}
             />
           )}
         </Card>
 
-        {/* Conta */}
+        {/* Sheet de Módulo Bloqueado */}
+        <Sheet
+          visible={!!moduloBloqueado}
+          onClose={() => setModuloBloqueado(null)}
+          title="Módulo Bloqueado 🔒"
+          scrollable={false}
+        >
+          <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
+            <Txt variant="body" color="textDim">
+              Este módulo faz parte da plataforma Social Veículos, mas não está liberado na assinatura ativa da sua loja ou para o seu perfil.
+            </Txt>
+            <Txt variant="caption" color="textMuted">
+              Para liberar o acesso completo aos recursos de {moduloBloqueado?.toUpperCase()}, entre em contato com o administrador da sua loja ou com o suporte.
+            </Txt>
+            <Button
+              title="Entendi"
+              variant="primary"
+              onPress={() => setModuloBloqueado(null)}
+            />
+          </View>
+        </Sheet>
+
+
+        {/* Conta & Suporte */}
         <Card padded={false}>
           <Txt variant="label" color="textMuted" style={{ padding: spacing.md, paddingBottom: spacing.xs, textTransform: 'uppercase' }}>
-            Conta
+            Conta & Suporte
           </Txt>
+          <ListRow
+            icon="help-circle-outline"
+            iconColor={colors.info}
+            title="Ajuda e Suporte"
+            subtitle="Central de ajuda, dúvidas e atendimento"
+            chevron
+            onPress={() => navigation.navigate('Ajuda')}
+          />
           <ListRow
             icon="settings-outline"
             title="Configurações"
             subtitle="Tema, preferências"
             chevron
             onPress={() => navigation.navigate('Configuracoes')}
+            style={sep}
           />
           <ListRow
             icon="storefront-outline"
             iconColor={colors.primary}
             title="Ver como comprador"
-            subtitle="Abrir a vitrine pública (B2C)"
+            subtitle="Abrir a vitrine pública"
             chevron
             onPress={trocarExperiencia}
             style={sep}
@@ -266,6 +292,7 @@ export default function MaisScreen() {
             style={sep}
           />
         </Card>
+
 
         <Txt variant="caption" color="textMuted" align="center">
           Social Veículos · v0.1

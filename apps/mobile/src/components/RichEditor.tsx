@@ -81,23 +81,27 @@ export function RichEditor({
   }, [value, pronto])
 
   return (
-    <View style={{ height: alturaConteudo, borderRadius: radius.md, overflow: 'hidden' }}>
+    <View
+      style={{ height: alturaConteudo, borderRadius: radius.md, overflow: 'hidden' }}
+      onStartShouldSetResponder={() => true}
+    >
       <WebView
         ref={webviewRef}
         originWhitelist={['*']}
         source={{ html: RICH_EDITOR_HTML }}
         onMessage={onMessage}
         style={{ backgroundColor: 'transparent' }}
-        // A WebView cresce junto com o conteúdo; quem rola é o Sheet. Scroll
-        // interno aqui disputava o gesto com o ScrollView pai e escondia o
-        // fim do editor.
         scrollEnabled={false}
         nestedScrollEnabled={false}
         hideKeyboardAccessoryView
-        // iOS: permite que `editor.commands.focus()` abra o teclado sem um
-        // toque direto no contenteditable.
         keyboardDisplayRequiresUserAction={false}
+        androidLayerType="hardware"
+        domStorageEnabled
+        javaScriptEnabled
+        textZoom={100}
+        overScrollMode="never"
       />
     </View>
   )
 }
+
