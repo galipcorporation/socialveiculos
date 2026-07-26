@@ -11,6 +11,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
@@ -34,10 +35,28 @@ def upgrade() -> None:
 
     # No Postgres o tipo enum nativo precisa existir ANTES do create_table /
     # ALTER TABLE; no SQLite o Enum vira VARCHAR + CHECK e o create é no-op.
-    tipo_enum = sa.Enum(*TIPOS_INTERACAO, name='tipointeracao')
-    motivo_enum = sa.Enum(*MOTIVOS_PERDA, name='motivoperda')
-    tipo_enum.create(bind, checkfirst=True)
-    motivo_enum.create(bind, checkfirst=True)
+    # No Postgres, sa.Enum(create_type=False) genérico não é suficiente para
+    # suprimir o CREATE TYPE ao criar a tabela; postgresql.ENUM(create_type=False) é quem suprime.
+    if bind.dialect.name == 'postgresql':
+        op.execute(sa.text("""
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tipointeracao') THEN
+                    CREATE TYPE tipointeracao AS ENUM ('NOTA', 'LIGACAO', 'WHATSAPP', 'VISITA', 'EMAIL', 'PROPOSTA', 'SISTEMA');
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'motivoperda') THEN
+                    CREATE TYPE motivoperda AS ENUM ('PRECO', 'CREDITO_NEGADO', 'COMPROU_CONCORRENTE', 'SEM_RESPOSTA', 'DESISTIU', 'VEICULO_VENDIDO', 'OUTRO');
+                END IF;
+            END $$;
+        """))
+        col_tipo_enum = postgresql.ENUM(*TIPOS_INTERACAO, name='tipointeracao', create_type=False)
+        col_motivo_enum = postgresql.ENUM(*MOTIVOS_PERDA, name='motivoperda', create_type=False)
+    else:
+        tipo_enum = sa.Enum(*TIPOS_INTERACAO, name='tipointeracao')
+        motivo_enum = sa.Enum(*MOTIVOS_PERDA, name='motivoperda')
+        tipo_enum.create(bind, checkfirst=True)
+        motivo_enum.create(bind, checkfirst=True)
+        col_tipo_enum = sa.Enum(*TIPOS_INTERACAO, name='tipointeracao', create_type=False)
+        col_motivo_enum = sa.Enum(*MOTIVOS_PERDA, name='motivoperda', create_type=False)
 
     if 'interacao_lead' not in inspector.get_table_names():
         op.create_table(
@@ -48,7 +67,7 @@ def upgrade() -> None:
             sa.Column('autor_nome', sa.String(150), nullable=True),
             sa.Column(
                 'tipo',
-                sa.Enum(*TIPOS_INTERACAO, name='tipointeracao', create_type=False),
+                col_tipo_enum,
                 nullable=False,
                 server_default='NOTA',
             ),
@@ -69,7 +88,7 @@ def upgrade() -> None:
     if 'motivo_perda' not in cols_lead:
         op.add_column('lead', sa.Column(
             'motivo_perda',
-            sa.Enum(*MOTIVOS_PERDA, name='motivoperda', create_type=False),
+            col_motivo_enum,
             nullable=True,
         ))
     if 'motivo_perda_detalhe' not in cols_lead:
@@ -81,7 +100,7 @@ def upgrade() -> None:
     # aceitável porque produção é Postgres.
     if bind.dialect.name == 'postgresql':
         fks_lead = {fk.get('name') for fk in inspector.get_foreign_keys('lead')}
-        if 'responsavel_id' not in cols_lead and 'fk_lead_responsavel' not in fks_lead:
+        if 'fk_lead_responsavel' not in fks_lead:
             op.create_foreign_key(
                 'fk_lead_responsavel', 'lead', 'usuario',
                 ['responsavel_id'], ['id'], ondelete='SET NULL',
@@ -102,7 +121,7 @@ def upgrade() -> None:
         f"""
         INSERT INTO interacao_lead (id, lead_id, autor_id, autor_nome, tipo, texto, created_at, updated_at)
         SELECT
-            l.id || '-criado', l.id, NULL, NULL, {tipo_sistema}, 'Lead criado', l.created_at, l.created_at
+            SUBSTR(l.id, 1, 28) || '-criado', l.id, NULL, NULL, {tipo_sistema}, 'Lead criado', l.created_at, l.created_at
         FROM "lead" l
         WHERE NOT EXISTS (
             SELECT 1 FROM interacao_lead i WHERE i.lead_id = l.id AND i.tipo = {tipo_sistema}

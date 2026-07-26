@@ -22,6 +22,16 @@ export function BarChart({ data, height = 140, formatValue = String }: BarChartP
   const max = Math.max(1, ...data.map((d) => d.value))
   const areaBarras = height - 34 // espaço p/ rótulo em cima e label embaixo
 
+  if (!data || data.length === 0) {
+    return (
+      <View style={{ height, alignItems: 'center', justifyContent: 'center' }}>
+        <Txt variant="caption" color="textMuted" align="center">
+          Nenhuma venda registrada no período
+        </Txt>
+      </View>
+    )
+  }
+
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs, height }}>
       {data.map((d, i) => {
