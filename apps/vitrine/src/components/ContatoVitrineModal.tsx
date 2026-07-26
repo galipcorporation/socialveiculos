@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { whatsappLojaLink } from '../lib/contato'
 import { mascararTelefone, capitalizarNome } from '../lib/mascaras'
@@ -91,7 +92,7 @@ export function ContatoVitrineModal({ veiculoId, veiculoInfo, onClose }: Contato
     <div className="vt-modal-overlay" onClick={onClose}>
       <div className="vt-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
         <button className="vt-modal-close" onClick={onClose} aria-label="Fechar">
-          ×
+          <X size={18} />
         </button>
         <div className="vt-modal-header">
           <h3>Falar com a loja</h3>

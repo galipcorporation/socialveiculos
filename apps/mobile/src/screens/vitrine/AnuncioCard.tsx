@@ -18,9 +18,10 @@ interface Props {
   onSeguirLoja?: () => void
   seguindoLoja?: boolean
   onWhatsapp?: () => void
+  onConversar?: () => void
 }
 
-export const AnuncioCard = React.memo(function AnuncioCard({ anuncio: a, onPress, onLojaPress, onFavorito, onSeguirLoja, seguindoLoja, onWhatsapp }: Props) {
+export const AnuncioCard = React.memo(function AnuncioCard({ anuncio: a, onPress, onLojaPress, onFavorito, onSeguirLoja, seguindoLoja, onWhatsapp, onConversar }: Props) {
   const { colors } = useTheme()
   const aceitaTroca = !!a.descricao && semAcento(a.descricao).includes('troca')
 
@@ -70,8 +71,8 @@ export const AnuncioCard = React.memo(function AnuncioCard({ anuncio: a, onPress
       {/* Info */}
       <View style={{ padding: spacing.sm, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          {a.oferta && <Badge label="Oferta" tone="error" size="sm" />}
           <Txt variant="bodySemibold" numberOfLines={1} style={{ flex: 1 }}>{a.marca} {a.modelo}</Txt>
+          {a.oferta && <Badge label="Oferta" tone="error" size="sm" />}
         </View>
         {a.versao ? <Txt variant="caption" color="textDim" numberOfLines={1}>{a.versao}</Txt> : null}
         <Txt variant="caption" color="textMuted" numberOfLines={1}>
@@ -86,8 +87,15 @@ export const AnuncioCard = React.memo(function AnuncioCard({ anuncio: a, onPress
             <Txt variant="caption" color="textMuted">{a.total_favoritos}</Txt>
           </View>
         </View>
-        {onWhatsapp && (
-          <Button title="WhatsApp" variant="success" size="sm" icon="logo-whatsapp" onPress={onWhatsapp} full style={{ marginTop: spacing.xs }} />
+        {(onConversar || onWhatsapp) && (
+          <View style={{ flexDirection: 'row', gap: spacing.xs, marginTop: spacing.xs }}>
+            {onConversar && (
+              <Button title="Conversar" size="sm" icon="chatbubble-outline" onPress={onConversar} style={{ flex: 1 }} />
+            )}
+            {onWhatsapp && (
+              <Button title="WhatsApp" variant="success" size="sm" icon="logo-whatsapp" onPress={onWhatsapp} style={{ flex: 1 }} />
+            )}
+          </View>
         )}
       </View>
     </Card>

@@ -700,36 +700,51 @@ async def register_b2c(data: RegisterB2CRequest, request: Request, db: AsyncSess
     return novo_cliente
 
 
+async def montar_user_response(current_user: Usuario, db: AsyncSession) -> UserResponse:
+    """
+    Monta o UserResponse do usuário autenticado com o vínculo de loja resolvido.
+
+    `loja_id`/`modulos` não moram em Usuario (vêm de MembroLoja), então qualquer
+    rota que devolva o usuário logado precisa passar por aqui. Retornar o ORM cru
+    manda `loja_id: null` para o front, que troca o usuário inteiro no store e
+    perde o vínculo — foi assim que o "Sou lojista" sumia no mobile depois de
+    editar o perfil.
+    """
+    user_resp = UserResponse.model_validate(current_user)
+    if current_user.papel in (PapelUsuario.CLIENTE, PapelUsuario.ADMIN_PLATAFORMA):
+        return user_resp
+
+    # Gestor/Vendedor: o acesso depende de um vínculo de loja ATIVO e da
+    # própria loja estar ATIVA. Se o membro foi desativado (Equipe) ou o
+    # admin de plataforma inativou a loja (Admin > Lojas), não há acesso
+    # válido — a sessão está morta ainda que o Usuario.ativo continue True.
+    # Devolve 401 para o front expulsar ao login em vez de deixar entrar e
+    # só falhar depois, com os cards do dashboard quebrados.
+    stmt = (
+        select(MembroLoja, Loja)
+        .join(Loja, MembroLoja.loja_id == Loja.id)
+        .where(MembroLoja.usuario_id == current_user.id, MembroLoja.ativo == True)
+    )
+    membro_res = await db.execute(stmt)
+    row = membro_res.first()
+    if not row or not row[1].ativa:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Seu acesso a esta loja foi desativado.",
+        )
+    membro, _loja = row
+    user_resp.loja_id = membro.loja_id
+    user_resp.modulos = membro.modulos
+    return user_resp
+
+
 @router.get("/me", response_model=UserResponse)
 async def get_me(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Retorna o usuário autenticado (inclui avatar_url)."""
-    user_resp = UserResponse.model_validate(current_user)
-    if current_user.papel not in (PapelUsuario.CLIENTE, PapelUsuario.ADMIN_PLATAFORMA):
-        # Gestor/Vendedor: o acesso depende de um vínculo de loja ATIVO e da
-        # própria loja estar ATIVA. Se o membro foi desativado (Equipe) ou o
-        # admin de plataforma inativou a loja (Admin > Lojas), não há acesso
-        # válido — a sessão está morta ainda que o Usuario.ativo continue True.
-        # Devolve 401 para o front expulsar ao login em vez de deixar entrar e
-        # só falhar depois, com os cards do dashboard quebrados.
-        stmt = (
-            select(MembroLoja, Loja)
-            .join(Loja, MembroLoja.loja_id == Loja.id)
-            .where(MembroLoja.usuario_id == current_user.id, MembroLoja.ativo == True)
-        )
-        membro_res = await db.execute(stmt)
-        row = membro_res.first()
-        if not row or not row[1].ativa:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Seu acesso a esta loja foi desativado.",
-            )
-        membro, _loja = row
-        user_resp.loja_id = membro.loja_id
-        user_resp.modulos = membro.modulos
-    return user_resp
+    return await montar_user_response(current_user, db)
 
 
 @router.patch("/me", response_model=UserResponse, dependencies=[Depends(rate_limit(20, 60))])
@@ -768,7 +783,7 @@ async def atualizar_me(
         )
         await db.commit()
         await db.refresh(current_user)
-    return current_user
+    return await montar_user_response(current_user, db)
 
 
 @router.post("/me/avatar", response_model=UserResponse, dependencies=[Depends(rate_limit(10, 60))])
@@ -822,7 +837,7 @@ async def upload_avatar(
     )
     await db.commit()
     await db.refresh(current_user)
-    return current_user
+    return await montar_user_response(current_user, db)
 
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK, dependencies=[Depends(rate_limit(5, 60))])

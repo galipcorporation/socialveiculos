@@ -93,7 +93,13 @@ export function VeiculoModal({
   const [precoCustoStr, setPrecoCustoStr] = useState(mascararMoeda(veiculo?.preco_custo || 0))
   const [midias, setMidias] = useState<any[]>(veiculo?.midias || [])
   const [opcionais, setOpcionais] = useState<string[]>(() => {
-    try { return veiculo?.opcionais ? JSON.parse(veiculo.opcionais) : [] } catch { return [] }
+    try {
+      const raw = veiculo?.opcionais
+      if (!raw) return []
+      if (Array.isArray(raw)) return raw as string[]
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
+    } catch { return [] }
   })
   const [novoOpcional, setNovoOpcional] = useState('')
   const [buscandoPlaca, setBuscandoPlaca] = useState(false)
@@ -619,15 +625,27 @@ export function VeiculoModal({
                     <button type="button" className="opc-x" onClick={() => removerOpcional(o)} title="Remover">✕</button>
                   </span>
                 ))}
-                <input
-                  className="opc-input"
-                  type="text"
-                  placeholder="+ Adicionar opcional"
-                  value={novoOpcional}
-                  onChange={e => setNovoOpcional(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); adicionarOpcional() } }}
-                  onBlur={adicionarOpcional}
-                />
+                <div style={{ display: 'flex', flex: 1, minWidth: 160, gap: 4 }}>
+                  <input
+                    className="opc-input"
+                    type="text"
+                    placeholder="+ Adicionar opcional"
+                    value={novoOpcional}
+                    style={{ flex: 1, minWidth: 0 }}
+                    onChange={e => setNovoOpcional(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); adicionarOpcional() } }}
+                  />
+                  {novoOpcional.trim() && (
+                    <button
+                      type="button"
+                      className="btn btn-glass btn-sm"
+                      style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                      onClick={adicionarOpcional}
+                    >
+                      +
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

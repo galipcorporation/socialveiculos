@@ -163,7 +163,7 @@ async def get_sitemap_xml(db: AsyncSession = Depends(get_db)):
 class PreAprovacaoRequest(BaseModel):
     veiculo_id: str
     nome: str = Field(..., min_length=2, max_length=200)
-    telefone: str = Field(..., min_length=8, max_length=20)
+    cpf: Optional[str] = Field(None, max_length=14)   # substituiu telefone — obrigatório no front
     email: Optional[str] = Field(None, max_length=200)
     renda_mensal: Optional[float] = Field(None, ge=0)
     entrada: Optional[float] = Field(None, ge=0)
@@ -185,13 +185,16 @@ async def solicitar_pre_aprovacao(data: PreAprovacaoRequest, db: AsyncSession = 
     if not veiculo:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Veículo não encontrado ou indisponível.")
 
-    # Reaproveita ClientePF pelo telefone na loja, ou cria (sem exigir login).
-    res_cliente = await db.execute(
-        select(ClientePF).where(ClientePF.loja_id == veiculo.loja_id, ClientePF.telefone == data.telefone)
-    )
-    cliente = res_cliente.scalar_one_or_none()
+    # Reaproveita ClientePF pelo CPF na loja, ou cria (sem exigir login).
+    cpf_limpo = (data.cpf or "").replace(".", "").replace("-", "").strip()
+    cliente = None
+    if cpf_limpo:
+        res_cliente = await db.execute(
+            select(ClientePF).where(ClientePF.loja_id == veiculo.loja_id, ClientePF.cpf == cpf_limpo)
+        )
+        cliente = res_cliente.scalar_one_or_none()
     if not cliente:
-        cliente = ClientePF(loja_id=veiculo.loja_id, nome=data.nome, telefone=data.telefone, email=data.email)
+        cliente = ClientePF(loja_id=veiculo.loja_id, nome=data.nome, cpf=cpf_limpo or None, email=data.email)
         db.add(cliente)
         await db.flush()
 
@@ -266,7 +269,7 @@ async def cadastrar_lead_vitrine(data: LeadVitrineRequest, db: AsyncSession = De
         veiculo_id=veiculo.id,
         origem=OrigemLead.VITRINE,
         etapa=EtapaLead.LEAD,
-        valor_estimado=veiculo.preco_venda or 0.0,
+        valor_proposta=veiculo.preco_venda or 0.0,
         observacoes=obs,
     )
     db.add(lead)

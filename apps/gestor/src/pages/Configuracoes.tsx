@@ -5,6 +5,7 @@ import { useUIStore } from '../stores/uiStore'
 import { mascararCNPJ, mascararTelefone, mascararCEP, capitalizarNome } from '../lib/mascaras'
 import { buscarCEP } from '../lib/cep'
 import { RichEditor } from '../components/RichEditor'
+import { PasswordInput } from '../components/PasswordInput'
 import { CATALOGO_VARIAVEIS, labelsDe } from '../lib/variaveisContrato'
 import { Link2, Unlink, Gem, FileText, ShieldCheck, Upload, AlertTriangle } from 'lucide-react'
 
@@ -1461,7 +1462,7 @@ export function Configuracoes() {
                       </div>
                       <div className="form-group">
                         <label>Senha do certificado</label>
-                        <input type="password" value={senhaCertificado} onChange={e => setSenhaCertificado(e.target.value)} placeholder="Senha do arquivo .pfx" style={{ width: '100%' }} />
+                        <PasswordInput value={senhaCertificado} onChange={e => setSenhaCertificado(e.target.value)} placeholder="Senha do arquivo .pfx" style={{ width: '100%' }} />
                       </div>
                     </div>
                     <button type="submit" className="btn btn-primary" disabled={enviandoCertificado} style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 8 }}>

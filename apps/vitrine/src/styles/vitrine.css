@@ -2105,3 +2105,200 @@ a {
   gap: 8px;
 }
 
+/* ── Account Modal & Settings Enhancements ───────────────────────── */
+.vt-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: var(--vt-surface-hover);
+  border: 1px solid var(--vt-border);
+  border-radius: var(--vt-radius-lg, 16px);
+}
+
+.vt-profile-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--vt-primary-light);
+  color: var(--vt-primary);
+  font-weight: 700;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--vt-border);
+  overflow: hidden;
+}
+
+.vt-profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vt-profile-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--vt-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vt-profile-email {
+  font-size: 12px;
+  color: var(--vt-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vt-account-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--vt-border);
+}
+
+.vt-account-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vt-text-dim);
+}
+
+.vt-account-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vt-account-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: var(--vt-radius, 8px);
+  background: var(--vt-surface);
+  border: 1px solid var(--vt-border);
+  color: var(--vt-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+  text-align: left;
+}
+
+.vt-account-menu-item:hover {
+  background: var(--vt-surface-hover);
+  border-color: var(--vt-border-hover);
+  transform: translateY(-1px);
+}
+
+.vt-account-menu-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vt-account-menu-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--vt-primary-light);
+  color: var(--vt-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.vt-account-menu-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.vt-account-menu-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vt-text);
+}
+
+.vt-account-menu-subtitle {
+  font-size: 11px;
+  color: var(--vt-text-dim);
+}
+
+.vt-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.vt-badge-success {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--vt-success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.vt-badge-muted {
+  background: var(--vt-surface-hover);
+  color: var(--vt-text-dim);
+  border: 1px solid var(--vt-border);
+}
+
+.vt-btn-secondary {
+  background: var(--vt-surface-hover);
+  color: var(--vt-text);
+  border: 1px solid var(--vt-border);
+}
+.vt-btn-secondary:hover {
+  background: var(--vt-border);
+}
+
+.vt-btn-danger-outline {
+  background: transparent;
+  color: var(--vt-error);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.vt-btn-danger-outline:hover {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: var(--vt-error);
+}
+
+.vt-btn-sm {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.vt-qr-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid var(--vt-border);
+  border-radius: 12px;
+  box-shadow: var(--vt-shadow);
+  margin: 12px 0;
+}
+
+.vt-code-input {
+  letter-spacing: 0.3em;
+  text-align: center;
+  font-family: monospace;
+  font-size: 18px;
+  font-weight: 700;
+}
+

@@ -209,7 +209,7 @@ async def gerar_resposta_ia(
         lead = res_lead.scalar_one_or_none()
         
         if lead:
-            contexto_extra += f"- Dados do Lead no CRM: Nome {cliente.nome}, Etapa atual: {lead.etapa.value}, Valor Estimado da compra: {formatar_moeda(lead.valor_estimado)}\n"
+            contexto_extra += f"- Dados do Lead no CRM: Nome {cliente.nome}, Etapa atual: {lead.etapa.value}, Valor Estimado da compra: {formatar_moeda(lead.valor_proposta)}\n"
             if lead.veiculo_id:
                 # buscar modelo do veículo
                 from models import Veiculo
@@ -385,7 +385,7 @@ async def processar_mensagem_recebida(
             cliente_id=cliente.id,
             origem=OrigemLead.WHATSAPP,
             etapa=EtapaLead.LEAD,
-            valor_estimado=0.0,
+            valor_proposta=0.0,
             observacoes=f"Lead gerado via Assistente WhatsApp IA do vendedor. Mensagem inicial: {conteudo}"
         )
         db.add(lead)

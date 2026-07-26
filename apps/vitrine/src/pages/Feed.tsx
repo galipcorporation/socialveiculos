@@ -5,6 +5,7 @@ import { useUIStore } from '../stores/uiStore'
 import { useSiteConfig } from '../lib/SiteContext'
 import { LoginModal } from '../components/LoginModal'
 import { MfaSettingsModal } from '../components/MfaSettingsModal'
+import { AccountModal } from '../components/AccountModal'
 import { api } from '../lib/api'
 import { whatsappLojaLink } from '../lib/contato'
 import { CarCard } from '../components/CarCard'
@@ -524,141 +525,39 @@ export function Feed() {
 
       {/* Perfil Modal */}
       {showPerfilModal && user && (
-        <div className="vt-modal-overlay" onClick={closePerfilModal}>
-          <div className="vt-modal-card" style={{ maxWidth: 400, width: 'min(400px, 92vw)', background: 'var(--vt-surface)', border: '1px solid var(--vt-border)', color: 'var(--vt-text)' }} onClick={e => e.stopPropagation()}>
-            <div className="vt-modal-header" style={{ borderBottom: '1px solid var(--vt-border)', paddingBottom: '12px' }}>
-              <h3 style={{ margin: 0 }}>Minha Conta</h3>
-              <button className="vt-modal-close" onClick={closePerfilModal} style={{ color: 'var(--vt-text)' }} aria-label="Fechar">×</button>
-            </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px 0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '54px',
-                  height: '54px',
-                  borderRadius: '50%',
-                  background: 'var(--vt-primary-light)',
-                  color: 'var(--vt-primary)',
-                  fontWeight: '700',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '20px',
-                  border: '1px solid var(--vt-border)'
-                }}>
-                  {avatarPreview ? (
-                    <img src={avatarPreview} alt="Pré-visualização" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                  ) : user.avatar_url && !modalAvatarError ? (
-                    <img 
-                      src={user.avatar_url} 
-                      alt={user.nome} 
-                      onError={() => setModalAvatarError(true)}
-                      style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} 
-                    />
-                  ) : (
-                    user.nome.slice(0, 2).toUpperCase()
-                  )}
-                </div>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{user.nome}</h4>
-                  <span style={{ fontSize: '12px', color: 'var(--vt-text-dim)' }}>{user.email}</span>
-                </div>
-              </div>
-
-              <div style={{ borderTop: '1px solid var(--vt-border)', paddingTop: '16px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>Foto de Perfil</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{
-                    width: '64px',
-                    height: '64px',
-                    borderRadius: '50%',
-                    overflow: 'hidden',
-                    border: '2px dashed var(--vt-border-hover)',
-                    background: 'var(--vt-bg)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flex: '0 0 auto',
-                    color: 'var(--vt-text-muted)',
-                    fontSize: '11px',
-                    textAlign: 'center'
-                  }}>
-                    {avatarPreview ? (
-                      <img src={avatarPreview} alt="Pré-visualização" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : user.avatar_url && !previewAvatarError ? (
-                      <img 
-                        src={user.avatar_url} 
-                        alt={user.nome} 
-                        onError={() => setPreviewAvatarError(true)}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                      />
-                    ) : (
-                      'sem foto'
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <input
-                      ref={avatarInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleAvatarSelect}
-                      style={{ display: 'none' }}
-                      id="vt-avatar-input"
-                    />
-                    <label htmlFor="vt-avatar-input" className="vt-btn vt-btn-outline" style={{ fontSize: '13px', cursor: 'pointer' }}>
-                      {user.avatar_url || avatarPreview ? 'Trocar imagem' : 'Escolher imagem'}
-                    </label>
-                    <span style={{ fontSize: '11px', color: 'var(--vt-text-dim)' }}>JPG, PNG ou WEBP — até 15 MB.</span>
-                  </div>
-                </div>
-                {avatarError && (
-                  <span style={{ display: 'block', marginTop: '8px', fontSize: '12px', color: 'var(--vt-error)' }}>{avatarError}</span>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
-                  <button
-                    className="vt-btn vt-btn-primary"
-                    disabled={!avatarPreview || avatarUploading}
-                    onClick={handleSaveAvatar}
-                    style={{ fontSize: '13px', opacity: !avatarPreview || avatarUploading ? 0.5 : 1, cursor: !avatarPreview || avatarUploading ? 'not-allowed' : 'pointer' }}
-                  >
-                    {avatarUploading ? 'Salvando…' : 'Salvar foto'}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer" style={{ borderTop: '1px solid var(--vt-border)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <button
-                className="vt-btn vt-btn-outline"
-                style={{ width: '100%', textAlign: 'left' }}
-                onClick={() => { navigate('/minha-conta/veiculos'); closePerfilModal() }}
-              >
-                🚗 Meus Veículos
-              </button>
-              <button
-                className="vt-btn vt-btn-outline"
-                style={{ width: '100%', textAlign: 'left' }}
-                onClick={() => setShowMfaModal(true)}
-              >
-                🔒 Verificação em duas etapas {user.mfa_ativo ? '(ativada)' : ''}
-              </button>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button className="vt-btn vt-btn-outline" style={{ borderColor: 'var(--vt-error)', color: 'var(--vt-error)' }} onClick={async () => {
-                  const ok = await useUIStore.getState().confirm({
-                    title: 'Sair da conta',
-                    message: 'Deseja realmente encerrar sua sessão?',
-                    confirmLabel: 'Sair',
-                    cancelLabel: 'Cancelar',
-                    danger: true,
-                  })
-                  if (ok) {
-                    logout()
-                    closePerfilModal()
-                  }
-                }}>Sair da Conta</button>
-                <button className="vt-btn vt-btn-outline" onClick={closePerfilModal}>Fechar</button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AccountModal
+          isOpen={showPerfilModal}
+          onClose={closePerfilModal}
+          user={user}
+          avatarPreview={avatarPreview}
+          avatarUploading={avatarUploading}
+          avatarError={avatarError}
+          modalAvatarError={modalAvatarError}
+          previewAvatarError={previewAvatarError}
+          setModalAvatarError={setModalAvatarError}
+          setPreviewAvatarError={setPreviewAvatarError}
+          avatarInputRef={avatarInputRef}
+          handleAvatarSelect={handleAvatarSelect}
+          handleSaveAvatar={handleSaveAvatar}
+          onOpenMfa={() => setShowMfaModal(true)}
+          onNavigateVeiculos={() => {
+            navigate('/minha-conta/veiculos')
+            closePerfilModal()
+          }}
+          onLogout={async () => {
+            const ok = await useUIStore.getState().confirm({
+              title: 'Sair da conta',
+              message: 'Deseja realmente encerrar sua sessão?',
+              confirmLabel: 'Sair',
+              cancelLabel: 'Cancelar',
+              danger: true,
+            })
+            if (ok) {
+              logout()
+              closePerfilModal()
+            }
+          }}
+        />
       )}
 
       {/* Login Gate Modal */}

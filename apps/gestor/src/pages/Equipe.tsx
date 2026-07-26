@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
 import { mascararTelefone, capitalizarNome } from '../lib/mascaras'
 import { MODULOS, TODOS_MODULOS, MODULOS_BASE, parseModulos, type ModuloKey } from '../lib/modulos'
+import { PasswordInput } from '../components/PasswordInput'
 
 type Papel = 'gestor' | 'vendedor'
 
@@ -237,12 +238,11 @@ export function Equipe() {
                   </div>
                   <div className="form-group full-width-mobile" style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / 3' }}>
                     <label style={{ fontSize: 12, fontWeight: 600 }}>Senha provisória *</label>
-                    <input
+                    <PasswordInput
                       value={form.senha}
                       onChange={(e) => setForm({ ...form, senha: e.target.value })}
                       placeholder="Senha temporária (mín. 6 caracteres)"
-                      type="password"
-                      style={inputStyle}
+                      style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
                       required
                     />
                   </div>

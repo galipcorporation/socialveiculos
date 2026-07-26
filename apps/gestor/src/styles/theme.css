@@ -1987,6 +1987,30 @@ a:hover {
   background: var(--sv-row-hover);
 }
 
+/* Linha / área clicável que abre edição ao clicar */
+.clickable-row {
+  cursor: pointer;
+}
+
+.stock-table tbody .clickable-row:hover td {
+  background: color-mix(in srgb, var(--sv-primary) 6%, var(--sv-row-hover));
+}
+
+.stock-table tbody .clickable-row:hover td:first-child {
+  box-shadow: inset 3px 0 0 var(--sv-primary);
+}
+
+/* Card header mobile clicável */
+.mobile-vehicle-card-header.clickable-row {
+  cursor: pointer;
+  border-radius: var(--sv-radius) var(--sv-radius) 0 0;
+  transition: background var(--sv-transition);
+}
+
+.mobile-vehicle-card-header.clickable-row:hover {
+  background: color-mix(in srgb, var(--sv-primary) 8%, transparent);
+}
+
 .stock-table tbody td {
   padding: 14px 16px;
   border-bottom: 1px solid var(--sv-border);

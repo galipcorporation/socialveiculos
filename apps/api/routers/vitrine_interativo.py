@@ -428,7 +428,7 @@ async def iniciar_conversa_b2c(
     v_stmt = select(Veiculo).where(
         Veiculo.id == data.veiculo_id,
         Veiculo.publicado_marketplace == True,
-        Veiculo.status.in_([StatusVeiculo.DISPONIVEL, StatusVeiculo.REPASSE, "disponivel", "repasse"])
+        Veiculo.status.in_([StatusVeiculo.DISPONIVEL, StatusVeiculo.REPASSE])
     )
     v_res = await db.execute(v_stmt)
     veiculo = v_res.scalar_one_or_none()
@@ -498,7 +498,7 @@ async def iniciar_conversa_b2c(
             veiculo_id=data.veiculo_id,
             origem=OrigemLead.VITRINE,
             etapa=EtapaLead.LEAD,
-            valor_estimado=veiculo.preco_venda or 0.0,
+            valor_proposta=veiculo.preco_venda or 0.0,
             observacoes=f"Lead gerado via Chat Vitrine B2C. Mensagem inicial: {msg_texto}"
         )
         db.add(lead)

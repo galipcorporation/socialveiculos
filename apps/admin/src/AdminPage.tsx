@@ -4,6 +4,7 @@ import { api } from './lib/api'
 import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda, mascararTelefone } from './lib/mascaras'
 import { useUIStore } from './stores/uiStore'
 import { RichEditor } from './components/RichEditor'
+import { PasswordInput } from './components/PasswordInput'
 import { CATALOGO_VARIAVEIS_ASSINATURA, LABELS_VARIAVEIS_ASSINATURA } from './lib/variaveisContratoAssinatura'
 
 // ── Tipos ────────────────────────────────────────────────────────
@@ -201,7 +202,7 @@ function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           </div>
           <div className="form-group">
             <label>Senha temporária</label>
-            <input type="password" value={form.gestor_senha} onChange={set('gestor_senha')} required minLength={6} placeholder="••••••••" />
+            <PasswordInput value={form.gestor_senha} onChange={set('gestor_senha')} required minLength={6} placeholder="••••••••" style={{ width: '100%' }} />
           </div>
 
           <div className="modal-footer">

@@ -24,7 +24,10 @@ interface AuthState {
   login: (token: string, refreshToken: string, user: User) => void
   logout: () => void
   setToken: (token: string) => void
-  /** Substitui o usuário logado (após editar o perfil), mantendo a sessão. */
+  /**
+   * Atualiza o usuário logado (após editar o perfil), mantendo a sessão.
+   * Preserva o vínculo de loja quando a resposta não o traz — ver setUser.
+   */
   setUser: (user: User) => void
 }
 
@@ -40,7 +43,17 @@ export const useAuthStore = create<AuthState>()(
       logout: () =>
         set({ token: null, refreshToken: null, user: null, isAuthenticated: false }),
       setToken: (token) => set({ token }),
-      setUser: (user) => set({ user }),
+      // Rotas que devolvem o usuário sem resolver MembroLoja mandam
+      // loja_id/modulos vazios; trocar o objeto inteiro apagaria o vínculo e
+      // esconderia o "Sou lojista". Só sobrescreve esses campos se vierem.
+      setUser: (user) =>
+        set((s) => ({
+          user: {
+            ...user,
+            loja_id: user.loja_id ?? s.user?.loja_id ?? null,
+            modulos: user.modulos ?? s.user?.modulos,
+          },
+        })),
     }),
     {
       name: 'sv-auth-storage',

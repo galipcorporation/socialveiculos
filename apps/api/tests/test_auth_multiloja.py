@@ -76,3 +76,22 @@ async def test_gestor_ignora_header_de_loja_alheia(client, gestor_token):
         headers={"Authorization": f"Bearer {gestor_token}", "X-Loja-Id": "outra-loja"},
     )
     assert resp.status_code == 200, resp.text
+
+
+# ── loja_id sobrevive à edição de perfil ───────────────────────
+# O PATCH /auth/me devolvia o ORM cru (loja_id sempre null, porque o vínculo
+# mora em MembroLoja). O mobile trocava o usuário inteiro no store e o botão
+# "Sou lojista" — condicionado a user.loja_id — sumia até relogar.
+
+
+async def test_patch_me_preserva_loja_id(client, gestor_token):
+    headers = {"Authorization": f"Bearer {gestor_token}"}
+    antes = await client.get("/v1/auth/me", headers=headers)
+    assert antes.status_code == 200, antes.text
+    loja_id = antes.json()["loja_id"]
+    assert loja_id, "gestor do fixture precisa ter vínculo de loja"
+
+    resp = await client.patch("/v1/auth/me", headers=headers, json={"nome": "Gestor Editado"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["loja_id"] == loja_id
+    assert resp.json()["nome"] == "Gestor Editado"

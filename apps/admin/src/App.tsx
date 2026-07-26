@@ -5,6 +5,7 @@ import { useAuthStore } from './stores/authStore'
 import { api, ApiError } from './lib/api'
 import { AdminPage } from './AdminPage'
 import { UIProvider } from './components/UIProvider'
+import { PasswordInput } from './components/PasswordInput'
 
 // ── Guard ────────────────────────────────────────────────────────
 
@@ -99,12 +100,12 @@ function LoginAdmin() {
           </div>
           <div className="form-group">
             <label>Senha</label>
-            <input
-              type="password"
+            <PasswordInput
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               required
               placeholder="••••••••"
+              style={{ width: '100%' }}
             />
           </div>
           <button

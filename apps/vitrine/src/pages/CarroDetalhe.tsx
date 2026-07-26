@@ -13,7 +13,7 @@ import { mascararTelefone, capitalizarNome, mascararMoeda, desmascararMoeda } fr
 /** Modal de pré-aprovação de crédito (M017) — captura o interesse do comprador
  *  e encaminha à loja como lead. Não simula parcela (sem parceria com banco). */
 function PreAprovacaoModal({ veiculoId, onClose }: { veiculoId: string; onClose: () => void }) {
-  const [form, setForm] = useState({ nome: '', telefone: '', email: '', renda_mensal: '', entrada: '' })
+  const [form, setForm] = useState({ nome: '', cpf: '', email: '', renda_mensal: '', entrada: '' })
   const [enviando, setEnviando] = useState(false)
   const [ok, setOk] = useState(false)
   const [erro, setErro] = useState('')
@@ -26,7 +26,7 @@ function PreAprovacaoModal({ veiculoId, onClose }: { veiculoId: string; onClose:
       await api.post('/marketplace/pre-aprovacao', {
         veiculo_id: veiculoId,
         nome: form.nome.trim(),
-        telefone: form.telefone.trim(),
+        cpf: form.cpf.replace(/\D/g, ''),
         email: form.email.trim() || undefined,
         renda_mensal: desmascararMoeda(form.renda_mensal),
         entrada: desmascararMoeda(form.entrada),
@@ -77,14 +77,23 @@ function PreAprovacaoModal({ veiculoId, onClose }: { veiculoId: string; onClose:
             </div>
 
             <div className="vt-form-group">
-              <label htmlFor="vt-sim-tel">WhatsApp / Telefone</label>
+              <label htmlFor="vt-sim-cpf">CPF</label>
               <input
-                id="vt-sim-tel"
+                id="vt-sim-cpf"
                 className="vt-input"
-                placeholder="(00) 00000-0000"
+                placeholder="000.000.000-00"
                 required
-                value={form.telefone}
-                onChange={(e) => setForm({ ...form, telefone: mascararTelefone(e.target.value) })}
+                inputMode="numeric"
+                maxLength={14}
+                value={form.cpf}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/\D/g, '').slice(0, 11)
+                  const masked = raw
+                    .replace(/(\d{3})(\d)/, '$1.$2')
+                    .replace(/(\d{3})(\d)/, '$1.$2')
+                    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+                  setForm({ ...form, cpf: masked })
+                }}
               />
             </div>
 

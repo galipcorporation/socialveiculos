@@ -13,6 +13,7 @@ import { MediaCarousel } from '../../components/MediaCarousel'
 import { vitrineService } from '../../services'
 import { useGateLogin } from '../../hooks/useGateLogin'
 import { useToggleFavorito } from '../../hooks/useToggleFavorito'
+import { extractErrorDetails } from '../../lib/api'
 import { formatBRL, formatKm } from '../../lib/format'
 import { abrirWhatsapp, abrirWhatsappComLead } from '../../lib/whatsapp'
 import type { VitrineScreenProps } from '../../navigation/types'
@@ -45,8 +46,8 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
         const conv = await vitrineService.abrirConversa(a)
         queryClient.invalidateQueries({ queryKey: ['vitrine', 'conversas'] })
         navigation.navigate('ConversaVitrine', { id: conv.id, nome: conv.loja_nome })
-      } catch {
-        toast.show('error', 'Não foi possível iniciar a conversa com a loja.')
+      } catch (e) {
+        toast.show('error', extractErrorDetails(e).message || 'Não foi possível iniciar a conversa com a loja.')
       }
     })
 

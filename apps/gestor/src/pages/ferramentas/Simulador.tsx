@@ -10,6 +10,7 @@ import {
   Calculator, Loader2, Trash2, Edit, Search, X, AlertCircle, AlertTriangle,
   Smartphone, Gem, ExternalLink, Printer,
 } from 'lucide-react'
+import { PasswordInput } from '../../components/PasswordInput'
 
 // Bancos disponíveis
 interface BancoInfo {
@@ -793,11 +794,11 @@ export function SimuladorPage() {
               </div>
               <div className="form-group">
                 <label>Senha / Chave de Acesso</label>
-                <input 
-                  type="password" 
-                  value={senhaConfig} 
-                  onChange={e => setSenhaConfig(e.target.value)} 
+                <PasswordInput
+                  value={senhaConfig}
+                  onChange={e => setSenhaConfig(e.target.value)}
                   placeholder="Senha do portal"
+                  style={{ width: '100%' }}
                 />
               </div>
               <button 

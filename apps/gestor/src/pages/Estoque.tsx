@@ -410,7 +410,12 @@ export function Estoque() {
             </thead>
             <tbody>
               {veiculos.map(v => (
-                <tr key={v.id}>
+                <tr
+                  key={v.id}
+                  className="clickable-row"
+                  onClick={() => { setEditingVeiculo(v); setShowModal(true) }}
+                  title="Clique para editar"
+                >
                   <td>
                     <div className="vehicle-info-cell">
                       {(() => {
@@ -445,13 +450,13 @@ export function Estoque() {
                       )
                     })() : <span className="margem-badge none">—</span>}
                   </td>
-                  <td>
+                  <td onClick={e => e.stopPropagation()}>
                     <StatusSelect
                       value={v.status || 'disponivel'}
                       onChange={newStatus => handleStatusChange(v, newStatus)}
                     />
                   </td>
-                  <td className="col-secondary">
+                  <td className="col-secondary" onClick={e => e.stopPropagation()}>
                     {(() => {
                       const semFoto = !v.midias || v.midias.length === 0
                       const naoDisponivel = v.status !== 'disponivel'
@@ -479,7 +484,7 @@ export function Estoque() {
                       )
                     })()}
                   </td>
-                  <td>
+                  <td onClick={e => e.stopPropagation()}>
                     <div className="actions-cell">
                       {v.status === 'disponivel' && (
                         <button
@@ -549,7 +554,11 @@ export function Estoque() {
           <div className="mobile-vehicle-cards">
             {veiculos.map(v => (
               <div key={v.id} className="mobile-vehicle-card">
-                <div className="mobile-vehicle-card-header">
+                <div
+                  className="mobile-vehicle-card-header clickable-row"
+                  onClick={() => { setEditingVeiculo(v); setShowModal(true) }}
+                  title="Clique para editar"
+                >
                   {(() => {
                     const capa = midiaCapa(v.midias)
                     return capa ? (

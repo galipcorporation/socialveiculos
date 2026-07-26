@@ -19,8 +19,12 @@ interface InputProps extends TextInputProps {
 export function Input({ label, error, hint, icon, right, containerStyle, style, ...rest }: InputProps) {
   const { colors } = useTheme()
   const [focused, setFocused] = useState(false)
+  const [senhaVisivel, setSenhaVisivel] = useState(false)
 
   const borderColor = error ? colors.error : focused ? colors.primary : colors.border
+  // Campo de senha sem "right" próprio ganha o olho automaticamente.
+  const olhoAutomatico = !!rest.secureTextEntry && !right
+  const secureTextEntry = olhoAutomatico ? !senhaVisivel : rest.secureTextEntry
 
   return (
     <View style={[{ gap: 6 }, containerStyle]}>
@@ -38,8 +42,24 @@ export function Input({ label, error, hint, icon, right, containerStyle, style, 
           onBlur={(e) => { setFocused(false); rest.onBlur?.(e) }}
           style={[styles.input, { color: colors.text }, style]}
           {...rest}
+          secureTextEntry={secureTextEntry}
         />
-        {right}
+        {olhoAutomatico ? (
+          <Pressable
+            onPress={() => setSenhaVisivel((v) => !v)}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={senhaVisivel ? 'Ocultar senha' : 'Mostrar senha'}
+          >
+            <Ionicons
+              name={senhaVisivel ? 'eye-off-outline' : 'eye-outline'}
+              size={19}
+              color={colors.textMuted}
+            />
+          </Pressable>
+        ) : (
+          right
+        )}
       </View>
       {error ? (
         <Txt variant="caption" color="error">{error}</Txt>
