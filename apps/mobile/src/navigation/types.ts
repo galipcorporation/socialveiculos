@@ -38,6 +38,7 @@ export type RootStackParamList = {
   MeuSite: undefined
   RedeSocial: undefined
   Marketing: undefined
+  Anuncios: undefined
   AssistenteIA: undefined
   ConversaAssistente: { id: string; nome: string }
   AssistenteConfig: undefined

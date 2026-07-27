@@ -30,6 +30,10 @@ export { siteService } from './site'
 export { repassesService } from './repasses'
 export { marketingService, TONS_MARKETING, CANAIS_MARKETING } from './marketing'
 export type { TomMarketing, CanalMarketing, PostMarketing } from './marketing'
+export { anunciosService } from './anuncios'
+export type {
+  Portal, CelulaAnuncio, LinhaAnuncio, GradeAnuncios, PendenciaBaixa, StatusAnuncio,
+} from './anuncios'
 export { assistenteService, TONS_ASSISTENTE } from './assistente'
 export type {
   TomAssistente, AutonomiaAssistente, SessaoAssistente,

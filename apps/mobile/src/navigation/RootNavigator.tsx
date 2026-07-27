@@ -38,6 +38,7 @@ import ContratosScreen from '../screens/ferramentas/ContratosScreen'
 import NotasFiscaisScreen from '../screens/ferramentas/NotasFiscaisScreen'
 import MeuSiteScreen from '../screens/ferramentas/MeuSiteScreen'
 import MarketingScreen from '../screens/ferramentas/MarketingScreen'
+import AnunciosScreen from '../screens/ferramentas/AnunciosScreen'
 import AssistenteIAScreen from '../screens/ferramentas/AssistenteIAScreen'
 import ConversaAssistenteScreen from '../screens/ferramentas/ConversaAssistenteScreen'
 import AssistenteConfigScreen from '../screens/ferramentas/AssistenteConfigScreen'
@@ -151,6 +152,7 @@ export default function RootNavigator() {
             <Stack.Screen name="NotasFiscais" component={NotasFiscaisScreen} />
             <Stack.Screen name="MeuSite" component={MeuSiteScreen} />
             <Stack.Screen name="Marketing" component={MarketingScreen} />
+            <Stack.Screen name="Anuncios" component={AnunciosScreen} />
             <Stack.Screen name="AssistenteIA" component={AssistenteIAScreen} />
             <Stack.Screen name="ConversaAssistente" component={ConversaAssistenteScreen} />
             <Stack.Screen name="AssistenteConfig" component={AssistenteConfigScreen} />

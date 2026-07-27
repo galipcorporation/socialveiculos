@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async'
 import { fetchLoja, lojaMeta, formatBRL, type LojaPublica } from '../lib/loaders'
 import { getSSGData } from '../lib/ssgData'
 import { BottomNav } from '../components/BottomNav'
+import { ehVideo } from '../lib/midia'
 
 interface MidiaItem {
   id: string
@@ -32,7 +33,7 @@ function StoreItemMedia({ midias, alt }: { midias: MidiaItem[]; alt: string }) {
 
   return (
     <div className="vt-store-item-media">
-      {atual.tipo === 'video' ? (
+      {ehVideo(atual) ? (
         <video src={atual.url} preload="metadata" muted />
       ) : (
         <img src={atual.url} alt={alt} loading="lazy" />

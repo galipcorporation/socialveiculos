@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { ehVideo } from '../lib/midia'
 
 export interface Midia {
   id: string
@@ -83,10 +84,14 @@ function timeAgo(v: Veiculo) {
 export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir }: CarCardProps) {
   const navigate = useNavigate()
   const [currentIdx, setCurrentIdx] = useState(0)
-  const [imgError, setImgError] = useState(false)
+  // Por índice: uma mídia quebrada não pode derrubar o carrossel inteiro.
+  const [errosPorIdx, setErrosPorIdx] = useState<Record<number, boolean>>({})
+  const imgError = !!errosPorIdx[currentIdx]
 
   const midias = veiculo.midias ?? []
   const currentMidia = midias.length > 0 ? midias[currentIdx] : null
+
+  const midiaEhVideo = currentMidia ? ehVideo(currentMidia) : false
 
   const prev = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -140,11 +145,11 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
       {/* Mídia — 1:1 */}
       <div className="vt-car-card-image">
         {currentMidia && !imgError ? (
-          currentMidia.tipo === 'video' ? (
+          midiaEhVideo ? (
             <video src={currentMidia.url} controls muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
             <Link to={`/carro/${veiculo.id}`} className="vt-car-card-media-link" style={{ width: '100%', height: '100%', display: 'block' }}>
-              <img src={currentMidia.thumb_url || currentMidia.url} alt={`${veiculo.marca} ${veiculo.modelo}`} loading="lazy" decoding="async" onError={() => setImgError(true)} />
+              <img src={currentMidia.thumb_url || currentMidia.url} alt={`${veiculo.marca} ${veiculo.modelo}`} loading="lazy" decoding="async" onError={() => setErrosPorIdx(e => ({ ...e, [currentIdx]: true }))} />
             </Link>
           )
         ) : (

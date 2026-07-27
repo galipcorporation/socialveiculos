@@ -6,6 +6,7 @@ import { getSSGData } from '../lib/ssgData'
 import { whatsappLojaLink } from '../lib/contato'
 import { api } from '../lib/api'
 import { BottomNav } from '../components/BottomNav'
+import { ehVideo } from '../lib/midia'
 import { ContatoVitrineModal } from '../components/ContatoVitrineModal'
 import { useAuthStore } from '../stores/authStore'
 import { mascararTelefone, capitalizarNome, mascararMoeda, desmascararMoeda } from '../lib/mascaras'
@@ -147,7 +148,7 @@ function PreAprovacaoModal({ veiculoId, onClose }: { veiculoId: string; onClose:
 
 /** Renderiza uma mídia (foto OU vídeo) — foto e vídeo são tratados como a mesma coisa. */
 function MidiaView({ midia, className }: { midia: Midia; className?: string }) {
-  if (midia.tipo === 'video') {
+  if (ehVideo(midia)) {
     return <video src={midia.url} className={className} controls preload="metadata" />
   }
   return <img src={midia.url} alt="" className={className} loading="lazy" />

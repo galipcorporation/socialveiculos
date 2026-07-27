@@ -4,6 +4,7 @@ import { api } from '../../lib/api'
 import { useUIStore } from '../../stores/uiStore'
 import { Megaphone, Loader2, Sparkles, Copy, Check, Gem, Car, Send, Clock, History, X } from 'lucide-react'
 import { SearchSelect } from '../../components/SearchSelect'
+import { GradeAnuncios } from '../../components/marketing/GradeAnuncios'
 
 interface VeiculoItem {
   id: string
@@ -59,6 +60,7 @@ export function MarketingPage() {
   const navigate = useNavigate()
 
   const [liberado, setLiberado] = useState<boolean | null>(null)
+  const [aba, setAba] = useState<'post' | 'anuncios'>('post')
 
   const [veiculos, setVeiculos] = useState<VeiculoItem[]>([])
   const [loadingVeiculos, setLoadingVeiculos] = useState(false)
@@ -244,9 +246,42 @@ export function MarketingPage() {
     <div className="page-content">
       <div className="page-header">
         <h2>Marketing</h2>
-        <p>Escolha um veículo do estoque e gere um anúncio pronto para publicar.</p>
+        <p>Gere posts com IA e publique seus veículos nos portais.</p>
       </div>
 
+      {/* Abas: gerador de post (original) e integrador de anúncios (M079) */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid var(--sv-border)' }}>
+        {([
+          { id: 'post', label: 'Criar post' },
+          { id: 'anuncios', label: 'Anúncios nos portais' },
+        ] as const).map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setAba(t.id)}
+            style={{
+              padding: '9px 16px',
+              border: '1px solid transparent',
+              borderBottom: 'none',
+              background: aba === t.id ? 'var(--sv-surface)' : 'none',
+              color: aba === t.id ? 'var(--sv-text)' : 'var(--sv-text-dim)',
+              borderColor: aba === t.id ? 'var(--sv-border)' : 'transparent',
+              borderRadius: '10px 10px 0 0',
+              cursor: 'pointer',
+              fontSize: 14,
+              fontWeight: 500,
+              position: 'relative',
+              top: 1,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {aba === 'anuncios' && <GradeAnuncios />}
+
+      {aba === 'post' && (
+      <>
       {/* Banner redes sociais — sempre visível quando nenhuma rede está conectada */}
       {redesConectadas.length === 0 && (
         <div style={{
@@ -542,6 +577,8 @@ export function MarketingPage() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   )
 }

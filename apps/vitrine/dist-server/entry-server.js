@@ -3,12 +3,12 @@ var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { en
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 import { jsx, jsxs, Fragment } from "react/jsx-runtime";
 import { renderToString } from "react-dom/server";
-import { useNavigate, useLocation, Link, useParams, Routes, Route, StaticRouter } from "react-router-dom";
+import { useNavigate, Link, useLocation, useParams, Routes, Route, StaticRouter } from "react-router-dom";
 import { Helmet, HelmetProvider } from "react-helmet-async";
 import React, { createContext, useState, useEffect, useContext, useRef, useCallback } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { X, AlertCircle, KeyRound, Mail, EyeOff, Eye, User, Phone } from "lucide-react";
+import { X, AlertCircle, KeyRound, Mail, EyeOff, Eye, User, Phone, ShieldCheck, CheckCircle2, ArrowLeft, Lock, Upload, Check, Car, ChevronRight, LogOut } from "lucide-react";
 const useAuthStore = create()(
   persist(
     (set) => ({
@@ -97,7 +97,11 @@ const DEFAULT_MARKETPLACE_CONFIG = {
 };
 function detectarTipoSite(host) {
   if (!host) return "marketplace";
-  const parts = host.split(".");
+  const h = host.toLowerCase();
+  if (h.endsWith(".vercel.app") || h.includes("localhost") || h.includes("127.0.0.1") || h === "socialveiculos.com.br" || h === "www.socialveiculos.com.br") {
+    return "marketplace";
+  }
+  const parts = h.split(".");
   return parts.length > 2 ? "white-label" : "marketplace";
 }
 function extrairSlugDoHost(host) {
@@ -114,10 +118,7 @@ async function getThemeConfig(host) {
   const slug = extrairSlugDoHost(host);
   if (!slug) return DEFAULT_MARKETPLACE_CONFIG;
   try {
-    const response = await fetch(
-      `${void 0}/v1/public/site/${host}`,
-      { credentials: "omit" }
-    );
+    const response = await fetch(`/v1/public/site/${host}`, { credentials: "omit" });
     if (!response.ok) return DEFAULT_MARKETPLACE_CONFIG;
     const siteData = await response.json();
     return {
@@ -286,7 +287,8 @@ class ApiClient {
       const ts = (/* @__PURE__ */ new Date()).toISOString();
       const requestId = response.headers.get("x-request-id") ?? void 0;
       if (response.status >= 500) {
-        void reportarErroServidor({ path, status: response.status, timestamp: ts, requestId, origem: "vitrine" });
+        const erroMsg = typeof body.detail === "string" ? body.detail : body.error ?? (body.detail ? JSON.stringify(body.detail) : void 0);
+        void reportarErroServidor({ path, status: response.status, timestamp: ts, requestId, origem: "vitrine", mensagem: erroMsg });
       }
       throw new ApiError(friendlyHttpMessage(response.status, body.error), {
         status: response.status,
@@ -336,6 +338,17 @@ function capitalizarNome(val) {
     }
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
   }).join("");
+}
+function mascararMoeda(val) {
+  const numStr = String(val).replace(/\D/g, "");
+  if (!numStr) return "";
+  const centavos = parseFloat(numStr) / 100;
+  return centavos.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+function desmascararMoeda(val) {
+  const numStr = val.replace(/\D/g, "");
+  if (!numStr) return void 0;
+  return parseFloat(numStr) / 100;
 }
 function LoginModal() {
   const isOpen = useAuthStore((state) => state.isLoginModalOpen);
@@ -408,7 +421,7 @@ function LoginModal() {
     }
   };
   return /* @__PURE__ */ jsx("div", { className: "vt-modal-overlay", onClick: close, children: /* @__PURE__ */ jsxs("div", { className: "vt-modal-card", onClick: (e) => e.stopPropagation(), children: [
-    /* @__PURE__ */ jsx("button", { className: "vt-modal-close", onClick: close, children: /* @__PURE__ */ jsx(X, { size: 20 }) }),
+    /* @__PURE__ */ jsx("button", { className: "vt-modal-close", onClick: close, "aria-label": "Fechar", children: /* @__PURE__ */ jsx(X, { size: 20 }) }),
     /* @__PURE__ */ jsxs("div", { className: "vt-modal-header", children: [
       /* @__PURE__ */ jsx("h3", { children: "Sua jornada automotiva começa aqui" }),
       /* @__PURE__ */ jsx("p", { children: "Conecte-se para favoritar veículos, enviar propostas e conversar diretamente com as concessionárias." })
@@ -531,6 +544,7 @@ function LoginModal() {
               className: "vt-btn-toggle-password",
               onClick: () => setShowPasswordLogin(!showPasswordLogin),
               tabIndex: -1,
+              "aria-label": showPasswordLogin ? "Ocultar senha" : "Mostrar senha",
               children: showPasswordLogin ? /* @__PURE__ */ jsx(EyeOff, { size: 16 }) : /* @__PURE__ */ jsx(Eye, { size: 16 })
             }
           )
@@ -619,6 +633,7 @@ function LoginModal() {
                 className: "vt-btn-toggle-password",
                 onClick: () => setShowPasswordRegister(!showPasswordRegister),
                 tabIndex: -1,
+                "aria-label": showPasswordRegister ? "Ocultar senha" : "Mostrar senha",
                 children: showPasswordRegister ? /* @__PURE__ */ jsx(EyeOff, { size: 16 }) : /* @__PURE__ */ jsx(Eye, { size: 16 })
               }
             )
@@ -634,6 +649,7 @@ function MfaSettingsModal({ mfaAtivo, onClose, onChange }) {
   const [qrCode, setQrCode] = useState(null);
   const [codigo, setCodigo] = useState("");
   const [senha, setSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro] = useState(null);
   const [loading, setLoading] = useState(false);
   async function iniciarEnroll() {
@@ -679,79 +695,400 @@ function MfaSettingsModal({ mfaAtivo, onClose, onChange }) {
       setLoading(false);
     }
   }
-  return /* @__PURE__ */ jsx("div", { className: "vt-modal-overlay", onClick: onClose, children: /* @__PURE__ */ jsxs("div", { className: "vt-modal-card", onClick: (e) => e.stopPropagation(), children: [
-    /* @__PURE__ */ jsx("button", { className: "vt-modal-close", onClick: onClose, children: "×" }),
-    /* @__PURE__ */ jsxs("div", { className: "vt-modal-header", children: [
-      /* @__PURE__ */ jsx("h3", { children: "Verificação em duas etapas" }),
-      /* @__PURE__ */ jsx("p", { children: "Adicione uma camada extra de segurança usando um app autenticador (Google Authenticator, Authy)." })
-    ] }),
-    erro && /* @__PURE__ */ jsx("div", { className: "vt-modal-error", children: /* @__PURE__ */ jsx("span", { children: erro }) }),
-    etapa === "inicial" && !mfaAtivo && /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-primary vt-btn-block", onClick: iniciarEnroll, disabled: loading, children: loading ? "Gerando..." : "Ativar verificação em duas etapas" }),
-    etapa === "inicial" && mfaAtivo && /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-outline vt-btn-block", onClick: () => setEtapa("desativar"), disabled: loading, children: "Desativar verificação em duas etapas" }),
-    etapa === "enroll" && qrCode && /* @__PURE__ */ jsxs("form", { onSubmit: confirmarEnroll, className: "vt-modal-form", children: [
+  return /* @__PURE__ */ jsx("div", { className: "vt-modal-overlay", onClick: onClose, children: /* @__PURE__ */ jsxs("div", { className: "vt-modal-card", style: { maxWidth: 440, width: "100%" }, onClick: (e) => e.stopPropagation(), children: [
+    /* @__PURE__ */ jsx("button", { className: "vt-modal-close", onClick: onClose, "aria-label": "Fechar modal", children: /* @__PURE__ */ jsx(X, { size: 18 }) }),
+    /* @__PURE__ */ jsxs("div", { className: "vt-modal-header", style: { display: "flex", gap: "14px", alignItems: "flex-start" }, children: [
       /* @__PURE__ */ jsx(
+        "div",
+        {
+          style: {
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            background: "rgba(37, 99, 235, 0.1)",
+            color: "var(--vt-primary)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0
+          },
+          children: /* @__PURE__ */ jsx(ShieldCheck, { size: 24 })
+        }
+      ),
+      /* @__PURE__ */ jsxs("div", { children: [
+        /* @__PURE__ */ jsx("h3", { children: "Verificação em duas etapas" }),
+        /* @__PURE__ */ jsx("p", { children: "Proteja sua conta utilizando um aplicativo autenticador como Google Authenticator ou Authy." })
+      ] })
+    ] }),
+    erro && /* @__PURE__ */ jsxs("div", { className: "vt-modal-error", children: [
+      /* @__PURE__ */ jsx(AlertCircle, { size: 16 }),
+      /* @__PURE__ */ jsx("span", { children: erro })
+    ] }),
+    etapa === "inicial" && /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "16px" }, children: [
+      /* @__PURE__ */ jsxs(
+        "div",
+        {
+          style: {
+            padding: "16px",
+            borderRadius: "var(--vt-radius)",
+            background: "var(--vt-surface-hover)",
+            border: "1px solid var(--vt-border)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px"
+          },
+          children: [
+            /* @__PURE__ */ jsx("div", { style: { display: "flex", alignItems: "center", gap: "8px" }, children: mfaAtivo ? /* @__PURE__ */ jsxs("span", { className: "vt-badge vt-badge-success", children: [
+              /* @__PURE__ */ jsx(CheckCircle2, { size: 13 }),
+              " Proteção Ativa"
+            ] }) : /* @__PURE__ */ jsx("span", { className: "vt-badge vt-badge-muted", children: "Proteção Desativada" }) }),
+            /* @__PURE__ */ jsx("p", { style: { fontSize: "13px", color: "var(--vt-text-dim)", margin: 0, lineHeight: 1.45 }, children: mfaAtivo ? "Sua conta está protegida. Sempre que fizer login, um código de verificação temporário será solicitado." : "Sua conta possui apenas autenticação por senha. Ative o 2FA para garantir maior segurança contra acessos não autorizados." })
+          ]
+        }
+      ),
+      !mfaAtivo ? /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-primary vt-btn-block", onClick: iniciarEnroll, disabled: loading, children: loading ? "Gerando QR Code…" : "Ativar verificação em duas etapas" }) : /* @__PURE__ */ jsx(
+        "button",
+        {
+          className: "vt-btn vt-btn-danger-outline vt-btn-block",
+          onClick: () => setEtapa("desativar"),
+          disabled: loading,
+          children: "Desativar verificação em duas etapas"
+        }
+      )
+    ] }),
+    etapa === "enroll" && qrCode && /* @__PURE__ */ jsxs("form", { onSubmit: confirmarEnroll, className: "vt-modal-form", children: [
+      /* @__PURE__ */ jsxs("div", { style: { fontSize: "13px", color: "var(--vt-text-dim)", lineHeight: 1.4 }, children: [
+        /* @__PURE__ */ jsx("strong", { children: "1." }),
+        " Escaneie o QR Code abaixo no seu aplicativo autenticador:"
+      ] }),
+      /* @__PURE__ */ jsx("div", { className: "vt-qr-frame", children: /* @__PURE__ */ jsx(
         "img",
         {
           src: `data:image/png;base64,${qrCode}`,
           alt: "QR Code do autenticador",
-          style: { width: 200, height: 200, alignSelf: "center", background: "#fff", padding: 8, borderRadius: 8 }
+          style: { width: 180, height: 180, display: "block" }
+        }
+      ) }),
+      /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+        /* @__PURE__ */ jsx("label", { children: "2. Digite o código de 6 dígitos gerado" }),
+        /* @__PURE__ */ jsxs("div", { className: "vt-input-wrapper", children: [
+          /* @__PURE__ */ jsx(KeyRound, { className: "vt-input-icon", size: 18 }),
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              type: "text",
+              inputMode: "numeric",
+              placeholder: "000000",
+              maxLength: 6,
+              value: codigo,
+              onChange: (e) => setCodigo(e.target.value.replace(/\D/g, "")),
+              className: "vt-input vt-code-input",
+              required: true,
+              autoFocus: true,
+              disabled: loading
+            }
+          )
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "10px", marginTop: "8px" }, children: [
+        /* @__PURE__ */ jsxs(
+          "button",
+          {
+            type: "button",
+            className: "vt-btn vt-btn-secondary",
+            onClick: () => {
+              setEtapa("inicial");
+              setErro(null);
+            },
+            disabled: loading,
+            style: { gap: "6px" },
+            children: [
+              /* @__PURE__ */ jsx(ArrowLeft, { size: 16 }),
+              " Voltar"
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            type: "submit",
+            className: "vt-btn vt-btn-primary",
+            style: { flex: 1 },
+            disabled: loading || codigo.length !== 6,
+            children: loading ? "Confirmando..." : "Confirmar e ativar"
+          }
+        )
+      ] })
+    ] }),
+    etapa === "desativar" && /* @__PURE__ */ jsxs("form", { onSubmit: desativar, className: "vt-modal-form", children: [
+      /* @__PURE__ */ jsx(
+        "div",
+        {
+          style: {
+            padding: "12px 14px",
+            borderRadius: "var(--vt-radius)",
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.2)",
+            color: "var(--vt-error)",
+            fontSize: "13px"
+          },
+          children: "Atenção: Ao desativar o 2FA, sua conta perderá a camada extra de segurança."
         }
       ),
       /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
-        /* @__PURE__ */ jsx("label", { children: "Código do autenticador" }),
-        /* @__PURE__ */ jsx(
-          "input",
+        /* @__PURE__ */ jsx("label", { children: "Confirme sua senha para continuar" }),
+        /* @__PURE__ */ jsxs("div", { className: "vt-input-wrapper", children: [
+          /* @__PURE__ */ jsx(Lock, { className: "vt-input-icon", size: 18 }),
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              type: mostrarSenha ? "text" : "password",
+              value: senha,
+              onChange: (e) => setSenha(e.target.value),
+              placeholder: "Sua senha atual",
+              className: "vt-input vt-input-password",
+              required: true,
+              autoFocus: true,
+              disabled: loading
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              type: "button",
+              className: "vt-btn-toggle-password",
+              onClick: () => setMostrarSenha(!mostrarSenha),
+              tabIndex: -1,
+              "aria-label": mostrarSenha ? "Ocultar senha" : "Mostrar senha",
+              children: mostrarSenha ? /* @__PURE__ */ jsx(EyeOff, { size: 16 }) : /* @__PURE__ */ jsx(Eye, { size: 16 })
+            }
+          )
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "10px", marginTop: "8px" }, children: [
+        /* @__PURE__ */ jsxs(
+          "button",
           {
-            type: "text",
-            inputMode: "numeric",
-            placeholder: "000000",
-            maxLength: 6,
-            value: codigo,
-            onChange: (e) => setCodigo(e.target.value.replace(/\D/g, "")),
-            required: true,
-            autoFocus: true,
-            disabled: loading
+            type: "button",
+            className: "vt-btn vt-btn-secondary",
+            onClick: () => {
+              setEtapa("inicial");
+              setErro(null);
+            },
+            disabled: loading,
+            style: { gap: "6px" },
+            children: [
+              /* @__PURE__ */ jsx(ArrowLeft, { size: 16 }),
+              " Cancelar"
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            type: "submit",
+            className: "vt-btn vt-btn-danger-outline",
+            style: { flex: 1, justifyContent: "center" },
+            disabled: loading || !senha,
+            children: loading ? "Desativando..." : "Desativar 2FA"
           }
         )
-      ] }),
-      /* @__PURE__ */ jsx("button", { type: "submit", className: "vt-btn vt-btn-primary vt-btn-block", disabled: loading || codigo.length !== 6, children: loading ? "Confirmando..." : "Confirmar e ativar" })
-    ] }),
-    etapa === "desativar" && /* @__PURE__ */ jsxs("form", { onSubmit: desativar, className: "vt-modal-form", children: [
-      /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
-        /* @__PURE__ */ jsx("label", { children: "Confirme sua senha" }),
-        /* @__PURE__ */ jsx(
-          "input",
-          {
-            type: "password",
-            value: senha,
-            onChange: (e) => setSenha(e.target.value),
-            required: true,
-            autoFocus: true,
-            disabled: loading
-          }
-        )
-      ] }),
-      /* @__PURE__ */ jsx("button", { type: "submit", className: "vt-btn vt-btn-primary vt-btn-block", disabled: loading || !senha, children: loading ? "Desativando..." : "Desativar" })
+      ] })
     ] })
   ] }) });
 }
-const CONTATO_WHATSAPP = "5517991110057";
-const CONTATO_EMAIL = "suporte@socialveiculos.com";
-function normalizarWhatsapp(numero) {
-  const digitos = numero.replace(/\D/g, "");
-  if (!digitos) return "";
-  return digitos.length <= 11 ? `55${digitos}` : digitos;
+function AccountModal({
+  isOpen,
+  onClose,
+  user,
+  avatarPreview,
+  avatarUploading,
+  avatarError,
+  modalAvatarError,
+  previewAvatarError,
+  setModalAvatarError,
+  setPreviewAvatarError,
+  avatarInputRef,
+  handleAvatarSelect,
+  handleSaveAvatar,
+  onOpenMfa,
+  onNavigateVeiculos,
+  onLogout
+}) {
+  if (!isOpen || !user) return null;
+  const initials2 = user.nome ? user.nome.slice(0, 2).toUpperCase() : "U";
+  return /* @__PURE__ */ jsx("div", { className: "vt-modal-overlay", onClick: onClose, children: /* @__PURE__ */ jsxs(
+    "div",
+    {
+      className: "vt-modal-card",
+      style: { maxWidth: 440, width: "100%" },
+      onClick: (e) => e.stopPropagation(),
+      children: [
+        /* @__PURE__ */ jsx("button", { className: "vt-modal-close", onClick: onClose, "aria-label": "Fechar modal", children: /* @__PURE__ */ jsx(X, { size: 18 }) }),
+        /* @__PURE__ */ jsxs("div", { className: "vt-modal-header", children: [
+          /* @__PURE__ */ jsx("h3", { children: "Minha Conta" }),
+          /* @__PURE__ */ jsx("p", { children: "Gerencie seus dados de perfil e preferências da conta" })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "vt-modal-body", style: { display: "flex", flexDirection: "column", gap: "20px" }, children: [
+          /* @__PURE__ */ jsxs("div", { className: "vt-profile-card", children: [
+            /* @__PURE__ */ jsx("div", { className: "vt-profile-avatar", children: avatarPreview ? /* @__PURE__ */ jsx("img", { src: avatarPreview, alt: "Pré-visualização", style: { width: "100%", height: "100%", objectFit: "cover" } }) : user.avatar_url && !modalAvatarError ? /* @__PURE__ */ jsx(
+              "img",
+              {
+                src: user.avatar_url,
+                alt: user.nome,
+                onError: () => setModalAvatarError(true),
+                style: { width: "100%", height: "100%", objectFit: "cover" }
+              }
+            ) : initials2 }),
+            /* @__PURE__ */ jsxs("div", { className: "vt-profile-info", children: [
+              /* @__PURE__ */ jsx("div", { className: "vt-profile-name", children: user.nome }),
+              /* @__PURE__ */ jsx("div", { className: "vt-profile-email", children: user.email })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxs("div", { className: "vt-account-section", style: { marginTop: 0, paddingTop: 0, borderTop: "none" }, children: [
+            /* @__PURE__ */ jsx("span", { className: "vt-account-section-title", children: "Foto de Perfil" }),
+            /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "14px" }, children: [
+              /* @__PURE__ */ jsx(
+                "div",
+                {
+                  style: {
+                    width: "60px",
+                    height: "60px",
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    border: "2px dashed var(--vt-border-hover)",
+                    background: "var(--vt-bg)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    color: "var(--vt-text-dim)",
+                    fontSize: "11px"
+                  },
+                  children: avatarPreview ? /* @__PURE__ */ jsx("img", { src: avatarPreview, alt: "Pré-visualização", style: { width: "100%", height: "100%", objectFit: "cover" } }) : user.avatar_url && !previewAvatarError ? /* @__PURE__ */ jsx(
+                    "img",
+                    {
+                      src: user.avatar_url,
+                      alt: user.nome,
+                      onError: () => setPreviewAvatarError(true),
+                      style: { width: "100%", height: "100%", objectFit: "cover" }
+                    }
+                  ) : /* @__PURE__ */ jsx(User, { size: 24, style: { opacity: 0.4 } })
+                }
+              ),
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "6px", flex: 1 }, children: [
+                /* @__PURE__ */ jsx(
+                  "input",
+                  {
+                    ref: avatarInputRef,
+                    type: "file",
+                    accept: "image/*",
+                    onChange: handleAvatarSelect,
+                    style: { display: "none" },
+                    id: "vt-avatar-input-modal"
+                  }
+                ),
+                /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" }, children: [
+                  /* @__PURE__ */ jsxs(
+                    "label",
+                    {
+                      htmlFor: "vt-avatar-input-modal",
+                      className: "vt-btn vt-btn-outline vt-btn-sm",
+                      style: { cursor: "pointer", gap: "6px" },
+                      children: [
+                        /* @__PURE__ */ jsx(Upload, { size: 14 }),
+                        user.avatar_url || avatarPreview ? "Trocar imagem" : "Escolher imagem"
+                      ]
+                    }
+                  ),
+                  avatarPreview && /* @__PURE__ */ jsxs(
+                    "button",
+                    {
+                      className: "vt-btn vt-btn-primary vt-btn-sm",
+                      disabled: avatarUploading,
+                      onClick: handleSaveAvatar,
+                      style: { gap: "6px" },
+                      children: [
+                        /* @__PURE__ */ jsx(Check, { size: 14 }),
+                        avatarUploading ? "Salvando…" : "Salvar foto"
+                      ]
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsx("span", { style: { fontSize: "11px", color: "var(--vt-text-dim)" }, children: "JPG, PNG ou WEBP — até 15 MB." })
+              ] })
+            ] }),
+            avatarError && /* @__PURE__ */ jsx("span", { style: { display: "block", marginTop: "4px", fontSize: "12px", color: "var(--vt-error)" }, children: avatarError })
+          ] }),
+          /* @__PURE__ */ jsxs("div", { className: "vt-account-section", children: [
+            /* @__PURE__ */ jsx("span", { className: "vt-account-section-title", children: "Opções da Conta" }),
+            /* @__PURE__ */ jsxs("div", { className: "vt-account-menu", children: [
+              /* @__PURE__ */ jsxs("button", { className: "vt-account-menu-item", onClick: onNavigateVeiculos, children: [
+                /* @__PURE__ */ jsxs("div", { className: "vt-account-menu-left", children: [
+                  /* @__PURE__ */ jsx("div", { className: "vt-account-menu-icon", children: /* @__PURE__ */ jsx(Car, { size: 18 }) }),
+                  /* @__PURE__ */ jsxs("div", { className: "vt-account-menu-content", children: [
+                    /* @__PURE__ */ jsx("span", { className: "vt-account-menu-title", children: "Meus Veículos" }),
+                    /* @__PURE__ */ jsx("span", { className: "vt-account-menu-subtitle", children: "Gerenciar seus anúncios e cadastros" })
+                  ] })
+                ] }),
+                /* @__PURE__ */ jsx(ChevronRight, { size: 18, style: { color: "var(--vt-text-dim)" } })
+              ] }),
+              /* @__PURE__ */ jsxs("button", { className: "vt-account-menu-item", onClick: onOpenMfa, children: [
+                /* @__PURE__ */ jsxs("div", { className: "vt-account-menu-left", children: [
+                  /* @__PURE__ */ jsx("div", { className: "vt-account-menu-icon", style: { background: "rgba(37, 99, 235, 0.1)", color: "var(--vt-primary)" }, children: /* @__PURE__ */ jsx(ShieldCheck, { size: 18 }) }),
+                  /* @__PURE__ */ jsxs("div", { className: "vt-account-menu-content", children: [
+                    /* @__PURE__ */ jsx("span", { className: "vt-account-menu-title", children: "Verificação em duas etapas" }),
+                    /* @__PURE__ */ jsx("span", { className: "vt-account-menu-subtitle", children: "Segurança extra com autenticador" })
+                  ] })
+                ] }),
+                /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px" }, children: [
+                  /* @__PURE__ */ jsx("span", { className: `vt-badge ${user.mfa_ativo ? "vt-badge-success" : "vt-badge-muted"}`, children: user.mfa_ativo ? "Ativada" : "Desativada" }),
+                  /* @__PURE__ */ jsx(ChevronRight, { size: 18, style: { color: "var(--vt-text-dim)" } })
+                ] })
+              ] })
+            ] })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs(
+          "div",
+          {
+            className: "modal-footer",
+            style: {
+              marginTop: "20px",
+              paddingTop: "16px",
+              borderTop: "1px solid var(--vt-border)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px"
+            },
+            children: [
+              /* @__PURE__ */ jsxs(
+                "button",
+                {
+                  className: "vt-btn vt-btn-danger-outline",
+                  style: { fontSize: "13px", gap: "6px" },
+                  onClick: onLogout,
+                  children: [
+                    /* @__PURE__ */ jsx(LogOut, { size: 16 }),
+                    "Sair da Conta"
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-secondary", style: { fontSize: "13px" }, onClick: onClose, children: "Fechar" })
+            ]
+          }
+        )
+      ]
+    }
+  ) });
 }
-function whatsappLink(texto) {
-  const base = `https://wa.me/${CONTATO_WHATSAPP}`;
-  return texto ? `${base}?text=${encodeURIComponent(texto)}` : base;
-}
-function whatsappLojaLink(lojaWhatsapp, texto) {
-  if (!lojaWhatsapp) return null;
-  const numero = normalizarWhatsapp(lojaWhatsapp);
-  if (!numero) return null;
-  const base = `https://wa.me/${numero}`;
-  return texto ? `${base}?text=${encodeURIComponent(texto)}` : base;
+const EXT_VIDEO = /\.(mp4|mov|webm)$/i;
+const EXT_FOTO = /\.(jpe?g|png|webp)$/i;
+function ehVideo(midia) {
+  if (EXT_VIDEO.test(midia.url)) return true;
+  if (EXT_FOTO.test(midia.url)) return false;
+  return midia.tipo === "video";
 }
 const CarIcon$1 = () => /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: [
   /* @__PURE__ */ jsx("rect", { x: "1", y: "6", width: "22", height: "10", rx: "3" }),
@@ -778,9 +1115,11 @@ function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir }) {
   var _a;
   const navigate = useNavigate();
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [imgError, setImgError] = useState(false);
+  const [errosPorIdx, setErrosPorIdx] = useState({});
+  const imgError = !!errosPorIdx[currentIdx];
   const midias = veiculo.midias ?? [];
   const currentMidia = midias.length > 0 ? midias[currentIdx] : null;
+  const midiaEhVideo = currentMidia ? ehVideo(currentMidia) : false;
   const prev = (e) => {
     e.stopPropagation();
     setCurrentIdx((i) => i === 0 ? midias.length - 1 : i - 1);
@@ -823,10 +1162,10 @@ function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir }) {
       )
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "vt-car-card-image", children: [
-      currentMidia && !imgError ? currentMidia.tipo === "video" ? /* @__PURE__ */ jsx("video", { src: currentMidia.url, controls: true, muted: true, playsInline: true, style: { width: "100%", height: "100%", objectFit: "cover" } }) : /* @__PURE__ */ jsx("img", { src: currentMidia.thumb_url || currentMidia.url, alt: `${veiculo.marca} ${veiculo.modelo}`, loading: "lazy", decoding: "async", onError: () => setImgError(true) }) : /* @__PURE__ */ jsxs("div", { className: "vt-car-card-placeholder", children: [
+      currentMidia && !imgError ? midiaEhVideo ? /* @__PURE__ */ jsx("video", { src: currentMidia.url, controls: true, muted: true, playsInline: true, style: { width: "100%", height: "100%", objectFit: "cover" } }) : /* @__PURE__ */ jsx(Link, { to: `/carro/${veiculo.id}`, className: "vt-car-card-media-link", style: { width: "100%", height: "100%", display: "block" }, children: /* @__PURE__ */ jsx("img", { src: currentMidia.thumb_url || currentMidia.url, alt: `${veiculo.marca} ${veiculo.modelo}`, loading: "lazy", decoding: "async", onError: () => setErrosPorIdx((e) => ({ ...e, [currentIdx]: true })) }) }) : /* @__PURE__ */ jsx(Link, { to: `/carro/${veiculo.id}`, className: "vt-car-card-media-link", style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsxs("div", { className: "vt-car-card-placeholder", children: [
         /* @__PURE__ */ jsx(CarIcon$1, {}),
         /* @__PURE__ */ jsx("span", { children: "Sem foto disponível" })
-      ] }),
+      ] }) }),
       /* @__PURE__ */ jsx("div", { className: "vt-car-card-badges", children: indisponivel ? /* @__PURE__ */ jsx("span", { className: "vt-badge vt-badge-vendido", children: "Vendido" }) : /* @__PURE__ */ jsxs(Fragment, { children: [
         /* @__PURE__ */ jsx("span", { className: "vt-badge vt-badge-destaque", children: "Destaque" }),
         ((_a = veiculo.descricao) == null ? void 0 : _a.toLowerCase().includes("troca")) && /* @__PURE__ */ jsx("span", { className: "vt-badge vt-badge-troca", children: "Aceita troca" })
@@ -837,8 +1176,8 @@ function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir }) {
         midias.length
       ] }),
       midias.length > 1 && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("button", { className: "vt-media-arrow left", onClick: prev, children: "‹" }),
-        /* @__PURE__ */ jsx("button", { className: "vt-media-arrow right", onClick: next, children: "›" })
+        /* @__PURE__ */ jsx("button", { className: "vt-media-arrow left", onClick: prev, "aria-label": "Foto anterior", children: "‹" }),
+        /* @__PURE__ */ jsx("button", { className: "vt-media-arrow right", onClick: next, "aria-label": "Próxima foto", children: "›" })
       ] }),
       midias.length > 1 && /* @__PURE__ */ jsx("div", { className: "vt-media-dots", children: midias.map((_, i) => /* @__PURE__ */ jsx("span", { className: i === currentIdx ? "on" : "" }, i)) })
     ] }),
@@ -849,42 +1188,45 @@ function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir }) {
           className: `vt-act${veiculo.favoritado_por_mim ? " liked" : ""}`,
           onClick: () => onFavoritar(veiculo.id, veiculo.favoritado_por_mim),
           title: veiculo.favoritado_por_mim ? "Desfavoritar" : "Favoritar",
+          "aria-label": veiculo.favoritado_por_mim ? "Desfavoritar veículo" : "Favoritar veículo",
           children: /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: veiculo.favoritado_por_mim ? "currentColor" : "none", stroke: "currentColor", children: /* @__PURE__ */ jsx("path", { d: "M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" }) })
         }
       ) }),
-      /* @__PURE__ */ jsx("button", { className: "vt-act", title: "Salvar", onClick: () => onFavoritar(veiculo.id, veiculo.favoritado_por_mim), children: /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: veiculo.favoritado_por_mim ? "currentColor" : "none", stroke: "currentColor", children: /* @__PURE__ */ jsx("path", { d: "M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" }) }) })
+      /* @__PURE__ */ jsx("button", { className: "vt-act", title: "Salvar", "aria-label": "Salvar veículo", onClick: () => onFavoritar(veiculo.id, veiculo.favoritado_por_mim), children: /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: veiculo.favoritado_por_mim ? "currentColor" : "none", stroke: "currentColor", children: /* @__PURE__ */ jsx("path", { d: "M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" }) }) })
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "vt-car-card-body", children: [
       veiculo.total_favoritos > 0 && /* @__PURE__ */ jsxs("div", { className: "vt-card-likes", children: [
         veiculo.total_favoritos,
         " curtidas"
       ] }),
-      /* @__PURE__ */ jsxs("div", { className: "vt-card-caption", children: [
-        /* @__PURE__ */ jsxs("span", { className: "name", children: [
-          veiculo.marca,
-          " ",
-          veiculo.modelo
+      /* @__PURE__ */ jsxs(Link, { to: `/carro/${veiculo.id}`, className: "vt-car-card-details-link", style: { textDecoration: "none", color: "inherit", display: "block" }, children: [
+        /* @__PURE__ */ jsxs("div", { className: "vt-card-caption", children: [
+          /* @__PURE__ */ jsxs("span", { className: "name", children: [
+            veiculo.marca,
+            " ",
+            veiculo.modelo
+          ] }),
+          veiculo.versao && ` ${veiculo.versao}`,
+          " · ",
+          /* @__PURE__ */ jsx("span", { className: "vt-card-price", children: formatCurrency(veiculo.preco_venda) })
         ] }),
-        veiculo.versao && ` ${veiculo.versao}`,
-        " · ",
-        /* @__PURE__ */ jsx("span", { className: "vt-card-price", children: formatCurrency(veiculo.preco_venda) })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "vt-car-card-specs", children: [
-        /* @__PURE__ */ jsxs("div", { className: "vt-car-card-spec", children: [
-          /* @__PURE__ */ jsx("label", { children: "KM" }),
-          /* @__PURE__ */ jsx("span", { children: formatKm(veiculo.km) })
-        ] }),
-        /* @__PURE__ */ jsxs("div", { className: "vt-car-card-spec", children: [
-          /* @__PURE__ */ jsx("label", { children: "Ano" }),
-          /* @__PURE__ */ jsx("span", { children: timeAgo(veiculo) })
-        ] }),
-        veiculo.cambio && /* @__PURE__ */ jsxs("div", { className: "vt-car-card-spec", children: [
-          /* @__PURE__ */ jsx("label", { children: "Câmbio" }),
-          /* @__PURE__ */ jsx("span", { style: { textTransform: "capitalize" }, children: veiculo.cambio })
-        ] }),
-        veiculo.combustivel && /* @__PURE__ */ jsxs("div", { className: "vt-car-card-spec", children: [
-          /* @__PURE__ */ jsx("label", { children: "Combustível" }),
-          /* @__PURE__ */ jsx("span", { style: { textTransform: "capitalize" }, children: veiculo.combustivel })
+        /* @__PURE__ */ jsxs("div", { className: "vt-car-card-specs", children: [
+          /* @__PURE__ */ jsxs("div", { className: "vt-car-card-spec", children: [
+            /* @__PURE__ */ jsx("label", { children: "KM" }),
+            /* @__PURE__ */ jsx("span", { children: formatKm(veiculo.km) })
+          ] }),
+          /* @__PURE__ */ jsxs("div", { className: "vt-car-card-spec", children: [
+            /* @__PURE__ */ jsx("label", { children: "Ano" }),
+            /* @__PURE__ */ jsx("span", { children: timeAgo(veiculo) })
+          ] }),
+          veiculo.cambio && /* @__PURE__ */ jsxs("div", { className: "vt-car-card-spec", children: [
+            /* @__PURE__ */ jsx("label", { children: "Câmbio" }),
+            /* @__PURE__ */ jsx("span", { style: { textTransform: "capitalize" }, children: veiculo.cambio })
+          ] }),
+          veiculo.combustivel && /* @__PURE__ */ jsxs("div", { className: "vt-car-card-spec", children: [
+            /* @__PURE__ */ jsx("label", { children: "Combustível" }),
+            /* @__PURE__ */ jsx("span", { style: { textTransform: "capitalize" }, children: veiculo.combustivel })
+          ] })
         ] })
       ] }),
       indisponivel ? /* @__PURE__ */ jsx("div", { className: "vt-card-cta", children: /* @__PURE__ */ jsx("button", { className: "vt-btn-chat", disabled: true, title: "Este veículo não está mais disponível", children: "Vendido" }) }) : /* @__PURE__ */ jsxs("div", { className: "vt-card-cta", children: [
@@ -953,6 +1295,171 @@ function BottomNav() {
       item.path
     );
   }) });
+}
+const CONTATO_WHATSAPP = "5517991110057";
+const CONTATO_EMAIL = "suporte@socialveiculos.com";
+function normalizarWhatsapp(numero) {
+  const digitos = numero.replace(/\D/g, "");
+  if (!digitos) return "";
+  return digitos.length <= 11 ? `55${digitos}` : digitos;
+}
+function whatsappLink(texto) {
+  const base = `https://wa.me/${CONTATO_WHATSAPP}`;
+  return texto ? `${base}?text=${encodeURIComponent(texto)}` : base;
+}
+function whatsappLojaLink(lojaWhatsapp, texto) {
+  if (!lojaWhatsapp) return null;
+  const numero = normalizarWhatsapp(lojaWhatsapp);
+  if (!numero) return null;
+  const base = `https://wa.me/${numero}`;
+  return texto ? `${base}?text=${encodeURIComponent(texto)}` : base;
+}
+const LOCAL_STORAGE_KEY = "sv_vitrine_comprador";
+function ContatoVitrineModal({ veiculoId, veiculoInfo, onClose }) {
+  const [form, setForm] = useState({ nome: "", telefone: "", email: "", mensagem: "" });
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState("");
+  useEffect(() => {
+    try {
+      const salvo = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (salvo) {
+        const parsed = JSON.parse(salvo);
+        setForm((f) => ({
+          ...f,
+          nome: parsed.nome || "",
+          telefone: mascararTelefone(parsed.telefone || ""),
+          email: parsed.email || ""
+        }));
+      }
+    } catch {
+    }
+  }, []);
+  const enviar = async (e) => {
+    e.preventDefault();
+    if (!form.nome.trim() || !form.telefone.trim()) {
+      setErro("Por favor, informe seu nome e telefone.");
+      return;
+    }
+    setEnviando(true);
+    setErro("");
+    try {
+      try {
+        localStorage.setItem(
+          LOCAL_STORAGE_KEY,
+          JSON.stringify({
+            nome: form.nome.trim(),
+            telefone: form.telefone.trim(),
+            email: form.email.trim()
+          })
+        );
+      } catch {
+      }
+      const res = await api.post("/marketplace/lead-vitrine", {
+        veiculo_id: veiculoId,
+        nome: form.nome.trim(),
+        telefone: form.telefone.trim(),
+        email: form.email.trim() || void 0,
+        mensagem: form.mensagem.trim() || void 0
+      });
+      const msgWa = `Olá! Meu nome é ${form.nome.trim()}. Tenho interesse no ${veiculoInfo.marca} ${veiculoInfo.modelo} ${veiculoInfo.ano_modelo || ""} que vi na Vitrine.`;
+      const fallbackUrl = whatsappLojaLink(veiculoInfo.loja_whatsapp, msgWa);
+      const targetUrl = res.whatsapp_url || fallbackUrl;
+      onClose();
+      if (targetUrl) {
+        window.open(targetUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Não foi possível cadastrar o interesse. Tente novamente.");
+    } finally {
+      setEnviando(false);
+    }
+  };
+  return /* @__PURE__ */ jsx("div", { className: "vt-modal-overlay", onClick: onClose, children: /* @__PURE__ */ jsxs("div", { className: "vt-modal-card", onClick: (e) => e.stopPropagation(), style: { maxWidth: 420 }, children: [
+    /* @__PURE__ */ jsx("button", { className: "vt-modal-close", onClick: onClose, "aria-label": "Fechar", children: /* @__PURE__ */ jsx(X, { size: 18 }) }),
+    /* @__PURE__ */ jsxs("div", { className: "vt-modal-header", children: [
+      /* @__PURE__ */ jsx("h3", { children: "Falar com a loja" }),
+      /* @__PURE__ */ jsxs("p", { children: [
+        "Informe seus dados de contato para ser atendido pelo vendedor do",
+        " ",
+        /* @__PURE__ */ jsxs("strong", { children: [
+          veiculoInfo.marca,
+          " ",
+          veiculoInfo.modelo
+        ] }),
+        "."
+      ] })
+    ] }),
+    erro && /* @__PURE__ */ jsx("div", { className: "vt-modal-error", children: erro }),
+    /* @__PURE__ */ jsxs("form", { onSubmit: enviar, children: [
+      /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+        /* @__PURE__ */ jsx("label", { htmlFor: "vt-lead-nome", children: "Seu nome completo" }),
+        /* @__PURE__ */ jsx(
+          "input",
+          {
+            id: "vt-lead-nome",
+            className: "vt-input",
+            placeholder: "Ex: João da Silva",
+            required: true,
+            value: form.nome,
+            onChange: (e) => setForm({ ...form, nome: capitalizarNome(e.target.value) })
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+        /* @__PURE__ */ jsx("label", { htmlFor: "vt-lead-tel", children: "WhatsApp / Telefone" }),
+        /* @__PURE__ */ jsx(
+          "input",
+          {
+            id: "vt-lead-tel",
+            className: "vt-input",
+            placeholder: "(00) 00000-0000",
+            required: true,
+            value: form.telefone,
+            onChange: (e) => setForm({ ...form, telefone: mascararTelefone(e.target.value) })
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+        /* @__PURE__ */ jsx("label", { htmlFor: "vt-lead-email", children: "E-mail (opcional)" }),
+        /* @__PURE__ */ jsx(
+          "input",
+          {
+            id: "vt-lead-email",
+            className: "vt-input",
+            placeholder: "seuemail@exemplo.com",
+            type: "email",
+            value: form.email,
+            onChange: (e) => setForm({ ...form, email: e.target.value })
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+        /* @__PURE__ */ jsx("label", { htmlFor: "vt-lead-msg", children: "Dúvida ou mensagem rápida (opcional)" }),
+        /* @__PURE__ */ jsx(
+          "textarea",
+          {
+            id: "vt-lead-msg",
+            className: "vt-input",
+            placeholder: "Ex: Aceita troca? Qual o menor valor?",
+            rows: 2,
+            value: form.mensagem,
+            onChange: (e) => setForm({ ...form, mensagem: e.target.value }),
+            style: { resize: "vertical" }
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsx(
+        "button",
+        {
+          className: "vt-btn vt-btn-primary vt-btn-block",
+          type: "submit",
+          disabled: enviando,
+          style: { marginTop: 16 },
+          children: enviando ? "Conectando à loja…" : "Continuar para o WhatsApp 💬"
+        }
+      )
+    ] })
+  ] }) });
 }
 const CarIcon = () => /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.5", style: { width: 24, height: 24 }, children: [
   /* @__PURE__ */ jsx("rect", { x: "1", y: "6", width: "22", height: "10", rx: "3" }),
@@ -1170,6 +1677,8 @@ function Feed() {
       navigate("/mensagens", { state: { conversaId: res.id } });
     } catch (err) {
       console.error("Erro ao iniciar conversa:", err);
+      const msgErro = err instanceof Error ? err.message : "Não foi possível iniciar a conversa com a loja.";
+      useUIStore.getState().showError(msgErro);
     }
   };
   const handleSeguir = async (lojaId2, seguindo) => {
@@ -1192,14 +1701,9 @@ function Feed() {
       ));
     }
   };
+  const [veiculoContato, setVeiculoContato] = useState(null);
   const handleWhatsApp = (veiculo) => {
-    const text = `Olá! Vi o carro ${veiculo.marca} ${veiculo.modelo} (${veiculo.ano_fabricacao}/${veiculo.ano_modelo}) na Vitrine do Social Veículos e gostaria de mais informações.`;
-    const link = whatsappLojaLink(veiculo.loja_whatsapp, text);
-    if (!link) {
-      useUIStore.getState().showToast("Esta loja não tem WhatsApp cadastrado. Use o chat interno.", "info");
-      return;
-    }
-    window.open(link, "_blank");
+    setVeiculoContato(veiculo);
   };
   const handleFiltroRapido = (f) => {
     if (!isAuthenticated && f !== "Todos") {
@@ -1243,7 +1747,7 @@ function Feed() {
         )) })
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "vt-topbar-actions", children: [
-        /* @__PURE__ */ jsx("button", { className: "vt-icon-btn", onClick: () => setDarkMode((d) => !d), title: darkMode ? "Tema claro" : "Tema escuro", children: darkMode ? /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", children: [
+        /* @__PURE__ */ jsx("button", { className: "vt-icon-btn", onClick: () => setDarkMode((d) => !d), title: darkMode ? "Tema claro" : "Tema escuro", "aria-label": darkMode ? "Ativar tema claro" : "Ativar tema escuro", children: darkMode ? /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", children: [
           /* @__PURE__ */ jsx("circle", { cx: "12", cy: "12", r: "4" }),
           /* @__PURE__ */ jsx("path", { d: "M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" })
         ] }) : /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", children: /* @__PURE__ */ jsx("path", { d: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" }) }) }),
@@ -1267,7 +1771,7 @@ function Feed() {
       /* @__PURE__ */ jsx("span", { children: story.loja_nome })
     ] }, story.id)) }) }),
     storyAberto && /* @__PURE__ */ jsx("div", { onClick: () => setStoryAberto(null), style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsxs("div", { onClick: (e) => e.stopPropagation(), style: { background: "var(--vt-surface)", borderRadius: 16, width: 360, maxWidth: "95vw", overflow: "hidden", position: "relative" }, children: [
-      /* @__PURE__ */ jsx("button", { onClick: () => setStoryAberto(null), style: { position: "absolute", top: 12, right: 12, background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#fff", zIndex: 2 }, children: "✕" }),
+      /* @__PURE__ */ jsx("button", { onClick: () => setStoryAberto(null), style: { position: "absolute", top: 12, right: 12, background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#fff", zIndex: 2 }, "aria-label": "Fechar", children: "✕" }),
       storyAberto.midia_url ? /* @__PURE__ */ jsx("img", { src: storyAberto.midia_url, alt: "", style: { width: "100%", aspectRatio: "9/16", objectFit: "cover", maxHeight: 560 } }) : /* @__PURE__ */ jsx("div", { style: { width: "100%", aspectRatio: "9/16", maxHeight: 560, background: "var(--vt-bg)", display: "flex", alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsx(CarIcon, {}) }),
       /* @__PURE__ */ jsxs("div", { style: { padding: "12px 16px 16px" }, children: [
         /* @__PURE__ */ jsx("div", { style: { fontWeight: 700, fontSize: 15 }, children: storyAberto.loja_nome }),
@@ -1309,137 +1813,42 @@ function Feed() {
       /* @__PURE__ */ jsx("span", { children: "© 2026 Social Veículos" })
     ] }),
     /* @__PURE__ */ jsx(BottomNav, {}),
-    showPerfilModal && user && /* @__PURE__ */ jsx("div", { className: "vt-modal-overlay", onClick: closePerfilModal, children: /* @__PURE__ */ jsxs("div", { className: "vt-modal-card", style: { maxWidth: 400, width: "min(400px, 92vw)", background: "var(--vt-surface)", border: "1px solid var(--vt-border)", color: "var(--vt-text)" }, onClick: (e) => e.stopPropagation(), children: [
-      /* @__PURE__ */ jsxs("div", { className: "vt-modal-header", style: { borderBottom: "1px solid var(--vt-border)", paddingBottom: "12px" }, children: [
-        /* @__PURE__ */ jsx("h3", { style: { margin: 0 }, children: "Minha Conta" }),
-        /* @__PURE__ */ jsx("button", { className: "vt-modal-close", onClick: closePerfilModal, style: { color: "var(--vt-text)" }, children: "×" })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "modal-body", style: { display: "flex", flexDirection: "column", gap: "16px", padding: "16px 0" }, children: [
-        /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "12px" }, children: [
-          /* @__PURE__ */ jsx("div", { style: {
-            width: "54px",
-            height: "54px",
-            borderRadius: "50%",
-            background: "var(--vt-primary-light)",
-            color: "var(--vt-primary)",
-            fontWeight: "700",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "20px",
-            border: "1px solid var(--vt-border)"
-          }, children: avatarPreview ? /* @__PURE__ */ jsx("img", { src: avatarPreview, alt: "Pré-visualização", style: { width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" } }) : user.avatar_url && !modalAvatarError ? /* @__PURE__ */ jsx(
-            "img",
-            {
-              src: user.avatar_url,
-              alt: user.nome,
-              onError: () => setModalAvatarError(true),
-              style: { width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }
-            }
-          ) : user.nome.slice(0, 2).toUpperCase() }),
-          /* @__PURE__ */ jsxs("div", { children: [
-            /* @__PURE__ */ jsx("h4", { style: { margin: 0, fontSize: "16px", fontWeight: 600 }, children: user.nome }),
-            /* @__PURE__ */ jsx("span", { style: { fontSize: "12px", color: "var(--vt-text-dim)" }, children: user.email })
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxs("div", { style: { borderTop: "1px solid var(--vt-border)", paddingTop: "16px" }, children: [
-          /* @__PURE__ */ jsx("label", { style: { display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "8px" }, children: "Foto de Perfil" }),
-          /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "12px" }, children: [
-            /* @__PURE__ */ jsx("div", { style: {
-              width: "64px",
-              height: "64px",
-              borderRadius: "50%",
-              overflow: "hidden",
-              border: "2px dashed var(--vt-border-hover)",
-              background: "var(--vt-bg)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flex: "0 0 auto",
-              color: "var(--vt-text-muted)",
-              fontSize: "11px",
-              textAlign: "center"
-            }, children: avatarPreview ? /* @__PURE__ */ jsx("img", { src: avatarPreview, alt: "Pré-visualização", style: { width: "100%", height: "100%", objectFit: "cover" } }) : user.avatar_url && !previewAvatarError ? /* @__PURE__ */ jsx(
-              "img",
-              {
-                src: user.avatar_url,
-                alt: user.nome,
-                onError: () => setPreviewAvatarError(true),
-                style: { width: "100%", height: "100%", objectFit: "cover" }
-              }
-            ) : "sem foto" }),
-            /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "6px" }, children: [
-              /* @__PURE__ */ jsx(
-                "input",
-                {
-                  ref: avatarInputRef,
-                  type: "file",
-                  accept: "image/*",
-                  onChange: handleAvatarSelect,
-                  style: { display: "none" },
-                  id: "vt-avatar-input"
-                }
-              ),
-              /* @__PURE__ */ jsx("label", { htmlFor: "vt-avatar-input", className: "vt-btn vt-btn-outline", style: { fontSize: "13px", cursor: "pointer" }, children: user.avatar_url || avatarPreview ? "Trocar imagem" : "Escolher imagem" }),
-              /* @__PURE__ */ jsx("span", { style: { fontSize: "11px", color: "var(--vt-text-dim)" }, children: "JPG, PNG ou WEBP — até 15 MB." })
-            ] })
-          ] }),
-          avatarError && /* @__PURE__ */ jsx("span", { style: { display: "block", marginTop: "8px", fontSize: "12px", color: "var(--vt-error)" }, children: avatarError }),
-          /* @__PURE__ */ jsx("div", { style: { display: "flex", justifyContent: "flex-end", marginTop: "12px" }, children: /* @__PURE__ */ jsx(
-            "button",
-            {
-              className: "vt-btn vt-btn-primary",
-              disabled: !avatarPreview || avatarUploading,
-              onClick: handleSaveAvatar,
-              style: { fontSize: "13px", opacity: !avatarPreview || avatarUploading ? 0.5 : 1, cursor: !avatarPreview || avatarUploading ? "not-allowed" : "pointer" },
-              children: avatarUploading ? "Salvando…" : "Salvar foto"
-            }
-          ) })
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "modal-footer", style: { borderTop: "1px solid var(--vt-border)", paddingTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }, children: [
-        /* @__PURE__ */ jsx(
-          "button",
-          {
-            className: "vt-btn vt-btn-outline",
-            style: { width: "100%", textAlign: "left" },
-            onClick: () => {
-              navigate("/minha-conta/veiculos");
-              closePerfilModal();
-            },
-            children: "🚗 Meus Veículos"
+    showPerfilModal && user && /* @__PURE__ */ jsx(
+      AccountModal,
+      {
+        isOpen: showPerfilModal,
+        onClose: closePerfilModal,
+        user,
+        avatarPreview,
+        avatarUploading,
+        avatarError,
+        modalAvatarError,
+        previewAvatarError,
+        setModalAvatarError,
+        setPreviewAvatarError,
+        avatarInputRef,
+        handleAvatarSelect,
+        handleSaveAvatar,
+        onOpenMfa: () => setShowMfaModal(true),
+        onNavigateVeiculos: () => {
+          navigate("/minha-conta/veiculos");
+          closePerfilModal();
+        },
+        onLogout: async () => {
+          const ok = await useUIStore.getState().confirm({
+            title: "Sair da conta",
+            message: "Deseja realmente encerrar sua sessão?",
+            confirmLabel: "Sair",
+            cancelLabel: "Cancelar",
+            danger: true
+          });
+          if (ok) {
+            logout();
+            closePerfilModal();
           }
-        ),
-        /* @__PURE__ */ jsxs(
-          "button",
-          {
-            className: "vt-btn vt-btn-outline",
-            style: { width: "100%", textAlign: "left" },
-            onClick: () => setShowMfaModal(true),
-            children: [
-              "🔒 Verificação em duas etapas ",
-              user.mfa_ativo ? "(ativada)" : ""
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
-          /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-outline", style: { borderColor: "var(--vt-error)", color: "var(--vt-error)" }, onClick: async () => {
-            const ok = await useUIStore.getState().confirm({
-              title: "Sair da conta",
-              message: "Deseja realmente encerrar sua sessão?",
-              confirmLabel: "Sair",
-              cancelLabel: "Cancelar",
-              danger: true
-            });
-            if (ok) {
-              logout();
-              closePerfilModal();
-            }
-          }, children: "Sair da Conta" }),
-          /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-outline", onClick: closePerfilModal, children: "Fechar" })
-        ] })
-      ] })
-    ] }) }),
+        }
+      }
+    ),
     /* @__PURE__ */ jsx(LoginModal, {}),
     showMfaModal && user && /* @__PURE__ */ jsx(
       MfaSettingsModal,
@@ -1448,6 +1857,19 @@ function Feed() {
         onClose: () => setShowMfaModal(false),
         onChange: (ativo) => updateUser({ mfa_ativo: ativo })
       }
+    ),
+    veiculoContato && /* @__PURE__ */ jsx(
+      ContatoVitrineModal,
+      {
+        veiculoId: veiculoContato.id,
+        veiculoInfo: {
+          marca: veiculoContato.marca,
+          modelo: veiculoContato.modelo,
+          ano_modelo: veiculoContato.ano_modelo,
+          loja_whatsapp: veiculoContato.loja_whatsapp
+        },
+        onClose: () => setVeiculoContato(null)
+      }
     )
   ] });
 }
@@ -1455,6 +1877,7 @@ function Favoritos() {
   const { isAuthenticated, openLoginModal } = useAuthStore();
   const [favoritos, setFavoritos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [veiculoContato, setVeiculoContato] = useState(null);
   const fetchFavoritos = async () => {
     if (!isAuthenticated) {
       setLoading(false);
@@ -1466,6 +1889,7 @@ function Favoritos() {
       setFavoritos(data);
     } catch (err) {
       console.error("Erro ao carregar favoritos:", err);
+      useUIStore.getState().showError("Não foi possível carregar seus favoritos. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -1488,6 +1912,7 @@ function Favoritos() {
       }
     } catch (err) {
       console.error("Erro ao favoritar/desfavoritar:", err);
+      useUIStore.getState().showError("Não foi possível favoritar. Tente novamente.");
     }
   };
   const handleConversar = async (veiculo) => {
@@ -1505,16 +1930,11 @@ function Favoritos() {
       useUIStore.getState().showToast("Conversa iniciada! Vá para a aba de Mensagens para conversar.", "success");
     } catch (err) {
       console.error("Erro ao iniciar conversa:", err);
+      useUIStore.getState().showError("Não foi possível iniciar a conversa. Tente novamente.");
     }
   };
   const handleWhatsApp = (veiculo) => {
-    const text = `Olá! Vi o carro ${veiculo.marca} ${veiculo.modelo} (${veiculo.ano_fabricacao}/${veiculo.ano_modelo}) na Vitrine do Social Veículos e gostaria de mais informações.`;
-    const link = whatsappLojaLink(veiculo.loja_whatsapp, text);
-    if (!link) {
-      useUIStore.getState().showToast("Esta loja não tem WhatsApp cadastrado. Use o chat interno.", "info");
-      return;
-    }
-    window.open(link, "_blank");
+    setVeiculoContato(veiculo);
   };
   const handleSeguir = async (lojaId, seguindo) => {
     if (!isAuthenticated) {
@@ -1534,6 +1954,7 @@ function Favoritos() {
       setFavoritos((prev) => prev.map(
         (v) => v.loja_id === lojaId ? { ...v, seguindo_loja: seguindo } : v
       ));
+      useUIStore.getState().showError(seguindo ? "Não foi possível deixar de seguir a loja. Tente novamente." : "Não foi possível seguir a loja. Tente novamente.");
     }
   };
   if (!isAuthenticated) {
@@ -1567,6 +1988,19 @@ function Favoritos() {
       v.id
     )) }),
     /* @__PURE__ */ jsx(LoginModal, {}),
+    veiculoContato && /* @__PURE__ */ jsx(
+      ContatoVitrineModal,
+      {
+        veiculoId: veiculoContato.id,
+        veiculoInfo: {
+          marca: veiculoContato.marca,
+          modelo: veiculoContato.modelo,
+          ano_modelo: veiculoContato.ano_modelo,
+          loja_whatsapp: veiculoContato.loja_whatsapp
+        },
+        onClose: () => setVeiculoContato(null)
+      }
+    ),
     /* @__PURE__ */ jsx(BottomNav, {})
   ] });
 }
@@ -1719,6 +2153,7 @@ function Mensagens() {
       }
     } catch (err) {
       console.error("Erro ao buscar conversas:", err);
+      useUIStore.getState().showError("Não foi possível carregar suas conversas. Tente novamente.");
     } finally {
       setLoadingConversas(false);
     }
@@ -1730,6 +2165,7 @@ function Mensagens() {
       setMensagens(data);
     } catch (err) {
       console.error("Erro ao buscar mensagens:", err);
+      useUIStore.getState().showError("Não foi possível carregar as mensagens desta conversa. Tente novamente.");
     } finally {
       setLoadingMsgs(false);
     }
@@ -1804,6 +2240,7 @@ function Mensagens() {
         fetchMensagens(selected.id);
       } catch (err) {
         console.error("Erro ao enviar mensagem:", err);
+        useUIStore.getState().showError("Não foi possível enviar a mensagem. Tente novamente.");
       }
     }
   };
@@ -1867,7 +2304,7 @@ function Mensagens() {
     ] }),
     /* @__PURE__ */ jsx("div", { className: "vt-chat-area", children: selected ? /* @__PURE__ */ jsxs(Fragment, { children: [
       /* @__PURE__ */ jsx("div", { className: "vt-chat-head", children: /* @__PURE__ */ jsxs("div", { className: "vt-chat-head-left", children: [
-        /* @__PURE__ */ jsx("button", { className: "vt-chat-back", onClick: () => setSidebarHidden(false), children: /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", style: { width: 22, height: 22 }, children: /* @__PURE__ */ jsx("polyline", { points: "15 18 9 12 15 6" }) }) }),
+        /* @__PURE__ */ jsx("button", { className: "vt-chat-back", onClick: () => setSidebarHidden(false), "aria-label": "Voltar", children: /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", style: { width: 22, height: 22 }, children: /* @__PURE__ */ jsx("polyline", { points: "15 18 9 12 15 6" }) }) }),
         /* @__PURE__ */ jsx("div", { className: "vt-chat-head-avatar", children: initials(selected.loja_nome) }),
         /* @__PURE__ */ jsxs("div", { className: "vt-chat-head-info", children: [
           /* @__PURE__ */ jsx("h4", { children: selected.loja_nome }),
@@ -1918,7 +2355,7 @@ function Mensagens() {
             onKeyDown: handleKeyDown
           }
         ) }),
-        /* @__PURE__ */ jsx("button", { className: "vt-chat-send", onClick: () => handleSend(), disabled: !newMsg.trim(), children: /* @__PURE__ */ jsx(SendIcon, {}) })
+        /* @__PURE__ */ jsx("button", { className: "vt-chat-send", onClick: () => handleSend(), disabled: !newMsg.trim(), "aria-label": "Enviar mensagem", children: /* @__PURE__ */ jsx(SendIcon, {}) })
       ] })
     ] }) : /* @__PURE__ */ jsxs("div", { className: "vt-chat-empty", children: [
       /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: /* @__PURE__ */ jsx("path", { d: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" }) }),
@@ -2000,7 +2437,7 @@ function getSSGData() {
   return g.__SSG_DATA__ ?? null;
 }
 function PreAprovacaoModal({ veiculoId, onClose }) {
-  const [form, setForm] = useState({ nome: "", telefone: "", email: "", renda_mensal: "", entrada: "" });
+  const [form, setForm] = useState({ nome: "", cpf: "", email: "", renda_mensal: "", entrada: "" });
   const [enviando, setEnviando] = useState(false);
   const [ok, setOk] = useState(false);
   const [erro, setErro] = useState("");
@@ -2012,10 +2449,10 @@ function PreAprovacaoModal({ veiculoId, onClose }) {
       await api.post("/marketplace/pre-aprovacao", {
         veiculo_id: veiculoId,
         nome: form.nome.trim(),
-        telefone: form.telefone.trim(),
+        cpf: form.cpf.replace(/\D/g, ""),
         email: form.email.trim() || void 0,
-        renda_mensal: form.renda_mensal ? Number(form.renda_mensal) : void 0,
-        entrada: form.entrada ? Number(form.entrada) : void 0
+        renda_mensal: desmascararMoeda(form.renda_mensal),
+        entrada: desmascararMoeda(form.entrada)
       });
       setOk(true);
     } catch (err) {
@@ -2024,87 +2461,118 @@ function PreAprovacaoModal({ veiculoId, onClose }) {
       setEnviando(false);
     }
   };
-  return /* @__PURE__ */ jsx("div", { className: "vt-modal-overlay", onClick: onClose, children: /* @__PURE__ */ jsxs("div", { className: "vt-modal", onClick: (e) => e.stopPropagation(), style: { maxWidth: 420 }, children: [
+  return /* @__PURE__ */ jsx("div", { className: "vt-modal-overlay", onClick: onClose, children: /* @__PURE__ */ jsxs("div", { className: "vt-modal-card", onClick: (e) => e.stopPropagation(), style: { maxWidth: 440 }, children: [
     /* @__PURE__ */ jsx("button", { className: "vt-modal-close", onClick: onClose, "aria-label": "Fechar", children: "×" }),
     ok ? /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "1rem 0" }, children: [
       /* @__PURE__ */ jsx("h3", { children: "Pedido enviado! 🎉" }),
       /* @__PURE__ */ jsx("p", { style: { color: "var(--vt-text-dim)", marginTop: 8 }, children: "A loja vai entrar em contato para dar sequência ao financiamento." }),
       /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-primary vt-btn-block", style: { marginTop: 16 }, onClick: onClose, children: "Fechar" })
     ] }) : /* @__PURE__ */ jsxs("form", { onSubmit: enviar, children: [
-      /* @__PURE__ */ jsx("h3", { style: { marginBottom: 4 }, children: "Simular financiamento" }),
-      /* @__PURE__ */ jsx("p", { style: { color: "var(--vt-text-dim)", fontSize: 13, marginBottom: 16 }, children: "Preencha seus dados e a loja retorna com as condições. Não é uma aprovação automática." }),
-      /* @__PURE__ */ jsx(
-        "input",
-        {
-          className: "vt-input",
-          placeholder: "Seu nome",
-          required: true,
-          value: form.nome,
-          onChange: (e) => setForm({ ...form, nome: e.target.value })
-        }
-      ),
-      /* @__PURE__ */ jsx(
-        "input",
-        {
-          className: "vt-input",
-          placeholder: "WhatsApp / telefone",
-          required: true,
-          value: form.telefone,
-          onChange: (e) => setForm({ ...form, telefone: e.target.value }),
-          style: { marginTop: 10 }
-        }
-      ),
-      /* @__PURE__ */ jsx(
-        "input",
-        {
-          className: "vt-input",
-          placeholder: "E-mail (opcional)",
-          type: "email",
-          value: form.email,
-          onChange: (e) => setForm({ ...form, email: e.target.value }),
-          style: { marginTop: 10 }
-        }
-      ),
-      /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 10, marginTop: 10 }, children: [
+      /* @__PURE__ */ jsxs("div", { className: "vt-modal-header", children: [
+        /* @__PURE__ */ jsx("h3", { children: "Simular financiamento" }),
+        /* @__PURE__ */ jsx("p", { children: "Preencha seus dados e a loja retorna com as condições. Não é uma aprovação automática." })
+      ] }),
+      erro && /* @__PURE__ */ jsx("div", { className: "vt-modal-error", children: erro }),
+      /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+        /* @__PURE__ */ jsx("label", { htmlFor: "vt-sim-nome", children: "Seu nome completo" }),
         /* @__PURE__ */ jsx(
           "input",
           {
+            id: "vt-sim-nome",
             className: "vt-input",
-            placeholder: "Renda mensal (R$)",
-            inputMode: "numeric",
-            value: form.renda_mensal,
-            onChange: (e) => setForm({ ...form, renda_mensal: e.target.value.replace(/\D/g, "") })
-          }
-        ),
-        /* @__PURE__ */ jsx(
-          "input",
-          {
-            className: "vt-input",
-            placeholder: "Entrada (R$)",
-            inputMode: "numeric",
-            value: form.entrada,
-            onChange: (e) => setForm({ ...form, entrada: e.target.value.replace(/\D/g, "") })
+            placeholder: "Ex: João da Silva",
+            required: true,
+            value: form.nome,
+            onChange: (e) => setForm({ ...form, nome: capitalizarNome(e.target.value) })
           }
         )
       ] }),
-      erro && /* @__PURE__ */ jsx("p", { style: { color: "var(--vt-error, #dc2626)", fontSize: 13, marginTop: 10 }, children: erro }),
+      /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+        /* @__PURE__ */ jsx("label", { htmlFor: "vt-sim-cpf", children: "CPF" }),
+        /* @__PURE__ */ jsx(
+          "input",
+          {
+            id: "vt-sim-cpf",
+            className: "vt-input",
+            placeholder: "000.000.000-00",
+            required: true,
+            inputMode: "numeric",
+            maxLength: 14,
+            value: form.cpf,
+            onChange: (e) => {
+              const raw = e.target.value.replace(/\D/g, "").slice(0, 11);
+              const masked = raw.replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+              setForm({ ...form, cpf: masked });
+            }
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+        /* @__PURE__ */ jsx("label", { htmlFor: "vt-sim-email", children: "E-mail (opcional)" }),
+        /* @__PURE__ */ jsx(
+          "input",
+          {
+            id: "vt-sim-email",
+            className: "vt-input",
+            placeholder: "seuemail@exemplo.com",
+            type: "email",
+            value: form.email,
+            onChange: (e) => setForm({ ...form, email: e.target.value })
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }, children: [
+        /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+          /* @__PURE__ */ jsx("label", { htmlFor: "vt-sim-renda", children: "Renda mensal" }),
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              id: "vt-sim-renda",
+              className: "vt-input",
+              placeholder: "R$ 0,00",
+              inputMode: "numeric",
+              value: form.renda_mensal,
+              onChange: (e) => setForm({ ...form, renda_mensal: mascararMoeda(e.target.value) })
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "vt-form-group", children: [
+          /* @__PURE__ */ jsx("label", { htmlFor: "vt-sim-entrada", children: "Entrada pretendida" }),
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              id: "vt-sim-entrada",
+              className: "vt-input",
+              placeholder: "R$ 0,00",
+              inputMode: "numeric",
+              value: form.entrada,
+              onChange: (e) => setForm({ ...form, entrada: mascararMoeda(e.target.value) })
+            }
+          )
+        ] })
+      ] }),
       /* @__PURE__ */ jsx("button", { className: "vt-btn vt-btn-primary vt-btn-block", type: "submit", disabled: enviando, style: { marginTop: 16 }, children: enviando ? "Enviando…" : "Quero simular financiamento" })
     ] })
   ] }) });
 }
 function MidiaView({ midia, className }) {
-  if (midia.tipo === "video") {
+  if (ehVideo(midia)) {
     return /* @__PURE__ */ jsx("video", { src: midia.url, className, controls: true, preload: "metadata" });
   }
   return /* @__PURE__ */ jsx("img", { src: midia.url, alt: "", className, loading: "lazy" });
 }
 function CarroDetalhe({ initialData }) {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { isAuthenticated, openLoginModal } = useAuthStore();
   const seed = initialData ?? getSSGData();
   const [veiculo, setVeiculo] = useState(seed);
   const [loading, setLoading] = useState(!seed);
   const [erro, setErro] = useState(false);
   const [modalCredito, setModalCredito] = useState(false);
+  const [modalContato, setModalContato] = useState(false);
+  const [iniciandoChat, setIniciandoChat] = useState(false);
+  const [erroChat, setErroChat] = useState("");
   useEffect(() => {
     if (seed && seed.id === id) return;
     let alive = true;
@@ -2119,6 +2587,28 @@ function CarroDetalhe({ initialData }) {
       alive = false;
     };
   }, [id]);
+  const handleConversar = async () => {
+    if (!veiculo) return;
+    if (!isAuthenticated) {
+      openLoginModal("login");
+      return;
+    }
+    setIniciandoChat(true);
+    setErroChat("");
+    try {
+      const msg = `Olá, estou interessado no veículo ${veiculo.marca} ${veiculo.modelo} (${veiculo.ano_modelo}).`;
+      const res = await api.post("/vitrine/conversas", {
+        veiculo_id: veiculo.id,
+        loja_id: veiculo.loja_id,
+        mensagem: msg
+      });
+      navigate("/mensagens", { state: { conversaId: res.id } });
+    } catch (err) {
+      setErroChat(err instanceof Error ? err.message : "Não foi possível iniciar a conversa.");
+    } finally {
+      setIniciandoChat(false);
+    }
+  };
   if (loading) {
     return /* @__PURE__ */ jsx("div", { className: "vt-detail", children: "Carregando…" });
   }
@@ -2126,7 +2616,7 @@ function CarroDetalhe({ initialData }) {
     return /* @__PURE__ */ jsxs("div", { className: "vt-detail", children: [
       "Veículo não encontrado ou não está mais disponível.",
       " ",
-      /* @__PURE__ */ jsx(Link, { to: "/", className: "vt-detail-back", children: "Voltar ao feed" })
+      /* @__PURE__ */ jsx(Link, { to: "/", style: { color: "var(--vt-primary)" }, children: "Voltar ao início" })
     ] });
   }
   const meta = carroMeta(veiculo);
@@ -2139,10 +2629,6 @@ function CarroDetalhe({ initialData }) {
       return [];
     }
   })();
-  const whatsappHref = whatsappLojaLink(
-    veiculo.loja_whatsapp,
-    `Olá! Tenho interesse no ${veiculo.marca} ${veiculo.modelo} ${veiculo.ano_modelo}.`
-  );
   return /* @__PURE__ */ jsxs("div", { className: "vt-detail", children: [
     /* @__PURE__ */ jsxs(Helmet, { children: [
       /* @__PURE__ */ jsx("title", { children: meta.title }),
@@ -2211,29 +2697,59 @@ function CarroDetalhe({ initialData }) {
           /* @__PURE__ */ jsx("h3", { children: "Opcionais" }),
           /* @__PURE__ */ jsx("div", { className: "vt-detail-chips", children: opcionais.map((o) => /* @__PURE__ */ jsx("span", { className: "vt-chip", children: o }, o)) })
         ] }),
-        /* @__PURE__ */ jsx(
-          "button",
-          {
-            className: "vt-btn vt-btn-primary vt-btn-block",
-            style: { marginTop: "1.5rem" },
-            onClick: () => setModalCredito(true),
-            children: "Simular financiamento"
-          }
-        ),
-        whatsappHref && /* @__PURE__ */ jsx(
-          "a",
-          {
-            href: whatsappHref,
-            target: "_blank",
-            rel: "noopener noreferrer",
-            className: "vt-btn vt-btn-outline vt-btn-block",
-            style: { marginTop: "0.75rem" },
-            children: "Chamar no WhatsApp"
-          }
-        )
+        erroChat && /* @__PURE__ */ jsx("div", { className: "vt-modal-error", style: { marginTop: "1rem", marginBottom: 0 }, children: erroChat }),
+        /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "1.5rem" }, children: [
+          /* @__PURE__ */ jsxs(
+            "button",
+            {
+              type: "button",
+              className: "vt-btn vt-btn-primary vt-btn-block",
+              disabled: iniciandoChat,
+              onClick: handleConversar,
+              children: [
+                /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", width: "18", height: "18", fill: "none", stroke: "currentColor", strokeWidth: "2", children: /* @__PURE__ */ jsx("path", { d: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" }) }),
+                iniciandoChat ? "Iniciando conversa…" : "Conversar no Chat"
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxs(
+            "button",
+            {
+              type: "button",
+              className: "vt-btn vt-btn-outline vt-btn-block",
+              onClick: () => setModalContato(true),
+              children: [
+                /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", width: "18", height: "18", fill: "currentColor", children: /* @__PURE__ */ jsx("path", { d: "M.06 24l1.7-6.2A11.9 11.9 0 1 1 12 24a11.9 11.9 0 0 1-5.7-1.5L.06 24zM6.6 20l.4.2a9.9 9.9 0 1 0-3.4-3.4l.2.4-1 3.7 3.8-.9z" }) }),
+                "Chamar no WhatsApp"
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              type: "button",
+              className: "vt-btn vt-btn-outline vt-btn-block",
+              onClick: () => setModalCredito(true),
+              children: "Simular financiamento"
+            }
+          )
+        ] })
       ] })
     ] }),
     modalCredito && /* @__PURE__ */ jsx(PreAprovacaoModal, { veiculoId: veiculo.id, onClose: () => setModalCredito(false) }),
+    modalContato && /* @__PURE__ */ jsx(
+      ContatoVitrineModal,
+      {
+        veiculoId: veiculo.id,
+        veiculoInfo: {
+          marca: veiculo.marca,
+          modelo: veiculo.modelo,
+          ano_modelo: veiculo.ano_modelo,
+          loja_whatsapp: veiculo.loja_whatsapp
+        },
+        onClose: () => setModalContato(false)
+      }
+    ),
     /* @__PURE__ */ jsx(BottomNav, {})
   ] });
 }
@@ -2253,15 +2769,15 @@ function StoreItemMedia({ midias, alt }) {
   };
   if (!atual) return /* @__PURE__ */ jsx("div", { className: "vt-store-item-empty" });
   return /* @__PURE__ */ jsxs("div", { className: "vt-store-item-media", children: [
-    atual.tipo === "video" ? /* @__PURE__ */ jsx("video", { src: atual.url, preload: "metadata", muted: true }) : /* @__PURE__ */ jsx("img", { src: atual.url, alt, loading: "lazy" }),
+    ehVideo(atual) ? /* @__PURE__ */ jsx("video", { src: atual.url, preload: "metadata", muted: true }) : /* @__PURE__ */ jsx("img", { src: atual.url, alt, loading: "lazy" }),
     ordenadas.length > 1 && /* @__PURE__ */ jsxs(Fragment, { children: [
       /* @__PURE__ */ jsxs("span", { className: "vt-media-count", children: [
         idx + 1,
         "/",
         ordenadas.length
       ] }),
-      /* @__PURE__ */ jsx("button", { className: "vt-media-arrow left", onClick: prev, children: "‹" }),
-      /* @__PURE__ */ jsx("button", { className: "vt-media-arrow right", onClick: next, children: "›" }),
+      /* @__PURE__ */ jsx("button", { className: "vt-media-arrow left", onClick: prev, "aria-label": "Foto anterior", children: "‹" }),
+      /* @__PURE__ */ jsx("button", { className: "vt-media-arrow right", onClick: next, "aria-label": "Próxima foto", children: "›" }),
       /* @__PURE__ */ jsx("div", { className: "vt-media-dots", children: ordenadas.map((_, i) => /* @__PURE__ */ jsx("span", { className: i === idx ? "on" : "" }, i)) })
     ] })
   ] });
@@ -2363,7 +2879,9 @@ function MeusVeiculos() {
       setLoading(false);
       return;
     }
-    api.get("/vitrine/meus-veiculos").then(setVeiculos).catch(() => {
+    api.get("/vitrine/meus-veiculos").then(setVeiculos).catch((err) => {
+      console.error("Erro ao carregar meus veículos:", err);
+      useUIStore.getState().showError("Não foi possível carregar seus veículos. Tente novamente.");
     }).finally(() => setLoading(false));
   }, [isAuthenticated]);
   if (!isAuthenticated) {
@@ -2858,7 +3376,7 @@ function UIProvider() {
           ] })
         ] })
       ] }),
-      /* @__PURE__ */ jsx("button", { className: "vt-toast-close", onClick: () => removeToast(toast.id), children: /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", children: [
+      /* @__PURE__ */ jsx("button", { className: "vt-toast-close", onClick: () => removeToast(toast.id), "aria-label": "Fechar notificação", children: /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", children: [
         /* @__PURE__ */ jsx("line", { x1: "18", y1: "6", x2: "6", y2: "18" }),
         /* @__PURE__ */ jsx("line", { x1: "6", y1: "6", x2: "18", y2: "18" })
       ] }) })

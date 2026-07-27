@@ -12,6 +12,8 @@ import { useLojaAtivaStore } from '../../stores/lojaAtivaStore'
 import { useExperienciaStore } from '../../stores/experienciaStore'
 import { useModulosLiberados } from '../../hooks/useModulosLiberados'
 import { unregisterPush } from '../../lib/push'
+import { useQuery } from '@tanstack/react-query'
+import { anunciosService } from '../../services'
 
 import type { ModuloKey } from '../../lib/modulos'
 
@@ -27,6 +29,14 @@ export default function MaisScreen() {
 
   const { liberado, gestor } = useModulosLiberados()
   const sep = { borderTopWidth: 1, borderTopColor: colors.border }
+
+  // Contagem de baixas manuais em aberto (M079) — alimenta o badge de Anúncios.
+  const pendenciasQ = useQuery({
+    queryKey: ['anuncios', 'pendencias'],
+    queryFn: () => anunciosService.pendencias(),
+    enabled: liberado('marketing'),
+  })
+  const pendencias = pendenciasQ.data?.length ?? 0
 
   // Estado para exibir paywall/alerta de módulo bloqueado
   const [moduloBloqueado, setModuloBloqueado] = useState<string | null>(null)
@@ -206,6 +216,24 @@ export default function MaisScreen() {
             onPress={() => abrirFerramenta('marketing', 'Marketing')}
             style={sep}
             right={!liberado('marketing') ? <Badge label="Bloqueado" tone="neutral" size="sm" /> : undefined}
+          />
+          <ListRow
+            icon="megaphone-outline"
+            iconColor={colors.primary}
+            title="Anúncios nos portais"
+            subtitle="Escolha onde cada veículo fica no ar"
+            chevron
+            onPress={() => abrirFerramenta('marketing', 'Anuncios')}
+            style={sep}
+            right={
+              !liberado('marketing')
+                ? <Badge label="Bloqueado" tone="neutral" size="sm" />
+                // Baixas manuais pendentes: é o que faz o vendedor lembrar
+                // de tirar o carro vendido dos portais sem API.
+                : pendencias > 0
+                  ? <Badge label={String(pendencias)} tone="warning" size="sm" />
+                  : undefined
+            }
           />
           <ListRow
             icon="chatbubble-ellipses-outline"

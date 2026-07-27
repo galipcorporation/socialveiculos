@@ -200,6 +200,15 @@ export function AssistiveTouch() {
       action: () => navegarPara('Marketing'),
     },
     {
+      id: 'anuncios',
+      label: 'Anúncios nos portais',
+      sublabel: 'Publique ou retire um veículo do ar',
+      icon: 'megaphone-outline' as const,
+      color: '#8b5cf6',
+      visible: true,
+      action: () => navegarPara('Anuncios'),
+    },
+    {
       id: 'ajuda',
       label: 'Ajuda & Suporte',
       sublabel: 'Central de ajuda e atendimento',
