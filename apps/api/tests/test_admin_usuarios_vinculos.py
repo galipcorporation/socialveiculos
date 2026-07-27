@@ -37,6 +37,21 @@ async def _achar_usuario(client, admin_token, email: str) -> dict | None:
     return next((u for u in resp.json() if u["email"] == email), None)
 
 
+_vendedor_cache: dict = {}
+
+
+@pytest_asyncio.fixture
+async def _vendedor_criado(client, admin_token):
+    """Cria o vendedor de teste uma única vez e o reaproveita na suíte inteira.
+
+    `register-b2c` tem rate_limit(10, 60): um cadastro por teste estourava 429 —
+    a mesma armadilha que o cache de token do conftest resolve para o login.
+    """
+    if not _vendedor_cache:
+        _vendedor_cache.update(await _criar_vendedor(client, admin_token))
+    return _vendedor_cache
+
+
 @pytest_asyncio.fixture
 async def vendedor_multiloja(client, admin_token, _vendedor_criado):
     """Repõe os dois vínculos do vendedor de teste antes de cada teste.
@@ -70,9 +85,8 @@ async def vendedor_multiloja(client, admin_token, _vendedor_criado):
     return _vendedor_criado
 
 
-@pytest_asyncio.fixture(scope="module")
-async def _vendedor_criado(client, admin_token):
-    """Cria um vendedor de teste uma vez por módulo e o deixa sem vínculos no fim."""
+async def _criar_vendedor(client, admin_token) -> dict:
+    """Cadastra o usuário de teste e o promove a vendedor (sem vínculos ainda)."""
     lojas = await _lojas(client, admin_token)
     if len(lojas) < 2:
         pytest.skip("Precisa de ao menos duas lojas seedadas para testar multi-loja.")
@@ -93,16 +107,7 @@ async def _vendedor_criado(client, admin_token):
     )
     assert resp.status_code == 200, resp.text
 
-    yield {"id": uid, "email": email, "lojas": lojas[:2]}
-
-    # Limpa só os vínculos DESTE usuário de teste — nunca toca em conta seedada.
-    atual = await _achar_usuario(client, admin_token, email)
-    if atual:
-        assert atual["email"] == email, "guarda: limpeza só pode agir no usuário do fixture"
-        for v in atual["vinculos"]:
-            await client.delete(
-                f"/v1/admin/usuarios/{uid}/vinculos/{v['membro_id']}", headers=_h(admin_token)
-            )
+    return {"id": uid, "email": email, "lojas": lojas[:2]}
 
 
 # ── O bug do 500 ───────────────────────────────────────────────
@@ -116,7 +121,7 @@ async def test_login_com_duas_lojas_ativas_nao_da_500(client, vendedor_multiloja
     body = resp.json()
     assert body["user"]["papel"] == "vendedor"
     # Entra por uma das lojas vinculadas (a mais antiga), nunca sem loja.
-    assert body["user"]["loja_id"] in {l["id"] for l in vendedor_multiloja["lojas"]}
+    assert body["user"]["loja_id"] in {loja["id"] for loja in vendedor_multiloja["lojas"]}
 
 
 async def test_usuario_lista_os_dois_vinculos(client, admin_token, vendedor_multiloja):

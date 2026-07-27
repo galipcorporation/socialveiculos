@@ -3067,13 +3067,23 @@ function AbaErros() {
 
 // ── Aba Usuários (reset de senha) ────────────────────────────────
 
+interface UsuarioVinculo {
+  membro_id: string
+  loja_id: string
+  loja_nome: string
+  papel: string
+  ativo: boolean
+}
+
 interface UsuarioItem {
   id: string
   nome: string
   email: string
+  telefone: string | null
   papel: string
   ativo: boolean
   lojas: string[]
+  vinculos: UsuarioVinculo[]
 }
 
 const PAPEL_LABELS: Record<string, string> = {
@@ -3183,24 +3193,263 @@ function ModalResetSenha({ usuario, onClose }: { usuario: UsuarioItem; onClose: 
   )
 }
 
+const PAPEIS_VINCULO = ['gestor', 'vendedor'] as const
+
+function ModalEditarUsuario({
+  usuario,
+  lojas,
+  onClose,
+  onSalvo,
+}: {
+  usuario: UsuarioItem
+  lojas: { id: string; nome: string }[]
+  onClose: () => void
+  onSalvo: () => void
+}) {
+  const [nome, setNome] = useState(usuario.nome)
+  const [email, setEmail] = useState(usuario.email)
+  const [telefone, setTelefone] = useState(usuario.telefone || '')
+  const [papel, setPapel] = useState(usuario.papel)
+  const [ativo, setAtivo] = useState(usuario.ativo)
+  const [novaLoja, setNovaLoja] = useState('')
+  const [novoPapel, setNovoPapel] = useState<string>('vendedor')
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
+
+  // Lojas em que ele ainda não está — evita 409 de vínculo duplicado no select.
+  const lojasDisponiveis = lojas.filter(
+    (l) => !usuario.vinculos.some((v) => v.loja_id === l.id),
+  )
+
+  const acao = async (fn: () => Promise<any>) => {
+    setLoading(true)
+    setErro(null)
+    setAviso(null)
+    try {
+      const r = await fn()
+      if (r?.mensagem) setAviso(r.mensagem)
+      onSalvo()
+    } catch (err: any) {
+      setErro(err?.message || 'Não foi possível concluir a ação.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const salvarDados = (e: React.FormEvent) => {
+    e.preventDefault()
+    acao(() =>
+      api.patch(`/admin/usuarios/${usuario.id}`, {
+        nome,
+        email,
+        telefone: telefone || null,
+        papel,
+        ativo,
+      }),
+    )
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">Editar usuário</h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {erro && (
+            <div className="login-error-alert" style={{ margin: 0 }}>
+              <AlertTriangle size={16} />
+              <span>{erro}</span>
+            </div>
+          )}
+          {aviso && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
+              borderRadius: 'var(--sv-radius)', fontSize: '13px',
+              background: 'color-mix(in srgb, var(--sv-success) 12%, transparent)',
+              color: 'var(--sv-success)',
+            }}>
+              <CheckCircle size={15} />
+              <span>{aviso}</span>
+            </div>
+          )}
+
+          <form onSubmit={salvarDados} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div className="form-group">
+              <label>Nome</label>
+              <input value={nome} onChange={(e) => setNome(e.target.value)} required minLength={2} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-group">
+                <label>E-mail (login)</label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label>Telefone</label>
+                <input
+                  value={telefone}
+                  onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
+                  placeholder="(00) 00000-0000"
+                />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', alignItems: 'end' }}>
+              <div className="form-group">
+                <label>Papel na plataforma</label>
+                <select value={papel} onChange={(e) => setPapel(e.target.value)}>
+                  {Object.entries(PAPEL_LABELS).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 10, fontSize: '14px', color: 'var(--sv-text-dim)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
+                Conta ativa
+              </label>
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={loading} style={{ alignSelf: 'flex-start' }}>
+              {loading ? <span className="spinner" /> : 'Salvar dados'}
+            </button>
+          </form>
+
+          <div style={{ borderTop: '1px solid var(--sv-border)', paddingTop: '18px' }}>
+            <h4 style={{ margin: '0 0 4px', fontSize: '14px', color: 'var(--sv-text)' }}>Lojas do usuário</h4>
+            <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--sv-text-muted)' }}>
+              Define em qual loja o vendedor trabalha. Sem nenhuma loja ativa ele não consegue entrar no sistema.
+            </p>
+
+            {usuario.vinculos.length === 0 ? (
+              <p style={{ fontSize: '13px', color: 'var(--sv-text-muted)', margin: '0 0 12px' }}>Nenhuma loja vinculada.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
+                {usuario.vinculos.map((v) => (
+                  <div key={v.membro_id} style={{
+                    display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+                    padding: '10px 12px', borderRadius: 'var(--sv-radius)',
+                    border: '1px solid var(--sv-border)', background: 'rgba(255,255,255,0.02)',
+                  }}>
+                    <span style={{ flex: 1, minWidth: 120, color: 'var(--sv-text)', fontWeight: 600, fontSize: '14px' }}>
+                      {v.loja_nome}
+                    </span>
+                    <select
+                      value={v.papel}
+                      disabled={loading}
+                      onChange={(e) => acao(() =>
+                        api.patch(`/admin/usuarios/${usuario.id}/vinculos/${v.membro_id}`, { papel: e.target.value }),
+                      )}
+                      style={{ width: 'auto', minWidth: 110 }}
+                    >
+                      {PAPEIS_VINCULO.map((p) => (
+                        <option key={p} value={p}>{PAPEL_LABELS[p]}</option>
+                      ))}
+                    </select>
+                    <button
+                      className="btn btn-secondary"
+                      disabled={loading}
+                      style={{ padding: '4px 10px', fontSize: '12px' }}
+                      onClick={() => acao(() =>
+                        api.patch(`/admin/usuarios/${usuario.id}/vinculos/${v.membro_id}`, { ativo: !v.ativo }),
+                      )}
+                    >
+                      {v.ativo ? 'Desativar' : 'Reativar'}
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      disabled={loading}
+                      style={{ padding: '4px 10px', fontSize: '12px', color: 'var(--sv-error)' }}
+                      onClick={() => {
+                        if (!confirm(`Remover ${usuario.nome} da loja ${v.loja_nome}?`)) return
+                        acao(() => api.delete(`/admin/usuarios/${usuario.id}/vinculos/${v.membro_id}`))
+                      }}
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <select
+                value={novaLoja}
+                onChange={(e) => setNovaLoja(e.target.value)}
+                style={{ flex: 1, minWidth: 160 }}
+                disabled={lojasDisponiveis.length === 0}
+              >
+                <option value="">
+                  {lojasDisponiveis.length === 0 ? 'Já está em todas as lojas' : 'Selecione a loja…'}
+                </option>
+                {lojasDisponiveis.map((l) => (
+                  <option key={l.id} value={l.id}>{l.nome}</option>
+                ))}
+              </select>
+              <select value={novoPapel} onChange={(e) => setNovoPapel(e.target.value)} style={{ width: 'auto', minWidth: 110 }}>
+                {PAPEIS_VINCULO.map((p) => (
+                  <option key={p} value={p}>{PAPEL_LABELS[p]}</option>
+                ))}
+              </select>
+              <button
+                className="btn btn-primary"
+                disabled={loading || !novaLoja}
+                onClick={() => acao(async () => {
+                  const r = await api.post(`/admin/usuarios/${usuario.id}/vinculos`, {
+                    loja_id: novaLoja,
+                    papel: novoPapel,
+                  })
+                  setNovaLoja('')
+                  return r
+                })}
+              >
+                Vincular
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AbaUsuarios() {
   const [usuarios, setUsuarios] = useState<UsuarioItem[]>([])
   const [loading, setLoading] = useState(true)
   const [busca, setBusca] = useState('')
   const [usuarioReset, setUsuarioReset] = useState<UsuarioItem | null>(null)
+  const [usuarioEditar, setUsuarioEditar] = useState<UsuarioItem | null>(null)
+  const [lojas, setLojas] = useState<{ id: string; nome: string }[]>([])
   const [erro, setErro] = useState<string | null>(null)
+
+  const carregar = useCallback(() => {
+    setErro(null)
+    return api.get<UsuarioItem[]>(`/admin/usuarios?busca=${encodeURIComponent(busca)}`)
+      .then((lista) => {
+        setUsuarios(lista)
+        // Mantém o modal aberto refletindo o estado recém-salvo.
+        setUsuarioEditar((atual) => (atual ? lista.find((u) => u.id === atual.id) || null : null))
+      })
+      .catch((err: any) => setErro(err?.message || 'Erro ao carregar os usuários.'))
+  }, [busca])
 
   useEffect(() => {
     const t = setTimeout(() => {
       setLoading(true)
-      setErro(null)
-      api.get<UsuarioItem[]>(`/admin/usuarios?busca=${encodeURIComponent(busca)}`)
-        .then(setUsuarios)
-        .catch((err: any) => setErro(err?.message || 'Erro ao carregar os usuários.'))
-        .finally(() => setLoading(false))
+      carregar().finally(() => setLoading(false))
     }, 300)
     return () => clearTimeout(t)
-  }, [busca])
+  }, [carregar])
+
+  useEffect(() => {
+    api.get<{ id: string; nome: string }[]>('/admin/lojas')
+      .then((l) => setLojas(l.map((x) => ({ id: x.id, nome: x.nome }))))
+      .catch(() => setLojas([]))
+  }, [])
 
   return (
     <div style={{ marginTop: '24px' }}>
@@ -3262,15 +3511,26 @@ function AbaUsuarios() {
                     </span>
                   </td>
                   <td>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
-                      onClick={() => setUsuarioReset(u)}
-                      title="Redefinir a senha deste usuário"
-                    >
-                      <KeyRound size={14} />
-                      Resetar senha
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => setUsuarioEditar(u)}
+                        title="Editar dados e lojas deste usuário"
+                      >
+                        <Edit size={14} />
+                        Editar
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => setUsuarioReset(u)}
+                        title="Redefinir a senha deste usuário"
+                      >
+                        <KeyRound size={14} />
+                        Resetar senha
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -3281,6 +3541,15 @@ function AbaUsuarios() {
 
       {usuarioReset && (
         <ModalResetSenha usuario={usuarioReset} onClose={() => setUsuarioReset(null)} />
+      )}
+
+      {usuarioEditar && (
+        <ModalEditarUsuario
+          usuario={usuarioEditar}
+          lojas={lojas}
+          onClose={() => setUsuarioEditar(null)}
+          onSalvo={carregar}
+        />
       )}
     </div>
   )
@@ -3428,7 +3697,7 @@ function AbaContrato() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <label style={{ fontSize: 13, color: 'var(--sv-text-muted)' }}>Preencher com os dados de:</label>
         <select
-          className="form-input"
+          className="filter-select"
           value={lojaSel}
           onChange={(e) => setLojaSel(e.target.value)}
           style={{ maxWidth: 280 }}
