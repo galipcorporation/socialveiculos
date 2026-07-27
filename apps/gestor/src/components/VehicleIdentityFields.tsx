@@ -330,16 +330,20 @@ export function VehicleIdentityFields({
             value={value.fipe_ano_codigo || ''}
             onChange={e => {
               if (!e.target.value) return
-              // Extrai ano numérico do código (ex: "2020-1" → 2020)
-              const anoNum = parseInt(e.target.value.split('-')[0], 10) || 0
+              // Extrai ano numérico do código (ex: "2020-1" → 2020, "32000-1" → ano atual)
+              const rawAno = parseInt(e.target.value.split('-')[0], 10) || 0
+              const anoNum = rawAno >= 32000 ? new Date().getFullYear() : rawAno
               onChange({ fipe_ano_codigo: e.target.value, ano_fabricacao: anoNum, ano_modelo: anoNum })
             }}
             title="Ano de fabricação / modelo"
           >
             <option value="">Selecione</option>
-            {anosDisponiveis.map(a => (
-              <option key={a.codigo} value={a.codigo}>{a.label}</option>
-            ))}
+            {anosDisponiveis.map(a => {
+              const labelFormatada = a.label.replace(/^32000\b/i, 'Zero KM (0km)')
+              return (
+                <option key={a.codigo} value={a.codigo}>{labelFormatada}</option>
+              )
+            })}
           </select>
         ) : (
           /* Fallback: sem modelo FIPE selecionado, usa lista estática */

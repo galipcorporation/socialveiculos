@@ -12,18 +12,20 @@ interface Passo {
 interface Topico {
   id: string
   titulo: string
-  icone: string      // SVG path d
+  icone: string       // SVG path d
   descricao: string
-  imagem?: string    // caminho relativo em /ajuda/
+  imagem?: string     // caminho relativo em /ajuda/
   passos: Passo[]
-  modulo?: ModuloKey // se definido, só aparece quando o usuário tem acesso
-  gestorOnly?: boolean // só aparece para gestor/admin
+  modulo?: ModuloKey  // se definido, só aparece quando o usuário tem acesso
+  gestorOnly?: boolean // só aparece para gestor/admin da loja ou da plataforma
+  adminOnly?: boolean  // só aparece para admin_plataforma
 }
 
 interface FaqItem {
   pergunta: string
   resposta: string
   gestorOnly?: boolean
+  adminOnly?: boolean
 }
 
 const TOPICOS: Topico[] = [
@@ -31,44 +33,43 @@ const TOPICOS: Topico[] = [
     id: 'primeiros-passos',
     titulo: 'Primeiros Passos',
     icone: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
-    descricao: 'Aprenda a fazer login, navegar pelo menu e entender a interface do SocialVeículos.',
+    descricao: 'Aprenda a fazer login, navegar pelo menu lateral e utilizar os atalhos do SocialVeículos.',
     passos: [
-      { texto: 'Acesse o sistema pelo endereço fornecido pela sua loja e informe seu e-mail e senha na tela de login.' },
-      { texto: 'Após o login, você será direcionado ao Dashboard (Visão Geral), que mostra os indicadores principais da sua loja.' },
-      { texto: 'No lado esquerdo da tela, você encontra o menu lateral (Sidebar) com todas as seções do sistema: Dashboard, Rede Social, CRM, Estoque, Financeiro, etc.' },
-      { texto: 'No canto superior direito, clique no seu avatar para acessar Configurações da loja ou para Sair do sistema.' },
-      { texto: 'Use a barra de busca no topo para encontrar rapidamente qualquer seção ou funcionalidade.', dica: 'Atalho: pressione Ctrl+K para abrir a busca rápida a qualquer momento.' },
+      { texto: 'Acesse o sistema pelo endereço da sua loja ou plataforma e informe seu e-mail e senha cadastrados.' },
+      { texto: 'Após a autenticação, você será direcionado ao Dashboard inicial, onde vê um resumo em tempo real da loja.' },
+      { texto: 'No lado esquerdo fica a Sidebar com todas as seções: Dashboards, Rede Social, Clientes (CRM), Estoque, Pós-venda, Financeiro, Aprovações, Equipe e o menu expansível de Ferramentas.' },
+      { texto: 'No canto superior direito, utilize o seu avatar para acessar as Configurações da loja ou encerrar a sessão (Sair).' },
+      { texto: 'No topo, alterne entre o tema escuro e claro clicando no ícone de sol/lua conforme sua preferência visual.' },
     ],
   },
   {
     id: 'dashboard',
     titulo: 'Dashboard',
-    modulo: undefined,
     icone: 'M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z',
-    descricao: 'Veja em tempo real os KPIs da sua loja: estoque ativo, leads, vendas do mês e receita.',
+    descricao: 'Acompanhe os principais indicadores de desempenho (KPIs), atalhos de acesso rápido e alertas em tempo real.',
     imagem: '/ajuda/dashboard.png',
     passos: [
-      { texto: 'O Dashboard é a tela inicial após o login. Ele exibe 4 indicadores-chave (KPIs) no topo: Estoque Ativo, Leads Ativos, Vendas do Mês e Receita do Mês.' },
-      { texto: 'Logo abaixo dos KPIs, a seção "Acesso Rápido" mostra atalhos para as páginas que você mais visitou recentemente.' },
-      { texto: 'No painel de Alertas, você verá notificações importantes como veículos sem foto, leads sem contato há mais de 3 dias, entre outros.' },
-      { texto: 'Todos os dados são atualizados automaticamente a cada vez que você acessa o Dashboard.', dica: 'Os valores são isolados por loja — cada concessionária vê apenas seus próprios dados.' },
+      { texto: 'O Dashboard traz 4 cards de KPIs principais no topo: Estoque Ativo, Leads Ativos, Vendas do Mês e Receita do Mês.' },
+      { texto: 'Logo abaixo dos KPIs, o painel de Acesso Rápido traz botões para navegar direto para as telas que você mais utiliza.' },
+      { texto: 'No painel de Alertas, o sistema avisa automaticamente sobre pendências importantes, como veículos sem foto ou cadastros incompletos.' },
+      { texto: 'Os indicadores refletem com precisão os dados exclusivos da sua loja.', dica: 'Cada concessionária vê estritamente seus próprios dados de forma isolada.' },
     ],
   },
   {
     id: 'estoque',
     titulo: 'Estoque de Veículos',
     modulo: 'estoque' as const,
-    icone: 'M1 3h15a2 2 0 012 2v6a2 2 0 01-2 2H1V3zm0 0v13m4 2a2 2 0 100-4 2 2 0 000 4zm13 0a2 2 0 100-4 2 2 0 000 4z',
-    descricao: 'Gerencie todo o inventário da sua loja: cadastre, edite, publique na vitrine e faça upload de fotos e vídeos.',
+    icone: 'M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 002 12v4c0 .6.4 1 1 1h2',
+    descricao: 'Cadastre veículos, faça upload de fotos/vídeos, publique na Vitrine B2C, poste no Feed de Repasses B2B e feche vendas.',
     imagem: '/ajuda/estoque.png',
     passos: [
-      { texto: 'Acesse "Estoque" no menu lateral. No topo da página, você verá cards com informações resumidas: total de veículos, disponíveis, reservados e vendidos.' },
-      { texto: 'Clique no botão "Novo Veículo" (azul) para cadastrar um veículo. Preencha a marca e modelo usando o autocomplete — o sistema sugere automaticamente a partir do catálogo FIPE.' },
-      { texto: 'No cadastro, informe: tipo (Carro, Moto, Caminhão, etc.), ano, placa, cor, combustível, câmbio, quilometragem, preço de compra e preço de venda.' },
-      { texto: 'Na aba de fotos/vídeos, arraste e solte as imagens ou clique para selecionar. Você pode reordenar as fotos arrastando-as e definir a foto de capa.', dica: 'A primeira foto/vídeo é a capa (thumbnail) do veículo. Na vitrine pública, todas as fotos e vídeos aparecem em carrossel — o cliente pode navegar entre eles.' },
-      { texto: 'Use o toggle "Publicar na Vitrine" para controlar se o veículo aparece na vitrine pública (B2C) para clientes finais.' },
-      { texto: 'Para filtrar veículos, use a barra de busca (pesquisa por marca, modelo ou placa) e os dropdowns de status e ordenação.' },
-      { texto: 'Clique em qualquer veículo da lista para abrir o modal de edição, onde você pode atualizar informações, gerenciar mídias e ver o histórico de custos de preparação.' },
+      { texto: 'Acesse "Estoque" no menu lateral. No topo, consulte o Total no Estoque, Disponíveis e Publicados na Vitrine.' },
+      { texto: 'Clique em "Novo Veículo" para cadastrar. Preencha marca e modelo com autocomplete integrado ao catálogo FIPE, além de ano, placa, cor, combustível, câmbio, km, preço de compra e preço de venda.' },
+      { texto: 'Na aba de mídias, faça upload de fotos e vídeos. Defina a foto de capa — ela aparecerá nos cards e na vitrine pública.' },
+      { texto: 'Ative o toggle "Vitrine" para disponibilizar o veículo no marketplace público (B2C).', dica: 'Para ser publicado na Vitrine, o veículo deve ter status "Disponível" e pelo menos 1 foto.' },
+      { texto: 'Ative o botão "Feed de Repasses" para ofertar o veículo diretamente para outras concessionárias parceiras na Rede Social B2B.' },
+      { texto: 'Utilize a ação de fechar venda ($) para registrar o comprador e valor final: o veículo é marcado como vendido, o contrato é gerado e a esteira de Pós-venda é criada automaticamente.' },
+      { texto: 'Ações de exclusão de veículo ou alteração de preço enviadas por vendedores disparam uma solicitação pendente para aprovação do Gestor.', dica: 'Gestores podem aprovar ou rejeitar reajustes e exclusões solicitados pela equipe na tela de Aprovações.' },
     ],
   },
   {
@@ -76,29 +77,80 @@ const TOPICOS: Topico[] = [
     titulo: 'CRM — Clientes e Leads',
     modulo: 'crm' as const,
     icone: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zm10 1v6m3-3h-6',
-    descricao: 'Cadastre clientes, crie leads de negociação e acompanhe o funil de vendas pelo quadro Kanban.',
+    descricao: 'Gerencie sua carteira de clientes e acompanhe todas as oportunidades de venda no funil Kanban de 5 etapas.',
     imagem: '/ajuda/crm.png',
     passos: [
-      { texto: 'Acesse "CRM" no menu lateral. A página possui duas abas: "Quadro" (Kanban de leads) e "Clientes" (cadastro de pessoas físicas).' },
-      { texto: 'Na aba Quadro, o Kanban mostra 4 colunas: Novo, Em Contato, Proposta Enviada e Fechado. Cada card representa um lead (oportunidade de negócio).' },
-      { texto: 'Para criar um novo lead, clique em "Novo Lead". Selecione um cliente existente (ou crie um novo) e opcionalmente vincule um veículo de interesse do estoque.' },
-      { texto: 'Arraste os cards entre as colunas para mover o lead pelo funil de vendas. Isso atualiza automaticamente o status no sistema.' },
-      { texto: 'Clique em um card para abrir os detalhes do lead. Aqui você pode adicionar propostas de financiamento, anotações e ver o histórico completo da negociação.' },
-      { texto: 'Na aba "Clientes", cadastre pessoas físicas com CPF, telefone, e-mail e endereço. Esses clientes ficam disponíveis para vincular a leads.', dica: 'O CPF e o e-mail possuem validação automática. Espaços não são permitidos no campo de e-mail.' },
+      { texto: 'Acesse "Clientes (CRM)" no menu lateral. A página é dividida em duas abas: "Clientes" e "Funil de Vendas (CRM)".' },
+      { texto: 'Na aba "Clientes", cadastre e edite pessoas físicas/jurídicas com CPF/CNPJ, CNH, renda mensal, profissão e endereço completo com busca automática por CEP.' },
+      { texto: 'Na aba "Funil de Vendas", o quadro Kanban organiza os leads em 5 colunas: Lead Recebido, Proposta Enviada, Em Negociação, Fechamento e Perdido.' },
+      { texto: 'Clique em "Novo Lead" para abrir uma oportunidade vinculando um cliente da carteira e um veículo de interesse do estoque.' },
+      { texto: 'Arraste os cards entre as colunas para atualizar a etapa no funil. Ao mover para "Perdido", selecione o motivo da perda (preço, crédito negado, comprou no concorrente, etc.) para alimentar as estatísticas da loja.' },
+      { texto: 'Clique em qualquer card para abrir os detalhes do lead: adicione histórico de interações (notas, ligações, WhatsApp, visitas) e simule propostas.', dica: 'Toda conversa iniciada por um cliente na Vitrine B2C vira um Lead com origem "Vitrine" automaticamente no CRM.' },
+    ],
+  },
+  {
+    id: 'pos-venda',
+    titulo: 'Pós-venda',
+    icone: 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2',
+    descricao: 'Acompanhe a esteira de procedimentos pós-venda: emissão de contrato, quitação, documentação e transferência do veículo.',
+    imagem: '/ajuda/posvenda.png',
+    passos: [
+      { texto: 'Acesse "Pós-venda" no menu lateral. A tela organiza as esteiras em 4 estágios: Contrato, Pagamento, Documentos e Transferência.' },
+      { texto: 'A esteira de pós-venda é criada de forma automática sempre que uma venda é registrada no Estoque ou no CRM.' },
+      { texto: 'Clique em um card de pós-venda para abrir a esteira e marcar as tarefas concluídas no checklist de cada etapa.' },
+      { texto: 'Conforme os itens são checados, a barra de progresso avança. Ao concluir todas as etapas, a esteira é movida para finalizadas.', dica: 'Gestores podem personalizar os itens de checklist exigidos por etapa em cada contrato de venda.' },
+    ],
+  },
+  {
+    id: 'aprovacoes',
+    titulo: 'Fila e Histórico de Aprovações',
+    gestorOnly: true,
+    icone: 'M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3',
+    descricao: 'Central de controle para o Gestor aprovar ou rejeitar reajustes de preço e exclusões de veículos solicitados por vendedores.',
+    passos: [
+      { texto: 'Acesse "Aprovações" no menu lateral (exclusivo para Gestores e Administradores da plataforma).' },
+      { texto: 'Em "Fila de Aprovações", veja todas as solicitações pendentes enviadas pelos vendedores, incluindo o vendedor requisitante, veículo, motivo e o preço atual vs. o preço proposto.' },
+      { texto: 'Para aprovar uma alteração de preço ou exclusão de veículo, clique no botão "Aprovar" e confirme.' },
+      { texto: 'Para recusar, clique em "Rejeitar", informe a justificativa obrigatória (ex.: "Preço proposto abaixo da margem mínima") e confirme.', dica: 'O vendedor recebe a notificação da decisão com a justificativa registrada.' },
+      { texto: 'Alterne para o botão "Ver histórico" no topo para consultar todas as solicitações processadas no passado com data e responsável.' },
+    ],
+  },
+  {
+    id: 'minhas-comissoes',
+    titulo: 'Minhas Comissões',
+    icone: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
+    descricao: 'Painel individual do vendedor para acompanhar as vendas realizadas, a porcentagem de comissão e o status de pagamento.',
+    passos: [
+      { texto: 'Acesse "Minhas Comissões" no menu lateral.' },
+      { texto: 'A tabela exibe a lista de veículos vendidos por você, a data da venda, o valor total do veículo, a porcentagem (%) de comissão atribuída e o valor líquido a receber.' },
+      { texto: 'Acompanhe o status de cada comissão: "Definir %" (aguardando gestor definir o percentual), "Pendente" (comissão aprovada aguardando pagamento) e "Paga" (comissão quitada).' },
+      { texto: 'Use os filtros no topo ("Todas", "Pendentes", "Pagas") para filtrar rapidamente os valores do seu extrato.', dica: 'Os percentuais e acertos de comissão são gerenciados pelo Gestor na seção Financeiro.' },
     ],
   },
   {
     id: 'rede-social',
-    titulo: 'Rede Social',
+    titulo: 'Rede Social B2B',
     icone: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zm14 0v2a4 4 0 01-3 3.87M16 3.13a4 4 0 010 7.75',
-    descricao: 'Conecte-se com outras lojas parceiras: publique repasses, envie propostas, use o chat e encontre parceiros.',
+    descricao: 'Conecte-se com outras concessionárias parceiras: navegue pelo feed de repasses, troque propostas e negocie no chat em tempo real.',
     imagem: '/ajuda/redesocial.png',
     passos: [
-      { texto: 'Acesse "Rede Social" no menu lateral. A página possui 4 abas: Feed de Repasses, Propostas, Parceiros e Chat.' },
-      { texto: 'No Feed de Repasses, veja veículos publicados por outras lojas parceiras. Você pode curtir, comentar e enviar propostas de repasse.' },
-      { texto: 'Na aba "Propostas", gerencie todas as propostas enviadas e recebidas. Aceite, rejeite ou negocie propostas com lojas parceiras.' },
-      { texto: 'No "Diretório de Parceiros", busque lojas por nome, cidade ou UF para encontrar possíveis parceiros de negócio.' },
-      { texto: 'O Chat permite conversar em tempo real com lojas parceiras. As mensagens são entregues instantaneamente via WebSocket.', dica: 'As propostas aceitas atualizam automaticamente o estoque, movendo o veículo entre as lojas envolvidas.' },
+      { texto: 'Acesse "Rede Social" no menu lateral. A página é dividida em 4 abas: Feed de Repasses, Propostas, Parceiros e Chat.' },
+      { texto: 'No Feed de Repasses, veja oportunidades publicadas por outras concessionárias ativas no sistema. Curta, comente ou envie uma proposta direta de repasse.' },
+      { texto: 'Na aba "Propostas", acompanhe as ofertas de compra/troca enviadas para suas publicações ou recebidas de parceiros, com opções para aceitar, recusar ou contrapropor.' },
+      { texto: 'No "Diretório de Parceiros", encontre lojas parceiras por nome, cidade ou UF para expadir sua rede de contatos.' },
+      { texto: 'O Chat B2B permite mensagens instantâneas com outros lojistas.', dica: 'Quando chegam novas mensagens não lidas no Chat, um indicador numérico (badge) aparece no menu lateral.' },
+    ],
+  },
+  {
+    id: 'vitrine-b2c',
+    titulo: 'Vitrine B2C & Marketplace Público',
+    icone: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z',
+    descricao: 'Entenda como a Vitrine pública (estilo rede social de veículos) atrai compradores finais e gera novos leads para a sua loja.',
+    passos: [
+      { texto: 'A Vitrine B2C é a portal público de busca e descoberta de veículos para consumidores finais.' },
+      { texto: 'Veículos com o toggle "Publicar na Vitrine" ativado no Estoque (e com foto cadastrada) aparecem automaticamente no feed rolável da Vitrine.' },
+      { texto: 'O consumidor navega livremente sem precisar de cadastro prévio. Ao tentar favoritar um carro, enviar mensagem ou ver o WhatsApp, um modal simples de login/cadastro é exibido.' },
+      { texto: 'Quando o comprador clica em conversar com a loja na Vitrine, uma mensagem é iniciada e um **Lead com origem Vitrine** entra instantaneamente no CRM da sua loja.', dica: 'Dados internos da loja (preço de custo, margem de lucro, dados de repasse) jamais aparecem na Vitrine B2C.' },
     ],
   },
   {
@@ -106,26 +158,13 @@ const TOPICOS: Topico[] = [
     titulo: 'Financeiro',
     modulo: 'financeiro' as const,
     icone: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
-    descricao: 'Controle o caixa da loja com lançamentos de receitas e despesas, e gerencie comissões da equipe.',
+    descricao: 'Gerencie o fluxo de caixa da concessionária, lançamentos de receitas/despesas e acertos de comissão da equipe.',
     imagem: '/ajuda/financeiro.png',
     passos: [
-      { texto: 'Acesse "Financeiro" no menu lateral. No topo, você verá cards com o resumo financeiro: Receitas, Despesas e Saldo do período.' },
-      { texto: 'A tabela de Lançamentos lista todas as entradas e saídas financeiras. Use os filtros para buscar por data, tipo (Receita/Despesa) ou descrição.' },
-      { texto: 'Para registrar um novo lançamento, clique no botão "Novo Lançamento" e preencha: descrição, valor, tipo e data.' },
-      { texto: 'Na aba "Comissões", veja as comissões calculadas para cada vendedor com base nas vendas realizadas no período.', dica: 'Os valores monetários usam a formatação brasileira (R$) com separadores de milhar automáticos.' },
-    ],
-  },
-  {
-    id: 'pos-venda',
-    titulo: 'Pós-venda',
-    icone: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11',
-    descricao: 'Acompanhe pelo quadro de esteira todas as etapas que vêm depois da venda: contrato, pagamento, documentos e transferência.',
-    imagem: '/ajuda/posvenda.png',
-    passos: [
-      { texto: 'Acesse "Pós-venda" no menu lateral. A tela mostra um quadro (Kanban) com quatro estágios: Contrato, Pagamento, Documentos e Transferência. Cada card é a esteira de um veículo vendido.' },
-      { texto: 'Você não cria esteiras manualmente — quando uma venda é registrada no Estoque, a esteira pós-venda correspondente é gerada automaticamente na primeira coluna.' },
-      { texto: 'Clique em um card para abrir a esteira e marcar os itens de checklist de cada etapa. A barra de progresso do card mostra quanto já foi concluído.' },
-      { texto: 'Conforme os itens são concluídos, o card avança de estágio. Ao finalizar a última etapa, a esteira vai para a lista de finalizadas.', dica: 'Gestores e administradores podem personalizar os itens de checklist de cada esteira (adicionar ou remover itens), desde que ela ainda não esteja concluída.' },
+      { texto: 'Acesse "Financeiro" no menu lateral. No topo, consulte o resumo de Receitas, Despesas e Saldo do período.' },
+      { texto: 'Na tabela de Lançamentos, veja todas as entradas e saídas de caixa. Filtre por período ou busque por descrição.' },
+      { texto: 'Clique em "Novo Lançamento" para cadastrar movimentações manuais (despesas operacionais, manutenção, vendas, etc.).' },
+      { texto: 'Na aba "Comissões", o Gestor define a porcentagem de comissão de cada vendedor por venda realizada, aprova os valores calculados e confirma a liquidação/pagamento.', dica: 'Valores financeiros utilizam formatação monetária brasileira (R$) padronizada.' },
     ],
   },
   {
@@ -134,15 +173,14 @@ const TOPICOS: Topico[] = [
     modulo: 'simulador' as const,
     icone: 'M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M9 7V4a2 2 0 012-2h9a2 2 0 012 2v9a2 2 0 01-2 2h-3',
     imagem: '/ajuda/simulador.png',
-    descricao: 'Simule financiamentos em múltiplos bancos ao mesmo tempo (BV, C6, Itaú, Santander) e imprima propostas para o cliente.',
+    descricao: 'Simule financiamento de veículos simultaneamente em bancos parceiros (BV, C6, Itaú, Santander, Pan, Bradesco) e gere propostas em PDF.',
     passos: [
-      { texto: 'Acesse "Ferramentas → Simulador" no menu lateral. A primeira coisa a fazer é configurar as credenciais dos bancos: clique no botão "Configurar" em cada card de financeira e informe o usuário e senha do portal daquela instituição.' },
-      { texto: 'Com as financeiras configuradas, marque os bancos desejados com o checkbox "Selecionar" nos cards do passo 1. Você pode simular em um ou todos os bancos ao mesmo tempo.' },
-      { texto: 'No passo 2 (Dados do Cliente), informe o CPF. Ao sair do campo, o sistema busca automaticamente o cliente no CRM e preenche nome e telefone. Se não encontrar, preencha manualmente. A data de nascimento é obrigatória para as financeiras.' },
-      { texto: 'No passo 3 (Dados do Veículo), clique no campo Placa e selecione o veículo do estoque na lista que aparece, ou digite a placa e clique no ícone de busca. O valor de venda e a entrada de 20% são preenchidos automaticamente.', dica: 'O simulador só aceita carros e motos. Outros tipos de veículo (caminhão, barco etc.) não são financiáveis pelos bancos integrados.' },
-      { texto: 'Clique em "Simular Financiamento". Os resultados aparecem em cards: cada banco mostra parcela, taxa de juros e total financiado. Bancos que reprovarem exibem o motivo em vermelho.' },
-      { texto: 'Na tela de resultados, clique em "Imprimir Proposta" para gerar um documento PDF com os dados do cliente, do veículo e as condições de cada banco — pronto para mostrar ou enviar ao comprador.' },
-      { texto: 'Para reiniciar uma nova simulação, clique em "Limpar" para apagar todos os campos do formulário.', dica: 'O simulador requer a extensão "Simulador Fácil" instalada no Google Chrome (desktop). No celular ou em outros navegadores, a automação nos portais das financeiras não funciona.' },
+      { texto: 'Acesse "Ferramentas → Simulador" no menu lateral. Em primeiro lugar, certifique-se de cadastrar as credenciais das financeiras em Configurações.' },
+      { texto: 'Selecione os bancos nos quais deseja rodar a simulação nos cards das instituições parceiras.' },
+      { texto: 'No campo CPF do Cliente, ao digitar o número, o sistema carrega automaticamente os dados cadastrados no CRM. Informe também a data de nascimento.' },
+      { texto: 'Selecione o veículo do estoque clicando na busca por placa ou digitação manual. O preço de venda e entrada padrão são calculados automaticamente.' },
+      { texto: 'Clique em "Simular Financiamento". As propostas de cada financeira aparecem lado a lado com valor de parcela, taxas e prazos.' },
+      { texto: 'Clique em "Imprimir Proposta" para gerar um documento PDF pronto com o comparativo bancário para entregar ou enviar ao comprador.', dica: 'A automação dos portais bancários depende da extensão "Simulador Fácil" ativa no Google Chrome em computador desktop.' },
     ],
   },
   {
@@ -151,46 +189,56 @@ const TOPICOS: Topico[] = [
     modulo: 'contratos' as const,
     icone: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8',
     imagem: '/ajuda/contratos.png',
-    descricao: 'Crie, gerencie e compartilhe contratos de compra e venda, consignação e garantia diretamente pelo sistema.',
+    descricao: 'Gere minutas e contratos de Compra e Venda, Consignação, Termo de Garantia, Promissória e Procuração com preenchimento automático.',
     passos: [
-      { texto: 'Acesse "Ferramentas → Contratos" no menu lateral. Você verá os KPIs no topo: total de contratos, quantos estão aguardando assinatura e quantos já foram assinados.' },
-      { texto: 'Para criar um contrato, clique em "Novo Contrato". Selecione o tipo: Compra e Venda (o mais comum), Consignação (veículo em consignação por terceiro) ou Garantia (termo de garantia pós-venda).' },
-      { texto: 'Escolha o cliente no campo "Cliente" — use a caixa de busca abaixo para filtrar pelo nome. Em seguida, selecione o veículo da mesma forma.' },
-      { texto: 'Preencha o valor da venda, o valor da entrada e o número de parcelas. No campo "Observações" você pode adicionar cláusulas extras, condições especiais ou notas internas.' },
-      { texto: 'Clique em "Criar Contrato". O contrato aparece na lista com status "Rascunho". Para avançar o fluxo, use o dropdown de status na tabela: Rascunho → Aguardando → Assinado.', dica: 'Contratos cancelados não são excluídos — ficam registrados para histórico e auditoria.' },
-      { texto: 'Para baixar o contrato em PDF, clique no ícone de download na linha do contrato. O documento abre em nova aba pronto para imprimir ou salvar.' },
-      { texto: 'Para compartilhar pelo WhatsApp, clique no ícone verde do WhatsApp na linha do contrato. O sistema abre uma mensagem pré-formatada com o número e tipo do contrato.' },
+      { texto: 'Acesse "Ferramentas → Contratos" no menu lateral. Acompanhe no topo o total de contratos e o status (Rascunho, Aguardando, Assinado, Cancelado).' },
+      { texto: 'Clique em "Novo Contrato" e escolha o modelo desejado (Compra e Venda, Consignação, Termo de Garantia, etc.).' },
+      { texto: 'Selecione o cliente e o veículo na lista. Todos os campos de qualificação (CPF/CNPJ, endereço, chassi, placa, ano, cor) são preenchidos automaticamente.' },
+      { texto: 'Defina as condições financeiras (valor de venda, entrada, saldo financiado, parcelas e observações operacionais).' },
+      { texto: 'Ao salvar, o contrato fica disponível em formato PDF pronto para impressão ou assinatura digital.' },
+      { texto: 'Utilize o botão verde do WhatsApp para enviar o link/documento diretamente ao cliente.', dica: 'Vendas concluídas na tela de Estoque geram o contrato de compra e venda correspondente de forma automática.' },
+    ],
+  },
+  {
+    id: 'fipe',
+    titulo: 'Consulta Tabela FIPE',
+    icone: 'M9 17h6M12 3v14M5 8l7-5 7 5',
+    descricao: 'Consulte valores oficiais de referência da Tabela FIPE para carros, motos e caminhões em um assistente guiado em 4 passos.',
+    passos: [
+      { texto: 'Acesse "Ferramentas → Consulta FIPE" no menu lateral.' },
+      { texto: 'Passo 1: Escolha o Tipo de Veículo (Carro, Moto ou Caminhão).' },
+      { texto: 'Passo 2: Selecione a Marca do veículo na lista atualizada.' },
+      { texto: 'Passo 3: Selecione o Modelo desejado.' },
+      { texto: 'Passo 4: Selecione o Ano/Modelo de fabricação.' },
+      { texto: 'Clique em "Consultar FIPE". O sistema exibe o Valor FIPE de referência oficial imediatamente na tela.', dica: 'Esta ferramenta é perfeita para avaliar veículos oferecidos como entrada ou calcular valores de repasse sem precisar cadastrar o veículo no estoque.' },
     ],
   },
   {
     id: 'marketing',
-    titulo: 'Marketing',
+    titulo: 'Marketing & Gerador de Posts com IA',
     modulo: 'marketing' as const,
     icone: 'M3 11l18-5v12L3 14v-3zM11.6 16.8a3 3 0 11-5.8-1.6',
     imagem: '/ajuda/marketing.png',
-    descricao: 'Gere posts a partir dos veículos do seu estoque com IA e publique (ou agende) direto no Instagram e Facebook da loja.',
+    descricao: 'Crie anúncios profissionais com Inteligência Artificial a partir do estoque e agende publicações no Instagram e Facebook.',
     passos: [
-      { texto: 'Acesse "Ferramentas → Marketing" no menu lateral. Selecione um veículo do estoque, a rede/canal e o tom da mensagem, e clique em "Gerar anúncio". A IA escreve a legenda com base nas informações do veículo (marca, modelo, ano, preço).' },
-      { texto: 'Revise o texto na prévia. Você pode copiá-lo para publicar manualmente onde quiser, ou publicar direto pela plataforma no painel "Publicar / Agendar" logo abaixo.' },
-      { texto: 'Para publicar direto, primeiro conecte suas redes: no painel "Publicar / Agendar" (ou no banner de aviso), clique em "Configurar redes sociais". Você será levado às Configurações → Redes Sociais.' },
-      { texto: 'Clique em "Conectar via Meta". Faça login na sua conta do Facebook e autorize o acesso. Se você administra mais de uma Página, o sistema pedirá para escolher qual Página do Facebook e qual conta do Instagram Business usar.', dica: 'Para publicar no Instagram, a conta precisa ser Instagram Business (ou Creator) e estar vinculada a uma Página do Facebook. Contas pessoais do Instagram não são suportadas pela API da Meta.' },
-      { texto: 'De volta ao Marketing, marque as redes onde quer publicar, escolha "Publicar agora" ou "Agendar para" (data e hora) e clique no botão. Posts agendados são publicados automaticamente pela plataforma no horário marcado.', dica: 'Para publicar no Instagram, o veículo precisa ter ao menos uma foto cadastrada — o Instagram não aceita post só de texto.' },
-      { texto: 'Acompanhe tudo no painel "Histórico de posts": status (agendado, publicado, falhou, cancelado), data e a rede de cada publicação. Posts ainda agendados podem ser cancelados pelo ícone de X.' },
+      { texto: 'Acesse "Ferramentas → Marketing" no menu lateral.' },
+      { texto: 'Selecione um veículo do seu estoque, a rede social de destino e o tom da mensagem (comercial, persuasivo, esportivo, etc.).' },
+      { texto: 'Clique em "Gerar Anúncio". A IA redige a legenda completa destacando opcionais, motorização, facilidades de financiamento e chamada para ação (CTA).' },
+      { texto: 'No painel de publicação, selecione "Publicar agora" ou "Agendar para" informando a data e horário desejados.' },
+      { texto: 'Em "Histórico de Posts", acompanhe o status de cada publicação (Agendado, Publicado, Falhou).', dica: 'Para publicar no Instagram, a conta da loja deve ser Instagram Business e estar conectada à Página do Facebook.' },
     ],
   },
   {
     id: 'marketing-meta-setup',
-    titulo: 'Conectar Instagram/Facebook (Meta)',
+    titulo: 'Conectar Instagram e Facebook (Meta)',
     gestorOnly: true,
     icone: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3a3 3 0 110 6 3 3 0 010-6zm0 14.2a7.2 7.2 0 01-6-3.22c.03-2 4-3.08 6-3.08s5.97 1.09 6 3.08a7.2 7.2 0 01-6 3.22z',
-    descricao: 'Guia para o responsável pela plataforma habilitar a publicação automática de posts no Instagram e Facebook via API oficial da Meta.',
+    descricao: 'Guia de integração oficial para conectar as contas de redes sociais da loja via Meta Graph API.',
     passos: [
-      { texto: 'A publicação direta usa a API oficial da Meta (Graph API). Para habilitá-la é preciso criar um App no Meta for Developers uma única vez, para toda a plataforma. Acesse developers.facebook.com e faça login com a conta que administrará o app.' },
-      { texto: 'Crie um novo App do tipo "Business". No painel do app, adicione os produtos "Facebook Login" e "Instagram Graph API".' },
-      { texto: 'Anote o "App ID" e o "App Secret" (em Configurações → Básico). Em Facebook Login → Configurações, cadastre a URL de redirecionamento (redirect URI) que aponta para o endpoint de callback da plataforma: https://SEU-DOMINIO/api/v1/social-auth/meta/callback.' },
-      { texto: 'Configure essas credenciais como variáveis de ambiente da aplicação — META_APP_ID, META_APP_SECRET e META_REDIRECT_URI —, além da FERNET_KEY (usada para cifrar os tokens das lojas). No deploy em nuvem (Vercel/Expo/Supabase) essas chaves vão nos painéis de variáveis de ambiente do provedor, não em arquivo local.', dica: 'A FERNET_KEY é a mesma chave usada para cifrar as credenciais bancárias. Nunca a exponha nem a versione no Git.' },
-      { texto: 'As permissões necessárias — instagram_content_publish, pages_manage_posts, pages_show_list, instagram_basic, pages_read_engagement — exigem revisão da Meta (App Review) antes de funcionar com contas que não sejam de teste. Enquanto o app estiver em modo de desenvolvimento, só contas com papel no app (admin/testador) conseguem conectar.', dica: 'Submeta o App Review com um vídeo mostrando o fluxo de conexão e publicação. A aprovação da Meta costuma levar de alguns dias a semanas — planeje com antecedência antes do lançamento.' },
-      { texto: 'Após aprovar o App Review e publicar o app (modo "Ativo"), qualquer loja poderá conectar suas próprias contas em Configurações → Redes Sociais, sem precisar de credenciais próprias — o app da plataforma intermedia a autorização.' },
+      { texto: 'Para permitir postagens automáticas, é necessário configurar uma única vez as chaves de integração da Meta.' },
+      { texto: 'Acesse developers.facebook.com, crie um App do tipo "Business" e adicione "Facebook Login" e "Instagram Graph API".' },
+      { texto: 'Anote o App ID e App Secret e configure o Redirect URI oficial da sua aplicação em nuvem (ex.: https://SEU-DOMINIO/api/v1/social-auth/meta/callback).' },
+      { texto: 'Em Configurações → Redes Sociais, o gestor da loja clica em "Conectar via Meta" para autenticar e escolher a Página do Facebook e conta do Instagram Business.', dica: 'Contas pessoais do Instagram não possuem permissão de publicação por API oficial da Meta.' },
     ],
   },
   {
@@ -198,11 +246,12 @@ const TOPICOS: Topico[] = [
     titulo: 'Assistente de IA',
     modulo: 'assistente_ia' as const,
     icone: 'M12 2a10 10 0 100 20 10 10 0 000-20zm0 5v5l4 2',
-    descricao: 'Converse por texto ou voz com o assistente virtual para tirar dúvidas e agilizar o atendimento de leads.',
+    descricao: 'Assistente virtual para tirar dúvidas operacionais, sugerir abordagens comerciais e consultar dados do estoque e leads por texto ou voz.',
     passos: [
-      { texto: 'Acesse "Assistente IA" no menu lateral. Digite sua pergunta ou clique no ícone de microfone para falar — o áudio é transcrito automaticamente.' },
-      { texto: 'O assistente responde com base nos dados da sua loja (estoque, leads, financeiro) e pode ajudar a redigir mensagens para clientes.' },
-      { texto: 'O histórico de conversas fica salvo e pode ser retomado a qualquer momento.', dica: 'Este módulo é premium e depende do plano contratado pela loja.' },
+      { texto: 'Acesse "Assistente IA" no menu lateral.' },
+      { texto: 'Digite sua mensagem na caixa de chat ou clique no ícone de microfone para enviar comandos por áudio com transcrição automática.' },
+      { texto: 'Peça resumos do estoque, sugestões de resposta para clientes difíceis ou auxílio na montagem de propostas.' },
+      { texto: 'O histórico de conversa fica armazenado para consulta a qualquer momento.', dica: 'O assistente considera as informações em tempo real da sua própria loja.' },
     ],
   },
   {
@@ -210,116 +259,141 @@ const TOPICOS: Topico[] = [
     titulo: 'Fiscal / NF-e',
     modulo: 'fiscal' as const,
     icone: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z',
-    descricao: 'Emita notas fiscais eletrônicas (NF-e) das vendas de veículos direto pelo sistema.',
+    descricao: 'Emita Notas Fiscais Eletrônicas (NF-e) de venda de veículos com integração SEFAZ e envio de DANFE/XML.',
     passos: [
-      { texto: 'Acesse "Ferramentas → Notas Fiscais" no menu lateral. Antes de emitir a primeira nota, cadastre o certificado digital A1 da loja em Configurações → Fiscal.' },
-      { texto: 'Em "Emitir NF-e", use a busca para selecionar um contrato de venda com status "Aguardando". Os dados do veículo, cliente e valor vêm automaticamente do contrato — não é preciso digitá-los.', dica: 'A NF-e é sempre emitida a partir de um contrato. Se a venda ainda não tem contrato, crie-o antes em Ferramentas → Contratos. Você também pode disparar a emissão pelo botão "Emitir NF-e" dentro do próprio contrato.' },
-      { texto: 'Clique em "Emitir NF-e". A nota entra em processamento e, ao concluir, aparece na listagem com o status retornado pela SEFAZ (Autorizada, Rejeitada, Erro ou Cancelada). Notas rejeitadas mostram o motivo.' },
-      { texto: 'Para uma nota autorizada, baixe o XML e o DANFE (PDF) pelos botões da linha. Se precisar desfazer, use "Cancelar" dentro do prazo legal.', dica: 'O certificado digital é armazenado de forma criptografada e nunca é exibido novamente após o cadastro.' },
+      { texto: 'Acesse "Ferramentas → Notas Fiscais" no menu lateral. Antes de emitir a primeira nota, cadastre o Certificado Digital A1 da loja em Configurações → Fiscal.' },
+      { texto: 'Em "Emitir NF-e", selecione um contrato de venda assinado. Todos os dados do emitente, destinatário, valores e veículo são importados automaticamente.' },
+      { texto: 'Clique em "Emitir NF-e" para transmitir à SEFAZ. O status é atualizado para Autorizada, Rejeitada ou Cancelada.' },
+      { texto: 'Baixe o XML oficial e o PDF da DANFE com um clique para arquivamento ou envio ao comprador.', dica: 'O Certificado A1 é criptografado e mantido com segurança máxima no ambiente do servidor.' },
     ],
   },
   {
     id: 'meu-site',
-    titulo: 'Meu Site',
+    titulo: 'Meu Site da Loja',
     modulo: 'site' as const,
     icone: 'M3 12h18M12 3v18m9-9a9 9 0 11-18 0 9 9 0 0118 0z',
-    descricao: 'Crie e publique o site público da sua loja com um construtor visual, sem precisar programar.',
+    descricao: 'Crie e publique o website exclusivo da concessionária com seus veículos sem precisar digitar nenhum código.',
     passos: [
-      { texto: 'Acesse "Ferramentas → Meu Site" no menu lateral. Escolha um template para começar o site da sua loja.' },
-      { texto: 'Personalize textos, cores, logotipo e seções (sobre a loja, veículos em destaque, contato) pelo construtor visual.' },
-      { texto: 'O site exibe automaticamente os veículos publicados no Estoque, sem necessidade de duplicar cadastro.' },
-      { texto: 'Clique em "Publicar" para colocar o site no ar. Visitantes podem enviar leads diretamente pelo formulário de contato do site.', dica: 'Alterações ficam em rascunho até você clicar em "Publicar" novamente.' },
+      { texto: 'Acesse "Ferramentas → Meu Site" no menu lateral.' },
+      { texto: 'Escolha o template visual de sua preferência e personalize logo, cores institucionais, banners, texto "Sobre a Loja" e canais de atendimento.' },
+      { texto: 'Os veículos marcados com "Publicar na Vitrine" no Estoque aparecem automaticamente na listagem do seu site oficial.' },
+      { texto: 'Clique em "Publicar Site" para disponibilizar a página na internet. Formulários de contato preenchidos pelos clientes no site entram como Leads no seu CRM.', dica: 'Quaisquer edições feitas no construtor visual ficam salvas em rascunho até que você confirme a publicação.' },
     ],
   },
   {
     id: 'ferramentas-modulos',
-    titulo: 'Ferramentas & Módulos',
+    titulo: 'Ferramentas & Módulos Premium',
     gestorOnly: true,
     icone: 'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z',
     imagem: '/ajuda/ferramentas-planos.png',
-    descricao: 'Veja quais módulos premium estão habilitados para a sua loja e acesse-os diretamente.',
+    descricao: 'Painel geral dos módulos adicionais contratados pela concessionária (Simulador, Contratos, Marketing, FIPE, IA, Fiscal e Site).',
     passos: [
-      { texto: 'Acesse "Ferramentas" no menu lateral. Você verá um card para cada módulo premium: Simulador, Contratos, Marketing, Assistente IA, Fiscal / NF-e e Meu Site. O badge no canto indica se o módulo está Ativo ou Bloqueado.' },
-      { texto: 'Módulos com badge "Ativo" têm o botão "Abrir módulo" disponível — clique para acessar diretamente.' },
-      { texto: 'Módulos com badge "Bloqueado" não estão habilitados para a sua loja. O card mostra a orientação para contatar o seu consultor ou o suporte, que fazem a liberação.', dica: 'A liberação de módulos é feita pela equipe da plataforma. Apenas gestores e administradores enxergam esta seção — vendedores não veem os módulos premium.' },
+      { texto: 'Acesse "Ferramentas" no menu lateral (ou expanda o grupo de menus).' },
+      { texto: 'Nesta página você visualiza os cards de todos os módulos disponíveis com seus respectivos badges de status ("Ativo" ou "Bloqueado").' },
+      { texto: 'Módulos ativos possuem o botão "Abrir Módulo" para acesso direto.' },
+      { texto: 'Módulos bloqueados podem ser solicitados ou ativados mediante contato com o consultor ou suporte da plataforma.', dica: 'A liberação de módulos premium para a loja é gerenciada pela Administração da Plataforma.' },
     ],
   },
   {
     id: 'equipe',
-    titulo: 'Equipe',
+    titulo: 'Equipe & Permissões',
     gestorOnly: true,
     icone: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zm14 0v2a4 4 0 01-3 3.87M16 3.13a4 4 0 010 7.75',
     imagem: '/ajuda/equipe.png',
-    descricao: 'Gerencie os membros da sua equipe: convide vendedores, defina permissões e controle acessos.',
+    descricao: 'Gerencie membros da equipe da loja: convide vendedores, atribua permissões granulares por módulo e desative acessos.',
     passos: [
-      { texto: 'Acesse "Equipe" no menu lateral (visível apenas para gestores). Aqui você vê todos os membros ativos e inativos da sua loja.' },
-      { texto: 'Para convidar um novo membro, clique em "Convidar" e informe o e-mail do vendedor. Ele receberá um convite para criar a conta no sistema.' },
-      { texto: 'Para cada membro, defina quais módulos ele pode acessar: Estoque, CRM, Financeiro, Simulador, Contratos, Marketing e Assistente IA.' },
-      { texto: 'Você pode desativar um membro a qualquer momento sem apagar seus dados. Isso bloqueia imediatamente o acesso dele ao sistema.', dica: 'Apenas gestores e administradores da plataforma podem acessar a seção de Equipe. Vendedores não veem este menu.' },
+      { texto: 'Acesse "Equipe" no menu lateral (exclusivo para Gestores da loja).' },
+      { texto: 'Clique em "Convidar Membro", preencha o nome e o e-mail do vendedor. Ele receberá um e-mail com instruções para criar sua senha de acesso.' },
+      { texto: 'Defina os módulos que cada vendedor tem permissão para utilizar (ex.: liberar Estoque e CRM e restringir Financeiro e Contratos).' },
+      { texto: 'Caso um membro saia da equipe, você pode desativar seu usuário imediatamente sem perder o histórico das vendas realizadas por ele.', dica: 'Vendedores não enxergam as seções de Equipe, Configurações de Loja, Fila de Aprovações e módulos aos quais não têm acesso.' },
     ],
   },
   {
     id: 'configuracoes',
-    titulo: 'Configurações',
+    titulo: 'Configurações da Loja',
     gestorOnly: true,
     imagem: '/ajuda/configuracoes.png',
-    icone: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z',
-    descricao: 'Ajuste os dados da loja e todas as credenciais em um só lugar, organizado por abas: Perfil, bancos, IA, redes sociais, DETRAN e Fiscal.',
+    icone: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z',
+    descricao: 'Central de parâmetros da concessionária organizada em abas: Perfil da Loja, Credenciais Bancárias, IA, Redes Sociais, DETRAN e Fiscal.',
     passos: [
-      { texto: 'Clique no seu avatar no canto superior direito e selecione "Configurações". A tela é dividida em abas: Perfil da Loja, Credenciais Bancárias (Simulador), Inteligência Artificial, Redes Sociais, Consulta DETRAN e Fiscal / NF-e.' },
-      { texto: 'Na aba "Perfil da Loja", edite os dados cadastrais (Nome, CNPJ, Telefone, WhatsApp, E-mail, Endereço, Cidade, UF, CEP) e a comissão padrão de vendas. Clique em "Salvar" para aplicar — os dados refletem em todo o sistema, inclusive na vitrine pública.' },
-      { texto: 'Na aba "Credenciais Bancárias (Simulador)", cadastre usuário e senha dos portais das financeiras parceiras. É isso que habilita a automação do Simulador de Crédito.' },
-      { texto: 'Na aba "Fiscal / NF-e", cadastre o certificado digital A1 da loja, necessário para emitir notas fiscais. Nas abas "Redes Sociais" e "Consulta DETRAN" ficam as conexões usadas pelo Marketing e pela consulta de placas.', dica: 'Os campos de CNPJ, Telefone e CEP têm máscaras automáticas que formatam o valor conforme você digita.' },
+      { texto: 'Clique no seu avatar e escolha "Configurações" (acesso exclusivo para Gestores).' },
+      { texto: 'Aba Perfil da Loja: edite Razão Social, Nome Fantasia, CNPJ, WhatsApp oficial, E-mail, CEP, Endereço e Porcentagem Padrão de Comissão.' },
+      { texto: 'Aba Credenciais Bancárias: cadastre os acessos dos portais das financeiras (BV, C6, Itaú, Santander, Pan, Bradesco) que ativam as automações do Simulador.' },
+      { texto: 'Aba Redes Sociais: vincule sua conta do Facebook e Instagram para publicação de postagens com IA.' },
+      { texto: 'Aba Fiscal: cadastre e atualize o arquivo do Certificado Digital A1 da loja para a emissão de Notas Fiscais (NF-e).', dica: 'Os dados cadastrais alterados no perfil da loja são refletidos nos cabeçalhos de contratos e no seu site público.' },
+    ],
+  },
+  {
+    id: 'admin-plataforma',
+    titulo: 'Painel do Administrador da Plataforma',
+    adminOnly: true,
+    icone: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+    descricao: 'Painel exclusivo para administradores da plataforma SaaS: gestão de lojas (tenants), planos, patrocínios, suporte via "Observar" e auditoria.',
+    passos: [
+      { texto: 'Acesse "Administração" no menu lateral (exclusivo para Administradores da Plataforma).' },
+      { texto: 'Na aba Overview, consulte as métricas globais do SaaS: Total de Lojas, Lojas Ativas, Total de Veículos, Usuários e Logs de Auditoria.' },
+      { texto: 'Na aba Lojas, cadastre novas concessionárias, edite dados, ative/desative lojas e configure o badge de Destaque (lojas patrocinadas na Vitrine).' },
+      { texto: 'Clique em "Observar" na linha de qualquer loja para abrir em nova aba a visão de Gestor daquela concessionária para prestar suporte direto.' },
+      { texto: 'Em "Assinatura", gerencie os planos contratados pela loja, ative novos módulos e registre pagamentos.', dica: 'Todas as alterações administrativas e acessos via Impersonar/Observar ficam gravados com timestamp no log de auditoria global.' },
     ],
   },
 ]
 
 const FAQ_ITEMS: FaqItem[] = [
   {
-    pergunta: 'Esqueci minha senha. Como recuperar?',
-    resposta: 'Na tela de login, clique em "Esqueci minha senha". Informe o e-mail cadastrado e você receberá um link de recuperação. O link é válido por 1 hora.',
+    pergunta: 'Esqueci minha senha. Como recuperar o acesso?',
+    resposta: 'Na tela de login, clique em "Esqueci minha senha". Informe seu e-mail cadastrado e você receberá um link seguro por e-mail para cadastrar uma nova senha. O link expira em 1 hora por segurança.',
   },
   {
-    pergunta: 'Posso usar o sistema no celular?',
-    resposta: 'Sim! O SocialVeículos é responsivo e funciona em qualquer dispositivo. No celular, o menu lateral se transforma em um menu hambúrguer que pode ser aberto pelo ícone no canto superior.',
+    pergunta: 'Posso utilizar o sistema no celular ou tablet?',
+    resposta: 'Sim! O SocialVeículos é 100% responsivo e otimizado para dispositivos móveis. No smartphone, o menu lateral é recolhido em um menu hambúrguer no topo para facilitar a navegação.',
   },
   {
-    pergunta: 'Como publicar um veículo na vitrine pública?',
-    resposta: 'No Estoque, abra o veículo desejado e ative o toggle "Publicar na Vitrine". O veículo aparecerá instantaneamente no feed público para clientes finais. Certifique-se de que o veículo tenha pelo menos uma foto.',
+    pergunta: 'Por que meu veículo não aparece na Vitrine B2C pública?',
+    resposta: 'Para um veículo ser exibido no marketplace público para clientes finais, 3 requisitos precisam ser atendidos: (1) o toggle "Publicar na Vitrine" deve estar ativo no cadastro do veículo; (2) o status do veículo precisa ser "Disponível"; e (3) o veículo deve ter pelo menos 1 foto cadastrada em sua galeria de mídias.',
   },
   {
-    pergunta: 'Vendedores podem ver os dados financeiros?',
-    resposta: 'Não por padrão. O acesso ao módulo Financeiro é controlado pelo gestor na seção de Equipe. O gestor pode liberar ou bloquear o acesso individualmente para cada vendedor.',
+    pergunta: 'Vendedores podem excluir veículos do estoque ou alterar preços livremente?',
+    resposta: 'Depende da permissão. Por padrão, solicitações de exclusão permanente ou alterações no preço de venda enviadas por vendedores disparam uma pendência na Fila de Aprovações. A alteração só é efetuada no estoque após o Gestor clicar em "Aprovar".',
   },
   {
-    pergunta: 'Como funciona o Simulador de Crédito?',
-    resposta: 'O Simulador permite rodar simulações de financiamento com os bancos parceiros. É necessário primeiro cadastrar as credenciais dos bancos em Configurações. Depois, no Simulador, preencha os dados do cliente e do veículo para receber propostas de financiamento.',
+    pergunta: 'Como o vendedor consulta suas comissões a receber?',
+    resposta: 'O vendedor deve acessar o menu "Minhas Comissões" na Sidebar. Lá ele pode visualizar todas as suas vendas de veículos, a porcentagem (%) configurada pelo gestor, os valores líquidos e o status do pagamento ("Definir %", "Pendente" ou "Paga").',
   },
   {
-    pergunta: 'O que é a Rede Social?',
-    resposta: 'É uma rede interna entre lojas parceiras. Você pode publicar veículos para repasse, enviar propostas a outras lojas, usar o chat para negociar e buscar parceiros no Diretório. É um marketplace exclusivo entre concessionárias.',
+    pergunta: 'O que acontece quando um cliente manda mensagem pela Vitrine pública?',
+    resposta: 'Ao clicar para conversar sobre um carro na Vitrine B2C, o cliente inicia um atendimento. O sistema cria automaticamente um novo Lead no CRM da sua loja com a origem identificada como "Vitrine", vinculando o cliente e o veículo em questão.',
   },
   {
-    pergunta: 'Como convidar um vendedor para o sistema?',
-    resposta: 'Acesse "Equipe" no menu lateral, clique em "Convidar" e informe o e-mail do vendedor. Ele receberá um convite por e-mail com link para criar a conta. Após o cadastro, defina quais módulos ele terá acesso.',
+    pergunta: 'Como funciona o Simulador de Crédito simultâneo?',
+    resposta: 'O Simulador consulta as condições de financiamento em múltiplos bancos de uma só vez (BV, C6, Itaú, Santander, Pan, Bradesco). Para funcionar, o Gestor deve primeiro cadastrar os acessos das financeiras em Configurações → Credenciais Bancárias.',
+  },
+  {
+    pergunta: 'Como consultar a Tabela FIPE de um veículo sem cadastrá-lo?',
+    resposta: 'Acesse "Ferramentas → Consulta FIPE" no menu lateral. Siga o assistente de 4 passos selecionando o Tipo (Carro/Moto/Caminhão), Marca, Modelo e Ano para visualizar a cotação oficial de mercado.',
+  },
+  {
+    pergunta: 'Como convidar um novo vendedor para a equipe da loja?',
+    resposta: 'Acesse "Equipe" no menu lateral (exclusivo para Gestores), clique em "Convidar Membro" e digite o nome e e-mail do vendedor. Em seguida, selecione quais módulos (Estoque, CRM, Financeiro, etc.) ele terá permissão para acessar.',
     gestorOnly: true,
   },
   {
-    pergunta: 'Os dados da minha loja ficam seguros?',
-    resposta: 'Sim. O SocialVeículos utiliza tecnologias avançadas de segurança e criptografia para garantir o isolamento completo de dados entre as lojas, em conformidade com as diretrizes da LGPD. Suas informações são protegidas com total sigilo e privacidade.',
+    pergunta: 'Os dados da minha concessionária são isolados e seguros?',
+    resposta: 'Com certeza. O SocialVeículos adota arquitetura multi-tenant com isolamento rígido de dados no banco de dados e criptografia de credenciais. Os dados de custo, margem e negociações da sua loja são estritamente confidenciais e protegidos em conformidade com a LGPD.',
   },
   {
-    pergunta: 'Posso alterar o tema para claro?',
-    resposta: 'Sim! No canto superior direito, ao lado do seu avatar, há um ícone de sol/lua que alterna entre o tema escuro e claro. Sua preferência fica salva no navegador.',
+    pergunta: 'O que é a função Observar/Impersonar do Administrador da Plataforma?',
+    resposta: 'É um recurso exclusivo para administradores globais da plataforma prestarem suporte técnico às concessionárias. Permite abrir o painel da loja em nova aba para diagnosticar dúvidas ou apoiar configurações sem alterar a senha da loja.',
+    adminOnly: true,
   },
   {
-    pergunta: 'Por que não consigo conectar o Instagram no Marketing?',
-    resposta: 'Três requisitos precisam estar atendidos: (1) sua conta do Instagram deve ser Business ou Creator — contas pessoais não são aceitas pela API da Meta; (2) essa conta do Instagram precisa estar vinculada a uma Página do Facebook que você administra; e (3) o app da plataforma na Meta precisa ter o App Review aprovado. Se você acabou de configurar e ainda está em ambiente de testes, apenas contas com papel no app conseguem conectar. Além disso, para publicar no Instagram o veículo precisa ter ao menos uma foto.',
+    pergunta: 'Por que não consigo conectar a conta do Instagram no Marketing?',
+    resposta: 'São necessários 3 requisitos: (1) a conta do Instagram precisa ser do tipo Profissional (Business ou Criador); (2) ela deve estar vinculada a uma Página oficial do Facebook que você administra; e (3) o App oficial da plataforma na Meta precisa estar ativo.',
     gestorOnly: true,
   },
   {
-    pergunta: 'O que são módulos premium?',
-    resposta: 'São funcionalidades avançadas (Simulador de Crédito, Contratos, Marketing, Assistente IA, Fiscal / NF-e e Meu Site) habilitadas conforme o plano da loja. Acesse "Ferramentas" para ver quais estão ativos: os liberados têm o botão "Abrir módulo"; os bloqueados trazem a orientação para contatar o seu consultor ou o suporte, que fazem a liberação.',
+    pergunta: 'Como funciona a alternância do Tema Claro e Escuro?',
+    resposta: 'No canto superior direito, próximo ao seu avatar, há um botão de sol/lua. Clique para alternar instantaneamente entre o tema escuro elegante e o tema claro. Sua escolha fica salva no seu navegador.',
   },
 ]
 
@@ -334,8 +408,10 @@ export function Ajuda() {
   const papel = user?.papel
   const modulosUsuario = parseModulos(user?.modulos)
   const isGestor = papel === 'gestor' || papel === 'admin_plataforma'
+  const isAdminPlataforma = papel === 'admin_plataforma'
 
   const topicosVisiveis = TOPICOS.filter((t) => {
+    if (t.adminOnly && !isAdminPlataforma) return false
     if (t.gestorOnly && !isGestor) return false
     if (t.modulo && !podeAcessarModulo(papel, modulosUsuario, t.modulo)) return false
     return true
@@ -350,6 +426,7 @@ export function Ajuda() {
   )
 
   const faqFiltrado = FAQ_ITEMS.filter((f) => {
+    if (f.adminOnly && !isAdminPlataforma) return false
     if (f.gestorOnly && !isGestor) return false
     return (
       f.pergunta.toLowerCase().includes(buscaLower) ||
@@ -391,7 +468,6 @@ export function Ajuda() {
         if (bestId) setTopicoAtivo(bestId)
       },
       {
-        // Múltiplos thresholds para precisão granular
         threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
       }
     )
@@ -409,9 +485,9 @@ export function Ajuda() {
             <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
-          Central de Ajuda
+          Central de Ajuda & Manual do Usuário
         </h2>
-        <p>Manual completo do sistema SocialVeículos. Encontre instruções detalhadas para cada módulo.</p>
+        <p>Guia completo do sistema SocialVeículos. Consulte passo a passo as instruções atualizadas de cada módulo e funcionalidade.</p>
         <a
           href="/manual/manual-socialveiculos.pdf"
           download="Manual-SocialVeiculos.pdf"
@@ -435,7 +511,7 @@ export function Ajuda() {
         <input
           className="ajuda-busca"
           type="text"
-          placeholder="Buscar no manual... (ex: cadastrar veículo, Kanban, financeiro)"
+          placeholder="Buscar no manual... (ex: cadastrar veículo, aprovações, comissões, FIPE, Vitrine, CRM)"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           id="ajuda-busca-input"
@@ -493,7 +569,7 @@ export function Ajuda() {
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
               <h3>Nenhum resultado encontrado</h3>
-              <p>Tente buscar por outros termos como "estoque", "lead" ou "financeiro".</p>
+              <p>Tente buscar por termos como "estoque", "aprovações", "comissões", "FIPE" ou "CRM".</p>
             </div>
           ) : (
             <>
@@ -527,7 +603,7 @@ export function Ajuda() {
                           <circle cx="8.5" cy="8.5" r="1.5" />
                           <polyline points="21 15 16 10 5 21" />
                         </svg>
-                        Tela do módulo {topico.titulo}
+                        Interface do módulo {topico.titulo}
                       </div>
                     </div>
                   )}
@@ -570,7 +646,7 @@ export function Ajuda() {
                     </div>
                     <div>
                       <h3 className="ajuda-topico-titulo">Dúvidas Frequentes</h3>
-                      <p className="ajuda-topico-desc">Respostas rápidas para as perguntas mais comuns sobre o sistema.</p>
+                      <p className="ajuda-topico-desc">Respostas diretas para as perguntas mais comuns sobre o funcionamento do sistema.</p>
                     </div>
                   </div>
 

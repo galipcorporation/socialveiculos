@@ -91,110 +91,125 @@ async def _chamar_ia(
     usuario_id: str,
     db: AsyncSession,
 ) -> str:
+    import logging
+    logger = logging.getLogger("marketing")
+
+    candidatos = []
     groq_key = os.getenv("GROQ_API_KEY", "").strip()
     openai_key = os.getenv("OPENAI_API_KEY", "").strip()
     anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
 
     if groq_key:
-        api_key = groq_key
-        base_url = GROQ_BASE_URL
-        modelo = GROQ_MARKETING_MODEL
-        provedor = "groq"
-    elif openai_key:
-        api_key = openai_key
-        base_url = "https://api.openai.com/v1"
-        modelo = "gpt-4o-mini"
-        provedor = "openai"
-    elif anthropic_key:
-        api_key = anthropic_key
-        base_url = "https://api.anthropic.com/v1"
-        modelo = "claude-haiku-4-5-20251001"
-        provedor = "anthropic"
-    else:
+        candidatos.append(("groq", groq_key, GROQ_BASE_URL, GROQ_MARKETING_MODEL))
+    if openai_key:
+        candidatos.append(("openai", openai_key, "https://api.openai.com/v1", "gpt-4o-mini"))
+    if anthropic_key:
+        candidatos.append(("anthropic", anthropic_key, "https://api.anthropic.com/v1", "claude-haiku-4-5-20251001"))
+
+    if not candidatos:
         raise HTTPException(
             status_code=503,
-            detail="Nenhuma chave de IA configurada no servidor (GROQ_API_KEY / OPENAI_API_KEY).",
+            detail="Nenhuma chave de IA configurada no servidor (GROQ_API_KEY / OPENAI_API_KEY). Verifique as variáveis de ambiente no Vercel.",
         )
 
-    try:
-        async with httpx.AsyncClient() as client:
-            if provedor == "anthropic":
-                resp = await client.post(
-                    f"{base_url}/messages",
-                    headers={
-                        "x-api-key": api_key,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
-                    json={
+    erros = []
+
+    async with httpx.AsyncClient() as client:
+        for provedor, api_key, base_url, modelo in candidatos:
+            try:
+                if provedor == "anthropic":
+                    resp = await client.post(
+                        f"{base_url}/messages",
+                        headers={
+                            "x-api-key": api_key,
+                            "anthropic-version": "2023-06-01",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "model": modelo,
+                            "max_tokens": 700,
+                            "system": prompt_system,
+                            "messages": [{"role": "user", "content": conteudo}],
+                        },
+                        timeout=30.0,
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    content_blocks = data.get("content", [])
+                    texto = content_blocks[0].get("text", "") if content_blocks else ""
+                    tokens_in = data.get("usage", {}).get("input_tokens", 0)
+                    tokens_out = data.get("usage", {}).get("output_tokens", 0)
+                else:
+                    # Groq ou OpenAI (formato compatível OpenAI)
+                    json_body = {
                         "model": modelo,
                         "max_tokens": 700,
-                        "system": prompt_system,
-                        "messages": [{"role": "user", "content": conteudo}],
-                    },
-                    timeout=40.0,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                content_blocks = data.get("content", [])
-                texto = content_blocks[0].get("text", "") if content_blocks else ""
-                tokens_in = data.get("usage", {}).get("input_tokens", 0)
-                tokens_out = data.get("usage", {}).get("output_tokens", 0)
-            else:
-                resp = await client.post(
-                    f"{base_url}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "content-type": "application/json",
-                    },
-                    json={
-                        "model": modelo,
-                        "max_tokens": 700,
-                        "response_format": {"type": "json_object"},
                         "messages": [
                             {"role": "system", "content": prompt_system},
                             {"role": "user", "content": conteudo},
                         ],
-                    },
-                    timeout=40.0,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                escolhas = data.get("choices", [])
-                texto = escolhas[0].get("message", {}).get("content", "") if escolhas else ""
-                usage = data.get("usage", {})
-                tokens_in = usage.get("prompt_tokens", 0)
-                tokens_out = usage.get("completion_tokens", 0)
+                    }
+                    # Adiciona response_format json_object
+                    json_body_formatted = {**json_body, "response_format": {"type": "json_object"}}
+                    resp = await client.post(
+                        f"{base_url}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "content-type": "application/json",
+                        },
+                        json=json_body_formatted,
+                        timeout=30.0,
+                    )
 
-            # Registrar consumo para billing futuro
-            db.add(MarketingUsage(
-                loja_id=loja_id,
-                usuario_id=usuario_id,
-                funcionalidade="marketing",
-                provedor=provedor,
-                modelo=modelo,
-                tokens_input=tokens_in,
-                tokens_output=tokens_out,
-                byok=False,
-            ))
-            await db.commit()
-            return texto
+                    # Se 400 por causa do response_format, tenta sem response_format
+                    if resp.status_code == 400 and "response_format" in resp.text:
+                        resp = await client.post(
+                            f"{base_url}/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {api_key}",
+                                "content-type": "application/json",
+                            },
+                            json=json_body,
+                            timeout=30.0,
+                        )
 
-    except httpx.HTTPStatusError as exc:
-        err_body = exc.response.text[:300]
-        import logging
-        logging.getLogger("marketing").error(f"[MARKETING IA] Status {exc.response.status_code}: {err_body}")
-        raise HTTPException(
-            status_code=502,
-            detail=f"Erro no serviço de IA ({exc.response.status_code}). Tente novamente em instantes.",
-        )
-    except httpx.RequestError as exc:
-        import logging
-        logging.getLogger("marketing").error(f"[MARKETING IA] Falha de conexão: {exc}")
-        raise HTTPException(
-            status_code=503,
-            detail="Não foi possível conectar ao serviço de IA. Verifique sua conexão.",
-        )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    escolhas = data.get("choices", [])
+                    texto = escolhas[0].get("message", {}).get("content", "") if escolhas else ""
+                    usage = data.get("usage", {})
+                    tokens_in = usage.get("prompt_tokens", 0)
+                    tokens_out = usage.get("completion_tokens", 0)
+
+                if texto:
+                    db.add(MarketingUsage(
+                        loja_id=loja_id,
+                        usuario_id=usuario_id,
+                        funcionalidade="marketing",
+                        provedor=provedor,
+                        modelo=modelo,
+                        tokens_input=tokens_in,
+                        tokens_output=tokens_out,
+                        byok=False,
+                    ))
+                    await db.commit()
+                    return texto
+            except httpx.HTTPStatusError as exc:
+                body_snippet = exc.response.text[:200]
+                logger.error(f"[MARKETING IA] Provedor {provedor} HTTP {exc.response.status_code}: {body_snippet}")
+                erros.append(f"{provedor}: HTTP {exc.response.status_code} ({body_snippet})")
+            except httpx.RequestError as exc:
+                logger.error(f"[MARKETING IA] Provedor {provedor} erro de conexão: {exc}")
+                erros.append(f"{provedor}: erro de conexão")
+            except Exception as exc:
+                logger.error(f"[MARKETING IA] Provedor {provedor} erro inesperado: {exc}")
+                erros.append(f"{provedor}: {exc}")
+
+    detalhe_erro = " | ".join(erros) if erros else "Sem resposta do provedor de IA."
+    raise HTTPException(
+        status_code=502,
+        detail=f"Falha ao conectar com o serviço de IA ({detalhe_erro}). Verifique a chave GROQ_API_KEY no servidor Vercel.",
+    )
 
 
 @router.post(
