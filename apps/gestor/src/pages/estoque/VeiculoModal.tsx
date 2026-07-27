@@ -74,6 +74,8 @@ export function VeiculoModal({
 
   // Form state
   const [placa, setPlaca] = useState(veiculo?.placa || '')
+  const [chassi, setChassi] = useState(veiculo?.chassi || '')
+  const [renavam, setRenavam] = useState(veiculo?.renavam || '')
   const [marca, setMarca] = useState(veiculo?.marca || '')
   const [modelo, setModelo] = useState(veiculo?.modelo || '')
   const [versao, setVersao] = useState(veiculo?.versao || '')
@@ -243,6 +245,8 @@ export function VeiculoModal({
   // ── Rascunho: cria veículo silenciosamente para liberar upload de mídia ──
   const buildBody = (rascunho = false) => ({
     placa: regra.placa ? (placa || null) : null,
+    chassi: regra.placa ? (chassi || null) : null,
+    renavam: regra.placa ? (renavam || null) : null,
     marca: marca || 'Rascunho',
     modelo: modelo || 'Rascunho',
     versao: versao || null,
@@ -424,6 +428,32 @@ export function VeiculoModal({
                   </button>
                 </div>
               </div>
+            )}
+
+            {/* Chassi e RENAVAM: exigidos nos contratos e na transferência */}
+            {regra.placa && (
+              <>
+                <div className="form-group veic-c6">
+                  <label>Chassi <span className="veic-hint">— usado nos contratos</span></label>
+                  <input
+                    type="text"
+                    placeholder="17 caracteres"
+                    value={chassi}
+                    onChange={e => setChassi(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 17))}
+                    maxLength={17}
+                  />
+                </div>
+                <div className="form-group veic-c6">
+                  <label>RENAVAM</label>
+                  <input
+                    type="text"
+                    placeholder="11 dígitos"
+                    value={renavam}
+                    onChange={e => setRenavam(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                    maxLength={11}
+                  />
+                </div>
+              </>
             )}
 
             {/* ── Linha 2: Marca · Modelo · Ano ── */}

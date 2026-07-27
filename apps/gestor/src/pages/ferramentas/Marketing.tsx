@@ -73,7 +73,6 @@ export function MarketingPage() {
   const [gerando, setGerando] = useState(false)
   const [resultado, setResultado] = useState<GerarPostResponse | null>(null)
   const [copiado, setCopiado] = useState(false)
-  const [modoIA, setModoIA] = useState<'byok' | 'plataforma' | 'sem-chave' | null>(null)
 
   // Publicação / agendamento
   const [redesConectadas, setRedesConectadas] = useState<RedeSocialStatus[]>([])
@@ -86,7 +85,7 @@ export function MarketingPage() {
   const [historico, setHistorico] = useState<PostHistorico[]>([])
   const [loadingHistorico, setLoadingHistorico] = useState(false)
 
-  // Verificar módulo premium marketing + modo de IA ativo
+  // Verificar módulo premium marketing
   useEffect(() => {
     const verificar = async () => {
       try {
@@ -97,17 +96,7 @@ export function MarketingPage() {
         setLiberado(false)
       }
     }
-    const verificarIA = async () => {
-      try {
-        const creds = await api.get<any[]>('/configuracoes/credenciais-ia')
-        const anthropic = creds.find((c: any) => c.provedor === 'anthropic' && c.ativo)
-        setModoIA(anthropic ? 'byok' : 'plataforma')
-      } catch {
-        setModoIA('plataforma')
-      }
-    }
     verificar()
-    verificarIA()
     // Carregar redes conectadas
     api.get<RedeSocialStatus[]>('/configuracoes/redes-sociais')
       .then(setRedesConectadas)
@@ -257,23 +246,6 @@ export function MarketingPage() {
         <h2>Marketing</h2>
         <p>Escolha um veículo do estoque e gere um anúncio pronto para publicar.</p>
       </div>
-
-      {/* Banner modo IA */}
-      {modoIA && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 8,
-          marginBottom: 20,
-          background: modoIA === 'byok' ? 'rgba(16,185,129,0.08)' : 'rgba(37,99,235,0.08)',
-          border: `1px solid ${modoIA === 'byok' ? 'var(--sv-success)' : 'var(--sv-primary)'}`,
-          fontSize: 13,
-        }}>
-          <Sparkles style={{ width: 16, height: 16, color: modoIA === 'byok' ? 'var(--sv-success)' : 'var(--sv-primary)', flexShrink: 0 }} />
-          {modoIA === 'byok'
-            ? <span style={{ color: 'var(--sv-success)' }}>Usando sua API — o custo é cobrado na sua conta Anthropic.</span>
-            : <span style={{ color: 'var(--sv-primary)' }}>IA da plataforma — <a href="/configuracoes" style={{ color: 'inherit' }}>configure sua chave</a> para usar sua conta.</span>
-          }
-        </div>
-      )}
 
       {/* Banner redes sociais — sempre visível quando nenhuma rede está conectada */}
       {redesConectadas.length === 0 && (

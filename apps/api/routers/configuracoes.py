@@ -18,7 +18,7 @@ from storage import storage_provider
 _IMG_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
 _IMG_MAX_BYTES = 2 * 1024 * 1024  # 2 MB
 from schemas import (
-    LojaResponse, LojaUpdateRequest,
+    MinhaLojaResponse, LojaUpdateRequest,
     SimuladorBancoCredencialResponse, SimuladorBancoCredencialRequest,
     SimuladorTestarConexaoRequest, SimuladorTestarConexaoResponse,
 )
@@ -38,7 +38,7 @@ async def listar_bancos_suportados():
 
 @router.get(
     "/loja",
-    response_model=LojaResponse,
+    response_model=MinhaLojaResponse,
     dependencies=[Depends(exige_permissao(Acao.VER, Recurso.CONFIGURACOES))],
 )
 async def get_minha_loja(
@@ -61,7 +61,7 @@ async def get_minha_loja(
 
 @router.patch(
     "/loja",
-    response_model=LojaResponse,
+    response_model=MinhaLojaResponse,
     dependencies=[Depends(exige_permissao(Acao.EDITAR, Recurso.CONFIGURACOES))],
 )
 async def atualizar_minha_loja(
@@ -108,7 +108,7 @@ async def atualizar_minha_loja(
 
 @router.post(
     "/loja/marca-dagua",
-    response_model=LojaResponse,
+    response_model=MinhaLojaResponse,
     dependencies=[Depends(exige_permissao(Acao.EDITAR, Recurso.CONFIGURACOES))],
 )
 async def upload_marca_dagua(

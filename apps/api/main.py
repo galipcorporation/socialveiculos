@@ -222,7 +222,6 @@ from routers.assistente import router as assistente_router
 import deps
 from routers.contratos import router as contratos_router
 from routers.marketing import router as marketing_router
-from routers.credenciais_ia import router as credenciais_ia_router
 from routers.credenciais_detran import router as credenciais_detran_router
 from routers.fiscal import router as fiscal_router
 from routers.site import router as site_router, public_router as site_public_router
@@ -254,7 +253,8 @@ app.include_router(midias_router)
 app.include_router(lgpd_router)
 app.include_router(contratos_router)
 app.include_router(marketing_router)
-app.include_router(credenciais_ia_router)
+# credenciais_ia (BYOK) desativado: a IA é sempre a da plataforma (Groq).
+# Código mantido em routers/credenciais_ia.py caso o BYOK volte.
 app.include_router(credenciais_detran_router)
 app.include_router(fiscal_router)
 app.include_router(site_router)

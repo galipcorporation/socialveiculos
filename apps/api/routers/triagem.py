@@ -17,11 +17,18 @@ from sqlalchemy.orm import selectinload
 
 from database import get_db
 from deps import get_current_b2b_user, B2BContext
-from models import LeadTriagem, Conversa, Mensagem, TipoConversa
+from models import LeadTriagem, Conversa, Mensagem, MarketingUsage, TipoConversa
 
 router = APIRouter(prefix="/v1", tags=["Triagem IA"])
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+# IA da plataforma: Groq (Llama), API compatível com OpenAI — mesma stack do
+# Marketing e do Assistente do Vendedor.
+GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+GROQ_TRIAGEM_MODEL = os.getenv("GROQ_TRIAGEM_MODEL", "llama-3.3-70b-versatile")
+
+# Só as últimas mensagens interessam: o interesse do cliente é o estado ATUAL da
+# conversa, não o histórico inteiro (e mantém o prompt barato).
+TRIAGEM_ULTIMAS_MENSAGENS = 3
 
 
 def _now() -> datetime:
@@ -55,8 +62,9 @@ class TriagemListItem(BaseModel):
 # ── Lógica de triagem ──────────────────────────────────────────
 
 async def _classificar_conversa(mensagens: list[Mensagem]) -> dict:
-    """Chama Claude para classificar o lead. Retorna score + classificacao + justificativa."""
-    if not ANTHROPIC_API_KEY:
+    """Classifica o lead com a IA da plataforma. Retorna score + classificacao + justificativa."""
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
         return {
             "score": 50,
             "classificacao": "pendente_revisao",
@@ -64,14 +72,15 @@ async def _classificar_conversa(mensagens: list[Mensagem]) -> dict:
             "precisa_revisao_manual": True,
         }
 
+    recentes = mensagens[-TRIAGEM_ULTIMAS_MENSAGENS:]
     historico = "\n".join(
         f"{'Cliente' if m.autor_id is None else 'Vendedor'}: {m.conteudo}"
-        for m in mensagens[:20]  # máximo 20 mensagens para economizar tokens
+        for m in recentes
     )
 
-    prompt = f"""Você é um especialista em vendas de veículos. Analise esta conversa entre cliente e vendedor de uma loja de veículos.
+    prompt = f"""Você é um especialista em vendas de veículos. Analise as últimas mensagens desta conversa entre cliente e vendedor de uma loja de veículos.
 
-CONVERSA:
+ÚLTIMAS MENSAGENS:
 {historico}
 
 Classifique o interesse do cliente e responda SOMENTE com JSON válido no formato:
@@ -82,29 +91,54 @@ Classifique o interesse do cliente e responda SOMENTE com JSON válido no format
 }}
 
 Critérios:
-- quente (score >= 60): cliente faz perguntas específicas sobre preço, financiamento, test drive, documentação, disponibilidade
-- ruido (score < 60): cliente só curioso, pedindo desconto absurdo, sem interesse real, testando o bot, mensagens vazias/ofensivas
+- quente (score >= 60): cliente sinaliza intenção real de fechar — quer agendar test drive, pede simulação de financiamento/entrada, negocia condições dentro do razoável, pergunta sobre documentação ou disponibilidade para comprar agora.
+- ruido (score < 60): cliente só curioso ou pesquisando preço, compra adiada para um futuro distante, oferta muito abaixo do valor pedido, mensagens vazias/ofensivas, testando o bot.
+
+IMPORTANTE: os sinais de ruído têm PRECEDÊNCIA. Falar de preço ou pedir informação
+NÃO torna o lead quente por si só — o que vale é a intenção real de comprar.
+Exemplos: "faz por metade do preço?" é ruido (oferta irreal), "só olhando, compro
+daqui uns anos" é ruido (sem intenção agora), mesmo citando preço ou o veículo.
 
 Responda APENAS o JSON, sem mais nada."""
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             resp = await client.post(
-                "https://api.anthropic.com/v1/messages",
+                f"{GROQ_BASE_URL}/chat/completions",
                 headers={
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
+                    "Authorization": f"Bearer {api_key}",
                     "content-type": "application/json",
                 },
                 json={
-                    "model": "claude-haiku-4-5-20251001",
+                    "model": GROQ_TRIAGEM_MODEL,
                     "max_tokens": 150,
+                    "response_format": {"type": "json_object"},
                     "messages": [{"role": "user", "content": prompt}],
                 },
             )
             resp.raise_for_status()
-            text = resp.json()["content"][0]["text"].strip()
-            return json.loads(text)
+            payload = resp.json()
+            text = payload["choices"][0]["message"]["content"].strip()
+            bruto = json.loads(text)
+
+            # A IA pode devolver JSON válido com chaves faltando ou fora do
+            # domínio esperado; normaliza aqui para o endpoint nunca quebrar.
+            classificacao = str(bruto.get("classificacao", "")).lower().strip()
+            if classificacao not in ("quente", "ruido"):
+                raise ValueError(f"classificacao inesperada: {classificacao!r}")
+            score = int(bruto["score"])
+            if not 0 <= score <= 100:
+                raise ValueError(f"score fora de 0-100: {score}")
+
+            usage = payload.get("usage", {})
+            return {
+                "score": score,
+                "classificacao": classificacao,
+                "justificativa": str(bruto.get("justificativa") or "").strip() or None,
+                "precisa_revisao_manual": False,
+                "tokens_input": usage.get("prompt_tokens", 0),
+                "tokens_output": usage.get("completion_tokens", 0),
+            }
     except Exception:
         return {
             "score": 50,
@@ -123,6 +157,11 @@ async def triar_conversa(
     ctx: B2BContext = Depends(get_current_b2b_user),
 ):
     """Classifica (ou reclassifica) uma conversa B2C com IA."""
+    # Sem loja no contexto (admin sem X-Loja-Id) o filtro por loja_id viraria
+    # `IS NULL` e deixaria de isolar o tenant — corta antes de consultar.
+    if not ctx.loja_id:
+        raise HTTPException(status_code=409, detail="Selecione uma loja para triar conversas.")
+
     conv_res = await db.execute(
         select(Conversa)
         .options(selectinload(Conversa.mensagens))
@@ -140,6 +179,20 @@ async def triar_conversa(
         raise HTTPException(status_code=400, detail="Conversa sem mensagens para classificar.")
 
     resultado = await _classificar_conversa(conversa.mensagens)
+
+    # Consumo sempre atribuído à loja DONA da conversa (já validada acima),
+    # nunca ao operador — admin de suporte não polui a conta de outra loja.
+    if resultado.get("tokens_input") or resultado.get("tokens_output"):
+        db.add(MarketingUsage(
+            loja_id=conversa.loja_id,
+            usuario_id=ctx.usuario.id,
+            funcionalidade="triagem",
+            provedor="groq",
+            modelo=GROQ_TRIAGEM_MODEL,
+            tokens_input=resultado.get("tokens_input", 0),
+            tokens_output=resultado.get("tokens_output", 0),
+            byok=False,
+        ))
 
     triagem_res = await db.execute(
         select(LeadTriagem).where(LeadTriagem.conversa_id == conversa_id)

@@ -14,7 +14,6 @@ E o comportamento novo do modelo de suporte:
 """
 
 CRED_BANCO = "/v1/configuracoes/credenciais_banco"
-CRED_IA = "/v1/configuracoes/credenciais-ia"
 
 
 # ── B021 / login do admin ──────────────────────────────────────
@@ -53,7 +52,6 @@ async def test_admin_com_loja_recebe_200(client, admin_token):
     loja_id = await _primeira_loja(client, admin_token)
     headers = {"Authorization": f"Bearer {admin_token}", "X-Loja-Id": loja_id}
     assert (await client.get(CRED_BANCO, headers=headers)).status_code == 200
-    assert (await client.get(CRED_IA, headers=headers)).status_code == 200
 
 
 async def test_admin_loja_inexistente_recebe_404(client, admin_token):

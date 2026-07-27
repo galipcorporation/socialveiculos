@@ -1,10 +1,11 @@
 """
 Social Veículos — Rotas de Marketing (B009)
-Geração de posts/criativos a partir de um veículo do estoque, via Claude.
+Geração de posts/criativos a partir de um veículo do estoque, via IA da plataforma.
 Protegido por paywall do Módulo MARKETING.
 """
 
 import json
+import os
 from typing import Optional, List
 
 import httpx
@@ -19,9 +20,13 @@ from deps import get_current_b2b_user, B2BContext
 from lib_formatacao import formatar_moeda
 from models import Veiculo, MarketingUsage
 from modulos import exige_modulo, Modulo
-from routers.credenciais_ia import resolver_api_key_ia
 
 router = APIRouter(prefix="/v1/marketing", tags=["Marketing"])
+
+# IA da plataforma: Groq (Llama), API compatível com OpenAI. Mesma stack do
+# Assistente do Vendedor — texto curto de anúncio não justifica modelo premium.
+GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+GROQ_MARKETING_MODEL = os.getenv("GROQ_MARKETING_MODEL", "llama-3.3-70b-versatile")
 
 # Tom/rede definem o estilo do texto gerado.
 REDES = {"instagram", "facebook", "whatsapp", "olx"}
@@ -79,55 +84,54 @@ def _ficha_veiculo(v: Veiculo) -> str:
     return ficha
 
 
-async def _chamar_claude(
+async def _chamar_ia(
     prompt_system: str,
     conteudo: str,
     loja_id: str,
     usuario_id: str,
     db: AsyncSession,
 ) -> str:
-    api_key, provedor = await resolver_api_key_ia(loja_id, db)
-    modelo = "claude-opus-4-8"
+    api_key = os.getenv("GROQ_API_KEY", "")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="IA indisponível no momento. Tente novamente em instantes.",
+        )
+
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            "https://api.anthropic.com/v1/messages",
+            f"{GROQ_BASE_URL}/chat/completions",
             headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
+                "Authorization": f"Bearer {api_key}",
                 "content-type": "application/json",
             },
             json={
-                "model": modelo,
+                "model": GROQ_MARKETING_MODEL,
                 "max_tokens": 700,
-                "system": prompt_system,
-                "messages": [{"role": "user", "content": conteudo}],
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {"role": "system", "content": prompt_system},
+                    {"role": "user", "content": conteudo},
+                ],
             },
             timeout=40.0,
         )
         resp.raise_for_status()
         data = resp.json()
-        blocos = data.get("content", [])
-        texto = blocos[0].get("text", "") if blocos else ""
+        escolhas = data.get("choices", [])
+        texto = escolhas[0].get("message", {}).get("content", "") if escolhas else ""
 
         # Registrar consumo para billing futuro
         usage = data.get("usage", {})
-        from models import CredencialIA
-        from sqlalchemy.future import select as sa_select
-        cred_byok = await db.scalar(
-            sa_select(CredencialIA).where(
-                CredencialIA.loja_id == loja_id,
-                CredencialIA.provedor == provedor,
-                CredencialIA.ativo == True,
-            )
-        )
         db.add(MarketingUsage(
             loja_id=loja_id,
             usuario_id=usuario_id,
-            provedor=provedor,
-            modelo=modelo,
-            tokens_input=usage.get("input_tokens", 0),
-            tokens_output=usage.get("output_tokens", 0),
-            byok=cred_byok is not None,
+            funcionalidade="marketing",
+            provedor="groq",
+            modelo=GROQ_MARKETING_MODEL,
+            tokens_input=usage.get("prompt_tokens", 0),
+            tokens_output=usage.get("completion_tokens", 0),
+            byok=False,
         ))
         await db.commit()
 
@@ -146,6 +150,11 @@ async def gerar_post(
 ):
     rede = data.rede if data.rede in REDES else "instagram"
     tom = data.tom if data.tom in TONS else "vendedor"
+
+    # Sem loja no contexto (admin sem X-Loja-Id) o filtro por loja_id viraria
+    # `IS NULL` e deixaria de isolar o tenant — corta antes de consultar.
+    if not context.loja_id:
+        raise HTTPException(status_code=409, detail="Selecione uma loja para gerar anúncios.")
 
     stmt = (
         select(Veiculo)
@@ -173,7 +182,7 @@ async def gerar_post(
     if data.destaques:
         conteudo += f"\nDestaques a ressaltar: {data.destaques}\n"
 
-    bruto = await _chamar_claude(prompt_system, conteudo, context.loja_id, context.usuario.id, db)
+    bruto = await _chamar_ia(prompt_system, conteudo, context.loja_id, context.usuario.id, db)
 
     # Tolerância a JSON com cercas de código.
     limpo = bruto.strip()

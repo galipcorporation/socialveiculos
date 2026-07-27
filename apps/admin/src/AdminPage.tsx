@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
-import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload, KeyRound, FileText, FlaskConical, Play, XCircle, Star, Download, Printer, Send, Copy, Check } from 'lucide-react'
+import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, Users, Car, Mail, CheckCircle, EyeOff, RefreshCw, Edit, CreditCard, Package, Upload, KeyRound, FileText, FlaskConical, Play, XCircle, Star, Download, Printer, Send, Copy, Check, Sparkles, Activity } from 'lucide-react'
 import { api } from './lib/api'
 import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda, mascararTelefone } from './lib/mascaras'
 import { useUIStore } from './stores/uiStore'
@@ -3895,9 +3895,201 @@ function AbaTestes() {
   )
 }
 
+// ── Consumo de IA ────────────────────────────────────────────────
+
+interface ConsumoLoja {
+  loja_id: string
+  loja_nome: string
+  chamadas: number
+  tokens_input: number
+  tokens_output: number
+  tokens_total: number
+}
+
+interface ConsumoIA {
+  dias: number
+  desde: string
+  total_chamadas: number
+  total_tokens: number
+  por_funcionalidade: Record<string, number>
+  lojas: ConsumoLoja[]
+}
+
+const FUNCIONALIDADE_LABELS: Record<string, string> = {
+  marketing: 'Geração de anúncios',
+  triagem: 'Triagem de leads',
+}
+
+const PERIODOS = [
+  { valor: 7, label: 'Últimos 7 dias' },
+  { valor: 30, label: 'Últimos 30 dias' },
+  { valor: 90, label: 'Últimos 90 dias' },
+]
+
+function fmtNum(n: number) {
+  return n.toLocaleString('pt-BR')
+}
+
+/** Abrevia só na casa dos milhões: misturar "12 mil" com "5.106" na mesma
+ *  coluna quebra a comparação visual entre as linhas. */
+function fmtTokens(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`
+  return fmtNum(n)
+}
+
+function AbaConsumoIA() {
+  const [dados, setDados] = useState<ConsumoIA | null>(null)
+  const [dias, setDias] = useState(30)
+  const [funcionalidade, setFuncionalidade] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const carregar = useCallback(() => {
+    setLoading(true)
+    setErro(null)
+    const params: Record<string, string> = { dias: String(dias) }
+    if (funcionalidade) params.funcionalidade = funcionalidade
+    api.get<ConsumoIA>('/admin/consumo-ia', params)
+      .then(setDados)
+      .catch((err: any) => setErro(err?.message || 'Erro ao carregar o consumo de IA.'))
+      .finally(() => setLoading(false))
+  }, [dias, funcionalidade])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  // O maior consumo vira a régua das barras de proporção.
+  const maiorTotal = dados?.lojas.length ? dados.lojas[0].tokens_total : 0
+
+  return (
+    <div style={{ marginTop: '24px' }}>
+      {erro && <ErroAlerta msg={erro} onFechar={() => setErro(null)} />}
+
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <select style={ESTILO_CAMPO_FILTRO} value={dias} onChange={(e) => setDias(Number(e.target.value))}>
+          {PERIODOS.map((p) => (
+            <option key={p.valor} value={p.valor}>{p.label}</option>
+          ))}
+        </select>
+
+        <select style={ESTILO_CAMPO_FILTRO} value={funcionalidade} onChange={(e) => setFuncionalidade(e.target.value)}>
+          <option value="">Todas as funcionalidades</option>
+          <option value="marketing">{FUNCIONALIDADE_LABELS.marketing}</option>
+          <option value="triagem">{FUNCIONALIDADE_LABELS.triagem}</option>
+        </select>
+
+        <button
+          className="btn btn-secondary"
+          onClick={carregar}
+          disabled={loading}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40 }}
+        >
+          <RefreshCw size={14} /> Atualizar
+        </button>
+      </div>
+
+      {loading ? (
+        <LoadingState msg="Carregando consumo de IA…" />
+      ) : !dados ? (
+        <EmptyState msg="Não foi possível carregar o consumo." />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+            <StatCard label="Chamadas à IA" value={dados.total_chamadas} Icon={Sparkles} />
+            <StatCard label="Tokens consumidos" value={dados.total_tokens} Icon={Activity} />
+            <StatCard label="Lojas usando IA" value={dados.lojas.length} Icon={Building2} />
+          </div>
+
+          {Object.keys(dados.por_funcionalidade).length > 0 && (
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
+              {Object.entries(dados.por_funcionalidade).map(([chave, tokens]) => (
+                <div
+                  key={chave}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 14px', borderRadius: 999,
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid var(--sv-border)',
+                    fontSize: 13,
+                  }}
+                >
+                  <span style={{ color: 'var(--sv-text-dim)' }}>
+                    {FUNCIONALIDADE_LABELS[chave] || chave}
+                  </span>
+                  <span style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{fmtNum(tokens)}</span>
+                  <span style={{ color: 'var(--sv-text-muted)', fontSize: 12 }}>tokens</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {dados.lojas.length === 0 ? (
+            <EmptyState msg="Nenhum consumo de IA registrado no período." />
+          ) : (
+            <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
+              <table className="stock-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Loja</th>
+                    <th style={{ textAlign: 'right' }}>Chamadas</th>
+                    <th style={{ textAlign: 'right' }}>Entrada</th>
+                    <th style={{ textAlign: 'right' }}>Saída</th>
+                    <th style={{ textAlign: 'right' }}>Total</th>
+                    <th style={{ width: '20%' }}>Proporção</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dados.lojas.map((l, i) => (
+                    <tr key={l.loja_id}>
+                      <td style={{ color: 'var(--sv-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</td>
+                      <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{l.loja_nome}</td>
+                      <td style={{ textAlign: 'right', color: 'var(--sv-text-dim)', fontVariantNumeric: 'tabular-nums' }}>
+                        {fmtNum(l.chamadas)}
+                      </td>
+                      <td style={{ textAlign: 'right', color: 'var(--sv-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                        {fmtTokens(l.tokens_input)}
+                      </td>
+                      <td style={{ textAlign: 'right', color: 'var(--sv-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                        {fmtTokens(l.tokens_output)}
+                      </td>
+                      <td style={{ textAlign: 'right', color: 'var(--sv-text)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        {fmtNum(l.tokens_total)}
+                      </td>
+                      <td>
+                        <div
+                          style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}
+                          title={`${fmtNum(l.tokens_total)} tokens`}
+                        >
+                          <div
+                            style={{
+                              height: '100%',
+                              width: `${maiorTotal ? Math.max((l.tokens_total / maiorTotal) * 100, 2) : 0}%`,
+                              background: 'var(--sv-primary)',
+                              borderRadius: 999,
+                            }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <p style={{ color: 'var(--sv-text-muted)', fontSize: 12, marginTop: 12 }}>
+            O consumo é atribuído à loja dona do veículo ou da conversa — operações do
+            suporte dentro de uma loja não distorcem o ranking.
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Página principal ─────────────────────────────────────────────
 
-type Aba = 'overview' | 'lojas' | 'financeiro' | 'planos' | 'contrato' | 'auditoria' | 'erros' | 'usuarios' | 'testes'
+type Aba = 'overview' | 'lojas' | 'financeiro' | 'planos' | 'contrato' | 'auditoria' | 'erros' | 'usuarios' | 'testes' | 'consumo-ia'
 
 const ABAS: { id: Aba; label: string; Icon: typeof Shield }[] = [
   { id: 'overview', label: 'Overview', Icon: Shield },
@@ -3906,6 +4098,7 @@ const ABAS: { id: Aba; label: string; Icon: typeof Shield }[] = [
   { id: 'financeiro', label: 'Financeiro', Icon: CreditCard },
   { id: 'planos', label: 'Planos', Icon: Package },
   { id: 'contrato', label: 'Contrato', Icon: FileText },
+  { id: 'consumo-ia', label: 'Consumo IA', Icon: Sparkles },
   { id: 'auditoria', label: 'Auditoria', Icon: ClipboardList },
   { id: 'erros', label: 'Erros', Icon: AlertTriangle },
   { id: 'testes', label: 'Testes', Icon: FlaskConical },
@@ -3945,6 +4138,7 @@ export function AdminPage() {
       {aba === 'financeiro' && <AbaFinanceiro />}
       {aba === 'planos' && <AbaPlanos />}
       {aba === 'contrato' && <AbaContrato />}
+      {aba === 'consumo-ia' && <AbaConsumoIA />}
       {aba === 'auditoria' && <AbaAuditoria />}
       {aba === 'erros' && <AbaErros />}
       {aba === 'testes' && <AbaTestes />}

@@ -1,0 +1,191 @@
+{
+  "main": {
+    "id": "ddbb1417f90596eb",
+    "type": "split",
+    "children": [
+      {
+        "id": "6b5cdc2d56ebc828",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "920151eacaf71128",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "Nova aba"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "2e42935b37e721ea",
+    "type": "split",
+    "children": [
+      {
+        "id": "7c1d608820d82170",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "51556c75adf05b3c",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de arquivos"
+            }
+          },
+          {
+            "id": "d9fd3ae62d342589",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Procurar"
+            }
+          },
+          {
+            "id": "6051c0d0d6ba6373",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "7cfcaca3e7969d22",
+    "type": "split",
+    "children": [
+      {
+        "id": "6654732b2eff0eea",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "7f28b4e97cc27eba",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Links inversos"
+            }
+          },
+          {
+            "id": "02c1c4818fc3251d",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Links de saída"
+            }
+          },
+          {
+            "id": "c35e2c852132d25c",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "f036ba21fb8ad5ec",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas as propriedades"
+            }
+          },
+          {
+            "id": "5dd3e2c83ceddf73",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Sumário"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir a troca rápida": false,
+      "graph:Abrir visualização em gráfico": false,
+      "canvas:Criar novo canvas": false,
+      "daily-notes:Abrir a nota de hoje": false,
+      "templates:Inserir modelo": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Criar nova base": false
+    }
+  },
+  "active": "920151eacaf71128",
+  "lastOpenFiles": [
+    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.bf6408234fcf",
+    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.8388955e18f6",
+    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.d4c83f94f167",
+    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.182b43df8694",
+    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.d28855fc565d",
+    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.e44a63efa78b",
+    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.51b264de3d0c",
+    "apps/api/tests/test_ia_tenant_consumo.py",
+    "apps/api/alembic/versions/a7c3e5b91f42_marketing_usage_funcionalidade.py"
+  ]
+}

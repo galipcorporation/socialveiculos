@@ -127,6 +127,12 @@ interface Cliente {
   bairro?: string
   cidade?: string
   estado?: string
+  // Qualificação civil — preenche os modelos de contrato automaticamente
+  nacionalidade?: string
+  estado_civil?: string
+  profissao?: string
+  cnh?: string
+  cnh_categoria?: string
   observacoes?: string
   tags?: string
   created_at: string
@@ -1717,6 +1723,12 @@ function ClienteModal({
   const [bairro, setBairro] = useState(cliente?.bairro || '')
   const [cidade, setCidade] = useState(cliente?.cidade || '')
   const [estado, setEstado] = useState(cliente?.estado || '')
+  // Qualificação civil exigida nos contratos
+  const [nacionalidade, setNacionalidade] = useState(cliente?.nacionalidade || 'Brasileiro(a)')
+  const [estadoCivil, setEstadoCivil] = useState(cliente?.estado_civil || '')
+  const [profissao, setProfissao] = useState(cliente?.profissao || '')
+  const [cnh, setCnh] = useState(cliente?.cnh || '')
+  const [cnhCategoria, setCnhCategoria] = useState(cliente?.cnh_categoria || '')
   const [observacoes, setObservacoes] = useState(cliente?.observacoes || '')
   const [saving, setSaving] = useState(false)
   const [submetido, setSubmetido] = useState(false)
@@ -1800,6 +1812,11 @@ function ClienteModal({
         bairro: bairro ? sanitizarTexto(bairro, 255) : null,
         cidade: cidade ? sanitizarTexto(cidade, 255) : null,
         estado: estado ? sanitizarTexto(estado, 2).toUpperCase() : null,
+        nacionalidade: nacionalidade ? sanitizarTexto(nacionalidade, 50) : null,
+        estado_civil: estadoCivil ? sanitizarTexto(estadoCivil, 30) : null,
+        profissao: profissao ? sanitizarTexto(profissao, 100) : null,
+        cnh: cnh ? cnh.replace(/\D/g, '') : null,
+        cnh_categoria: cnhCategoria ? cnhCategoria.toUpperCase() : null,
         observacoes: observacoes ? sanitizarTexto(observacoes, 255) : null,
       }
 
@@ -1986,6 +2003,70 @@ function ClienteModal({
                 maxLength={2}
                 value={estado}
                 onChange={e => setEstado(e.target.value.replace(/[^A-Za-z]/g, '').toUpperCase())}
+              />
+            </div>
+
+            {/* Qualificação civil: o que os contratos exigem além do endereço */}
+            <div className="form-group full-width" style={{ marginBottom: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--sv-text-dim)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Dados para contrato
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Nacionalidade</label>
+              <input
+                type="text"
+                placeholder="Ex: Brasileiro(a)"
+                value={nacionalidade}
+                onChange={e => setNacionalidade(capitalizarNome(e.target.value))}
+                maxLength={50}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Estado civil</label>
+              <select value={estadoCivil} onChange={e => setEstadoCivil(e.target.value)}>
+                <option value="">Selecione...</option>
+                <option value="Solteiro(a)">Solteiro(a)</option>
+                <option value="Casado(a)">Casado(a)</option>
+                <option value="União estável">União estável</option>
+                <option value="Divorciado(a)">Divorciado(a)</option>
+                <option value="Separado(a)">Separado(a)</option>
+                <option value="Viúvo(a)">Viúvo(a)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Profissão</label>
+              <input
+                type="text"
+                placeholder="Ex: Engenheiro(a)"
+                value={profissao}
+                onChange={e => setProfissao(capitalizarNome(e.target.value))}
+                maxLength={100}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>CNH</label>
+              <input
+                type="text"
+                placeholder="Ex: 01234567890"
+                value={cnh}
+                onChange={e => setCnh(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                maxLength={11}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Categoria da CNH</label>
+              <input
+                type="text"
+                placeholder="Ex: B"
+                value={cnhCategoria}
+                onChange={e => setCnhCategoria(e.target.value.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 5))}
+                maxLength={5}
               />
             </div>
 

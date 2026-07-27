@@ -14,21 +14,21 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from jinja2 import Environment
+from jinja2 import Environment, Undefined
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func, or_, desc
 
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
-from lib_formatacao import formatar_moeda
+from lib_formatacao import formatar_moeda, valor_por_extenso, data_por_extenso
 from models import (
     utcnow,
     Contrato, Veiculo, ClientePF, StatusContrato, TipoContrato,
     StatusVeiculo, LancamentoFinanceiro, TipoLancamento,
     EsteiraPosVenda, EstagioPosVenda, OrigemLead, OrigemVeiculo, ComissaoVenda, MembroLoja,
     TemplateContrato, PublicacaoB2B, PropostaRepasse, StatusPropostaRepasse,
-    EtapaLead, Lead, Usuario,
+    EtapaLead, Lead, Usuario, ConfiguracaoFiscal,
 )
 from pos_venda_template import montar_checklist
 from rbac import Acao, Recurso, can
@@ -352,7 +352,12 @@ async def gerar_pdf_contrato(
     # página impressa — salvo se o modelo tiver desativado a identidade da loja.
     if contrato.template_id and contrato.template:
         usar_identidade = contrato.template.usar_identidade_loja
-        corpo = _render_template_contrato(contrato.template, contrato, ctx.loja)
+        ie_fiscal = (await db.execute(
+            select(ConfiguracaoFiscal.inscricao_estadual).where(
+                ConfiguracaoFiscal.loja_id == ctx.loja.id
+            )
+        )).scalar_one_or_none()
+        corpo = _render_template_contrato(contrato.template, contrato, ctx.loja, ie_fiscal)
     else:
         usar_identidade = True
         corpo = _gerar_html_contrato(contrato, ctx.loja)
@@ -824,7 +829,22 @@ async def vender_veiculo(
 # ── RENDER DE MODELOS DE CONTRATO (Jinja2)
 # ═══════════════════════════════════════════════════════════════
 
-_jinja_env = Environment(autoescape=True)
+class _LacunaUndefined(Undefined):
+    """Variável não preenchida vira linha para preencher à mão, não string vazia.
+
+    Os modelos padrão referenciam `campos_extras` (forma de pagamento, dados
+    bancários, datas de entrega) que o gestor pode deixar em branco. Sem isso o
+    contrato sairia com a frase truncada, sem sinal de que falta um dado.
+    """
+
+    def __str__(self) -> str:
+        return "___________"
+
+    def __html__(self) -> str:
+        return "___________"
+
+
+_jinja_env = Environment(autoescape=True, undefined=_LacunaUndefined)
 
 
 def _fmt_brl(v):
@@ -833,11 +853,39 @@ def _fmt_brl(v):
     return formatar_moeda(v)
 
 
-def _render_template_contrato(template: TemplateContrato, contrato: Contrato, loja) -> str:
-    """Renderiza um TemplateContrato com Jinja2 usando os dados do contrato."""
+def _fmt_extenso(v):
+    """Valor por extenso para as cláusulas de preço; lacuna se não informado."""
+    if v is None:
+        return "_______________________"
+    return valor_por_extenso(v)
+
+
+def _render_template_contrato(
+    template: TemplateContrato,
+    contrato: Contrato,
+    loja,
+    inscricao_estadual: Optional[str] = None,
+) -> str:
+    """Renderiza um TemplateContrato com Jinja2 usando os dados do contrato.
+
+    `inscricao_estadual` vem da configuração fiscal quando a loja não tem a IE
+    própria preenchida — evita pedir o mesmo número duas vezes ao gestor.
+    """
     veiculo = contrato.veiculo
     cliente = contrato.cliente
-    dados_extras = json.loads(contrato.dados_extras) if contrato.dados_extras else {}
+
+    # Campo extra não informado no contrato cai no `padrao` do modelo — assim o
+    # contrato sai redigido (garantia de 90 dias, multa de 10%) em vez de vazio.
+    dados_extras = {}
+    if template.campos_extras:
+        for campo in json.loads(template.campos_extras):
+            if campo.get("padrao"):
+                dados_extras[campo["chave"]] = campo["padrao"]
+    if contrato.dados_extras:
+        dados_extras.update({
+            k: v for k, v in json.loads(contrato.dados_extras).items()
+            if v not in (None, "")
+        })
 
     contexto = {
         "cliente": {
@@ -845,9 +893,15 @@ def _render_template_contrato(template: TemplateContrato, contrato: Contrato, lo
             "cpf": (cliente.cpf if cliente else None) or "___.___.___-__",
             "rg": (cliente.rg if cliente else None) or "___________",
             "telefone": (cliente.telefone if cliente else None) or "___________",
+            "email": (cliente.email if cliente else None) or "___________",
             "endereco": (cliente.endereco if cliente else None) or "___________",
             "cidade": (cliente.cidade if cliente else None) or "___________",
             "estado": (cliente.estado if cliente else None) or "__",
+            "nacionalidade": (cliente.nacionalidade if cliente else None) or "brasileiro(a)",
+            "estado_civil": (cliente.estado_civil if cliente else None) or "___________",
+            "profissao": (cliente.profissao if cliente else None) or "___________",
+            "cnh": (cliente.cnh if cliente else None) or "___________",
+            "cnh_categoria": (cliente.cnh_categoria if cliente else None) or "__",
         },
         "veiculo": {
             "marca": (veiculo.marca if veiculo else None) or "___________",
@@ -856,6 +910,8 @@ def _render_template_contrato(template: TemplateContrato, contrato: Contrato, lo
             "ano_fabricacao": veiculo.ano_fabricacao if veiculo else "____",
             "ano_modelo": veiculo.ano_modelo if veiculo else "____",
             "placa": (veiculo.placa if veiculo else None) or "___________",
+            "chassi": (veiculo.chassi if veiculo else None) or "_________________",
+            "renavam": (veiculo.renavam if veiculo else None) or "___________",
             "cor": (veiculo.cor if veiculo else None) or "___________",
             "km": veiculo.km if veiculo else 0,
             "combustivel": (veiculo.combustivel if veiculo else None) or "___________",
@@ -863,18 +919,27 @@ def _render_template_contrato(template: TemplateContrato, contrato: Contrato, lo
         "loja": {
             "nome": loja.nome,
             "cnpj": loja.cnpj or "___.___.___/____-__",
+            "inscricao_estadual": loja.inscricao_estadual or inscricao_estadual or "___________",
             "endereco": loja.endereco or "___________",
             "cidade": loja.cidade or "___________",
             "estado": loja.estado or "__",
+            "cep": loja.cep or "_____-___",
             "telefone": loja.telefone or loja.whatsapp or "___________",
+            "email": loja.email or "___________",
+            "representante_nome": loja.representante_nome or "___________",
+            "representante_cpf": loja.representante_cpf or "___.___.___-__",
+            "representante_rg": loja.representante_rg or "___________",
         },
         "contrato": {
             "numero": contrato.numero,
             "valor_venda": _fmt_brl(contrato.valor_venda),
+            "valor_venda_extenso": _fmt_extenso(contrato.valor_venda),
             "valor_entrada": _fmt_brl(contrato.valor_entrada),
+            "valor_entrada_extenso": _fmt_extenso(contrato.valor_entrada),
             "parcelas": contrato.parcelas or "___",
             "observacoes": contrato.observacoes or "",
             "data": contrato.created_at.strftime("%d/%m/%Y") if contrato.created_at else "___/___/______",
+            "data_extenso": data_por_extenso(contrato.created_at) if contrato.created_at else "___ de _________ de ____",
         },
         **dados_extras,
     }

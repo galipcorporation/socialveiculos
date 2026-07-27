@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
-import { mascararCNPJ, mascararTelefone, mascararCEP, capitalizarNome } from '../lib/mascaras'
+import { mascararCNPJ, mascararCPF, mascararRG, mascararTelefone, mascararCEP, capitalizarNome } from '../lib/mascaras'
 import { buscarCEP } from '../lib/cep'
 import { RichEditor } from '../components/RichEditor'
 import { PasswordInput } from '../components/PasswordInput'
@@ -14,6 +14,10 @@ interface Loja {
   nome: string
   slug: string
   cnpj?: string
+  inscricao_estadual?: string
+  representante_nome?: string
+  representante_cpf?: string
+  representante_rg?: string
   telefone?: string
   whatsapp?: string
   email?: string
@@ -49,18 +53,31 @@ interface BancoSuportado {
 
 const SENHA_MASCARADA = '••••••••'
 
-type Editaveis = Pick<Loja, 'nome' | 'cnpj' | 'telefone' | 'whatsapp' | 'email' | 'endereco' | 'cidade' | 'estado' | 'cep'>
+type Editaveis = Pick<
+  Loja,
+  'nome' | 'cnpj' | 'inscricao_estadual' | 'telefone' | 'whatsapp' | 'email'
+  | 'endereco' | 'cidade' | 'estado' | 'cep'
+  | 'representante_nome' | 'representante_cpf' | 'representante_rg'
+>
 
-const CAMPOS: { key: keyof Editaveis; label: string; placeholder?: string; gridColumn?: string }[] = [
+const CAMPOS: { key: keyof Editaveis; label: string; placeholder?: string; gridColumn?: string; ajuda?: string }[] = [
   { key: 'nome', label: 'Nome da loja', gridColumn: 'span 8' },
   { key: 'cnpj', label: 'CNPJ', gridColumn: 'span 4' },
-  { key: 'telefone', label: 'Telefone', gridColumn: 'span 6' },
-  { key: 'whatsapp', label: 'WhatsApp', gridColumn: 'span 6' },
+  { key: 'inscricao_estadual', label: 'Inscrição estadual', gridColumn: 'span 4' },
+  { key: 'telefone', label: 'Telefone', gridColumn: 'span 4' },
+  { key: 'whatsapp', label: 'WhatsApp', gridColumn: 'span 4' },
   { key: 'email', label: 'E-mail', gridColumn: 'span 6' },
   { key: 'cep', label: 'CEP', gridColumn: 'span 6' },
   { key: 'endereco', label: 'Endereço', gridColumn: 'span 12' },
   { key: 'cidade', label: 'Cidade', gridColumn: 'span 9' },
   { key: 'estado', label: 'UF', placeholder: 'SP', gridColumn: 'span 3' },
+  // Assinam os contratos pela loja — preenchem os modelos automaticamente.
+  {
+    key: 'representante_nome', label: 'Representante legal', gridColumn: 'span 6',
+    ajuda: 'Quem assina os contratos pela loja (sócio ou procurador).',
+  },
+  { key: 'representante_cpf', label: 'CPF do representante', gridColumn: 'span 3' },
+  { key: 'representante_rg', label: 'RG do representante', gridColumn: 'span 3' },
 ]
 
 export interface RedeSocialStatus {
@@ -309,6 +326,7 @@ export function Configuracoes() {
           setForm({
             nome: dataLoja.nome,
             cnpj: dataLoja.cnpj ? mascararCNPJ(dataLoja.cnpj) : '',
+            inscricao_estadual: dataLoja.inscricao_estadual ?? '',
             telefone: dataLoja.telefone ? mascararTelefone(dataLoja.telefone) : '',
             whatsapp: dataLoja.whatsapp ? mascararTelefone(dataLoja.whatsapp) : '',
             email: dataLoja.email ?? '',
@@ -316,6 +334,9 @@ export function Configuracoes() {
             cidade: dataLoja.cidade ?? '',
             estado: dataLoja.estado ?? '',
             cep: dataLoja.cep ? mascararCEP(dataLoja.cep) : '',
+            representante_nome: dataLoja.representante_nome ?? '',
+            representante_cpf: dataLoja.representante_cpf ? mascararCPF(dataLoja.representante_cpf) : '',
+            representante_rg: dataLoja.representante_rg ? mascararRG(dataLoja.representante_rg) : '',
           })
           setPercentualComissao(String(dataLoja.percentual_comissao_padrao ?? 0))
           setCabecalho(dataLoja.contrato_cabecalho ?? '')
@@ -716,7 +737,7 @@ export function Configuracoes() {
                 </div>
               )}
               <div className="form-grid-12">
-                {CAMPOS.map(({ key, label, placeholder, gridColumn }) => (
+                {CAMPOS.map(({ key, label, placeholder, gridColumn, ajuda }) => (
                   <div key={key} className="form-group" style={{ gridColumn: gridColumn || 'span 6' }}>
                     <label>{label}</label>
                     <input
@@ -724,9 +745,13 @@ export function Configuracoes() {
                       onChange={(e) => {
                         let val = e.target.value
                         if (key === 'cnpj') val = mascararCNPJ(val)
+                        if (key === 'representante_cpf') val = mascararCPF(val)
+                        if (key === 'representante_rg') val = mascararRG(val)
                         if (key === 'telefone' || key === 'whatsapp') val = mascararTelefone(val)
                         if (key === 'cep') val = mascararCEP(val)
-                        if (key === 'nome' || key === 'cidade' || key === 'endereco') val = capitalizarNome(val)
+                        if (key === 'nome' || key === 'cidade' || key === 'endereco' || key === 'representante_nome') {
+                          val = capitalizarNome(val)
+                        }
                         setForm({ ...form, [key]: val })
                       }}
                       onBlur={() => {
@@ -739,6 +764,9 @@ export function Configuracoes() {
                       maxLength={key === 'estado' ? 2 : (key === 'cep' ? 9 : undefined)}
                       style={{ width: '100%' }}
                     />
+                    {ajuda && (
+                      <div style={{ fontSize: '11px', color: 'var(--sv-text-dim)', marginTop: '4px' }}>{ajuda}</div>
+                    )}
                   </div>
                 ))}
               </div>

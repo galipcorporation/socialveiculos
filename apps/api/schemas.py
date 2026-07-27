@@ -125,6 +125,8 @@ class VeiculoB2BResponse(BaseModel):
     id: str
     loja_id: str
     placa: Optional[str] = None
+    chassi: Optional[str] = None   # 🔒 DADO EXCLUSIVO B2B (documentação/contrato)
+    renavam: Optional[str] = None  # 🔒 DADO EXCLUSIVO B2B
     marca: str
     modelo: str
     versao: Optional[str] = None
@@ -159,6 +161,8 @@ class VeiculoB2BResponse(BaseModel):
 
 class VeiculoCreateRequest(BaseModel):
     placa: Optional[str] = Field(None, max_length=10)
+    chassi: Optional[str] = Field(None, max_length=17)
+    renavam: Optional[str] = Field(None, max_length=11)
     marca: str = Field(..., min_length=1, max_length=100)
     modelo: str = Field(..., min_length=1, max_length=200)
     versao: Optional[str] = Field(None, max_length=200)
@@ -217,6 +221,8 @@ class VeiculoCreateRequest(BaseModel):
 
 class VeiculoUpdateRequest(BaseModel):
     placa: Optional[str] = Field(None, max_length=10)
+    chassi: Optional[str] = Field(None, max_length=17)
+    renavam: Optional[str] = Field(None, max_length=11)
     marca: Optional[str] = Field(None, max_length=100)
     modelo: Optional[str] = Field(None, max_length=200)
     versao: Optional[str] = Field(None, max_length=200)
@@ -401,6 +407,16 @@ class LojaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class MinhaLojaResponse(LojaResponse):
+    """Perfil da própria loja (Configurações). Inclui os dados de qualificação
+    usados nos contratos — que NÃO devem aparecer em /parceiros, porque CPF/RG
+    do representante são dados pessoais de terceiro (LGPD)."""
+    inscricao_estadual: Optional[str] = None
+    representante_nome: Optional[str] = None
+    representante_cpf: Optional[str] = None
+    representante_rg: Optional[str] = None
+
+
 class SeguirParceiroResponse(BaseModel):
     seguindo: bool
     loja_id: str
@@ -475,6 +491,12 @@ class ClienteResponse(BaseModel):
     bairro: Optional[str] = None
     cidade: Optional[str] = None
     estado: Optional[str] = None
+    # Qualificação civil usada nos contratos
+    nacionalidade: Optional[str] = None
+    estado_civil: Optional[str] = None
+    profissao: Optional[str] = None
+    cnh: Optional[str] = None
+    cnh_categoria: Optional[str] = None
     observacoes: Optional[str] = None
     tags: Optional[str] = None  # JSON array string
     created_at: datetime
@@ -510,7 +532,11 @@ class _ClienteValidatorsMixin(BaseModel):
             raise ValueError("UF do estado inválida.")
         return uf
 
-    @field_validator("endereco", "numero", "bairro", "cidade", "observacoes", check_fields=False)
+    @field_validator(
+        "endereco", "numero", "bairro", "cidade", "observacoes",
+        "nacionalidade", "estado_civil", "profissao",
+        check_fields=False,
+    )
     @classmethod
     def _v_texto(cls, v: Optional[str]) -> Optional[str]:
         return sanitizar_texto(v, 255)
@@ -542,6 +568,11 @@ class ClienteCreateRequest(_ClienteValidatorsMixin):
     bairro: Optional[str] = Field(None, max_length=255)
     cidade: Optional[str] = Field(None, max_length=255)
     estado: Optional[str] = Field(None, min_length=2, max_length=2, pattern=r"^[A-Za-z]{2}$")
+    nacionalidade: Optional[str] = Field(None, max_length=50)
+    estado_civil: Optional[str] = Field(None, max_length=30)
+    profissao: Optional[str] = Field(None, max_length=100)
+    cnh: Optional[str] = Field(None, min_length=11, max_length=11, pattern=r"^\d{11}$")
+    cnh_categoria: Optional[str] = Field(None, max_length=5, pattern=r"^[A-Za-z]{1,5}$")
     observacoes: Optional[str] = Field(None, max_length=255)
     tags: Optional[str] = None
 
@@ -561,6 +592,11 @@ class ClienteUpdateRequest(_ClienteValidatorsMixin):
     bairro: Optional[str] = Field(None, max_length=255)
     cidade: Optional[str] = Field(None, max_length=255)
     estado: Optional[str] = Field(None, min_length=2, max_length=2, pattern=r"^[A-Za-z]{2}$")
+    nacionalidade: Optional[str] = Field(None, max_length=50)
+    estado_civil: Optional[str] = Field(None, max_length=30)
+    profissao: Optional[str] = Field(None, max_length=100)
+    cnh: Optional[str] = Field(None, min_length=11, max_length=11, pattern=r"^\d{11}$")
+    cnh_categoria: Optional[str] = Field(None, max_length=5, pattern=r"^[A-Za-z]{1,5}$")
     observacoes: Optional[str] = Field(None, max_length=255)
     tags: Optional[str] = None
 
@@ -1377,6 +1413,11 @@ class LojaUpdateRequest(BaseModel):
     """Edição do perfil/configurações da própria loja (Gestor)."""
     nome: Optional[str] = Field(None, min_length=1, max_length=200)
     cnpj: Optional[str] = Field(None, max_length=18)
+    inscricao_estadual: Optional[str] = Field(None, max_length=20)
+    # Representante legal que assina os contratos pela loja
+    representante_nome: Optional[str] = Field(None, max_length=200)
+    representante_cpf: Optional[str] = Field(None, max_length=14)
+    representante_rg: Optional[str] = Field(None, max_length=20)
     logo_url: Optional[str] = Field(None, max_length=500)
     telefone: Optional[str] = Field(None, max_length=20)
     whatsapp: Optional[str] = Field(None, max_length=20)
@@ -1532,6 +1573,10 @@ class SimulacaoResponse(BaseModel):
 class CampoExtraTemplate(BaseModel):
     chave: str = Field(..., min_length=1, max_length=60)
     label: str = Field(..., min_length=1, max_length=120)
+    # `tipo` orienta o input no front; `padrao` entrega o modelo já preenchido
+    # com o valor usual (prazo de garantia, % de multa) em vez de campo vazio.
+    tipo: Optional[str] = Field(None, max_length=20)
+    padrao: Optional[str] = Field(None, max_length=500)
 
 
 class TemplateContratoCreateRequest(BaseModel):

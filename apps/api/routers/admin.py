@@ -22,7 +22,7 @@ from deps import get_current_active_user, registrar_auditoria
 from models import (
     Usuario, Loja, Veiculo, LogAuditoria, PapelUsuario, MembroLoja, Lead, ModuloHabilitado,
     Plano, Assinatura, Pagamento, StatusAssinatura, StatusPagamento, ContratoAssinaturaVersao, utcnow,
-    DestaquePagamento,
+    DestaquePagamento, MarketingUsage,
 )
 from schemas import (
     LojaResponse, LogAuditoriaResponse,
@@ -45,6 +45,7 @@ from schemas import (
 from auth import hash_password, create_access_token
 from config import settings
 from email_service import enviar_email, render_contrato_para_assinatura
+from contrato_modelos_padrao import semear_modelos_padrao
 from lib_formatacao import formatar_moeda
 from pdf_service import html_para_pdf
 from storage import storage_provider
@@ -277,6 +278,9 @@ async def criar_loja(
     )
     db.add(nova_loja)
     await db.flush()
+
+    # Loja nova já nasce com os modelos de contrato prontos para uso
+    await semear_modelos_padrao(db, nova_loja.id)
 
     # Criar ou reaproveitar gestor
     if reaproveitar_usuario:
@@ -886,6 +890,97 @@ async def reportar_erro_servidor(
     db.add(log)
     await db.commit()
     return {"ok": True}
+
+
+class ConsumoIAPorLoja(BaseModel):
+    loja_id: str
+    loja_nome: str
+    chamadas: int
+    tokens_input: int
+    tokens_output: int
+    tokens_total: int
+
+
+class ConsumoIAResponse(BaseModel):
+    dias: int
+    desde: datetime
+    total_chamadas: int
+    total_tokens: int
+    por_funcionalidade: Dict[str, int]
+    lojas: List[ConsumoIAPorLoja]
+
+
+@router.get(
+    "/consumo-ia",
+    response_model=ConsumoIAResponse,
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def get_consumo_ia(
+    dias: int = 30,
+    funcionalidade: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Consumo de IA (Groq) agregado por loja — quem mais gasta token.
+
+    O consumo é sempre atribuído à loja DONA do recurso (veículo/conversa),
+    não a quem operou, então o ranking não distorce quando o suporte age
+    dentro de uma loja. `funcionalidade` filtra "marketing" | "triagem".
+    """
+    dias = max(1, min(dias, 365))
+    desde = utcnow() - timedelta(days=dias)
+
+    filtros = [MarketingUsage.created_at >= desde]
+    if funcionalidade:
+        filtros.append(MarketingUsage.funcionalidade == funcionalidade)
+
+    tokens_in = func.coalesce(func.sum(MarketingUsage.tokens_input), 0)
+    tokens_out = func.coalesce(func.sum(MarketingUsage.tokens_output), 0)
+
+    stmt = (
+        select(
+            MarketingUsage.loja_id,
+            Loja.nome,
+            func.count(MarketingUsage.id),
+            tokens_in,
+            tokens_out,
+        )
+        .join(Loja, Loja.id == MarketingUsage.loja_id)
+        .where(*filtros)
+        .group_by(MarketingUsage.loja_id, Loja.nome)
+        .order_by((tokens_in + tokens_out).desc())
+    )
+    linhas = (await db.execute(stmt)).all()
+
+    lojas = [
+        ConsumoIAPorLoja(
+            loja_id=loja_id,
+            loja_nome=nome,
+            chamadas=chamadas,
+            tokens_input=t_in,
+            tokens_output=t_out,
+            tokens_total=t_in + t_out,
+        )
+        for loja_id, nome, chamadas, t_in, t_out in linhas
+    ]
+
+    func_stmt = (
+        select(
+            MarketingUsage.funcionalidade,
+            func.coalesce(func.sum(MarketingUsage.tokens_input + MarketingUsage.tokens_output), 0),
+        )
+        .where(*filtros)
+        .group_by(MarketingUsage.funcionalidade)
+    )
+    por_funcionalidade = {f: total for f, total in (await db.execute(func_stmt)).all()}
+
+    return ConsumoIAResponse(
+        dias=dias,
+        desde=desde,
+        total_chamadas=sum(item.chamadas for item in lojas),
+        total_tokens=sum(item.tokens_total for item in lojas),
+        por_funcionalidade=por_funcionalidade,
+        lojas=lojas,
+    )
 
 
 @router.get(

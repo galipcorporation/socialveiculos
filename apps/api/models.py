@@ -278,6 +278,11 @@ class Loja(Base):
     nome = Column(String(200), nullable=False)
     slug = Column(String(100), unique=True, nullable=False)
     cnpj = Column(String(18), unique=True, nullable=True)
+    inscricao_estadual = Column(String(20), nullable=True)
+    # Representante legal que assina os contratos pela loja
+    representante_nome = Column(String(200), nullable=True)
+    representante_cpf = Column(String(14), nullable=True)
+    representante_rg = Column(String(20), nullable=True)
     logo_url = Column(String(500), nullable=True)
     # Identidade nos documentos (contratos) — HTML rico do editor, reaplicado em todo modelo
     contrato_cabecalho = Column(Text, nullable=True)
@@ -403,6 +408,8 @@ class Veiculo(Base):
 
     # Identificação
     placa = Column(String(10), nullable=True)
+    chassi = Column(String(17), nullable=True)
+    renavam = Column(String(11), nullable=True)
     marca = Column(String(100), nullable=False)
     modelo = Column(String(200), nullable=False)
     versao = Column(String(200), nullable=True)
@@ -513,6 +520,12 @@ class ClientePF(Base):
     telefone = Column(String(20), nullable=True)
     email = Column(String(200), nullable=True)
     renda_mensal = Column(Float, nullable=True)
+    # Qualificação civil exigida nos contratos (Código Civil, art. 104)
+    nacionalidade = Column(String(50), nullable=True)
+    estado_civil = Column(String(30), nullable=True)
+    profissao = Column(String(100), nullable=True)
+    cnh = Column(String(11), nullable=True)
+    cnh_categoria = Column(String(5), nullable=True)
 
     # Endereço
     cep = Column(String(10), nullable=True)
@@ -1242,12 +1255,19 @@ class CartaCorrecaoNfe(Base):
 
 
 class MarketingUsage(Base):
-    """Registro de consumo de IA por chamada de marketing (billing futuro)."""
+    """Registro de consumo de IA por chamada (billing futuro).
+
+    Apesar do nome legado, cobre TODA funcionalidade de IA da plataforma —
+    ver a coluna `funcionalidade` ("marketing", "triagem", ...). `loja_id` é
+    sempre a loja DONA do recurso, nunca a do operador (admin de suporte não
+    pode poluir o consumo de outra loja).
+    """
     __tablename__ = "marketing_usage"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
     usuario_id = Column(String(36), ForeignKey("usuario.id", ondelete="SET NULL"), nullable=True)
+    funcionalidade = Column(String(50), nullable=False, default="marketing", server_default="marketing")
     provedor = Column(String(50), nullable=False)
     modelo = Column(String(100), nullable=False)
     tokens_input = Column(Integer, default=0)
