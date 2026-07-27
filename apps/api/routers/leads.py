@@ -120,7 +120,7 @@ async def listar_leads(
     """
     stmt = (
         select(Lead)
-        .options(selectinload(Lead.cliente), selectinload(Lead.negociacoes))
+        .options(*_LEAD_LOADS)
         .where(Lead.loja_id == context.loja_id)
     )
     if etapa:
@@ -128,7 +128,7 @@ async def listar_leads(
 
     stmt = stmt.order_by(Lead.updated_at.desc())
     result = await db.execute(stmt)
-    return result.scalars().all()
+    return [_com_responsavel(lead) for lead in result.scalars().all()]
 
 
 @router.get(
@@ -147,17 +147,19 @@ async def quadro_kanban(
     """
     stmt = (
         select(Lead)
-        .options(selectinload(Lead.cliente), selectinload(Lead.negociacoes))
+        .options(*_LEAD_LOADS)
         .where(Lead.loja_id == context.loja_id)
         .order_by(Lead.updated_at.desc())
     )
     result = await db.execute(stmt)
     leads = result.scalars().all()
 
-    # Agrupa por etapa, mantendo a ordem canônica do funil
+    # Agrupa por etapa, mantendo a ordem canônica do funil.
+    # Etapa desconhecida (dado legado) não derruba o quadro: fica fora das colunas.
     por_etapa: dict[EtapaLead, list] = {etapa: [] for etapa in EtapaLead}
     for lead in leads:
-        por_etapa[lead.etapa].append(lead)
+        if lead.etapa in por_etapa:
+            por_etapa[lead.etapa].append(_com_responsavel(lead))
 
     colunas = [
         KanbanColunaResponse(

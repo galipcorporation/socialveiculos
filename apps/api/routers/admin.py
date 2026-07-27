@@ -38,7 +38,8 @@ from schemas import (
     ContratoAssinaturaEnviarRequest, ContratoAssinaturaEnviarResponse,
     DestaquePagamentoResponse, AdminAtivarDestaqueRequest, AdminDesativarDestaqueRequest,
     AdminDestaqueDetalheResponse,
-    AdminUsuarioItem, AdminResetSenhaRequest,
+    AdminUsuarioItem, AdminResetSenhaRequest, AdminUsuarioVinculo,
+    AdminUsuarioUpdateRequest, AdminVinculoCreateRequest, AdminVinculoUpdateRequest,
     AdminLogAuditoriaItem, AdminAuditoriaPageResponse,
     AdminFacetaItem, AdminAuditoriaFacetasResponse,
 )
@@ -503,24 +504,40 @@ async def buscar_usuarios(
     usuarios = (await db.execute(stmt)).scalars().all()
 
     lojas_por_usuario: Dict[str, List[str]] = {}
+    vinculos_por_usuario: Dict[str, List[AdminUsuarioVinculo]] = {}
     ids = [u.id for u in usuarios]
     if ids:
+        # LEFT JOIN de propósito: vínculo apontando para loja removida não pode
+        # sumir com o usuário da lista — é justamente o registro a ser corrigido aqui.
         res_lojas = await db.execute(
-            select(MembroLoja.usuario_id, Loja.nome)
-            .join(Loja, Loja.id == MembroLoja.loja_id)
+            select(MembroLoja, Loja.nome)
+            .outerjoin(Loja, Loja.id == MembroLoja.loja_id)
             .where(MembroLoja.usuario_id.in_(ids))
+            .order_by(MembroLoja.created_at)
         )
-        for usuario_id, loja_nome in res_lojas.all():
-            lojas_por_usuario.setdefault(usuario_id, []).append(loja_nome)
+        for membro, loja_nome in res_lojas.all():
+            loja_nome = loja_nome or "(loja removida)"
+            lojas_por_usuario.setdefault(membro.usuario_id, []).append(loja_nome)
+            vinculos_por_usuario.setdefault(membro.usuario_id, []).append(
+                AdminUsuarioVinculo(
+                    membro_id=membro.id,
+                    loja_id=membro.loja_id,
+                    loja_nome=loja_nome,
+                    papel=membro.papel.value,
+                    ativo=bool(membro.ativo),
+                )
+            )
 
     return [
         AdminUsuarioItem(
             id=u.id,
             nome=u.nome,
             email=u.email,
+            telefone=u.telefone,
             papel=u.papel.value,
             ativo=bool(u.ativo),
             lojas=lojas_por_usuario.get(u.id, []),
+            vinculos=vinculos_por_usuario.get(u.id, []),
         )
         for u in usuarios
     ]
@@ -552,6 +569,215 @@ async def resetar_senha_usuario(
     )
     await db.commit()
     return {"ok": True, "mensagem": f"Senha de {usuario.email} redefinida com sucesso."}
+
+
+def _papel_valido(valor: str) -> PapelUsuario:
+    """Converte o papel vindo do painel no enum, recusando valor desconhecido."""
+    try:
+        return PapelUsuario(valor)
+    except ValueError:
+        validos = ", ".join(p.value for p in PapelUsuario)
+        raise HTTPException(status_code=422, detail=f"Papel inválido. Use um destes: {validos}.")
+
+
+@router.patch(
+    "/usuarios/{usuario_id}",
+)
+async def editar_usuario(
+    usuario_id: str,
+    data: AdminUsuarioUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """
+    Corrige os dados da conta pelo painel (nome, e-mail, telefone, papel, ativo).
+    Só altera os campos enviados. Ação registrada na auditoria.
+    """
+    res = await db.execute(select(Usuario).where(Usuario.id == usuario_id))
+    usuario = res.scalar_one_or_none()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    alteracoes: Dict[str, Dict[str, Optional[str]]] = {}
+
+    if data.email is not None:
+        novo_email = data.email.strip().lower()
+        if novo_email != usuario.email:
+            # email é UNIQUE e é a chave de login: recusa duplicata com 409 legível
+            dup = (await db.execute(
+                select(Usuario.id).where(Usuario.email == novo_email, Usuario.id != usuario_id)
+            )).scalar_one_or_none()
+            if dup:
+                raise HTTPException(status_code=409, detail=f"Já existe outro usuário com o e-mail {novo_email}.")
+            alteracoes["email"] = {"de": usuario.email, "para": novo_email}
+            usuario.email = novo_email
+
+    if data.nome is not None and data.nome.strip() != usuario.nome:
+        alteracoes["nome"] = {"de": usuario.nome, "para": data.nome.strip()}
+        usuario.nome = data.nome.strip()
+
+    if data.telefone is not None and (data.telefone or None) != usuario.telefone:
+        alteracoes["telefone"] = {"de": usuario.telefone, "para": data.telefone or None}
+        usuario.telefone = data.telefone or None
+
+    if data.papel is not None:
+        novo_papel = _papel_valido(data.papel)
+        if novo_papel != usuario.papel:
+            if usuario.id == admin.id and novo_papel != PapelUsuario.ADMIN_PLATAFORMA:
+                raise HTTPException(status_code=409, detail="Você não pode rebaixar o seu próprio acesso de admin.")
+            alteracoes["papel"] = {"de": usuario.papel.value, "para": novo_papel.value}
+            usuario.papel = novo_papel
+
+    if data.ativo is not None and bool(data.ativo) != bool(usuario.ativo):
+        if usuario.id == admin.id and not data.ativo:
+            raise HTTPException(status_code=409, detail="Você não pode desativar a sua própria conta.")
+        alteracoes["ativo"] = {"de": str(bool(usuario.ativo)), "para": str(bool(data.ativo))}
+        usuario.ativo = bool(data.ativo)
+
+    if not alteracoes:
+        return {"ok": True, "mensagem": "Nenhuma alteração a aplicar."}
+
+    await registrar_auditoria(
+        db=db, loja_id=None, ator_id=admin.id, ator_nome=admin.nome,
+        acao="usuario.editar", entidade="usuario", entidade_id=usuario.id,
+        detalhes=json.dumps({"email": usuario.email, "alteracoes": alteracoes}),
+    )
+    await db.commit()
+    return {"ok": True, "mensagem": "Dados atualizados com sucesso."}
+
+
+@router.post(
+    "/usuarios/{usuario_id}/vinculos",
+)
+async def vincular_usuario_loja(
+    usuario_id: str,
+    data: AdminVinculoCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """Vincula o usuário a uma loja com o papel informado (ex.: mover vendedor de loja)."""
+    usuario = (await db.execute(select(Usuario).where(Usuario.id == usuario_id))).scalar_one_or_none()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    loja = (await db.execute(select(Loja).where(Loja.id == data.loja_id))).scalar_one_or_none()
+    if not loja:
+        raise HTTPException(status_code=404, detail="Loja não encontrada.")
+
+    papel = _papel_valido(data.papel)
+
+    existente = (await db.execute(
+        select(MembroLoja).where(
+            MembroLoja.usuario_id == usuario_id,
+            MembroLoja.loja_id == data.loja_id,
+        )
+    )).scalar_one_or_none()
+    if existente:
+        # UniqueConstraint (usuario_id, loja_id): reativa em vez de estourar erro de integridade
+        if existente.ativo and existente.papel == papel:
+            raise HTTPException(status_code=409, detail=f"{usuario.nome} já está vinculado a {loja.nome}.")
+        existente.ativo = True
+        existente.papel = papel
+        membro_id = existente.id
+    else:
+        novo = MembroLoja(usuario_id=usuario_id, loja_id=data.loja_id, papel=papel, ativo=True)
+        db.add(novo)
+        await db.flush()
+        membro_id = novo.id
+
+    await registrar_auditoria(
+        db=db, loja_id=data.loja_id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="usuario.vincular_loja", entidade="membro_loja", entidade_id=membro_id,
+        detalhes=json.dumps({"usuario": usuario.email, "loja": loja.nome, "papel": papel.value}),
+    )
+    await db.commit()
+    return {"ok": True, "mensagem": f"{usuario.nome} vinculado a {loja.nome} como {papel.value}."}
+
+
+@router.patch(
+    "/usuarios/{usuario_id}/vinculos/{membro_id}",
+)
+async def editar_vinculo_usuario(
+    usuario_id: str,
+    membro_id: str,
+    data: AdminVinculoUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """Muda o papel do usuário naquela loja ou ativa/desativa o vínculo."""
+    res = await db.execute(
+        select(MembroLoja, Loja.nome)
+        .outerjoin(Loja, Loja.id == MembroLoja.loja_id)
+        .where(MembroLoja.id == membro_id, MembroLoja.usuario_id == usuario_id)
+    )
+    row = res.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Vínculo não encontrado para este usuário.")
+    membro, loja_nome = row
+    loja_nome = loja_nome or "(loja removida)"
+
+    alteracoes: Dict[str, Dict[str, str]] = {}
+    if data.papel is not None:
+        novo_papel = _papel_valido(data.papel)
+        if novo_papel != membro.papel:
+            alteracoes["papel"] = {"de": membro.papel.value, "para": novo_papel.value}
+            membro.papel = novo_papel
+    if data.ativo is not None and bool(data.ativo) != bool(membro.ativo):
+        alteracoes["ativo"] = {"de": str(bool(membro.ativo)), "para": str(bool(data.ativo))}
+        membro.ativo = bool(data.ativo)
+
+    if not alteracoes:
+        return {"ok": True, "mensagem": "Nenhuma alteração a aplicar."}
+
+    await registrar_auditoria(
+        db=db, loja_id=membro.loja_id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="usuario.editar_vinculo", entidade="membro_loja", entidade_id=membro.id,
+        detalhes=json.dumps({"usuario_id": usuario_id, "loja": loja_nome, "alteracoes": alteracoes}),
+    )
+    await db.commit()
+    return {"ok": True, "mensagem": f"Vínculo com {loja_nome} atualizado."}
+
+
+@router.delete(
+    "/usuarios/{usuario_id}/vinculos/{membro_id}",
+)
+async def remover_vinculo_usuario(
+    usuario_id: str,
+    membro_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: Usuario = Depends(exige_admin_plataforma),
+):
+    """Remove o usuário de uma loja (ex.: vendedor cadastrado na loja errada)."""
+    res = await db.execute(
+        select(MembroLoja, Loja.nome)
+        .outerjoin(Loja, Loja.id == MembroLoja.loja_id)
+        .where(MembroLoja.id == membro_id, MembroLoja.usuario_id == usuario_id)
+    )
+    row = res.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Vínculo não encontrado para este usuário.")
+    membro, loja_nome = row
+    loja_nome = loja_nome or "(loja removida)"
+
+    # Gestor/vendedor sem nenhum vínculo não consegue mais logar: avisa antes de deixar órfão
+    restantes = (await db.execute(
+        select(func.count()).select_from(MembroLoja).where(
+            MembroLoja.usuario_id == usuario_id,
+            MembroLoja.id != membro_id,
+            MembroLoja.ativo == True,
+        )
+    )).scalar() or 0
+
+    await db.delete(membro)
+    await registrar_auditoria(
+        db=db, loja_id=membro.loja_id, ator_id=admin.id, ator_nome=admin.nome,
+        acao="usuario.remover_vinculo", entidade="membro_loja", entidade_id=membro_id,
+        detalhes=json.dumps({"usuario_id": usuario_id, "loja": loja_nome}),
+    )
+    await db.commit()
+
+    aviso = "" if restantes else " Atenção: o usuário ficou sem loja e não conseguirá entrar no sistema."
+    return {"ok": True, "mensagem": f"Vínculo com {loja_nome} removido.{aviso}"}
 
 
 @router.get(

@@ -59,6 +59,42 @@ def cnpj_valido(val: str) -> bool:
             return False
     return True
 
+
+def normalizar_email(val: Optional[str]) -> Optional[str]:
+    """E-mail é chave de login e tem índice único: sempre minúsculo e sem espaços.
+
+    Sem isto, quem cadastra com Caps Lock ligado grava 'JOAO@X.COM' e nunca mais
+    entra digitando normal — a busca é `==` e o Postgres compara caixa. Pior: a
+    checagem de duplicidade usa a mesma comparação, então o unique da coluna não
+    protege e o mesmo e-mail vira duas contas. (ver B107)
+    """
+    if val is None:
+        return None
+    return val.strip().lower() or None
+
+
+def normalizar_documento(val: Optional[str]) -> Optional[str]:
+    """CPF/CNPJ guardado só com dígitos — a máscara é coisa da UI.
+
+    As colunas são String(14)/String(18), então o mesmo documento cabia com e sem
+    máscara e virava dois registros distintos (com unique furado, no caso da loja).
+    """
+    if val is None:
+        return None
+    return re.sub(r"\D", "", val) or None
+
+
+def normalizar_placa(val: Optional[str]) -> Optional[str]:
+    """Placa em caixa alta e sem separadores — apenas para a busca casar.
+
+    ⚠️ NÃO implica unicidade: placa repetida é legítima no negócio (revenda entre
+    lojas, veículo que volta ao estoque, clonagem). Aqui só se uniformiza a
+    grafia; nada de bloquear duplicata.
+    """
+    if val is None:
+        return None
+    return re.sub(r"[^A-Za-z0-9]", "", val).upper() or None
+
 # ── Midia ──────────────────────────────────────────────────────
 
 class MidiaResponse(BaseModel):
@@ -197,6 +233,15 @@ class VeiculoCreateRequest(BaseModel):
                     data["ano_modelo"] = val
         return data
 
+    @field_validator("placa", mode="before")
+    @classmethod
+    def validate_placa(cls, v):
+        # Uniformiza a grafia (a rota de consulta KePlaca já fazia isso; o
+        # cadastro gravava cru, inclusive com espaços). NÃO é chave: placa
+        # repetida é normal — revenda entre lojas, veículo que retorna ao
+        # estoque, clonagem — então aqui não há checagem de duplicidade.
+        return normalizar_placa(v) if isinstance(v, str) else v
+
     @field_validator("cambio", mode="before")
     @classmethod
     def validate_cambio(cls, v):
@@ -257,6 +302,15 @@ class VeiculoUpdateRequest(BaseModel):
                 if "ano_modelo" not in data or data["ano_modelo"] is None:
                     data["ano_modelo"] = val
         return data
+
+    @field_validator("placa", mode="before")
+    @classmethod
+    def validate_placa(cls, v):
+        # Uniformiza a grafia (a rota de consulta KePlaca já fazia isso; o
+        # cadastro gravava cru, inclusive com espaços). NÃO é chave: placa
+        # repetida é normal — revenda entre lojas, veículo que retorna ao
+        # estoque, clonagem — então aqui não há checagem de duplicidade.
+        return normalizar_placa(v) if isinstance(v, str) else v
 
     @field_validator("cambio", mode="before")
     @classmethod
@@ -507,6 +561,21 @@ class ClienteResponse(BaseModel):
 
 class _ClienteValidatorsMixin(BaseModel):
     """Validação/sanitização compartilhada (server-side) de clientes do CRM."""
+
+    @field_validator("email", mode="before", check_fields=False)
+    @classmethod
+    def _v_email_cliente(cls, v):
+        """Minúsculo e sem espaços, como no login. (ver B107)"""
+        return normalizar_email(v) if isinstance(v, str) else v
+
+    @field_validator("cpf", "cnpj", mode="before", check_fields=False)
+    @classmethod
+    def _v_documentos_limpar(cls, v):
+        """Guarda só dígitos. Antes o valor voltava cru: como as colunas são
+        String(14)/String(18), um CPF mascarado era **rejeitado** por tamanho e o
+        mesmo documento podia entrar em duas grafias. (ver B107)
+        """
+        return normalizar_documento(v) if isinstance(v, str) else v
 
     @field_validator("cpf", check_fields=False)
     @classmethod
@@ -1235,17 +1304,47 @@ class AdminVencimentoItem(BaseModel):
 
 # ── Admin — usuários e reset de senha ────────────────────────────
 
+class AdminUsuarioVinculo(BaseModel):
+    """Vínculo usuario ↔ loja, editável pelo admin da plataforma."""
+    membro_id: str
+    loja_id: str
+    loja_nome: str
+    papel: str
+    ativo: bool
+
+
 class AdminUsuarioItem(BaseModel):
     id: str
     nome: str
     email: str
+    telefone: Optional[str] = None
     papel: str
     ativo: bool
     lojas: List[str] = []
+    vinculos: List[AdminUsuarioVinculo] = []
 
 
 class AdminResetSenhaRequest(BaseModel):
     nova_senha: str = Field(..., min_length=6, max_length=128)
+
+
+class AdminUsuarioUpdateRequest(BaseModel):
+    """Edição dos dados da conta pelo admin. Campos ausentes não são alterados."""
+    nome: Optional[str] = Field(None, min_length=2, max_length=200)
+    email: Optional[str] = Field(None, max_length=200, pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+    telefone: Optional[str] = Field(None, max_length=20)
+    papel: Optional[str] = None
+    ativo: Optional[bool] = None
+
+
+class AdminVinculoCreateRequest(BaseModel):
+    loja_id: str
+    papel: str
+
+
+class AdminVinculoUpdateRequest(BaseModel):
+    papel: Optional[str] = None
+    ativo: Optional[bool] = None
 
 
 # ── B2B Social & Feed ──────────────────────────────────────────
@@ -1399,6 +1498,14 @@ class ConvidarMembroRequest(BaseModel):
     senha: str = Field(..., min_length=6, max_length=100)
     modulos: Optional[str] = None  # JSON array string
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _v_email(cls, v):
+        # O "reaproveita o usuário" do docstring depende de bater com o e-mail
+        # gravado: sem normalizar, convidar 'Joao@x.com' cria uma segunda conta
+        # para quem já é 'joao@x.com'. (ver B107)
+        return normalizar_email(v) if isinstance(v, str) else v
+
 
 class AtualizarMembroRequest(BaseModel):
     papel: Optional[PapelUsuario] = None
@@ -1411,6 +1518,33 @@ class AtualizarMembroRequest(BaseModel):
 
 class LojaUpdateRequest(BaseModel):
     """Edição do perfil/configurações da própria loja (Gestor)."""
+
+    @field_validator("cnpj", "representante_cpf", mode="before")
+    @classmethod
+    def _v_documentos(cls, v):
+        """Só dígitos: `Loja.cnpj` é unique e a máscara criava um segundo registro
+        para o mesmo CNPJ. Diferente de ClientePF, esta classe nunca herdou o
+        mixin de validação, então também não conferia dígito verificador. (ver B107)
+        """
+        if not isinstance(v, str):
+            return v
+        limpo = normalizar_documento(v)
+        return limpo
+
+    @field_validator("cnpj")
+    @classmethod
+    def _v_cnpj_digito(cls, v: Optional[str]) -> Optional[str]:
+        if v and not cnpj_valido(v):
+            raise ValueError("CNPJ inválido (dígito verificador).")
+        return v
+
+    @field_validator("representante_cpf")
+    @classmethod
+    def _v_cpf_digito(cls, v: Optional[str]) -> Optional[str]:
+        if v and not cpf_valido(v):
+            raise ValueError("CPF do representante inválido (dígito verificador).")
+        return v
+
     nome: Optional[str] = Field(None, min_length=1, max_length=200)
     cnpj: Optional[str] = Field(None, max_length=18)
     inscricao_estadual: Optional[str] = Field(None, max_length=20)

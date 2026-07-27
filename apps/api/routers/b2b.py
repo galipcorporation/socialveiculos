@@ -1463,9 +1463,9 @@ async def chat_websocket_endpoint(websocket: WebSocket, token: Optional[str] = N
                             
                             if conversa.tipo == "b2b":
                                 # Obter loja do remetente
-                                stmt_membro = select(MembroLoja).where(MembroLoja.usuario_id == usuario_id, MembroLoja.ativo == True)
+                                stmt_membro = select(MembroLoja).where(MembroLoja.usuario_id == usuario_id, MembroLoja.ativo == True).limit(1)
                                 res_membro = await db.execute(stmt_membro)
-                                membro = res_membro.scalar_one_or_none()
+                                membro = res_membro.scalars().first()
                                 if membro:
                                     sender_loja_id = membro.loja_id
                                     dest_loja_id = conversa.loja_b_id if conversa.loja_a_id == sender_loja_id else conversa.loja_a_id

@@ -12,7 +12,7 @@ import pyotp
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, EmailStr, Field, model_validator, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -54,13 +54,29 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class _EmailNormalizadoMixin(BaseModel):
+    """Minúsculo e sem espaços em todo e-mail que entra.
+
+    `EmailStr` valida o formato mas preserva a caixa, e a busca é `Usuario.email
+    == data.email` (case-sensitive no Postgres): sem isto, quem cadastra com Caps
+    Lock nunca mais loga digitando normal, e a checagem de duplicidade — que usa
+    a mesma comparação — deixa passar duas contas para o mesmo e-mail, furando o
+    unique da coluna. Herdado por todo schema de entrada com e-mail. (ver B107)
+    """
+
+    @field_validator("email", mode="before", check_fields=False)
+    @classmethod
+    def _v_email(cls, v):
+        return v.strip().lower() if isinstance(v, str) else v
+
+
 class UpdateMeRequest(BaseModel):
     """Edição do próprio perfil. E-mail e papel não mudam por aqui."""
     nome: Optional[str] = Field(None, min_length=2, max_length=200)
     telefone: Optional[str] = Field(None, max_length=20)
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(_EmailNormalizadoMixin):
     email: EmailStr
     senha: str
 
@@ -100,7 +116,7 @@ class MfaVerifyLoginRequest(BaseModel):
     codigo: str = Field(..., min_length=6, max_length=6)
 
 
-class RegisterB2BRequest(BaseModel):
+class RegisterB2BRequest(_EmailNormalizadoMixin):
     # Dados da Loja
     loja_nome: str = Field(..., min_length=2, max_length=200)
     loja_cnpj: Optional[str] = Field(None, max_length=18)
@@ -123,7 +139,7 @@ class RegisterB2BRequest(BaseModel):
         return data
 
 
-class RegisterB2CRequest(BaseModel):
+class RegisterB2CRequest(_EmailNormalizadoMixin):
     nome: str = Field(..., min_length=2, max_length=200)
     email: EmailStr
     senha: str = Field(..., min_length=6)
@@ -144,7 +160,7 @@ class LogoutRequest(BaseModel):
     refresh_token: str
 
 
-class ForgotPasswordRequest(BaseModel):
+class ForgotPasswordRequest(_EmailNormalizadoMixin):
     email: EmailStr
 
 
@@ -194,9 +210,16 @@ async def _emitir_sessao_login(
     loja_id = None
     modulos_membro = None
     if user.papel != PapelUsuario.CLIENTE:
-        stmt = select(MembroLoja).where(MembroLoja.usuario_id == user.id, MembroLoja.ativo == True)
+        # Usuário pode ter vínculo com várias lojas: entra na mais antiga e troca
+        # depois pelo seletor de loja. scalar_one_or_none() aqui estourava 500.
+        stmt = (
+            select(MembroLoja)
+            .where(MembroLoja.usuario_id == user.id, MembroLoja.ativo == True)
+            .order_by(MembroLoja.created_at)
+            .limit(1)
+        )
         membro_res = await db.execute(stmt)
-        membro = membro_res.scalar_one_or_none()
+        membro = membro_res.scalars().first()
         if membro:
             loja_id = membro.loja_id
             modulos_membro = membro.modulos
@@ -359,9 +382,11 @@ async def login(
     # foi desativado na Equipe, bloqueia já no login (Usuario.ativo pode ser True).
     if user.papel not in (PapelUsuario.CLIENTE, PapelUsuario.ADMIN_PLATAFORMA):
         membro_res = await db.execute(
-            select(MembroLoja).where(MembroLoja.usuario_id == user.id, MembroLoja.ativo == True)
+            select(MembroLoja)
+            .where(MembroLoja.usuario_id == user.id, MembroLoja.ativo == True)
+            .limit(1)
         )
-        if not membro_res.scalar_one_or_none():
+        if not membro_res.scalars().first():
             await registrar_auditoria(
                 db=db, loja_id=None, ator_id=user.id, ator_nome=user.nome,
                 acao="auth.login_failed", entidade="usuario", entidade_id=user.id,
@@ -491,7 +516,7 @@ async def mfa_enroll(
 
     img = qrcode.make(otpauth_url)
     buf = BytesIO()
-    img.save(buf, format="PNG")
+    img.save(buf, format="PNG")  # type: ignore
     qr_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 
     return MfaEnrollResponse(secret=secret, otpauth_url=otpauth_url, qr_code_base64=qr_base64)
