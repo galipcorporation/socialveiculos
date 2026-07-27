@@ -66,10 +66,12 @@ async def lifespan(app: FastAPI):
     from esteira_worker import worker_loop as esteira_worker_loop
     from assinatura_worker import worker_loop as assinatura_worker_loop
     from destaque_worker import worker_loop as destaque_worker_loop
+    from anuncios_worker import worker_loop as anuncios_worker_loop
     worker_task = asyncio.create_task(worker_loop())
     esteira_task = asyncio.create_task(esteira_worker_loop())
     assinatura_task = asyncio.create_task(assinatura_worker_loop())
     destaque_task = asyncio.create_task(destaque_worker_loop())
+    anuncios_task = asyncio.create_task(anuncios_worker_loop())
 
     yield
 
@@ -77,6 +79,7 @@ async def lifespan(app: FastAPI):
     esteira_task.cancel()
     assinatura_task.cancel()
     destaque_task.cancel()
+    anuncios_task.cancel()
     await engine.dispose()
 
 
@@ -226,6 +229,7 @@ from routers.credenciais_detran import router as credenciais_detran_router
 from routers.fiscal import router as fiscal_router
 from routers.site import router as site_router, public_router as site_public_router
 from routers.marketing_social import router as marketing_social_router
+from routers.anuncios import router as anuncios_router
 from routers.stories import router as stories_router
 from routers.triagem import router as triagem_router
 from routers.notificacoes import router as notificacoes_router
@@ -260,6 +264,7 @@ app.include_router(fiscal_router)
 app.include_router(site_router)
 app.include_router(site_public_router)
 app.include_router(marketing_social_router)
+app.include_router(anuncios_router)
 app.include_router(stories_router)
 app.include_router(triagem_router)
 app.include_router(notificacoes_router)

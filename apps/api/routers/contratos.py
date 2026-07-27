@@ -285,6 +285,10 @@ async def atualizar_contrato(
             veiculo_rev.comprador_id = None
             veiculo_rev.updated_at = utcnow()
 
+            # Venda cancelada: republica onde a venda tinha derrubado (M079).
+            from anuncios_service import enfileirar_sync_veiculo
+            await enfileirar_sync_veiculo(db, veiculo_rev, "publicar")
+
             # Encerrar a esteira pós-venda desta venda (sem apagar histórico)
             est_res = await db.execute(
                 select(EsteiraPosVenda).where(
@@ -616,6 +620,11 @@ async def vender_veiculo(
     veiculo.status = StatusVeiculo.VENDIDO
     veiculo.publicado_marketplace = False
     veiculo.updated_at = utcnow()
+
+    # 2a. Tirar do ar os anúncios nos portais (M079). Onde o portal não tem API,
+    #     vira baixa_pendente para alguém remover manualmente.
+    from anuncios_service import enfileirar_sync_veiculo
+    await enfileirar_sync_veiculo(db, veiculo, "despublicar")
 
     # 2b. Desativar publicação B2B e rejeitar propostas de repasse pendentes
     #     (venda no balcão fecha o ciclo mesmo se o veículo estava em REPASSE)

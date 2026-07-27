@@ -616,6 +616,11 @@ async def processar_proposta_repasse(
                 proposta.veiculo.status = StatusVeiculo.VENDIDO
                 proposta.veiculo.publicado_marketplace = False
                 proposta.veiculo.updated_at = utcnow()
+
+                # Tira do ar os anúncios nos portais (M079); portal sem API
+                # vira baixa_pendente para remoção manual.
+                from anuncios_service import enfileirar_sync_veiculo
+                await enfileirar_sync_veiculo(db, proposta.veiculo, "despublicar")
                 # Atualizar a publicação B2B correspondente
                 pub_stmt = select(PublicacaoB2B).where(PublicacaoB2B.veiculo_id == proposta.veiculo_id)
                 pub_res = await db.execute(pub_stmt)

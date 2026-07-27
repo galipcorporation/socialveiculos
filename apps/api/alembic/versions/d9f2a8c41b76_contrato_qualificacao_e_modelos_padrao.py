@@ -81,7 +81,11 @@ def _seed_modelos(bind) -> None:
         sa.column('updated_at', sa.DateTime),
     )
 
-    now = datetime.now(timezone.utc)
+    # NAIVE UTC: created_at/updated_at são TIMESTAMP WITHOUT TIME ZONE e o
+    # asyncpg REJEITA datetime aware ("can't subtract offset-naive and
+    # offset-aware datetimes"). O SQLite aceita, então isso só quebra em
+    # produção — no boot, derrubando a API. Ver ARMADILHAS-PRODUCAO.md §1.
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     lojas = bind.execute(sa.text("SELECT id FROM loja")).fetchall()
 
     # Pares (loja_id, nome) já existentes — não recriar.

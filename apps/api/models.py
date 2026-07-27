@@ -1815,3 +1815,78 @@ class ItemChecklist(Base):
         Index("ix_item_status", "status"),
     )
 
+
+# ═══════════════════════════════════════════════════════════════
+# INTEGRADOR DE ANÚNCIOS — portais automotivos (M079)
+# ═══════════════════════════════════════════════════════════════
+
+class CredencialPortal(Base):
+    """Credencial de uma loja num portal de anúncios (Mercado Livre, OLX...).
+
+    Mesmo padrão cifrado de CredencialBanco/CredencialIA/CredencialRedeSocial.
+    O Meta não usa esta tabela — reaproveita CredencialRedeSocial (M024).
+    """
+    __tablename__ = "credencial_portal"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
+    portal = Column(String(30), nullable=False)  # mercadolivre | olx | webmotors | icarros
+
+    # Payload JSON cifrado (Fernet): {"access_token": "...", "refresh_token": "..."}
+    credenciais_cifradas = Column(Text, nullable=False)
+    token_expira_em = Column(DateTime, nullable=True)
+    conta_externa_id = Column(String(100), nullable=True)  # seller_id no portal
+
+    ativo = Column(Boolean, default=True)
+    criado_em = Column(DateTime, default=_now)
+    atualizado_em = Column(DateTime, default=_now, onupdate=_now)
+
+    __table_args__ = (
+        UniqueConstraint("loja_id", "portal", name="uq_credencial_portal_loja"),
+        Index("ix_credencial_portal_loja", "loja_id"),
+    )
+
+
+class AnuncioPortal(Base):
+    """Estado de UM veículo em UM portal — a célula da grade de sincronização.
+
+    `status` é String (não Enum) de propósito: portal novo não deve exigir
+    migration de enum. Ver TDD §3.4.1.
+    """
+    __tablename__ = "anuncio_portal"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
+    veiculo_id = Column(String(36), ForeignKey("veiculo.id", ondelete="CASCADE"), nullable=False)
+    portal = Column(String(30), nullable=False)
+
+    # nao_publicado | sincronizando | publicado | erro | despublicado | baixa_pendente
+    status = Column(String(20), default="nao_publicado", nullable=False)
+    anuncio_externo_id = Column(String(100), nullable=True)
+    url_externa = Column(String(500), nullable=True)
+    erro = Column(Text, nullable=True)
+
+    # sha256 do payload enviado — evita reenviar ao portal o que não mudou
+    hash_payload = Column(String(64), nullable=True)
+    # publicar | atualizar | despublicar — o que o worker deve fazer no próximo tick
+    acao_pendente = Column(String(20), nullable=True)
+    tentativas = Column(Integer, default=0)
+    proxima_tentativa_em = Column(DateTime, nullable=True)
+
+    # Baixa manual (portal sem API): quem confirmou que removeu de lá
+    baixa_confirmada_em = Column(DateTime, nullable=True)
+    baixa_confirmada_por = Column(String(36), ForeignKey("usuario.id", ondelete="SET NULL"), nullable=True)
+
+    publicado_em = Column(DateTime, nullable=True)
+    criado_em = Column(DateTime, default=_now)
+    atualizado_em = Column(DateTime, default=_now, onupdate=_now)
+
+    veiculo = relationship("Veiculo")
+
+    __table_args__ = (
+        UniqueConstraint("veiculo_id", "portal", name="uq_anuncio_veiculo_portal"),
+        Index("ix_anuncio_portal_loja", "loja_id"),
+        Index("ix_anuncio_portal_status", "status"),
+        Index("ix_anuncio_portal_proxima", "proxima_tentativa_em"),
+    )
+

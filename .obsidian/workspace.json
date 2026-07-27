@@ -11,10 +11,14 @@
             "id": "920151eacaf71128",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "Nova aba"
+              "title": "2026-07-26-m079-integrador-anuncios"
             }
           }
         ]
@@ -90,6 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -99,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Links inversos"
+              "title": "Links inversos para 2026-07-26-m079-integrador-anuncios"
             }
           },
           {
@@ -108,11 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
+                "file": "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Links de saída"
+              "title": "Links de saída para 2026-07-26-m079-integrador-anuncios"
             }
           },
           {
@@ -150,12 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
+                "file": "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Sumário"
+              "title": "Sumário de 2026-07-26-m079-integrador-anuncios"
             }
           }
         ]
@@ -178,14 +185,16 @@
   },
   "active": "920151eacaf71128",
   "lastOpenFiles": [
-    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.bf6408234fcf",
-    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.8388955e18f6",
-    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.d4c83f94f167",
-    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.182b43df8694",
-    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.d28855fc565d",
-    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.e44a63efa78b",
-    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.51b264de3d0c",
-    "apps/api/tests/test_ia_tenant_consumo.py",
-    "apps/api/alembic/versions/a7c3e5b91f42_marketing_usage_funcionalidade.py"
+    "_deploy_test.ps1",
+    "documentos/tarefa/ARMADILHAS-PRODUCAO.md.tmp.15480.550d5f1830b4",
+    "documentos/tarefa/ARMADILHAS-PRODUCAO.md.tmp.15480.fa46e838cbcd",
+    "apps/api/alembic/versions/__pycache__/a7c3e5b91f42_marketing_usage_funcionalidade.cpython-314.pyc",
+    "deploy.ps1.tmp.15480.74a1385b2d73",
+    "deploy.ps1.tmp.15480.edfa41487358",
+    "documentos/tarefa/MELHORIAS.md.tmp.3236.09ab8838ba88",
+    "deploy.ps1.tmp.15480.4d0de33133d0",
+    "deploy.ps1.tmp.15480.140064d0f854",
+    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.d323d8a852e3",
+    "documentos/tarefa/specs/2026-07-26-m079-integrador-anuncios.md.tmp.3236.69a8183b7915"
   ]
 }
