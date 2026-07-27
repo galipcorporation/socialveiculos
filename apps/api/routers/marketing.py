@@ -91,51 +91,110 @@ async def _chamar_ia(
     usuario_id: str,
     db: AsyncSession,
 ) -> str:
-    api_key = os.getenv("GROQ_API_KEY", "")
-    if not api_key:
+    groq_key = os.getenv("GROQ_API_KEY", "").strip()
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+
+    if groq_key:
+        api_key = groq_key
+        base_url = GROQ_BASE_URL
+        modelo = GROQ_MARKETING_MODEL
+        provedor = "groq"
+    elif openai_key:
+        api_key = openai_key
+        base_url = "https://api.openai.com/v1"
+        modelo = "gpt-4o-mini"
+        provedor = "openai"
+    elif anthropic_key:
+        api_key = anthropic_key
+        base_url = "https://api.anthropic.com/v1"
+        modelo = "claude-haiku-4-5-20251001"
+        provedor = "anthropic"
+    else:
         raise HTTPException(
             status_code=503,
-            detail="IA indisponível no momento. Tente novamente em instantes.",
+            detail="Nenhuma chave de IA configurada no servidor (GROQ_API_KEY / OPENAI_API_KEY).",
         )
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{GROQ_BASE_URL}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "content-type": "application/json",
-            },
-            json={
-                "model": GROQ_MARKETING_MODEL,
-                "max_tokens": 700,
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": prompt_system},
-                    {"role": "user", "content": conteudo},
-                ],
-            },
-            timeout=40.0,
+    try:
+        async with httpx.AsyncClient() as client:
+            if provedor == "anthropic":
+                resp = await client.post(
+                    f"{base_url}/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": modelo,
+                        "max_tokens": 700,
+                        "system": prompt_system,
+                        "messages": [{"role": "user", "content": conteudo}],
+                    },
+                    timeout=40.0,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                content_blocks = data.get("content", [])
+                texto = content_blocks[0].get("text", "") if content_blocks else ""
+                tokens_in = data.get("usage", {}).get("input_tokens", 0)
+                tokens_out = data.get("usage", {}).get("output_tokens", 0)
+            else:
+                resp = await client.post(
+                    f"{base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": modelo,
+                        "max_tokens": 700,
+                        "response_format": {"type": "json_object"},
+                        "messages": [
+                            {"role": "system", "content": prompt_system},
+                            {"role": "user", "content": conteudo},
+                        ],
+                    },
+                    timeout=40.0,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                escolhas = data.get("choices", [])
+                texto = escolhas[0].get("message", {}).get("content", "") if escolhas else ""
+                usage = data.get("usage", {})
+                tokens_in = usage.get("prompt_tokens", 0)
+                tokens_out = usage.get("completion_tokens", 0)
+
+            # Registrar consumo para billing futuro
+            db.add(MarketingUsage(
+                loja_id=loja_id,
+                usuario_id=usuario_id,
+                funcionalidade="marketing",
+                provedor=provedor,
+                modelo=modelo,
+                tokens_input=tokens_in,
+                tokens_output=tokens_out,
+                byok=False,
+            ))
+            await db.commit()
+            return texto
+
+    except httpx.HTTPStatusError as exc:
+        err_body = exc.response.text[:300]
+        import logging
+        logging.getLogger("marketing").error(f"[MARKETING IA] Status {exc.response.status_code}: {err_body}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Erro no serviço de IA ({exc.response.status_code}). Tente novamente em instantes.",
         )
-        resp.raise_for_status()
-        data = resp.json()
-        escolhas = data.get("choices", [])
-        texto = escolhas[0].get("message", {}).get("content", "") if escolhas else ""
-
-        # Registrar consumo para billing futuro
-        usage = data.get("usage", {})
-        db.add(MarketingUsage(
-            loja_id=loja_id,
-            usuario_id=usuario_id,
-            funcionalidade="marketing",
-            provedor="groq",
-            modelo=GROQ_MARKETING_MODEL,
-            tokens_input=usage.get("prompt_tokens", 0),
-            tokens_output=usage.get("completion_tokens", 0),
-            byok=False,
-        ))
-        await db.commit()
-
-        return texto
+    except httpx.RequestError as exc:
+        import logging
+        logging.getLogger("marketing").error(f"[MARKETING IA] Falha de conexão: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível conectar ao serviço de IA. Verifique sua conexão.",
+        )
 
 
 @router.post(

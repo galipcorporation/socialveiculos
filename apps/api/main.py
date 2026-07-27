@@ -257,8 +257,8 @@ app.include_router(midias_router)
 app.include_router(lgpd_router)
 app.include_router(contratos_router)
 app.include_router(marketing_router)
-# credenciais_ia (BYOK) desativado: a IA é sempre a da plataforma (Groq).
-# Código mantido em routers/credenciais_ia.py caso o BYOK volte.
+from routers.credenciais_ia import router as credenciais_ia_router
+app.include_router(credenciais_ia_router)
 app.include_router(credenciais_detran_router)
 app.include_router(fiscal_router)
 app.include_router(site_router)
