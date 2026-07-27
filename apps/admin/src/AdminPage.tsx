@@ -1745,7 +1745,9 @@ function AbaLojas() {
     try {
       const res = await api.post<{ access_token: string; loja_nome: string }>(`/admin/lojas/${loja.id}/impersonar`, {})
       const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      const gestorBase = isDev ? 'http://localhost:5173' : window.location.origin.replace('admin.', 'app.').replace('/admin', '')
+      const gestorBase = isDev
+        ? 'http://localhost:5173'
+        : (import.meta.env.VITE_GESTOR_URL || window.location.origin.replace('admin.', 'app.').replace('/admin', ''))
       const url = `${gestorBase}/impersonar?token=${encodeURIComponent(res.access_token)}&loja=${encodeURIComponent(res.loja_nome)}`
       window.open(url, '_blank')
     } catch (err: any) {
