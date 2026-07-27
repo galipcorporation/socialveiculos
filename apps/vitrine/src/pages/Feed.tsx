@@ -132,8 +132,10 @@ export function Feed() {
   useEffect(() => {
     if (isAuthenticated) {
       api.get<Story[]>('/vitrine/stories').then(setStories).catch(() => {})
+    } else {
+      setStories([])
     }
-  }, [])
+  }, [isAuthenticated])
 
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

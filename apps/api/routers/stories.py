@@ -14,7 +14,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from database import get_db
-from deps import get_current_user, get_current_b2b_user, B2BContext
+from deps import get_current_user, get_current_b2b_user, B2BContext, get_optional_user
 from models import (
     Story, LojaSeguidora, LojaConfig, Loja, Veiculo, Usuario, StatusVeiculo,
 )
@@ -109,9 +109,12 @@ def _story_to_out(s: Story) -> StoryOut:
 @router.get("/vitrine/stories", response_model=List[StoryOut])
 async def listar_stories_vitrine(
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Optional[Usuario] = Depends(get_optional_user),
 ):
     """Stories das lojas que o usuário B2C segue, ainda não expirados e já visíveis ao público."""
+    if not current_user:
+        return []
+
     agora = _now()
 
     seguidas_stmt = select(LojaSeguidora.loja_id).where(LojaSeguidora.usuario_id == current_user.id)
