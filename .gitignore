@@ -61,6 +61,7 @@ pnpm-debug.log*
 *.db-shm
 *.db-wal
 *.db.bak-*
+*.db.bkp-*
 *.db-shm.bak-*
 *.db-wal.bak-*
 
@@ -72,3 +73,4 @@ pytest-report.xml
 .vercel
 .env*
 deploy.ps1
+preview-apk.ps1

@@ -2238,7 +2238,6 @@ VARIAVEIS_CONTRATO_ASSINATURA: List[tuple] = [
     ("responsavel.telefone", "Telefone"),
     ("plano.nome", "Nome do plano"),
     ("plano.descricao", "Descrição"),
-    ("plano.preco_mensal", "Preço de tabela"),
     ("plano.modulos", "Módulos inclusos"),
     ("assinatura.valor_mensal", "Valor mensal contratado"),
     ("assinatura.inicio", "Início da vigência"),
@@ -2337,6 +2336,9 @@ async def resolver_variaveis_contrato_assinatura(
 
         "plano.nome": plano.nome if plano else None,
         "plano.descricao": plano.descricao if plano else None,
+        # Fora do catálogo de variáveis (o contrato mostra só o valor cobrado, em
+        # assinatura.valor_mensal — dois preços no mesmo documento confundem o
+        # lojista). Mantido aqui para não quebrar modelos antigos que já usam a tag.
         "plano.preco_mensal": formatar_moeda(plano.preco_mensal) if plano else None,
         "plano.modulos": ", ".join(modulos) if modulos else None,
 

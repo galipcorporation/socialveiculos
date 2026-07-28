@@ -30,7 +30,6 @@ export const CATALOGO_VARIAVEIS_ASSINATURA: VarGroup[] = [
     itens: [
       { chave: 'plano.nome', label: 'Nome do plano' },
       { chave: 'plano.descricao', label: 'Descrição' },
-      { chave: 'plano.preco_mensal', label: 'Preço de tabela' },
       { chave: 'plano.modulos', label: 'Módulos inclusos' },
     ],
   },

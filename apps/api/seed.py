@@ -243,9 +243,9 @@ async def seed():
         else:
             session.add(Plano(
                 id=_uuid(),
-                nome="Básico",
-                descricao="Gestão de estoque e CRM, sem módulos premium",
-                preco_mensal=99.90,
+                nome="Essencial",
+                descricao="Gestão de estoque, CRM e vitrine — sem módulos premium",
+                preco_mensal=149.90,
                 modulos_incluidos='[]',
             ))
             plano_id = _uuid()
@@ -253,7 +253,14 @@ async def seed():
                 id=plano_id,
                 nome="Profissional",
                 descricao="Gestão completa + todos os módulos premium",
-                preco_mensal=299.90,
+                preco_mensal=349.90,
+                modulos_incluidos='["contratos","simulador","marketing","assistente_ia"]',
+            ))
+            session.add(Plano(
+                id=_uuid(),
+                nome="Premium",
+                descricao="Tudo do Profissional + multi-loja, estoque ilimitado e suporte prioritário",
+                preco_mensal=599.90,
                 modulos_incluidos='["contratos","simulador","marketing","assistente_ia"]',
             ))
             print("  [OK] Planos criados")
@@ -267,7 +274,7 @@ async def seed():
                 loja_id=loja_id,
                 plano_id=plano_id,
                 status=StatusAssinatura.ATIVA,
-                valor_mensal=299.90,
+                valor_mensal=349.90,
                 # Sem vencimento o acesso até funciona (legado), mas a tela de
                 # Plano & Acesso mostraria "—"; um ano à frente mantém o ambiente
                 # de desenvolvimento sempre liberado.

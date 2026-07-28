@@ -48,12 +48,27 @@ import { AssistiveTouch } from '../components/ui'
 const Stack = createNativeStackNavigator<RootStackParamList>()
 export const navigationRef = createNavigationContainerRef<RootStackParamList>()
 
-/** Ao tocar numa notificação (link "chat:{conversaId}"), abre a conversa. */
+/**
+ * Ao tocar numa notificação, abre a tela correspondente:
+ *   "chat:{conversaId}"                       → conversa do chat
+ *   "assistente:{conversaId}:{nome do lead}"  → conversa do Assistente do Vendedor
+ * O nome vai no próprio link porque a rota ConversaAssistente exige `nome` e o
+ * push chega sem nenhum dado carregado.
+ */
 function abrirDeepLink(link?: unknown) {
   if (typeof link !== 'string' || !navigationRef.isReady()) return
   if (link.startsWith('chat:')) {
     const id = link.slice('chat:'.length)
     if (id) navigationRef.navigate('Conversa', { id })
+    return
+  }
+  if (link.startsWith('assistente:')) {
+    // O nome do lead pode conter ':', então só o primeiro separador divide.
+    const resto = link.slice('assistente:'.length)
+    const sep = resto.indexOf(':')
+    const id = sep === -1 ? resto : resto.slice(0, sep)
+    const nome = sep === -1 ? 'Lead' : resto.slice(sep + 1) || 'Lead'
+    if (id) navigationRef.navigate('ConversaAssistente', { id, nome })
   }
 }
 

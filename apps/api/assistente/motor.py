@@ -297,6 +297,17 @@ async def gerar_resposta_ia(
         raise
 
 
+def _resumir_para_push(texto: str, limite: int = 120) -> str:
+    """Corpo do push: uma linha, curta. O SO ja trunca, mas cortar aqui evita
+    mandar um audio transcrito inteiro pela rede."""
+    limpo = " ".join((texto or "").split())
+    if not limpo:
+        return "Nova mensagem. Toque para ver a sugestao da IA."
+    if len(limpo) <= limite:
+        return limpo
+    return limpo[: limite - 1].rstrip() + "…"
+
+
 async def processar_mensagem_recebida(
     db,
     loja_id: str,
@@ -451,3 +462,20 @@ async def processar_mensagem_recebida(
             mensagem.sugestao_ia = resposta_ia
             await db.commit()
             logger.info("[ASSISTENTE] Sugestao de resposta IA salva no banco (modo Copiloto).")
+
+            # Avisar o vendedor: no Copiloto nada sai sem aprovacao, entao sem
+            # push a sugestao fica parada ate ele abrir o app por conta propria.
+            # Falha de push nunca derruba o processamento da mensagem.
+            try:
+                from push import enviar_push_usuario
+
+                await enviar_push_usuario(
+                    db,
+                    usuario_id,
+                    f"{conversa.contato_nome or 'Lead'} respondeu",
+                    _resumir_para_push(conteudo),
+                    link=f"assistente:{conversa.id}:{conversa.contato_nome or 'Lead'}",
+                    tipo="assistente_sugestao",
+                )
+            except Exception as e:
+                logger.error(f"[ASSISTENTE ERROR] Falha ao enviar push da sugestao: {e}")
