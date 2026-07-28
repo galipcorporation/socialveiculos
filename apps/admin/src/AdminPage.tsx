@@ -617,7 +617,7 @@ function ModalFinanceiro({ lojaId, lojaNome, onClose, onSaved }: ModalFinanceiro
         setDiff(null)
         setForm((f) => ({
           ...f,
-          valor_mensal: mascararMoeda(det.assinatura?.valor_mensal ?? ativos[0]?.preco_mensal ?? 99.90),
+          valor_mensal: mascararMoeda(det.assinatura?.valor_mensal ?? ativos[0]?.preco_mensal ?? 149.90),
           observacoes: det.assinatura?.observacoes || '',
         }))
       })
@@ -1459,7 +1459,7 @@ function ModalPlano({ planoId, onClose, onSaved }: ModalPlanoProps) {
           </div>
           <div className="form-group">
             <label>Preço (R$/mês)</label>
-            <input type="text" inputMode="numeric" value={form.preco_mensal} onChange={(e) => setForm((f) => ({ ...f, preco_mensal: mascararMoeda(e.target.value) }))} required placeholder="299,90" />
+            <input type="text" inputMode="numeric" value={form.preco_mensal} onChange={(e) => setForm((f) => ({ ...f, preco_mensal: mascararMoeda(e.target.value) }))} required placeholder="349,90" />
           </div>
 
           <div className="form-group span-2">
@@ -3079,11 +3079,14 @@ interface UsuarioItem {
   id: string
   nome: string
   email: string
-  telefone: string | null
+  telefone?: string | null
   papel: string
   ativo: boolean
   lojas: string[]
-  vinculos: UsuarioVinculo[]
+  // Opcionais de propósito: a API só passa a mandá-los após o deploy do backend
+  // (M121). Declarar como obrigatórios fazia o TS aceitar `.vinculos.some()`,
+  // que quebrava a tela contra a API antiga.
+  vinculos?: UsuarioVinculo[]
 }
 
 const PAPEL_LABELS: Record<string, string> = {
@@ -3217,9 +3220,13 @@ function ModalEditarUsuario({
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
+  // API antiga (sem deploy do backend) não devolve `vinculos`: sem este default
+  // o .some() abaixo quebra a tela inteira com "Cannot read properties of undefined".
+  const vinculos = usuario.vinculos ?? []
+
   // Lojas em que ele ainda não está — evita 409 de vínculo duplicado no select.
   const lojasDisponiveis = lojas.filter(
-    (l) => !usuario.vinculos.some((v) => v.loja_id === l.id),
+    (l) => !vinculos.some((v) => v.loja_id === l.id),
   )
 
   const acao = async (fn: () => Promise<any>) => {
@@ -3321,11 +3328,11 @@ function ModalEditarUsuario({
               Define em qual loja o vendedor trabalha. Sem nenhuma loja ativa ele não consegue entrar no sistema.
             </p>
 
-            {usuario.vinculos.length === 0 ? (
+            {vinculos.length === 0 ? (
               <p style={{ fontSize: '13px', color: 'var(--sv-text-muted)', margin: '0 0 12px' }}>Nenhuma loja vinculada.</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
-                {usuario.vinculos.map((v) => (
+                {vinculos.map((v) => (
                   <div key={v.membro_id} style={{
                     display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
                     padding: '10px 12px', borderRadius: 'var(--sv-radius)',
