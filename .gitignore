@@ -74,3 +74,4 @@ pytest-report.xml
 .env*
 deploy.ps1
 preview-apk.ps1
+CLAUDE.md

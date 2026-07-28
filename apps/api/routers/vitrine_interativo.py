@@ -20,6 +20,7 @@ from models import (
 from schemas import (
     FavoritoResponse, FavoritoRequest, VeiculoB2CResponse,
     ConversaB2CResponse, MensagemB2CResponse, ConversaB2CCreateRequest,
+    MensagemB2CCreateRequest,
     MeuVeiculoResponse, VeiculoDocumentoResponse,
 )
 from auth import decode_access_token
@@ -655,7 +656,7 @@ async def listar_mensagens_conversa(
 )
 async def enviar_mensagem_conversa(
     id: str,
-    data: ConversaB2CCreateRequest, # Podemos usar para mandar a mensagem (reaproveitando o campo mensagem)
+    data: MensagemB2CCreateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
@@ -671,7 +672,7 @@ async def enviar_mensagem_conversa(
     nova_msg = Mensagem(
         conversa_id=id,
         autor_id=current_user.id,
-        conteudo=data.mensagem
+        conteudo=data.conteudo
     )
     db.add(nova_msg)
     conversa.updated_at = utcnow()

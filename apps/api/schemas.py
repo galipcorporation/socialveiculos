@@ -1623,6 +1623,11 @@ class ConversaB2CCreateRequest(BaseModel):
     mensagem: Optional[str] = None
 
 
+class MensagemB2CCreateRequest(BaseModel):
+    """Envio de mensagem numa conversa B2C já existente."""
+    conteudo: str = Field(min_length=1, max_length=4000)
+
+
 # ── Simulador de Crédito ───────────────────────────────────────
 
 class SimuladorBancoCredencialRequest(BaseModel):

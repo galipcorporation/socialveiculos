@@ -108,7 +108,7 @@ async def test_reabrir_conversa_devolve_ultima_mensagem_real(client, veiculo_pub
 
     envio = await client.post(
         f"/v1/vitrine/conversas/{conversa_id}/mensagens",
-        json={"veiculo_id": veiculo_publicado, "mensagem": "Ainda está disponível?"},
+        json={"conteudo": "Ainda está disponível?"},
         headers=headers,
     )
     assert envio.status_code == 200, envio.text

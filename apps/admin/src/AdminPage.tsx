@@ -3341,18 +3341,19 @@ function ModalEditarUsuario({
                     <span style={{ flex: 1, minWidth: 120, color: 'var(--sv-text)', fontWeight: 600, fontSize: '14px' }}>
                       {v.loja_nome}
                     </span>
-                    <select
-                      value={v.papel}
-                      disabled={loading}
-                      onChange={(e) => acao(() =>
-                        api.patch(`/admin/usuarios/${usuario.id}/vinculos/${v.membro_id}`, { papel: e.target.value }),
-                      )}
-                      style={{ width: 'auto', minWidth: 110 }}
-                    >
-                      {PAPEIS_VINCULO.map((p) => (
-                        <option key={p} value={p}>{PAPEL_LABELS[p]}</option>
-                      ))}
-                    </select>
+                    <div className="form-group" style={{ minWidth: 110 }}>
+                      <select
+                        value={v.papel}
+                        disabled={loading}
+                        onChange={(e) => acao(() =>
+                          api.patch(`/admin/usuarios/${usuario.id}/vinculos/${v.membro_id}`, { papel: e.target.value }),
+                        )}
+                      >
+                        {PAPEIS_VINCULO.map((p) => (
+                          <option key={p} value={p}>{PAPEL_LABELS[p]}</option>
+                        ))}
+                      </select>
+                    </div>
                     <button
                       className="btn btn-secondary"
                       disabled={loading}
@@ -3380,24 +3381,27 @@ function ModalEditarUsuario({
             )}
 
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <select
-                value={novaLoja}
-                onChange={(e) => setNovaLoja(e.target.value)}
-                style={{ flex: 1, minWidth: 160 }}
-                disabled={lojasDisponiveis.length === 0}
-              >
-                <option value="">
-                  {lojasDisponiveis.length === 0 ? 'Já está em todas as lojas' : 'Selecione a loja…'}
-                </option>
-                {lojasDisponiveis.map((l) => (
-                  <option key={l.id} value={l.id}>{l.nome}</option>
-                ))}
-              </select>
-              <select value={novoPapel} onChange={(e) => setNovoPapel(e.target.value)} style={{ width: 'auto', minWidth: 110 }}>
-                {PAPEIS_VINCULO.map((p) => (
-                  <option key={p} value={p}>{PAPEL_LABELS[p]}</option>
-                ))}
-              </select>
+              <div className="form-group" style={{ flex: 1, minWidth: 160 }}>
+                <select
+                  value={novaLoja}
+                  onChange={(e) => setNovaLoja(e.target.value)}
+                  disabled={lojasDisponiveis.length === 0}
+                >
+                  <option value="">
+                    {lojasDisponiveis.length === 0 ? 'Já está em todas as lojas' : 'Selecione a loja…'}
+                  </option>
+                  {lojasDisponiveis.map((l) => (
+                    <option key={l.id} value={l.id}>{l.nome}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group" style={{ minWidth: 110 }}>
+                <select value={novoPapel} onChange={(e) => setNovoPapel(e.target.value)}>
+                  {PAPEIS_VINCULO.map((p) => (
+                    <option key={p} value={p}>{PAPEL_LABELS[p]}</option>
+                  ))}
+                </select>
+              </div>
               <button
                 className="btn btn-primary"
                 disabled={loading || !novaLoja}

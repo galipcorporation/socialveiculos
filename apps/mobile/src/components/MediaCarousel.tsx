@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { Dimensions, FlatList, LayoutChangeEvent, Pressable, StyleSheet, View, type ViewToken } from 'react-native'
+import { FlatList, LayoutChangeEvent, Pressable, StyleSheet, View, type ViewToken } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
@@ -94,14 +94,15 @@ interface MediaCarouselProps {
 
 /** Carrossel de fotos/vídeos do veículo — setas, bolinhas e contador "N/M". */
 export function MediaCarousel({ veiculo, width, height, borderRadius = radius.md }: MediaCarouselProps) {
-  const larguraTela = Dimensions.get('window').width
-  // Sem `width` explícito, mede o container real via onLayout — herdar a
-  // largura da tela cheia estoura cards com padding lateral (corta a mídia
-  // e some com a seta "próximo").
-  const [larguraMedida, setLarguraMedida] = useState(width ?? larguraTela)
+  // Sem `width` explícito, mede o container real via onLayout. Não usar a
+  // largura da tela como palpite inicial: em card com padding lateral ela
+  // estoura o container em 2×padding, jogando a seta "próximo" e o contador
+  // pra fora da área visível no primeiro frame.
+  const [larguraMedida, setLarguraMedida] = useState<number | null>(width ?? null)
   const w = width ?? larguraMedida
   const onLayoutContainer = (e: LayoutChangeEvent) => {
-    if (!width) setLarguraMedida(e.nativeEvent.layout.width)
+    const nova = e.nativeEvent.layout.width
+    if (!width && nova > 0 && nova !== larguraMedida) setLarguraMedida(nova)
   }
 
   const midias: Midia[] = React.useMemo(
@@ -115,6 +116,12 @@ export function MediaCarousel({ veiculo, width, height, borderRadius = radius.md
     const primeiro = viewableItems[0]
     if (primeiro?.index != null) setIndice(primeiro.index)
   }).current
+
+  // Primeiro frame: ainda não medimos. Reserva a altura e espera o onLayout —
+  // renderizar com largura chutada é o que fazia a mídia vazar do card.
+  if (w == null) {
+    return <View onLayout={onLayoutContainer} style={{ height, borderRadius, backgroundColor: '#2d3748' }} />
+  }
 
   if (midias.length === 0) {
     return <View onLayout={onLayoutContainer}><Placeholder veiculo={veiculo} width={w} height={height} borderRadius={borderRadius} /></View>

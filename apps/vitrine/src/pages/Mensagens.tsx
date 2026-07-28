@@ -165,11 +165,7 @@ export function Mensagens() {
       socketRef.current.send(JSON.stringify({ conversa_id: selected.id, conteudo: content }))
     } else {
       try {
-        await api.post(`/vitrine/conversas/${selected.id}/mensagens`, {
-          veiculo_id: selected.veiculo_id || '',
-          loja_id: selected.loja_id,
-          mensagem: content,
-        })
+        await api.post(`/vitrine/conversas/${selected.id}/mensagens`, { conteudo: content })
         fetchMensagens(selected.id)
       } catch (err) {
         console.error('Erro ao enviar mensagem:', err)
