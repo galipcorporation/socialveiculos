@@ -16,6 +16,7 @@ import { RichEditor } from '../../components/RichEditor'
 import type { Contrato, StatusContrato } from '../../services/types'
 import { STATUS_CONTRATO_LABEL } from '../../services/types'
 import { formatBRL, formatData, maskMoedaInput, parseMoedaInput } from '../../lib/format'
+import { extractErrorDetails } from '../../lib/api'
 import type { RootScreenProps } from '../../navigation/types'
 
 const TONE: Record<StatusContrato, 'success' | 'warning' | 'neutral' | 'error'> = {
@@ -121,8 +122,11 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
     mutationFn: (s: StatusContrato) => contratosService.alterarStatus(contrato.id, s),
     onSuccess: (_data, s) => {
       // Cancelar compra e venda desfaz a venda no backend: além dos contratos,
-      // invalida estoque, esteiras, financeiro e dashboard.
-      queryClient.invalidateQueries()
+      // invalida estoque, esteiras, financeiro e dashboard. Sem `queryKey` o
+      // invalidate atingia o app inteiro, inclusive telas sem relação (nº 18).
+      for (const key of [['contratos'], ['veiculos'], ['esteiras'], ['financeiro'], ['dashboard']]) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
       setConfirmarCancelamento(false)
       toast.show(
         'success',
@@ -132,7 +136,7 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
       )
       onClose()
     },
-    onError: () => toast.show('error', 'Não foi possível alterar o status.'),
+    onError: (err) => toast.show('error', extractErrorDetails(err).message),
   })
 
   // Cancelar um contrato de compra e venda desfaz a venda — pede confirmação.
@@ -215,8 +219,10 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
   const queryClient = useQueryClient()
   const toast = useToast()
   const [tipo, setTipo] = useState<'compra_venda' | 'compra'>('compra_venda')
-  const [veiculo, setVeiculo] = useState('')
-  const [cliente, setCliente] = useState('')
+  // Guarda id + rótulo: o backend vincula pelo id, a tela mostra o nome. Antes
+  // só o nome era guardado e o contrato nascia sem veículo e sem cliente.
+  const [veiculo, setVeiculo] = useState<{ id: string; nome: string } | null>(null)
+  const [cliente, setCliente] = useState<{ id: string; nome: string } | null>(null)
   const [valor, setValor] = useState('')
   const [entrada, setEntrada] = useState('')
   const [parcelas, setParcelas] = useState('')
@@ -237,13 +243,13 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
   })
 
   const salvar = async () => {
-    if (!veiculo.trim() || !cliente.trim()) { toast.show('error', 'Informe veículo e cliente.'); return }
+    if (!veiculo || !cliente) { toast.show('error', 'Escolha o veículo e o cliente.'); return }
     setSalvando(true)
     try {
       const input: ContratoInput = {
         tipo,
-        veiculo_nome: veiculo.trim(),
-        cliente_nome: cliente.trim(),
+        veiculo_id: veiculo.id,
+        cliente_id: cliente.id,
         valor_venda: parseMoedaInput(valor) || undefined,
         valor_entrada: parseMoedaInput(entrada) || undefined,
         parcelas: parseInt(parcelas.replace(/\D/g, ''), 10) || undefined,
@@ -252,8 +258,12 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
       await contratosService.criar(input)
       await queryClient.invalidateQueries({ queryKey: ['contratos'] })
       toast.show('success', 'Contrato criado.')
-      setVeiculo(''); setCliente(''); setValor(''); setEntrada(''); setParcelas(''); setObs('')
+      setVeiculo(null); setCliente(null); setValor(''); setEntrada(''); setParcelas(''); setObs('')
       onClose()
+    } catch (err) {
+      // Sem este catch, falha de rede/422 fechava o sheet sem aviso e o usuário
+      // achava que o contrato tinha sido criado (padrão nº 18).
+      toast.show('error', extractErrorDetails(err).message)
     } finally {
       setSalvando(false)
     }
@@ -269,14 +279,14 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
         />
         <SelectField
           label="Veículo"
-          value={veiculo || undefined}
+          value={veiculo?.nome}
           placeholder={veiculosQ.isLoading ? 'Carregando…' : 'Escolher do estoque'}
           icon="car-sport-outline"
           onPress={() => setVeiculoSheet(true)}
         />
         <SelectField
           label="Cliente"
-          value={cliente || undefined}
+          value={cliente?.nome}
           placeholder={clientesQ.isLoading ? 'Carregando…' : 'Escolher cliente'}
           icon="person-outline"
           onPress={() => setClienteSheet(true)}
@@ -302,7 +312,7 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
         onSelect={(id) => {
           const v = (veiculosQ.data ?? []).find((x) => x.id === id)
           if (!v) return
-          setVeiculo(`${v.marca} ${v.modelo}${v.versao ? ` ${v.versao}` : ''}`)
+          setVeiculo({ id: v.id, nome: `${v.marca} ${v.modelo}${v.versao ? ` ${v.versao}` : ''}` })
           if (!valor && v.preco_venda) setValor(maskMoedaInput(String(Math.round(v.preco_venda * 100))))
         }}
       />
@@ -318,7 +328,7 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
         }))}
         onSelect={(id) => {
           const c = (clientesQ.data ?? []).find((x) => x.id === id)
-          if (c) setCliente(c.nome)
+          if (c) setCliente({ id: c.id, nome: c.nome })
         }}
       />
     </Sheet>
@@ -338,6 +348,8 @@ function ModelosTab() {
   const queryClient = useQueryClient()
   const [selecionado, setSelecionado] = useState<TemplateContrato | null>(null)
   const [novoAberto, setNovoAberto] = useState(false)
+  // Exclusão de modelo é destrutiva e não tem desfazer: confirma antes.
+  const [paraRemover, setParaRemover] = useState<TemplateContrato | null>(null)
   const toast = useToast()
 
   const q = useQuery({
@@ -351,8 +363,8 @@ function ModelosTab() {
       queryClient.invalidateQueries({ queryKey: ['templates'] })
       toast.show('success', 'Modelo duplicado.')
     },
-    onError: (err: any) => {
-      toast.show('error', err.message || 'Erro ao duplicar.')
+    onError: (err) => {
+      toast.show('error', extractErrorDetails(err).message)
     },
   })
 
@@ -360,10 +372,11 @@ function ModelosTab() {
     mutationFn: (id: string) => contratosService.removerTemplate(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] })
+      setParaRemover(null)
       toast.show('success', 'Modelo removido.')
     },
-    onError: (err: any) => {
-      toast.show('error', err.message || 'Erro ao remover.')
+    onError: (err) => {
+      toast.show('error', extractErrorDetails(err).message)
     },
   })
 
@@ -420,7 +433,7 @@ function ModelosTab() {
                   title=""
                   variant="ghost"
                   icon="trash-outline"
-                  onPress={() => delMut.mutate(item.id)}
+                  onPress={() => setParaRemover(item)}
                   style={{ minWidth: 40, paddingHorizontal: 0 }}
                 />
               </View>
@@ -440,6 +453,29 @@ function ModelosTab() {
           onClose={() => setNovoAberto(false)}
         />
       )}
+
+      <Sheet
+        visible={paraRemover !== null}
+        onClose={() => setParaRemover(null)}
+        title="Remover modelo"
+        scrollable={false}
+      >
+        <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
+          <Txt variant="body">Remover o modelo “{paraRemover?.nome}”?</Txt>
+          <Txt variant="caption" color="textDim">
+            Os contratos já gerados com ele não mudam. Esta ação não pode ser desfeita.
+          </Txt>
+          <Button
+            title="Remover modelo"
+            variant="danger"
+            icon="trash-outline"
+            loading={delMut.isPending}
+            onPress={() => paraRemover && delMut.mutate(paraRemover.id)}
+            full
+          />
+          <Button title="Cancelar" variant="ghost" onPress={() => setParaRemover(null)} full />
+        </View>
+      </Sheet>
     </View>
   )
 }

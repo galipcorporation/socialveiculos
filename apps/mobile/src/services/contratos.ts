@@ -3,10 +3,15 @@
 import { api } from '../lib/api'
 import type { Contrato, StatusContrato } from './types'
 
+// O backend (`ContratoCreateRequest`) só aceita **ids** — `veiculo_nome` /
+// `cliente_nome` eram descartados em silêncio pelo Pydantic, e o contrato
+// nascia órfão (`veiculo_id = None`). Como o `veiculo_nome` da resposta é
+// derivado do relacionamento, ele voltava vazio: contrato sem veículo nem
+// cliente na lista, e PDF com as variáveis todas em branco.
 export interface ContratoInput {
   tipo: 'compra_venda' | 'compra'
-  veiculo_nome?: string
-  cliente_nome?: string
+  veiculo_id?: string
+  cliente_id?: string
   valor_venda?: number
   valor_entrada?: number
   parcelas?: number
@@ -166,8 +171,8 @@ export const contratosService = {
   async criar(input: ContratoInput): Promise<Contrato> {
     const c = await api.post<ContratoDTO>('/contratos', {
       tipo: input.tipo,
-      veiculo_nome: input.veiculo_nome || null,
-      cliente_nome: input.cliente_nome || null,
+      veiculo_id: input.veiculo_id || null,
+      cliente_id: input.cliente_id || null,
       valor_venda: input.valor_venda ?? null,
       valor_entrada: input.valor_entrada ?? null,
       parcelas: input.parcelas ?? null,

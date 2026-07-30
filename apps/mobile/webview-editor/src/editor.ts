@@ -267,7 +267,9 @@ function iniciar(msg: InitMessage) {
           editor.chain().focus().setNodeSelection(pos).run()
           return
         }
-      } catch {}
+      } catch {
+        // posAtDOM lança se o nó saiu do documento — cai no foco genérico abaixo.
+      }
     }
 
     const pm = document.querySelector<HTMLElement>('.ProseMirror')
@@ -317,11 +319,35 @@ window.addEventListener('message', (ev) => {
 // Android entrega a mensagem em document, não em window.
 document.addEventListener('message', ((ev: any) => handleMessage(ev.data)) as EventListener)
 
+/** Aplica o tema do app nas CSS vars. As cores vinham hardcoded em dark no
+ *  index.html, então o editor saía escuro no tema claro — quem usa o app em
+ *  "automático" via isso metade do dia. Só grava chaves conhecidas: o valor vem
+ *  do RN, mas escrever qualquer nome recebido em `style` seria injeção. */
+const TEMA_VARS = [
+  'bg', 'input-bg', 'text', 'text-dim', 'text-muted', 'border',
+  'primary', 'primary-text', 'primary-glow', 'overlay-soft', 'error',
+] as const
+
+function aplicarTema(tema: Record<string, string>) {
+  const raiz = document.documentElement
+  for (const nome of TEMA_VARS) {
+    const valor = tema[nome]
+    // Só cor: corta `url(...)`, `expression(...)` e afins vindos de um payload
+    // adulterado. Sem isto, `--bg` viraria vetor de CSS injection.
+    if (typeof valor === 'string' && /^(#[0-9a-fA-F]{3,8}|rgba?\([\d\s.,%]+\))$/.test(valor.trim())) {
+      raiz.style.setProperty(`--${nome}`, valor.trim())
+    }
+  }
+}
+
 function handleMessage(raw: unknown) {
   try {
     const msg = typeof raw === 'string' ? JSON.parse(raw) : raw
     if (msg.type === 'init') {
+      if (msg.tema) aplicarTema(msg.tema)
       iniciar(msg)
+    } else if (msg.type === 'setTema') {
+      aplicarTema(msg.tema)
     } else if (msg.type === 'setVariaveis') {
       currentLabels = msg.labels
       renderVariaveis(msg.variaveis)
