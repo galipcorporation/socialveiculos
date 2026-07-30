@@ -15,6 +15,7 @@ from deps import get_current_b2b_user, B2BContext, registrar_auditoria
 from auth import hash_password
 from models import Usuario, MembroLoja, PapelUsuario, ModuloHabilitado
 from rbac import exige_permissao, Acao, Recurso
+from modulos import MODULOS_BASE, modulos_padrao_json
 from schemas import (
     MembroEquipeResponse,
     ConvidarMembroRequest,
@@ -30,7 +31,7 @@ PAPEIS_PERMITIDOS_NA_LOJA = {PapelUsuario.GESTOR, PapelUsuario.VENDEDOR}
 # Módulos do núcleo do CRM: não são contratáveis por fora, então o gestor
 # sempre pode liberá-los a um vendedor. Os demais (premium) dependem de o
 # admin ter habilitado o módulo para a loja (ModuloHabilitado).
-MODULOS_BASE = {"estoque", "crm", "financeiro"}
+# Fonte única em `modulos.py` — reimportado aqui para não duplicar a lista.
 
 
 async def _validar_modulos_da_loja(db: AsyncSession, loja_id: str, modulos_json: str | None) -> None:
@@ -183,11 +184,14 @@ async def convidar_membro(
     await _validar_modulos_da_loja(db, context.loja_id, data.modulos)
 
     # 4. Criar o vínculo
+    # Sem módulos informados o vínculo nasce com o núcleo, nunca NULL: o mobile
+    # esconde a aba cujo módulo não está na lista, então `NULL` deixaria o
+    # vendedor sem Estoque/CRM — sem erro nem 403, a aba só não apareceria.
     membro = MembroLoja(
         usuario_id=usuario.id,
         loja_id=context.loja_id,
         papel=data.papel,
-        modulos=data.modulos,
+        modulos=data.modulos or modulos_padrao_json(),
         ativo=True,
     )
     db.add(membro)

@@ -26,6 +26,7 @@ from auth import (
 from database import get_db
 from deps import get_current_user, registrar_auditoria
 from models import Usuario, Loja, MembroLoja, Sessao, PapelUsuario, utcnow
+from modulos import modulos_padrao_json
 from config import settings
 from limiter import rate_limit
 from storage import storage_provider
@@ -297,10 +298,14 @@ async def register_b2b(data: RegisterB2BRequest, request: Request, db: AsyncSess
     await db.flush()  # Para obter o ID do usuário
 
     # 5. Criar Vínculo MembroLoja
+    # `modulos` preenchido mesmo para gestor (que enxerga tudo por bypass): NULL
+    # é o estado que deixa um vendedor sem nenhuma aba no mobile, e o vínculo
+    # pode ser rebaixado depois.
     membro = MembroLoja(
         usuario_id=novo_usuario.id,
         loja_id=nova_loja.id,
         papel=PapelUsuario.GESTOR,
+        modulos=modulos_padrao_json(),
         ativo=True
     )
     db.add(membro)

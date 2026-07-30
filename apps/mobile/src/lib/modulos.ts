@@ -24,7 +24,11 @@ export const MODULOS: ModuloDef[] = [
   { key: 'estoque', label: 'Estoque', base: true },
   { key: 'crm', label: 'CRM Kanban', base: true },
   { key: 'financeiro', label: 'Financeiro', base: true },
-  { key: 'contratos', label: 'Contratos', base: true },
+  // `contratos` é PREMIUM (enum `Modulo` em apps/api/modulos.py) — não entra em
+  // MODULOS_BASE, que no backend é {estoque, crm, financeiro}. Marcá-lo como
+  // base fazia o app mostrar a tela sem a loja ter contratado, e o 402 só vinha
+  // no submit (ver "Padrões a vigiar" nº 12 e nº 13).
+  { key: 'contratos', label: 'Contratos' },
   { key: 'simulador', label: 'Simulador de Crédito' },
   { key: 'marketing', label: 'Marketing' },
   { key: 'assistente_ia', label: 'Assistente de IA' },

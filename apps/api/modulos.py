@@ -4,6 +4,7 @@ Protege rotas/UI premium: só passa quem tem o módulo contratado e a assinatura
 """
 
 import enum
+import json
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -23,6 +24,25 @@ class Modulo(str, enum.Enum):
     ASSISTENTE_IA = "assistente_ia"
     FISCAL = "fiscal"
     SITE = "site"
+
+
+# Módulos do núcleo do CRM: não são contratáveis por fora (não estão no enum
+# Modulo acima), então o gestor sempre pode liberá-los a um vendedor.
+# Fonte única: `equipe.py` valida contra esta lista e `admin.py` a usa como
+# default do vínculo novo. Precisa bater com `MODULOS` (flag `base`) do gestor
+# web e do mobile — chave divergente não dá erro de compilação nem de lint, só
+# faz o gate de UI responder `false` para sempre (ver "Padrões a vigiar" nº 13).
+MODULOS_BASE = {"estoque", "crm", "financeiro"}
+
+# Vínculo novo nasce com o núcleo liberado. `modulos = NULL` fazia
+# `parseModulos()` devolver `[]` no mobile e o vendedor ficava sem nenhuma aba
+# além de Início/Chat/Mais — sem erro, sem 403: a aba simplesmente não existia.
+MODULOS_PADRAO_VENDEDOR = sorted(MODULOS_BASE)
+
+
+def modulos_padrao_json() -> str:
+    """JSON do campo `MembroLoja.modulos` para um vínculo recém-criado."""
+    return json.dumps(MODULOS_PADRAO_VENDEDOR)
 
 
 # Status de assinatura que permitem acesso aos módulos.

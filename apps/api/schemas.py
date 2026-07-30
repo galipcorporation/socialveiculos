@@ -1311,6 +1311,10 @@ class AdminUsuarioVinculo(BaseModel):
     loja_nome: str
     papel: str
     ativo: bool
+    # JSON array dos módulos liberados ao membro. É o que o mobile usa para
+    # montar a navegação — expor aqui permite o painel enxergar o vínculo que
+    # ficou sem módulos (o defeito do B114) em vez de adivinhar.
+    modulos: Optional[str] = None
 
 
 class AdminUsuarioItem(BaseModel):

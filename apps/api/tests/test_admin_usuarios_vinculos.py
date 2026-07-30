@@ -12,6 +12,7 @@ E o comportamento novo da edição pelo painel:
   * PATCH .../vinculos/{membro_id} — troca papel / desativa;
   * DELETE .../vinculos/{membro_id} — tira o usuário da loja errada.
 """
+import json
 import uuid
 
 import pytest
@@ -238,3 +239,41 @@ async def test_sem_token_nao_edita(client, vendedor_multiloja):
         f"/v1/admin/usuarios/{vendedor_multiloja['id']}", json={"nome": "Anon"}
     )
     assert resp.status_code in (401, 403), resp.text
+
+
+# ── Módulos do vínculo (B114) ──────────────────────────────────
+# O vínculo criado pelo painel admin nascia com `modulos = NULL`. No mobile,
+# `parseModulos(null)` devolve `[]` e a aba cujo módulo não está na lista não é
+# registrada — o vendedor abria o app sem Estoque e sem CRM, sem erro nem 403.
+
+async def test_vinculo_criado_pelo_admin_nasce_com_modulos_do_nucleo(
+    client, admin_token, vendedor_multiloja
+):
+    """Regressão: `modulos` NULL deixava o vendedor sem abas no app."""
+    usuario = await _achar_usuario(client, admin_token, vendedor_multiloja["email"])
+    assert usuario, "usuário de teste sumiu da busca do admin"
+    assert usuario["vinculos"], "fixture deveria ter recriado os dois vínculos"
+
+    from modulos import MODULOS_BASE
+
+    for vinculo in usuario["vinculos"]:
+        membro_id = vinculo["membro_id"]
+        assert vinculo.get("modulos"), (
+            f"vínculo {membro_id} nasceu sem módulos — o vendedor ficaria sem abas"
+        )
+        assert set(json.loads(vinculo["modulos"])) == MODULOS_BASE, (
+            "vínculo novo deve liberar o núcleo (e nenhum premium por conta própria)"
+        )
+
+
+async def test_vinculo_novo_nao_libera_modulo_premium(client, admin_token, vendedor_multiloja):
+    """O default é só o núcleo: premium continua dependendo do gestor."""
+    usuario = await _achar_usuario(client, admin_token, vendedor_multiloja["email"])
+    from modulos import Modulo
+
+    premium = {m.value for m in Modulo}
+    for vinculo in usuario["vinculos"]:
+        concedidos = set(json.loads(vinculo["modulos"]))
+        assert not (concedidos & premium), (
+            f"vínculo novo concedeu módulo premium sem contratação: {concedidos & premium}"
+        )

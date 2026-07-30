@@ -50,7 +50,7 @@ from contrato_modelos_padrao import semear_modelos_padrao
 from lib_formatacao import formatar_moeda
 from pdf_service import html_para_pdf
 from storage import storage_provider
-from modulos import Modulo, assinatura_em_dia
+from modulos import Modulo, assinatura_em_dia, modulos_padrao_json
 from plano_acesso import (
     STATUS_RECUPERAVEIS,
     acesso_liberado,
@@ -303,11 +303,15 @@ async def criar_loja(
     await db.flush()
 
     # Vincular gestor à loja
+    # Gestor hoje enxerga tudo por bypass (não depende de `modulos`), mas o campo
+    # é preenchido mesmo assim: NULL aqui é uma bomba armada para o dia em que o
+    # bypass mudar ou o vínculo for rebaixado para vendedor.
     membro = MembroLoja(
         id=_uuid(),
         usuario_id=gestor.id,
         loja_id=nova_loja.id,
         papel=PapelUsuario.GESTOR,
+        modulos=modulos_padrao_json(),
         ativo=True,
     )
     db.add(membro)
@@ -525,6 +529,7 @@ async def buscar_usuarios(
                     loja_nome=loja_nome,
                     papel=membro.papel.value,
                     ativo=bool(membro.ativo),
+                    modulos=membro.modulos,
                 )
             )
 
@@ -678,9 +683,22 @@ async def vincular_usuario_loja(
             raise HTTPException(status_code=409, detail=f"{usuario.nome} já está vinculado a {loja.nome}.")
         existente.ativo = True
         existente.papel = papel
+        # Vínculo antigo reativado pode ter sido gravado com NULL (ver abaixo).
+        if not existente.modulos:
+            existente.modulos = modulos_padrao_json()
         membro_id = existente.id
     else:
-        novo = MembroLoja(usuario_id=usuario_id, loja_id=data.loja_id, papel=papel, ativo=True)
+        # `modulos` NUNCA nasce NULL: o mobile monta a navegação a partir desta
+        # lista (`parseModulos` → aba escondida quando o módulo não está nela),
+        # então um vínculo sem módulos deixava o vendedor só com Início/Chat/Mais
+        # — sem erro, sem 403, a aba simplesmente não era registrada.
+        novo = MembroLoja(
+            usuario_id=usuario_id,
+            loja_id=data.loja_id,
+            papel=papel,
+            modulos=modulos_padrao_json(),
+            ativo=True,
+        )
         db.add(novo)
         await db.flush()
         membro_id = novo.id
