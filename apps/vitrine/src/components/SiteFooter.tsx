@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { ThemeConfig } from '../lib/theme'
+import { CONTATO_EMAIL } from '../lib/contato'
 import '../styles/site-footer.css'
 
 interface SiteFooterProps {
@@ -53,7 +54,7 @@ export function SiteFooter({ config }: SiteFooterProps) {
                 <Link to="/anuncie">Anuncie aqui</Link>
               </li>
               <li>
-                <a href="mailto:suporte@socialveiculos.com.br">Suporte</a>
+                <a href={`mailto:${CONTATO_EMAIL}`}>Suporte</a>
               </li>
             </ul>
           </div>
@@ -65,8 +66,7 @@ export function SiteFooter({ config }: SiteFooterProps) {
         style={{ borderTopColor: paleta?.primary || '#0066cc' }}
       >
         <p>
-          © {currentYear} {tipo === 'white-label' ? 'Social Veículos' : 'Social Veículos'}. Todos os direitos
-          reservados.
+          © {currentYear} Social Veículos. Todos os direitos reservados.
         </p>
       </div>
     </footer>

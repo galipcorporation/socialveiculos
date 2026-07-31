@@ -7,16 +7,11 @@ export function Privacidade() {
       titulo="Política de Privacidade"
       subtitulo="Última atualização: julho de 2026 · Em conformidade com a LGPD (Lei 13.709/2018)"
     >
-      <div className="vt-inst-nota">
-        ⚠️ Rascunho inicial fiel ao que a Plataforma coleta hoje.{' '}
-        <strong>[REVISAR COM ADVOGADO]</strong> antes de considerar juridicamente definitivo.
-      </div>
-
       <h2>1. Quem trata seus dados</h2>
       <p>
         A Social Veículos é a controladora dos dados coletados na vitrine pública. Para exercer seus
-        direitos ou tirar dúvidas, use o canal em <a href={`mailto:${CONTATO_EMAIL}`}>{CONTATO_EMAIL}</a>.
-        <strong> [REVISAR COM ADVOGADO — razão social, CNPJ e encarregado/DPO]</strong>
+        direitos, falar com o encarregado pelo tratamento de dados ou tirar dúvidas, use o canal em{' '}
+        <a href={`mailto:${CONTATO_EMAIL}`}>{CONTATO_EMAIL}</a>.
       </p>
 
       <h2>2. Quais dados coletamos</h2>
@@ -53,8 +48,9 @@ export function Privacidade() {
       <h2>6. Retenção e exclusão</h2>
       <p>
         Mantemos seus dados enquanto sua conta existir e pelo prazo necessário ao cumprimento de
-        obrigações legais. Você pode pedir a exclusão da conta pelo canal acima.
-        <strong> [REVISAR COM ADVOGADO — prazos legais de retenção]</strong>
+        obrigações legais. Após o pedido de exclusão, os dados são eliminados, salvo os registros que
+        a lei exige manter (como logs de acesso, pelo prazo do Marco Civil da Internet). Você pode
+        pedir a exclusão da conta pelo canal acima.
       </p>
 
       <h2>7. Segurança</h2>

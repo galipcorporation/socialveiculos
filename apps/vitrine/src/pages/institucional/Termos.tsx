@@ -7,11 +7,6 @@ export function Termos() {
       titulo="Termos de Uso"
       subtitulo="Última atualização: julho de 2026"
     >
-      <div className="vt-inst-nota">
-        ⚠️ Rascunho inicial. <strong>[REVISAR COM ADVOGADO]</strong> antes de considerar
-        juridicamente definitivo. O texto descreve o funcionamento real da plataforma na data acima.
-      </div>
-
       <h2>1. Aceitação</h2>
       <p>
         Ao criar uma conta ou utilizar a Social Veículos (a "Plataforma"), você concorda com estes
@@ -52,7 +47,7 @@ export function Termos() {
       <p>
         A Plataforma é fornecida "no estado em que se encontra". Na máxima extensão permitida em lei,
         a Social Veículos não se responsabiliza por prejuízos decorrentes de negociações entre
-        usuários e lojas. <strong>[REVISAR COM ADVOGADO]</strong>
+        usuários e lojas.
       </p>
 
       <h2>7. Alterações</h2>

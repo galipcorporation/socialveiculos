@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { useQuery } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
-import { Button, Input, Sheet, Txt } from '../../components/ui'
+import { Button, Input, OptionSheet, SelectField, Sheet, Txt, type SheetOption } from '../../components/ui'
 import { maskMoedaInput, parseMoedaInput, formatNumber } from '../../lib/format'
 import { vitrineService, type FiltrosAvancados, type OrdenacaoBusca } from '../../services'
 import { ANOS, TIPOS_VEICULO, type TipoVeiculo } from '../../services/types'
@@ -40,6 +40,7 @@ export function FiltrosBuscaSheet({ visible, onClose, valor, onAplicar }: Filtro
   const [rascunho, setRascunho] = useState<FiltrosAvancados>(valor)
   const [precoMin, setPrecoMin] = useState(valor.preco_min != null ? formatNumber(valor.preco_min, 2) : '')
   const [precoMax, setPrecoMax] = useState(valor.preco_max != null ? formatNumber(valor.preco_max, 2) : '')
+  const [anoAberto, setAnoAberto] = useState<'min' | 'max' | null>(null)
 
   const categoriasQ = useQuery({
     queryKey: ['vitrine', 'categorias'],
@@ -48,7 +49,10 @@ export function FiltrosBuscaSheet({ visible, onClose, valor, onAplicar }: Filtro
     staleTime: 10 * 60 * 1000,
   })
 
-  const anos = useMemo(() => ANOS.slice(0, 20), [])
+  const opcoesAno: SheetOption[] = useMemo(
+    () => ANOS.slice(0, 20).map((a) => ({ value: String(a), label: String(a) })),
+    []
+  )
 
   function set<K extends keyof FiltrosAvancados>(chave: K, v: FiltrosAvancados[K]) {
     // Tocar de novo na opção já ativa limpa o critério.
@@ -75,6 +79,7 @@ export function FiltrosBuscaSheet({ visible, onClose, valor, onAplicar }: Filtro
   }
 
   return (
+    <>
     <Sheet visible={visible} onClose={onClose} title="Filtros" maxHeight={0.9}>
       <View style={{ gap: spacing.md, paddingBottom: spacing.sm }}>
         <Secao titulo="Ordenar por">
@@ -126,17 +131,19 @@ export function FiltrosBuscaSheet({ visible, onClose, valor, onAplicar }: Filtro
 
         <Secao titulo="Ano do modelo">
           <View style={styles.linha}>
-            <SeletorAno
+            <SelectField
               label="De"
-              anos={anos}
-              selecionado={rascunho.ano_min}
-              onSelect={(v) => set('ano_min', v)}
+              value={rascunho.ano_min ? String(rascunho.ano_min) : undefined}
+              placeholder="Qualquer"
+              onPress={() => setAnoAberto('min')}
+              containerStyle={{ flex: 1 }}
             />
-            <SeletorAno
+            <SelectField
               label="Até"
-              anos={anos}
-              selecionado={rascunho.ano_max}
-              onSelect={(v) => set('ano_max', v)}
+              value={rascunho.ano_max ? String(rascunho.ano_max) : undefined}
+              placeholder="Qualquer"
+              onPress={() => setAnoAberto('max')}
+              containerStyle={{ flex: 1 }}
             />
           </View>
         </Secao>
@@ -179,6 +186,20 @@ export function FiltrosBuscaSheet({ visible, onClose, valor, onAplicar }: Filtro
         </View>
       </View>
     </Sheet>
+    <OptionSheet
+      visible={anoAberto != null}
+      onClose={() => setAnoAberto(null)}
+      title={anoAberto === 'min' ? 'Ano do modelo — de' : 'Ano do modelo — até'}
+      options={opcoesAno}
+      selected={anoAberto === 'min' ? (rascunho.ano_min ? String(rascunho.ano_min) : undefined) : (rascunho.ano_max ? String(rascunho.ano_max) : undefined)}
+      onSelect={(v) => {
+        const ano = parseInt(v, 10)
+        if (anoAberto === 'min') set('ano_min', ano)
+        else if (anoAberto === 'max') set('ano_max', ano)
+        setAnoAberto(null)
+      }}
+    />
+    </>
   )
 }
 
@@ -232,54 +253,9 @@ function Opcoes<T extends string>({ opcoes, selecionado, onSelect }: OpcoesProps
   )
 }
 
-interface SeletorAnoProps {
-  label: string
-  anos: number[]
-  selecionado?: number
-  onSelect: (v: number) => void
-}
-
-function SeletorAno({ label, anos, selecionado, onSelect }: SeletorAnoProps) {
-  const { colors } = useTheme()
-  return (
-    <View style={{ flex: 1, gap: 6 }}>
-      <Txt variant="captionMedium" color="textDim">{label}</Txt>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.anosRow}>
-        {anos.map((a) => {
-          const ativo = a === selecionado
-          return (
-            <Pressable
-              key={a}
-              onPress={() => onSelect(a)}
-              style={[
-                styles.pilula,
-                {
-                  backgroundColor: ativo ? colors.primary : colors.surface,
-                  borderColor: ativo ? colors.primary : colors.border,
-                },
-              ]}
-            >
-              <Txt
-                style={{
-                  fontFamily: fonts.semibold,
-                  fontSize: 13,
-                  color: ativo ? colors.onPrimary : colors.textDim,
-                }}
-              >
-                {a}
-              </Txt>
-            </Pressable>
-          )
-        })}
-      </ScrollView>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   linha: { flexDirection: 'row', gap: spacing.sm },
   pilulas: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  anosRow: { gap: spacing.xs, paddingRight: spacing.sm },
   pilula: {
     paddingHorizontal: 14,
     height: 34,
