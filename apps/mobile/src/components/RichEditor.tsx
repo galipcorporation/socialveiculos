@@ -118,11 +118,25 @@ export function RichEditor({
   }, [value, pronto])
 
   return (
-    // Sem `onStartShouldSetResponder`: ele capturava TODO toque iniciado sobre o
-    // editor, inclusive o arrasto, então o ScrollView do Sheet não recebia o
-    // gesto e a tela não rolava com o dedo em cima do editor. O toque de edição
-    // chega na WebView de qualquer forma — ela é filha e trata o próprio evento.
-    <View style={{ height: alturaConteudo, borderRadius: radius.md, overflow: 'hidden' }}>
+    // O editor vive dentro do `Sheet`, que envolve o conteúdo em dois `Pressable`
+    // (backdrop + stopPropagation). `Pressable` é um responder e captura o toque
+    // no release: sem reivindicar o gesto aqui, o `touchend` morre no Sheet e
+    // NADA dentro da WebView responde — nem o texto, nem as pílulas, nem a
+    // toolbar. Ser filha não basta quando o pai é responder.
+    //
+    // Mas reivindicar TODO gesto (o antigo `onStartShouldSetResponder`) matava a
+    // rolagem do Sheet. As duas coisas se separam: aceitamos o toque no start e
+    // DESISTIMOS assim que ele vira arrasto vertical (`onMoveShouldSetResponder`
+    // false + `onResponderTerminationRequest` true), devolvendo o gesto ao
+    // ScrollView. Toque curto edita; arrasto rola.
+    <View
+      style={{ height: alturaConteudo, borderRadius: radius.md, overflow: 'hidden' }}
+      onStartShouldSetResponder={() => true}
+      // Arrasto não é nosso: deixa o ScrollView do Sheet assumir.
+      onMoveShouldSetResponder={() => false}
+      // Enquanto o editor rola por dentro, o pai não deve roubar o gesto.
+      onResponderTerminationRequest={() => !atingiuTeto}
+    >
       <WebView
         ref={webviewRef}
         originWhitelist={['*']}
