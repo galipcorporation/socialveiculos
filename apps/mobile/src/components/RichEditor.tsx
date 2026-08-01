@@ -66,6 +66,12 @@ export function RichEditor({
     try {
       const msg = JSON.parse(e.nativeEvent.data)
       if (msg.type === 'ready') {
+        // Responde na hora, não por efeito: se a WebView recarregar (Android
+        // mata o processo em background), `pronto` já é true e um efeito com
+        // dependência [pronto] não reexecutaria — o editor voltaria vazio.
+        webviewRef.current?.postMessage(JSON.stringify({
+          type: 'init', value: valorInicial.current, labels, variaveis, placeholder, compact, minHeight, tema,
+        }))
         setPronto(true)
       } else if (msg.type === 'height') {
         // Teto: sem ele um contrato de duas páginas faz a WebView crescer além
@@ -86,14 +92,6 @@ export function RichEditor({
       // mensagem não reconhecida, ignora
     }
   }
-
-  useEffect(() => {
-    if (!pronto) return
-    webviewRef.current?.postMessage(JSON.stringify({
-      type: 'init', value: valorInicial.current, labels, variaveis, placeholder, compact, minHeight, tema,
-    }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pronto])
 
   // Troca de tema com o editor aberto (o app segue o modo do sistema).
   useEffect(() => {

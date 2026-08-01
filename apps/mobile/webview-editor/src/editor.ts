@@ -178,6 +178,9 @@ function renderVariaveis(grupos: VarGroup[]) {
 }
 
 function iniciar(msg: InitMessage) {
+  // Uma WebView recarregada (ou um `init` repetido) montaria um segundo TipTap
+  // sobre o mesmo elemento e o conteúdo sumiria.
+  if (editor) return
   currentLabels = msg.labels
   if (msg.minHeight) {
     document.documentElement.style.setProperty('--min-content', `${msg.minHeight}px`)
@@ -286,7 +289,6 @@ function iniciar(msg: InitMessage) {
   elEditor.addEventListener('click', tratarToqueNoEditor)
 
   observarAltura()
-  postToRN({ type: 'ready' })
 }
 
 /** Informa a altura real do conteúdo pro lado nativo, que redimensiona a
@@ -318,6 +320,12 @@ window.addEventListener('message', (ev) => {
 })
 // Android entrega a mensagem em document, não em window.
 document.addEventListener('message', ((ev: any) => handleMessage(ev.data)) as EventListener)
+
+// `ready` = "o bundle carregou e os listeners estão de pé". Ele ficava no fim de
+// `iniciar()`, que só roda ao receber `init` — e o lado nativo só manda `init`
+// depois do `ready`: deadlock, nada nunca era enviado e o editor abria vazio,
+// sem texto e sem o menu de variáveis. Tem que sair na carga, não na init.
+postToRN({ type: 'ready' })
 
 /** Aplica o tema do app nas CSS vars. As cores vinham hardcoded em dark no
  *  index.html, então o editor saía escuro no tema claro — quem usa o app em
