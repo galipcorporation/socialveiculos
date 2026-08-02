@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { Pressable, Share, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useNavigation } from '@react-navigation/native'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useFocusEffect, useNavigation } from '@react-navigation/native'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTheme, type ThemeMode } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
 import { AppHeader, Avatar, Badge, Button, Card, ListRow, Screen, Sheet, Txt, useToast } from '../../components/ui'
@@ -23,6 +23,7 @@ export default function PerfilScreen() {
   const { colors, mode, setMode } = useTheme()
   const toast = useToast()
   const navigation = useNavigation<any>()
+  const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const isAuth = useAuthStore((s) => s.isAuthenticated)
   const logoutStore = useAuthStore((s) => s.logout)
@@ -44,6 +45,14 @@ export default function PerfilScreen() {
     enabled: isAuth,
   })
   const totalSeguindo = lojasQ.data?.length ?? 0
+
+  // A tab fica montada o tempo todo: sem isso o contador pode ficar
+  // desatualizado após seguir/deixar de seguir uma loja em outra tela.
+  useFocusEffect(
+    useCallback(() => {
+      if (isAuth) queryClient.invalidateQueries({ queryKey: ['vitrine', 'lojas-seguidas'] })
+    }, [isAuth, queryClient])
+  )
 
   // Sessões antigas guardaram o usuário sem avatar_url/telefone (campos novos):
   // recarrega do servidor para a foto e o telefone aparecerem sem precisar relogar.
