@@ -14,6 +14,9 @@ import { formatBRL } from '../../lib/format'
 type Tipo = 'carro' | 'moto' | 'caminhao'
 type Campo = 'marca' | 'modelo' | 'ano' | null
 
+/** FIPE usa "32000" como ano-sentinela para zero km (comum em elétricos recém-lançados). */
+const formatAnoNome = (nome: string) => nome.replace(/^32000\b/i, 'Zero KM (0km)')
+
 export default function FipeScreen() {
   const { colors } = useTheme()
   const [tipo, setTipo] = useState<Tipo>('carro')
@@ -35,7 +38,8 @@ export default function FipeScreen() {
 
   const nomeMarca = marcasQ.data?.find((m) => m.codigo === marcaCod)?.nome
   const nomeModelo = modelosQ.data?.find((m) => m.codigo === modeloCod)?.nome
-  const nomeAno = anosQ.data?.find((a) => a.codigo === anoCod)?.nome
+  const nomeAnoBruto = anosQ.data?.find((a) => a.codigo === anoCod)?.nome
+  const nomeAno = nomeAnoBruto != null ? formatAnoNome(nomeAnoBruto) : nomeAnoBruto
 
   const consultar = async () => {
     if (!anoCod) return
@@ -107,6 +111,10 @@ export default function FipeScreen() {
         options={(marcasQ.data ?? []).map((m) => ({ value: m.codigo, label: m.nome }))}
         selected={marcaCod}
         onSelect={setMarcaCod}
+        buscavel
+        buscaPlaceholder="Buscar marca…"
+        carregando={marcasQ.isLoading}
+        vazioTexto="Não foi possível carregar as marcas."
       />
       <OptionSheet
         visible={sheet === 'modelo'}
@@ -115,14 +123,22 @@ export default function FipeScreen() {
         options={(modelosQ.data ?? []).map((m) => ({ value: m.codigo, label: m.nome }))}
         selected={modeloCod}
         onSelect={setModeloCod}
+        buscavel
+        buscaPlaceholder="Buscar modelo…"
+        carregando={modelosQ.isLoading}
+        vazioTexto="Nenhum modelo para esta marca."
       />
       <OptionSheet
         visible={sheet === 'ano'}
         onClose={() => setSheet(null)}
         title="Ano / Modelo"
-        options={(anosQ.data ?? []).map((a) => ({ value: a.codigo, label: a.nome }))}
+        options={(anosQ.data ?? []).map((a) => ({ value: a.codigo, label: formatAnoNome(a.nome) }))}
         selected={anoCod}
         onSelect={setAnoCod}
+        buscavel
+        buscaPlaceholder="Buscar ano…"
+        carregando={anosQ.isLoading}
+        vazioTexto="Nenhum ano disponível para este modelo."
       />
     </Screen>
   )
