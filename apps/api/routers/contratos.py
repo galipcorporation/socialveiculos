@@ -60,15 +60,23 @@ async def gerar_numero_contrato(db: AsyncSession, loja_id: str, tipo: TipoContra
     prefixo = prefixos.get(tipo, "CV")
     ano = datetime.now(timezone.utc).year
 
-    # Conta contratos existentes do tipo neste ano para esta loja
-    stmt = select(func.count(Contrato.id)).where(
+    # Continua do MAIOR número já emitido, não da contagem: contar faz o número
+    # retroceder quando um contrato é apagado e o próximo colide com um vivo.
+    stmt = select(func.max(Contrato.numero)).where(
         Contrato.loja_id == loja_id,
         Contrato.numero.like(f"{prefixo}-{ano}-%"),
     )
     result = await db.execute(stmt)
-    count = result.scalar() or 0
+    ultimo = result.scalar()
 
-    return f"{prefixo}-{ano}-{count + 1:04d}"
+    proximo = 1
+    if ultimo:
+        try:
+            proximo = int(ultimo.rsplit("-", 1)[1]) + 1
+        except (IndexError, ValueError):
+            proximo = 1
+
+    return f"{prefixo}-{ano}-{proximo:04d}"
 
 
 def _contrato_to_response(c: Contrato) -> ContratoResponse:
@@ -95,6 +103,10 @@ def _contrato_to_response(c: Contrato) -> ContratoResponse:
         parcelas=c.parcelas,
         observacoes=c.observacoes,
         dados_ocr=c.dados_ocr,
+        # Sem estes dois o front não tinha como saber qual modelo o contrato usa
+        # (nem reabrir os campos preenchidos) para editar depois.
+        template_id=c.template_id,
+        dados_extras=json.loads(c.dados_extras) if c.dados_extras else None,
         created_at=c.created_at,
         updated_at=c.updated_at,
         veiculo_nome=veiculo_nome,
@@ -260,6 +272,31 @@ async def atualizar_contrato(
 
     status_anterior = contrato.status
     update_data = body.model_dump(exclude_unset=True)
+
+    # `template_id` e `dados_extras` saem do laço genérico: o primeiro precisa
+    # ser validado contra a loja (senão um id de outra loja escolheria o modelo
+    # dela) e o segundo é coluna de texto, não dict.
+    if "template_id" in update_data:
+        novo_template_id = update_data.pop("template_id")
+        if novo_template_id:
+            tmpl_res = await db.execute(
+                select(TemplateContrato).where(
+                    TemplateContrato.id == novo_template_id,
+                    TemplateContrato.loja_id == ctx.loja.id,
+                    TemplateContrato.ativo == True,  # noqa: E712
+                )
+            )
+            if not tmpl_res.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=404,
+                    detail="Modelo de contrato não encontrado.",
+                )
+        contrato.template_id = novo_template_id or None
+
+    if "dados_extras" in update_data:
+        novos_extras = update_data.pop("dados_extras")
+        contrato.dados_extras = json.dumps(novos_extras) if novos_extras else None
+
     for key, value in update_data.items():
         setattr(contrato, key, value)
 

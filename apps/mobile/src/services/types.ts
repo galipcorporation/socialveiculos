@@ -673,17 +673,33 @@ export interface FipeResultado {
 // ── Contratos ──────────────────────────────────────────────
 export type StatusContrato = 'rascunho' | 'aguardando' | 'assinado' | 'cancelado'
 
+/** Espelha `TipoContrato` do backend. O app oferecia um tipo "compra" que a API
+ *  nunca aceitou: todo contrato criado com ele voltava 422. */
+export type TipoContrato = 'compra_venda' | 'consignacao' | 'garantia'
+
+export const TIPO_CONTRATO_LABEL: Record<TipoContrato, string> = {
+  compra_venda: 'Compra e venda',
+  consignacao: 'Consignação',
+  garantia: 'Garantia',
+}
+
 export interface Contrato {
   id: string
   numero: string
-  tipo: 'compra_venda' | 'compra'
+  tipo: TipoContrato
   status: StatusContrato
+  veiculo_id?: string
+  cliente_id?: string
   veiculo_nome?: string
   cliente_nome?: string
   valor_venda?: number
   valor_entrada?: number
   parcelas?: number
   observacoes?: string
+  /** Modelo de contrato aplicado — `undefined` usa o layout padrão do sistema. */
+  template_id?: string
+  /** Valores dos campos personalizados do modelo, por chave. */
+  dados_extras?: Record<string, string>
   created_at: string
 }
 

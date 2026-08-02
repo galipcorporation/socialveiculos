@@ -25,6 +25,8 @@ interface ContratoItem {
   parcelas?: number
   observacoes?: string
   dados_ocr?: string
+  template_id?: string
+  dados_extras?: Record<string, string>
   created_at: string
   updated_at: string
   veiculo_nome?: string
@@ -68,6 +70,9 @@ interface VeiculoItem {
 interface CampoExtra {
   chave: string
   label: string
+  tipo?: string
+  /** Valor usual do campo — entrega o contrato redigido em vez de vazio. */
+  padrao?: string
 }
 
 interface TemplateItem {
@@ -894,8 +899,8 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
   const [observacoes, setObservacoes] = useState(contrato?.observacoes || '')
   const [saving, setSaving] = useState(false)
   const [templates, setTemplates] = useState<TemplateItem[]>([])
-  const [templateId, setTemplateId] = useState('')
-  const [valoresExtras, setValoresExtras] = useState<Record<string, string>>({})
+  const [templateId, setTemplateId] = useState(contrato?.template_id || '')
+  const [valoresExtras, setValoresExtras] = useState<Record<string, string>>(contrato?.dados_extras || {})
 
   useEffect(() => {
     api.get<{ items: TemplateItem[] }>('/templates-contrato')
@@ -904,6 +909,20 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
   }, [])
 
   const templateSelecionado = templates.find(t => t.id === templateId)
+
+  // Trocar de modelo troca o conjunto de campos: parte dos `padrao` do novo
+  // modelo e preserva o que já estava preenchido nas chaves em comum.
+  const escolherTemplate = (novoId: string) => {
+    setTemplateId(novoId)
+    const novo = templates.find(t => t.id === novoId)
+    setValoresExtras(prev => {
+      const proximo: Record<string, string> = {}
+      for (const campo of novo?.campos_extras || []) {
+        proximo[campo.chave] = prev[campo.chave] ?? campo.padrao ?? ''
+      }
+      return proximo
+    })
+  }
 
   // Busca de clientes e veículos
   const [clientes, setClientes] = useState<ClienteItem[]>([])
@@ -941,28 +960,26 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
   const handleSubmit = async () => {
     setSaving(true)
     try {
+      // Modelo e campos vão nos dois casos: até o PATCH aceitá-los, um contrato
+      // criado sem modelo (todos os do app) ficava preso ao layout legado.
+      const preenchidos = Object.fromEntries(
+        Object.entries(valoresExtras).filter(([, v]) => v.trim() !== ''),
+      )
+      const payload = {
+        tipo,
+        cliente_id: clienteId || null,
+        veiculo_id: veiculoId || null,
+        valor_venda: parseMoeda(valorStr) || null,
+        valor_entrada: parseMoeda(entradaStr) || null,
+        parcelas: parcelas ? parseInt(parcelas) : null,
+        observacoes: observacoes || null,
+        template_id: templateId || null,
+        dados_extras: Object.keys(preenchidos).length > 0 ? preenchidos : null,
+      }
       if (isEditing) {
-        await api.patch(`/contratos/${contrato!.id}`, {
-          tipo,
-          cliente_id: clienteId || null,
-          veiculo_id: veiculoId || null,
-          valor_venda: parseMoeda(valorStr) || null,
-          valor_entrada: parseMoeda(entradaStr) || null,
-          parcelas: parcelas ? parseInt(parcelas) : null,
-          observacoes: observacoes || null,
-        })
+        await api.patch(`/contratos/${contrato!.id}`, payload)
       } else {
-        await api.post('/contratos', {
-          tipo,
-          cliente_id: clienteId || null,
-          veiculo_id: veiculoId || null,
-          valor_venda: parseMoeda(valorStr) || null,
-          valor_entrada: parseMoeda(entradaStr) || null,
-          parcelas: parcelas ? parseInt(parcelas) : null,
-          observacoes: observacoes || null,
-          template_id: templateId || null,
-          dados_extras: Object.keys(valoresExtras).length > 0 ? valoresExtras : null,
-        })
+        await api.post('/contratos', payload)
       }
       onSaved()
     } catch (err) {
@@ -993,35 +1010,32 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
               </select>
             </div>
 
-            {/* Modelo — só na criação; edição altera os dados do contrato já existente */}
-            {!isEditing && (
-              <>
-                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                  <label>Modelo de Contrato</label>
-                  <select value={templateId} onChange={e => { setTemplateId(e.target.value); setValoresExtras({}) }}>
-                    <option value="">Nenhum (usar layout padrão do sistema)</option>
-                    {templates.map(t => (
-                      <option key={t.id} value={t.id}>{t.nome}</option>
-                    ))}
-                  </select>
-                </div>
+            {/* Modelo — também na edição: é o que permite trocar o documento de
+                um contrato já criado (e adotar um modelo em quem nasceu sem). */}
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label>Modelo de Contrato</label>
+              <select value={templateId} onChange={e => escolherTemplate(e.target.value)}>
+                <option value="">Nenhum (usar layout padrão do sistema)</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.nome}</option>
+                ))}
+              </select>
+            </div>
 
-                {templateSelecionado && templateSelecionado.campos_extras.length > 0 && (
-                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                    <label>Campos do modelo "{templateSelecionado.nome}"</label>
-                    {templateSelecionado.campos_extras.map(campo => (
-                      <input
-                        key={campo.chave}
-                        type="text"
-                        placeholder={campo.label}
-                        value={valoresExtras[campo.chave] || ''}
-                        onChange={e => setValoresExtras(prev => ({ ...prev, [campo.chave]: e.target.value }))}
-                        style={{ marginBottom: 8 }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
+            {templateSelecionado && templateSelecionado.campos_extras.length > 0 && (
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Campos do modelo "{templateSelecionado.nome}"</label>
+                {templateSelecionado.campos_extras.map(campo => (
+                  <input
+                    key={campo.chave}
+                    type="text"
+                    placeholder={campo.padrao ? `${campo.label} (padrão: ${campo.padrao})` : campo.label}
+                    value={valoresExtras[campo.chave] || ''}
+                    onChange={e => setValoresExtras(prev => ({ ...prev, [campo.chave]: e.target.value }))}
+                    style={{ marginBottom: 8 }}
+                  />
+                ))}
+              </div>
             )}
 
             {/* Cliente */}

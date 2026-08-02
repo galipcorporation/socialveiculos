@@ -1,7 +1,7 @@
 // Contratos — lista + detalhe + PDF + templates contra /v1/contratos e
 // /v1/templates-contrato.
 import { api } from '../lib/api'
-import type { Contrato, StatusContrato } from './types'
+import type { Contrato, StatusContrato, TipoContrato } from './types'
 
 // O backend (`ContratoCreateRequest`) só aceita **ids** — `veiculo_nome` /
 // `cliente_nome` eram descartados em silêncio pelo Pydantic, e o contrato
@@ -9,18 +9,26 @@ import type { Contrato, StatusContrato } from './types'
 // derivado do relacionamento, ele voltava vazio: contrato sem veículo nem
 // cliente na lista, e PDF com as variáveis todas em branco.
 export interface ContratoInput {
-  tipo: 'compra_venda' | 'compra'
+  tipo: TipoContrato
   veiculo_id?: string
   cliente_id?: string
   valor_venda?: number
   valor_entrada?: number
   parcelas?: number
   observacoes?: string
+  /** Modelo de contrato; `null` desvincula e volta ao layout padrão. */
+  template_id?: string | null
+  /** Valores dos campos personalizados do modelo, por chave. */
+  dados_extras?: Record<string, string> | null
 }
 
 export interface CampoExtraTemplate {
   chave: string
   label: string
+  /** Orienta o teclado do input no formulário do contrato. */
+  tipo?: string
+  /** Valor usual — entrega o campo já preenchido em vez de vazio. */
+  padrao?: string
 }
 
 export interface TemplateContrato {
@@ -117,14 +125,18 @@ export function labelsDe(groups: VarGroup[]): Record<string, string> {
 interface ContratoDTO {
   id: string
   numero: string
-  tipo: 'compra_venda' | 'compra'
+  tipo: TipoContrato
   status: StatusContrato
+  veiculo_id?: string | null
+  cliente_id?: string | null
   veiculo_nome?: string | null
   cliente_nome?: string | null
   valor_venda?: number | null
   valor_entrada?: number | null
   parcelas?: number | null
   observacoes?: string | null
+  template_id?: string | null
+  dados_extras?: Record<string, string> | null
   created_at: string
 }
 interface TemplateDTO {
@@ -142,8 +154,12 @@ function mapContrato(c: ContratoDTO): Contrato {
     numero: c.numero,
     tipo: c.tipo,
     status: c.status,
+    veiculo_id: c.veiculo_id ?? undefined,
+    cliente_id: c.cliente_id ?? undefined,
     veiculo_nome: c.veiculo_nome ?? undefined,
     cliente_nome: c.cliente_nome ?? undefined,
+    template_id: c.template_id ?? undefined,
+    dados_extras: c.dados_extras ?? undefined,
     valor_venda: c.valor_venda ?? undefined,
     valor_entrada: c.valor_entrada ?? undefined,
     parcelas: c.parcelas ?? undefined,
@@ -160,6 +176,24 @@ function mapTemplate(t: TemplateDTO): TemplateContrato {
     camposExtras: t.campos_extras ?? [],
     usarIdentidadeLoja: t.usar_identidade_loja,
     created_at: t.created_at,
+  }
+}
+
+/** Corpo aceito por POST /contratos e PATCH /contratos/{id} — os dois campos do
+ *  modelo vão como `null` quando vazios, que é como a API desvincula. */
+function corpoContrato(input: ContratoInput) {
+  return {
+    tipo: input.tipo,
+    veiculo_id: input.veiculo_id || null,
+    cliente_id: input.cliente_id || null,
+    valor_venda: input.valor_venda ?? null,
+    valor_entrada: input.valor_entrada ?? null,
+    parcelas: input.parcelas ?? null,
+    observacoes: input.observacoes || null,
+    template_id: input.template_id || null,
+    dados_extras: input.dados_extras && Object.keys(input.dados_extras).length > 0
+      ? input.dados_extras
+      : null,
   }
 }
 
@@ -193,15 +227,13 @@ export const contratosService = {
   },
 
   async criar(input: ContratoInput): Promise<Contrato> {
-    const c = await api.post<ContratoDTO>('/contratos', {
-      tipo: input.tipo,
-      veiculo_id: input.veiculo_id || null,
-      cliente_id: input.cliente_id || null,
-      valor_venda: input.valor_venda ?? null,
-      valor_entrada: input.valor_entrada ?? null,
-      parcelas: input.parcelas ?? null,
-      observacoes: input.observacoes || null,
-    })
+    const c = await api.post<ContratoDTO>('/contratos', corpoContrato(input))
+    return mapContrato(c)
+  },
+
+  /** Edita um contrato existente — inclusive o modelo e os campos dele. */
+  async atualizar(id: string, input: ContratoInput): Promise<Contrato> {
+    const c = await api.patch<ContratoDTO>(`/contratos/${id}`, corpoContrato(input))
     return mapContrato(c)
   },
 
