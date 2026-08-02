@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { FlatList, Linking, Switch, View } from 'react-native'
+import { FlatList, Switch, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -114,7 +114,6 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
   const queryClient = useQueryClient()
   const toast = useToast()
   const navigation = useNavigation<any>()
-  const [abrindoPdf, setAbrindoPdf] = useState(false)
   const [statusSheet, setStatusSheet] = useState(false)
   const [confirmarCancelamento, setConfirmarCancelamento] = useState(false)
 
@@ -150,18 +149,11 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
     statusMut.mutate(s)
   }
 
-  const abrirPdf = async () => {
-    setAbrindoPdf(true)
-    try {
-      const url = await contratosService.pdfUrl(contrato.id)
-      const ok = await Linking.canOpenURL(url)
-      if (ok) await Linking.openURL(url)
-      else toast.show('info', 'PDF não disponível offline.')
-    } catch {
-      toast.show('info', 'PDF não disponível offline.')
-    } finally {
-      setAbrindoPdf(false)
-    }
+  // O documento abre dentro do app: a rota do contrato é autenticada e o
+  // navegador do celular, sem o token, só exibia o 401 da API.
+  const abrirDocumento = () => {
+    onClose()
+    navigation.navigate('ContratoDocumento', { contratoId: contrato.id, numero: contrato.numero })
   }
 
   return (
@@ -177,7 +169,7 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
         <Linha label="Criado em" valor={formatData(contrato.created_at)} />
 
         <SelectField label="Status" value={STATUS_CONTRATO_LABEL[contrato.status]} onPress={() => setStatusSheet(true)} icon="swap-horizontal-outline" containerStyle={{ marginTop: spacing.xs }} />
-        <Button title="Abrir PDF do contrato" icon="document-outline" loading={abrindoPdf} onPress={abrirPdf} full />
+        <Button title="Abrir documento do contrato" icon="document-outline" onPress={abrirDocumento} full />
         {contrato.tipo === 'compra_venda' && (
           <Button title="Emitir NF-e deste contrato" variant="tonal" icon="receipt-outline" onPress={() => { onClose(); navigation.navigate('NotasFiscais') }} full />
         )}

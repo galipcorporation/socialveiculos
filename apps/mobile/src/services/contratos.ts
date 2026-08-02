@@ -163,8 +163,6 @@ function mapTemplate(t: TemplateDTO): TemplateContrato {
   }
 }
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000/v1'
-
 export const contratosService = {
   async lista(): Promise<Contrato[]> {
     const data = await api.get<{ items: ContratoDTO[] }>('/contratos')
@@ -180,9 +178,18 @@ export const contratosService = {
     }
   },
 
-  async pdfUrl(id: string): Promise<string> {
-    // O PDF é servido autenticado; retornamos a URL absoluta do endpoint.
-    return `${API_BASE}/contratos/${id}/pdf`
+  /**
+   * Documento do contrato pronto para leitura/impressão (o endpoint `/pdf`
+   * devolve HTML paginado, não um PDF binário).
+   *
+   * Entregávamos só a URL para o `Linking` abrir no navegador do celular — mas
+   * a rota exige `Authorization` + `X-Loja-Id`, que o navegador externo não
+   * tem: o contrato virava a tela branca com
+   * `{"detail":"Credenciais inválidas ou token expirado"}`. Buscamos o HTML
+   * pelo cliente autenticado e o app o renderiza numa WebView interna.
+   */
+  async documentoHtml(id: string): Promise<string> {
+    return api.getText(`/contratos/${id}/pdf`)
   },
 
   async criar(input: ContratoInput): Promise<Contrato> {

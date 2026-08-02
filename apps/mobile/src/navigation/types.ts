@@ -34,6 +34,7 @@ export type RootStackParamList = {
   Fiscal: undefined
   Fipe: undefined
   Contratos: { contratoId?: string } | undefined
+  ContratoDocumento: { contratoId: string; numero?: string }
   NotasFiscais: { contratoId?: string } | undefined
   MeuSite: undefined
   RedeSocial: undefined
