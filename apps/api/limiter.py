@@ -3,6 +3,42 @@ import asyncio
 from collections import defaultdict
 from fastapi import Request, HTTPException, status
 
+from config import settings
+
+
+def obter_ip_cliente(request: Request) -> str:
+    """
+    IP real do cliente para chave de rate limit.
+
+    `X-Forwarded-For` é escrito pelo CLIENTE e só passa a valer alguma coisa
+    depois que um proxy confiável acrescenta a própria observação no fim da
+    lista. Confiar no primeiro item (o que estava aqui) deixava qualquer um
+    girar o header e zerar o rate limit — brute force de login sem limite.
+
+    Ordem de confiança:
+    1. `Fly-Client-IP` — o proxy da Fly SOBRESCREVE este header na borda, então
+       o valor que chega aqui nunca é o que o cliente mandou.
+    2. `X-Forwarded-For` lido de trás para frente, e só se
+       `trusted_proxy_hops > 0` disser quantos saltos confiáveis existem.
+    3. `request.client.host` (conexão direta).
+    """
+    fly = request.headers.get("fly-client-ip")
+    if fly and fly.strip():
+        return fly.strip()
+
+    hops = settings.trusted_proxy_hops
+    if hops > 0:
+        fwd = request.headers.get("x-forwarded-for")
+        if fwd:
+            partes = [p.strip() for p in fwd.split(",") if p.strip()]
+            if partes:
+                # Os `hops` últimos itens foram escritos pelos proxies confiáveis;
+                # o cliente real é o item imediatamente anterior a eles.
+                return partes[max(0, len(partes) - hops)]
+
+    return request.client.host if request.client else "unknown"
+
+
 class InMemoryLimiter:
     def __init__(self):
         # Mapeia chave -> lista de timestamps das requisições
@@ -31,14 +67,7 @@ def rate_limit(limit: int, period: int = 60):
     - period: Janela de tempo em segundos (padrão 60s).
     """
     async def dependency(request: Request):
-        # Identificar por IP real do cliente. Com uvicorn --proxy-headers o
-        # request.client.host já reflete o X-Forwarded-For; o fallback abaixo
-        # cobre o caso do header presente sem o flag (defesa em profundidade).
-        fwd = request.headers.get("x-forwarded-for")
-        if fwd:
-            ip = fwd.split(",")[0].strip()
-        else:
-            ip = request.client.host if request.client else "unknown"
+        ip = obter_ip_cliente(request)
         path = request.url.path
         key = f"limit:{path}:{ip}"
         

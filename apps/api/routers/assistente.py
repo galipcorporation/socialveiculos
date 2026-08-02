@@ -1,6 +1,7 @@
 import os
 import logging
 import re
+import uuid
 from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
@@ -341,13 +342,22 @@ async def upload_audio_config(
             config.voz_id = voice_id
             logger.info(f"[ASSISTENTE] Voz clonada criada com ID {voice_id}")
 
-    # Para fins de teste/dev: salvar arquivo localmente
+    # Para fins de teste/dev: salvar arquivo localmente.
+    # O nome vem do cliente: usado cru daria path traversal ("../../main.py") e
+    # deixaria subir .html/.svg numa pasta servida na mesma origem da API
+    # (stored XSS). Grava-se com nome próprio e extensão de uma whitelist.
+    EXT_AUDIO = {".webm", ".mp3", ".m4a", ".mp4", ".ogg", ".wav"}
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in EXT_AUDIO:
+        ext = ".webm"
+    nome_arquivo = f"{context.usuario.id}_{uuid.uuid4().hex}{ext}"
+
     os.makedirs("static/uploads/assistente", exist_ok=True)
-    audio_path = f"static/uploads/assistente/{context.usuario.id}_{file.filename}"
+    audio_path = f"static/uploads/assistente/{nome_arquivo}"
     with open(audio_path, "wb") as f:
         f.write(audio_bytes)
-    
-    config.audio_url = f"/static/uploads/assistente/{context.usuario.id}_{file.filename}"
+
+    config.audio_url = f"/static/uploads/assistente/{nome_arquivo}"
     await db.commit()
 
     return {

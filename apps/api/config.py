@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: str = Field(default="http://localhost:5173,http://localhost:5174,http://localhost:8081")
 
+    # Proxy reverso — quantos saltos confiáveis existem à frente da API.
+    # 0 = nenhum (X-Forwarded-For é entrada de usuário e é IGNORADO no rate limit).
+    # Na Fly não precisa mexer: o header Fly-Client-IP, que o proxy sobrescreve,
+    # tem prioridade. Só suba para 1+ atrás de outro proxy (nginx, Cloudflare).
+    trusted_proxy_hops: int = Field(default=0)
+
     # Vitrine pública — URL base usada no sitemap.xml e canonical/OG
     vitrine_base_url: str = Field(default="http://localhost:5174")
 

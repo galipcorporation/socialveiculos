@@ -134,10 +134,27 @@ app.add_middleware(
 
 
 # ── Middleware de Segurança OWASP ──────────────────────────────
+
+# Arquivos servidos de /static são conteúdo ENVIADO POR USUÁRIO (fallback de
+# upload quando não há S3). Um .html/.svg malicioso ali roda na MESMA origem da
+# API — stored XSS com os cookies/sessão do domínio. `sandbox` sem
+# allow-scripts desliga JS, plugins, forms e a própria origem do documento;
+# `default-src 'none'` corta qualquer subrecurso. Imagem/áudio legítimos
+# continuam renderizando normalmente (sandbox só afeta documentos).
+CSP_STATIC = "sandbox; default-src 'none'; frame-ancestors 'none';"
+CSP_API = (
+    "default-src 'self'; script-src 'self'; object-src 'none'; "
+    "base-uri 'none'; form-action 'self'; frame-ancestors 'none';"
+)
+
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
-    response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
+    if request.url.path.startswith("/static"):
+        response.headers["Content-Security-Policy"] = CSP_STATIC
+    else:
+        response.headers["Content-Security-Policy"] = CSP_API
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"

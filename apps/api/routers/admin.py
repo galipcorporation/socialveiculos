@@ -3,10 +3,13 @@ Social Veículos — Rotas de Administração Global da Plataforma (/v1/admin/*)
 Acesso exclusivo para usuários com papel admin_plataforma.
 """
 
+import asyncio
 import csv
 import html as html_lib
 import io
 import json
+import secrets
+import time
 import unicodedata
 import re
 from datetime import datetime, timedelta
@@ -19,6 +22,7 @@ from sqlalchemy import func, or_
 
 from database import get_db
 from deps import get_current_active_user, registrar_auditoria
+from limiter import rate_limit
 from models import (
     Usuario, Loja, Veiculo, LogAuditoria, PapelUsuario, MembroLoja, Lead, ModuloHabilitado,
     Plano, Assinatura, Pagamento, StatusAssinatura, StatusPagamento, ContratoAssinaturaVersao, utcnow,
@@ -124,7 +128,34 @@ class StatusLojaRequest(BaseModel):
     ativa: bool
 
 
+# ── Códigos de troca da impersonação ────────────────────────────
+# codigo -> (token, loja_nome, expira_em). Em memória, como o rate limiter:
+# a API roda em uma máquina só na Fly (`min_machines_running = 1`,
+# `auto_stop_machines = false`). Se um dia escalar para 2+, a troca pode cair
+# noutra instância e o admin vê "código inválido" — a saída então é mover este
+# dicionário para o banco/Redis, nunca voltar a mandar token pela URL.
+IMPERSONAR_CODIGO_TTL = 60  # segundos
+_CODIGOS_IMPERSONAR: Dict[str, tuple] = {}
+_LOCK_IMPERSONAR = asyncio.Lock()
+
+
+def _limpar_codigos_expirados() -> None:
+    agora = time.time()
+    for c in [c for c, (_t, _n, exp) in _CODIGOS_IMPERSONAR.items() if exp < agora]:
+        _CODIGOS_IMPERSONAR.pop(c, None)
+
+
 class ImpersonarResponse(BaseModel):
+    """Resposta do admin: código de troca, NUNCA o token (ver `_CODIGOS_IMPERSONAR`)."""
+    codigo: str
+    loja_nome: str
+
+
+class ImpersonarTrocaRequest(BaseModel):
+    codigo: str
+
+
+class ImpersonarTokenResponse(BaseModel):
     access_token: str
     loja_nome: str
 
@@ -454,7 +485,14 @@ async def impersonar_loja(
     db: AsyncSession = Depends(get_db),
     admin: Usuario = Depends(exige_admin_plataforma),
 ):
-    """Gera token temporário (15 min) para observar a loja como gestor."""
+    """
+    Gera um CÓDIGO DE TROCA de uso único (60s) para observar a loja como gestor.
+
+    O token em si não sai daqui: o gestor abre `/impersonar?code=...` e troca o
+    código pelo JWT num POST. Passar o token direto na query string (como era
+    antes) o deixava no histórico do navegador, no header `Referer`, nos logs de
+    acesso HTTP e ao alcance de extensões — e este token dá sessão de gestor.
+    """
     res = await db.execute(select(Loja).where(Loja.id == loja_id))
     loja = res.scalar_one_or_none()
     if not loja:
@@ -482,7 +520,39 @@ async def impersonar_loja(
         expires_delta=timedelta(minutes=15),
     )
 
-    return ImpersonarResponse(access_token=token, loja_nome=loja.nome)
+    codigo = secrets.token_urlsafe(32)
+    async with _LOCK_IMPERSONAR:
+        _limpar_codigos_expirados()
+        _CODIGOS_IMPERSONAR[codigo] = (token, loja.nome, time.time() + IMPERSONAR_CODIGO_TTL)
+
+    return ImpersonarResponse(codigo=codigo, loja_nome=loja.nome)
+
+
+@router.post(
+    "/impersonar/trocar",
+    response_model=ImpersonarTokenResponse,
+    dependencies=[Depends(rate_limit(limit=10, period=60))],
+)
+async def trocar_codigo_impersonar(data: ImpersonarTrocaRequest):
+    """
+    Troca o código de uso único pelo token de impersonação.
+
+    Sem autenticação de propósito: quem chama é o app do gestor, que ainda não
+    tem sessão. A segurança está no código — 256 bits, vida de 60s, consumido na
+    primeira troca — e ele só existe porque um admin autenticado o pediu.
+    """
+    async with _LOCK_IMPERSONAR:
+        _limpar_codigos_expirados()
+        registro = _CODIGOS_IMPERSONAR.pop(data.codigo, None)  # uso único
+
+    if not registro:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Código de observação inválido ou expirado. Tente novamente pelo painel.",
+        )
+
+    token, loja_nome, _exp = registro
+    return ImpersonarTokenResponse(access_token=token, loja_nome=loja_nome)
 
 
 # ── Usuários — busca e reset de senha ────────────────────────────

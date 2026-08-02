@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native'
 import { useQuery } from '@tanstack/react-query'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius, spacing } from '../../theme/tokens'
-import { Button, Input, OptionSheet, SelectField, Sheet, Txt, type SheetOption } from '../../components/ui'
+import { Button, Input, OptionSheet, SelectField, Sheet, Slider, Txt, type SheetOption } from '../../components/ui'
 import { maskMoedaInput, parseMoedaInput, formatNumber } from '../../lib/format'
 import { vitrineService, type FiltrosAvancados, type OrdenacaoBusca } from '../../services'
 import { ANOS, TIPOS_VEICULO, type TipoVeiculo } from '../../services/types'
@@ -20,7 +20,11 @@ const ORDENACOES: { value: OrdenacaoBusca; label: string }[] = [
   { value: 'ano_desc', label: 'Mais novo' },
 ]
 
-const KMS_MAX = [20_000, 50_000, 80_000, 100_000, 150_000]
+// Slider de km máxima: o topo da faixa vale "sem limite" (não manda `km_max`),
+// senão o filtro cortaria justamente os anúncios de rodagem alta.
+const KM_MIN = 5_000
+const KM_TOPO = 200_000
+const KM_PASSO = 5_000
 
 // Só os tipos que fazem sentido na vitrine B2C — o resto do catálogo (barco,
 // aeronave…) polui o filtro sem ter anúncio publicado.
@@ -41,6 +45,7 @@ export function FiltrosBuscaSheet({ visible, onClose, valor, onAplicar }: Filtro
   const [precoMin, setPrecoMin] = useState(valor.preco_min != null ? formatNumber(valor.preco_min, 2) : '')
   const [precoMax, setPrecoMax] = useState(valor.preco_max != null ? formatNumber(valor.preco_max, 2) : '')
   const [anoAberto, setAnoAberto] = useState<'min' | 'max' | null>(null)
+  const [cambioAberto, setCambioAberto] = useState(false)
 
   const categoriasQ = useQuery({
     queryKey: ['vitrine', 'categorias'],
@@ -51,6 +56,11 @@ export function FiltrosBuscaSheet({ visible, onClose, valor, onAplicar }: Filtro
 
   const opcoesAno: SheetOption[] = useMemo(
     () => ANOS.slice(0, 20).map((a) => ({ value: String(a), label: String(a) })),
+    []
+  )
+
+  const opcoesCambio: SheetOption[] = useMemo(
+    () => [{ value: '', label: 'Qualquer' }, ...CAMBIOS.map((c) => ({ value: c, label: c }))],
     []
   )
 
@@ -148,19 +158,25 @@ export function FiltrosBuscaSheet({ visible, onClose, valor, onAplicar }: Filtro
           </View>
         </Secao>
 
-        <Secao titulo="Km máxima">
-          <Opcoes
-            opcoes={KMS_MAX.map((k) => ({ value: String(k), label: `até ${formatNumber(k)} km` }))}
-            selecionado={rascunho.km_max != null ? String(rascunho.km_max) : undefined}
-            onSelect={(v) => set('km_max', rascunho.km_max === Number(v) ? undefined : Number(v))}
-          />
-        </Secao>
+        <Slider
+          label="KM MÁXIMA"
+          min={KM_MIN}
+          max={KM_TOPO}
+          step={KM_PASSO}
+          value={rascunho.km_max ?? KM_TOPO}
+          onChange={(v) =>
+            setRascunho((f) => ({ ...f, km_max: v >= KM_TOPO ? undefined : v }))
+          }
+          valorTexto={rascunho.km_max != null ? `até ${formatNumber(rascunho.km_max)} km` : 'Sem limite'}
+          minTexto={`${formatNumber(KM_MIN)} km`}
+          maxTexto="Sem limite"
+        />
 
         <Secao titulo="Câmbio">
-          <Opcoes
-            opcoes={CAMBIOS.map((c) => ({ value: c, label: c }))}
-            selecionado={rascunho.cambio}
-            onSelect={(v) => set('cambio', v)}
+          <SelectField
+            value={rascunho.cambio}
+            placeholder="Qualquer"
+            onPress={() => setCambioAberto(true)}
           />
         </Secao>
 
@@ -197,6 +213,17 @@ export function FiltrosBuscaSheet({ visible, onClose, valor, onAplicar }: Filtro
         if (anoAberto === 'min') set('ano_min', ano)
         else if (anoAberto === 'max') set('ano_max', ano)
         setAnoAberto(null)
+      }}
+    />
+    <OptionSheet
+      visible={cambioAberto}
+      onClose={() => setCambioAberto(false)}
+      title="Câmbio"
+      options={opcoesCambio}
+      selected={rascunho.cambio ?? ''}
+      onSelect={(v) => {
+        setRascunho((f) => ({ ...f, cambio: v || undefined }))
+        setCambioAberto(false)
       }}
     />
     </>

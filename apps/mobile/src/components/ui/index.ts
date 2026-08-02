@@ -6,6 +6,7 @@ export {
   Badge, TONE_ESTAGIO_ESTEIRA, TONE_ETAPA_LEAD, TONE_STATUS_VEICULO, TONE_TIPO_LANCAMENTO,
 } from './Badge'
 export { Input, SearchBar, SelectField } from './Inputs'
+export { Slider } from './Slider'
 export { Sheet, OptionSheet, type SheetOption } from './Sheet'
 export { ConfirmSheet } from './ConfirmSheet'
 export { Skeleton, SkeletonCard, EmptyState, ErrorState, ProgressBar } from './Feedback'

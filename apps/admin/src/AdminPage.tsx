@@ -1743,12 +1743,15 @@ function AbaLojas() {
   const impersonar = async (loja: LojaItem) => {
     setImpersonarLoading(loja.id)
     try {
-      const res = await api.post<{ access_token: string; loja_nome: string }>(`/admin/lojas/${loja.id}/impersonar`, {})
+      // A API devolve um código de uso único (60s), nunca o token: token em query
+      // string fica no histórico, no Referer e nos logs de acesso — e este dá
+      // sessão de gestor. O gestor troca o código pelo token num POST.
+      const res = await api.post<{ codigo: string; loja_nome: string }>(`/admin/lojas/${loja.id}/impersonar`, {})
       const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
       const gestorBase = isDev
         ? 'http://localhost:5173'
         : (import.meta.env.VITE_GESTOR_URL || window.location.origin.replace('admin.', 'app.').replace('/admin', ''))
-      const url = `${gestorBase}/impersonar?token=${encodeURIComponent(res.access_token)}&loja=${encodeURIComponent(res.loja_nome)}`
+      const url = `${gestorBase}/impersonar?code=${encodeURIComponent(res.codigo)}`
       window.open(url, '_blank')
     } catch (err: any) {
       setErro(err.message || 'Erro ao impersonar loja.')

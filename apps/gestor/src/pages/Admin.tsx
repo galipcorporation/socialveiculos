@@ -223,8 +223,9 @@ function AbaLojas() {
 
   const impersonar = async (loja: LojaItem) => {
     try {
-      const res = await api.post<{ access_token: string; loja_nome: string }>(`/admin/lojas/${loja.id}/impersonar`, {})
-      const url = `/impersonar?token=${encodeURIComponent(res.access_token)}&loja=${encodeURIComponent(res.loja_nome)}`
+      // Código de uso único (60s); o token nunca vai na URL (histórico/Referer/logs).
+      const res = await api.post<{ codigo: string; loja_nome: string }>(`/admin/lojas/${loja.id}/impersonar`, {})
+      const url = `/impersonar?code=${encodeURIComponent(res.codigo)}`
       window.open(url, '_blank')
     } catch (err: any) {
       useUIStore.getState().showError(err.message || 'Erro ao impersonar loja.')
