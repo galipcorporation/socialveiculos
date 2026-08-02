@@ -87,7 +87,7 @@ export default function ConversaAssistenteScreen({ route }: RootScreenProps<'Con
   return (
     <Screen scroll={false} padded={false}>
       <AppHeader title={nome} large={false} back />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <FlatList
           data={q.data ?? []}
           keyExtractor={(m) => m.id}

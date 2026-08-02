@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react'
 import { FlatList, View } from 'react-native'
-import { useNavigation } from '@react-navigation/native'
+import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
@@ -32,14 +32,27 @@ export default function FeedScreen() {
     queryFn: () => vitrineService.feed(filtro, buscaDebounced),
   })
 
+  // A tela fica montada o tempo todo na tab bar, então sem isso o status
+  // "Seguindo" pode ficar desatualizado após seguir/deixar de seguir em
+  // outra tela (ex.: "Lojas que sigo") sem o usuário sair e voltar ao app.
+  useFocusEffect(
+    useCallback(() => {
+      queryClient.invalidateQueries({ queryKey: ['vitrine', 'feed'] })
+    }, [queryClient])
+  )
+
   const seguirLoja = useCallback((lojaId: string, seguindoAgora: boolean) =>
     comLogin('Entre para seguir lojas.', async () => {
-      const novoEstado = await vitrineService.alternarSeguir(lojaId, seguindoAgora)
-      queryClient.setQueryData<AnuncioVitrine[]>(['vitrine', 'feed', filtro, buscaDebounced], (ant) =>
-        (ant ?? []).map((a) => (a.loja_id === lojaId ? { ...a, seguindo_loja: novoEstado } : a))
-      )
-      queryClient.invalidateQueries({ queryKey: ['vitrine'] })
-    }), [comLogin, queryClient, filtro, buscaDebounced])
+      try {
+        const novoEstado = await vitrineService.alternarSeguir(lojaId, seguindoAgora)
+        queryClient.setQueryData<AnuncioVitrine[]>(['vitrine', 'feed', filtro, buscaDebounced], (ant) =>
+          (ant ?? []).map((a) => (a.loja_id === lojaId ? { ...a, seguindo_loja: novoEstado } : a))
+        )
+        queryClient.invalidateQueries({ queryKey: ['vitrine'] })
+      } catch (e) {
+        toast.show('error', extractErrorDetails(e).message || 'Não foi possível atualizar o status de seguir.')
+      }
+    }), [comLogin, queryClient, filtro, buscaDebounced, toast])
 
   const whatsapp = useCallback(async (a: AnuncioVitrine) => {
     if (!a.loja_whatsapp) return
