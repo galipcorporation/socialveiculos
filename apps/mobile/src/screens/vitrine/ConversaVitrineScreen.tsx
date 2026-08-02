@@ -64,7 +64,7 @@ export default function ConversaVitrineScreen({ route }: VitrineScreenProps<'Con
   return (
     <Screen scroll={false} padded={false}>
       <AppHeader title={nome} large={false} back />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {q.isLoading ? (
           <View style={{ padding: spacing.md, gap: spacing.sm }}>
             <Skeleton width="60%" height={40} style={{ alignSelf: 'flex-start', borderRadius: 16 }} />
