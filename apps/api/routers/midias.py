@@ -1,6 +1,9 @@
+import asyncio
 import logging
+import os
+import tempfile
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
@@ -28,9 +31,30 @@ EXT_FOTO = (".jpg", ".jpeg", ".png", ".webp")
 EXT_VIDEO = (".mp4", ".mov", ".webm")
 
 
+async def _remover_audio_video(content: bytes, sufixo: str) -> bytes:
+    """Remove a trilha de áudio de um vídeo via ffmpeg (stream copy, sem recodificar imagem)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        entrada = os.path.join(tmp, f"in{sufixo}")
+        saida = os.path.join(tmp, f"out{sufixo}")
+        with open(entrada, "wb") as f:
+            f.write(content)
+
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-i", entrada, "-c", "copy", "-an", saida,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0 or not os.path.exists(saida):
+            raise RuntimeError(f"ffmpeg falhou ao remover áudio: {stderr.decode(errors='ignore')[-500:]}")
+
+        with open(saida, "rb") as f:
+            return f.read()
+
+
 @router.post("/midias/upload", status_code=status.HTTP_201_CREATED)
 async def upload_midia(
     file: UploadFile = File(...),
+    remover_audio: bool = Form(False),
     current_user: B2BContext = Depends(get_current_b2b_user)
 ):
     """
@@ -73,6 +97,13 @@ async def upload_midia(
                 content, file.filename or "file", content_type, prefixo=prefixo,
             )
         else:
+            if remover_audio:
+                _, ext = os.path.splitext(file.filename or "")
+                try:
+                    content = await _remover_audio_video(content, ext or ".mp4")
+                except Exception as e:
+                    logger.error("Falha ao remover áudio do vídeo: %s", e)
+                    # Se o ffmpeg falhar, segue com o vídeo original em vez de bloquear o upload.
             url = await storage_provider.upload_file(
                 content, file.filename or "file", content_type, prefixo=prefixo,
             )

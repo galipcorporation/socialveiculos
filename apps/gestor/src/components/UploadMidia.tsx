@@ -18,7 +18,10 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [dragOver, setDragOver] = useState(false)
+  const [removerAudio, setRemoverAudio] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const temVideo = (files: FileList) => Array.from(files).some(f => f.type.startsWith('video/'))
 
   const processFiles = async (files: FileList) => {
     if (!files || files.length === 0) return
@@ -43,6 +46,9 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
         const file = files[i]
         const formData = new FormData()
         formData.append('file', file)
+        if (file.type.startsWith('video/') && removerAudio) {
+          formData.append('remover_audio', 'true')
+        }
 
         setProgress(30 + Math.round((i / files.length) * 40))
 
@@ -218,6 +224,20 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
         {salvandoRascunho ? 'Preparando...' : sidebar ? 'Adicionar fotos/vídeos' : 'Clique para selecionar ou arraste fotos/vídeos'}
       </span>
       {!sidebar && !salvandoRascunho && <span style={{ fontSize: 11, color: 'var(--sv-text-muted)', marginTop: 4 }}>Limite: Imagem 15MB, Vídeo 100MB</span>}
+      {!salvandoRascunho && (
+        <label
+          onClick={(e) => e.stopPropagation()}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 11, color: 'var(--sv-text-dim)', cursor: 'pointer' }}
+        >
+          <input
+            type="checkbox"
+            checked={removerAudio}
+            onChange={(e) => setRemoverAudio(e.target.checked)}
+            style={{ margin: 0 }}
+          />
+          Remover som do vídeo ao enviar
+        </label>
+      )}
       <input
         type="file"
         ref={fileInputRef}

@@ -1,6 +1,22 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { ehVideo } from '../lib/midia'
+
+const MuteIcon = ({ muted }: { muted: boolean }) => (
+  muted ? (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <line x1="23" y1="9" x2="17" y2="15" />
+      <line x1="17" y1="9" x2="23" y2="15" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.54 8.46a5 5 0 010 7.07" />
+      <path d="M19.07 4.93a10 10 0 010 14.14" />
+    </svg>
+  )
+)
 
 export interface Midia {
   id: string
@@ -87,6 +103,18 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
   // Por índice: uma mídia quebrada não pode derrubar o carrossel inteiro.
   const [errosPorIdx, setErrosPorIdx] = useState<Record<number, boolean>>({})
   const imgError = !!errosPorIdx[currentIdx]
+  const [muted, setMuted] = useState(true)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setMuted(m => {
+      const next = !m
+      if (videoRef.current) videoRef.current.muted = next
+      return next
+    })
+  }
 
   const midias = veiculo.midias ?? []
   const currentMidia = midias.length > 0 ? midias[currentIdx] : null
@@ -146,7 +174,23 @@ export function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSegui
       <div className="vt-car-card-image">
         {currentMidia && !imgError ? (
           midiaEhVideo ? (
-            <video src={currentMidia.url} controls muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+              <video ref={videoRef} src={currentMidia.url} muted={muted} loop playsInline autoPlay style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <button
+                type="button"
+                className="vt-video-mute-btn"
+                onClick={toggleMute}
+                aria-label={muted ? 'Ativar som' : 'Silenciar'}
+                style={{
+                  position: 'absolute', left: 10, bottom: 10, zIndex: 2,
+                  width: 32, height: 32, borderRadius: '50%', border: 'none',
+                  background: 'rgba(0,0,0,0.55)', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                }}
+              >
+                <span style={{ width: 16, height: 16, display: 'flex' }}><MuteIcon muted={muted} /></span>
+              </button>
+            </div>
           ) : (
             <Link to={`/carro/${veiculo.id}`} className="vt-car-card-media-link" style={{ width: '100%', height: '100%', display: 'block' }}>
               <img src={currentMidia.thumb_url || currentMidia.url} alt={`${veiculo.marca} ${veiculo.modelo}`} loading="lazy" decoding="async" onError={() => setErrosPorIdx(e => ({ ...e, [currentIdx]: true }))} />
