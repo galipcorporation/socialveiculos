@@ -27,8 +27,10 @@
     /* Sem isto o WebView reescala o texto por conta própria e o corpo do
        contrato sai menor que o resto do app. */
     -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+    /* Nada aqui dentro pode ser mais largo que a tela do celular. */
+    width: 100%; max-width: 100%; overflow-x: hidden;
   }
-  .rich-editor { border: 1px solid var(--border); border-radius: 10px; background: var(--input-bg); overflow: hidden; }
+  .rich-editor { max-width: 100%; border: 1px solid var(--border); border-radius: 10px; background: var(--input-bg); overflow: hidden; }
   .re-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 6px; border-bottom: 1px solid var(--border); background: var(--bg); }
   .re-tb {
     display: inline-flex; align-items: center; justify-content: center; gap: 4px;
@@ -68,14 +70,30 @@
   .re-var-add-btn { background: var(--overlay-soft); border: 1px solid var(--border); border-radius: 6px; color: var(--text); width: 30px; }
   /* O container nativo se ajusta à altura real (mensagem `height`), então o
      mínimo aqui é só o piso do editor vazio. */
-  .re-content { min-height: var(--min-content, 200px); display: flex; }
-  .re-content .ProseMirror { flex: 1; padding: 12px 14px; outline: none; color: var(--text); font-size: 16px; line-height: 1.6; }
+  .re-content { min-height: var(--min-content, 200px); display: flex; max-width: 100%; overflow: hidden; }
+  .re-content .ProseMirror {
+    flex: 1; padding: 12px 14px; outline: none; color: var(--text); font-size: 16px; line-height: 1.6;
+    /* `min-width: auto` (padrão do item flex) deixa o editor crescer até caber a
+       maior "palavra" do documento. As linhas de assinatura dos modelos padrão
+       são 50+ underscores seguidos: sem isto o conteúdo fica mais largo que a
+       tela e o texto aparece cortado nas laterais. */
+    min-width: 0; max-width: 100%;
+    overflow-wrap: break-word; word-break: break-word;
+  }
   .re-content .ProseMirror p { margin: 0 0 8px; }
-  .re-content .ProseMirror img { max-width: 100%; border-radius: 4px; }
+  /* Sem tamanho próprio o h1 sai em 2em (32px) e uma frase como "CONTRATO DE
+     COMPRA E VENDA DE VEÍCULO AUTOMOTOR" toma meia tela do celular. */
+  .re-content .ProseMirror h1 { font-size: 1.3em; line-height: 1.3; margin: 12px 0 8px; }
+  .re-content .ProseMirror h2 { font-size: 1.12em; line-height: 1.35; margin: 12px 0 6px; }
+  .re-content .ProseMirror h3 { font-size: 1em; line-height: 1.4; margin: 10px 0 6px; }
+  .re-content .ProseMirror ul, .re-content .ProseMirror ol { padding-left: 20px; margin: 0 0 8px; }
+  .re-content .ProseMirror img { max-width: 100%; height: auto; border-radius: 4px; }
   .re-content .ProseMirror p.is-editor-empty:first-child::before {
     content: attr(data-placeholder); color: var(--text-muted); float: left; height: 0; pointer-events: none;
   }
-  .re-content .ProseMirror table { border-collapse: collapse; width: 100%; }
+  /* `table-layout: fixed` obriga as colunas a caberem na largura da tela em vez
+     de esticar a tabela até o texto caber (o que empurrava o editor para fora). */
+  .re-content .ProseMirror table { border-collapse: collapse; width: 100%; max-width: 100%; table-layout: fixed; }
   .re-content .ProseMirror td, .re-content .ProseMirror th { border: 1px solid var(--border); padding: 6px 8px; }
   .re-content .ProseMirror th { background: var(--overlay-soft); }
   .rich-var {
