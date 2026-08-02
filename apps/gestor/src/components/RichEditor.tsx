@@ -92,17 +92,31 @@ const Variavel = Node.create({
   inline: true,
   atom: true,
   selectable: true,
+  // Sem `parseHTML`/`renderHTML` por atributo o TipTap procuraria atributos
+  // literais `chave=""`/`label=""` no span — que `toEditorHtml` não escreve. A
+  // pílula entrava vazia (aparecia como `{}`) e `toSavedHtml` não reconhecia
+  // `data-var=""`: a variável se perdia ao salvar.
   addAttributes() {
     return {
-      chave: { default: '' },
-      label: { default: '' },
+      chave: {
+        default: '',
+        parseHTML: (el) => el.getAttribute('data-var') || '',
+        renderHTML: (attrs) => ({ 'data-var': attrs.chave }),
+      },
+      label: {
+        default: '',
+        // O HTML salvo não carrega rótulo: o texto do span é o rótulo que
+        // `toEditorHtml` pintou a partir do catálogo.
+        parseHTML: (el) => el.getAttribute('data-label') || el.textContent || '',
+        renderHTML: (attrs) => (attrs.label ? { 'data-label': attrs.label } : {}),
+      },
     }
   },
   parseHTML() {
     return [{ tag: 'span[data-var]' }]
   },
-  renderHTML({ HTMLAttributes }) {
-    return ['span', mergeAttributes(HTMLAttributes, { 'data-var': HTMLAttributes.chave }), HTMLAttributes.label || HTMLAttributes.chave]
+  renderHTML({ HTMLAttributes, node }) {
+    return ['span', mergeAttributes(HTMLAttributes), node.attrs.label || node.attrs.chave]
   },
   addNodeView() {
     return ReactNodeViewRenderer(VariavelComponent)
@@ -111,11 +125,17 @@ const Variavel = Node.create({
 
 /* ── Serialização: HTML do TipTap ⇄ {{chave}} do backend ──────── */
 
+// Rótulo de campo personalizado é texto digitado pelo usuário: sem escapar, uma
+// aspa fecharia o atributo e um `<` abriria uma tag no meio do contrato.
+function escaparHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 // Converte o HTML salvo (com {{chave}}) em HTML que o TipTap entende (pílulas).
 function toEditorHtml(saved: string, labels: Record<string, string>): string {
   return saved.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_m, chave) => {
-    const label = labels[chave] || chave
-    return `<span data-var="${chave}">${label}</span>`
+    const label = escaparHtml(labels[chave] || chave)
+    return `<span data-var="${chave}" data-label="${label}">${label}</span>`
   })
 }
 

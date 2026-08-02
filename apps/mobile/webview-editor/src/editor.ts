@@ -31,32 +31,52 @@ const Variavel = Node.create({
   inline: true,
   atom: true,
   selectable: true,
+  // Sem `parseHTML`/`renderHTML` POR ATRIBUTO o TipTap procura atributos
+  // literais `chave=""`/`label=""` no span — que `toEditorHtml` não escreve.
+  // Toda pílula do modelo entrava com chave e rótulo vazios: aparecia como um
+  // `{}` mudo e, pior, `toSavedHtml` não reconhecia `data-var=""` e salvava o
+  // span vazio no lugar do `{{chave}}` — a variável era perdida ao salvar.
   addAttributes() {
     return {
-      chave: { default: '' },
-      label: { default: '' },
+      chave: {
+        default: '',
+        parseHTML: (el) => el.getAttribute('data-var') || '',
+        renderHTML: (attrs) => ({ 'data-var': attrs.chave }),
+      },
+      label: {
+        default: '',
+        // O HTML salvo não carrega rótulo: o texto do span é o próprio rótulo
+        // que `toEditorHtml` pintou a partir do catálogo.
+        parseHTML: (el) => el.getAttribute('data-label') || el.textContent || '',
+        renderHTML: (attrs) => (attrs.label ? { 'data-label': attrs.label } : {}),
+      },
     }
   },
   parseHTML() {
     return [{ tag: 'span[data-var]' }]
   },
-  renderHTML({ HTMLAttributes }) {
+  renderHTML({ HTMLAttributes, node }) {
     return [
       'span',
       mergeAttributes(HTMLAttributes, {
-        'data-var': HTMLAttributes.chave,
         class: 'rich-var',
         contenteditable: 'false',
       }),
-      HTMLAttributes.label || HTMLAttributes.chave,
+      node.attrs.label || node.attrs.chave,
     ]
   },
 })
 
+/** Rótulo de campo personalizado é texto digitado pelo usuário: sem escapar,
+ *  uma aspa fecharia o atributo e um `<` abriria uma tag no meio do contrato. */
+function escaparHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 function toEditorHtml(saved: string, labels: Record<string, string>): string {
   return saved.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_m, chave) => {
-    const label = labels[chave] || chave
-    return `<span data-var="${chave}" contenteditable="false" class="rich-var">${label}</span>`
+    const label = escaparHtml(labels[chave] || chave)
+    return `<span data-var="${chave}" data-label="${label}" contenteditable="false" class="rich-var">${label}</span>`
   })
 }
 
@@ -298,6 +318,18 @@ let medirAltura = () => {}
 
 function observarAltura() {
   const raiz = document.querySelector<HTMLElement>('.rich-editor')!
+  // Rede de segurança do corte lateral: o CSS já quebra palavras longas, mas
+  // qualquer nó que ainda estoure a largura (tabela colada, imagem em px) faz o
+  // browser rolar este box na horizontal ao levar o caret para a vista — e como
+  // ele é `overflow:hidden`, não há barra para voltar: o texto simplesmente some
+  // pela esquerda. Devolvemos o scroll ao zero.
+  const zerarScrollLateral = () => {
+    if (raiz.scrollLeft !== 0) raiz.scrollLeft = 0
+    if (document.documentElement.scrollLeft !== 0) document.documentElement.scrollLeft = 0
+    if (document.body.scrollLeft !== 0) document.body.scrollLeft = 0
+  }
+  raiz.addEventListener('scroll', zerarScrollLateral)
+  window.addEventListener('scroll', zerarScrollLateral)
   let ultima = 0
   medirAltura = () => {
     const h = Math.ceil(raiz.getBoundingClientRect().height)
