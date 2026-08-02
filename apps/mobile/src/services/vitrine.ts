@@ -34,25 +34,42 @@ export interface FiltrosAvancados {
   ano_max?: number
   km_max?: number
   cambio?: string
-  combustivel?: string
-  cor?: string
+  /** Multiescolha: quem procura "Flex ou Gasolina" não deveria ter que buscar duas vezes. */
+  combustivel?: string[]
+  cor?: string[]
   ordenacao?: OrdenacaoBusca
 }
 
 export const FILTROS_AVANCADOS_VAZIO: FiltrosAvancados = {}
 
-/** Quantos critérios estão ativos — alimenta o badge do botão de filtros. */
+/** Lista de critério multiescolha só conta como ativa se tiver algum item. */
+function listaAtiva(v?: string[]): string[] | undefined {
+  return v && v.length > 0 ? v : undefined
+}
+
+/** Quantos critérios estão ativos — alimenta o badge do botão de filtros.
+ *  Combustível e cor contam 1 por critério, não 1 por opção marcada. */
 export function contarFiltrosAtivos(f: FiltrosAvancados): number {
   return [
     f.tipo, f.marca, f.carroceria, f.preco_min, f.preco_max,
-    f.ano_min, f.ano_max, f.km_max, f.cambio, f.combustivel, f.cor,
+    f.ano_min, f.ano_max, f.km_max, f.cambio,
+    listaAtiva(f.combustivel), listaAtiva(f.cor),
     f.ordenacao && f.ordenacao !== 'relevancia' ? f.ordenacao : undefined,
   ].filter((v) => v != null && v !== '').length
 }
 
 function temFiltroLocal(f: FiltrosAvancados): boolean {
-  return [f.preco_min, f.ano_min, f.ano_max, f.km_max, f.cambio, f.combustivel, f.cor]
-    .some((v) => v != null && v !== '')
+  return [
+    f.preco_min, f.ano_min, f.ano_max, f.km_max, f.cambio,
+    listaAtiva(f.combustivel), listaAtiva(f.cor),
+  ].some((v) => v != null && v !== '')
+}
+
+/** Casa o valor do anúncio com qualquer uma das opções marcadas (OR). */
+function casaAlguma(valor: string | null | undefined, opcoes: string[] | undefined, porTrecho = false): boolean {
+  if (!opcoes || opcoes.length === 0) return true
+  const alvo = (valor ?? '').toLowerCase()
+  return opcoes.some((o) => (porTrecho ? alvo.includes(o.toLowerCase()) : alvo === o.toLowerCase()))
 }
 
 function aplicarFiltrosLocais(lista: AnuncioVitrine[], f: FiltrosAvancados): AnuncioVitrine[] {
@@ -63,8 +80,9 @@ function aplicarFiltrosLocais(lista: AnuncioVitrine[], f: FiltrosAvancados): Anu
     if (f.ano_max != null && a.ano_modelo > f.ano_max) return false
     if (f.km_max != null && (a.km ?? 0) > f.km_max) return false
     if (f.cambio && a.cambio?.toLowerCase() !== f.cambio.toLowerCase()) return false
-    if (f.combustivel && a.combustivel?.toLowerCase() !== f.combustivel.toLowerCase()) return false
-    if (f.cor && !(a.cor ?? '').toLowerCase().includes(f.cor.toLowerCase())) return false
+    if (!casaAlguma(a.combustivel, f.combustivel)) return false
+    // Cor casa por trecho: o cadastro costuma vir como "Preto metálico".
+    if (!casaAlguma(a.cor, f.cor, true)) return false
     return true
   })
 }

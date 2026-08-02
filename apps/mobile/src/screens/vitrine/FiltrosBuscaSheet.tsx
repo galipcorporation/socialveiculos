@@ -69,6 +69,17 @@ export function FiltrosBuscaSheet({ visible, onClose, valor, onAplicar }: Filtro
     setRascunho((f) => ({ ...f, [chave]: f[chave] === v ? undefined : v }))
   }
 
+  /** Critérios multiescolha (combustível, cor): cada toque marca/desmarca uma
+   *  opção e a busca aceita qualquer uma delas. Lista vazia vira `undefined`
+   *  para o filtro sumir da contagem e dos chips da tela de busca. */
+  function alternar(chave: 'combustivel' | 'cor', v: string) {
+    setRascunho((f) => {
+      const atual = f[chave] ?? []
+      const proxima = atual.includes(v) ? atual.filter((x) => x !== v) : [...atual, v]
+      return { ...f, [chave]: proxima.length > 0 ? proxima : undefined }
+    })
+  }
+
   function limpar() {
     setRascunho({})
     setPrecoMin('')
@@ -180,19 +191,19 @@ export function FiltrosBuscaSheet({ visible, onClose, valor, onAplicar }: Filtro
           />
         </Secao>
 
-        <Secao titulo="Combustível">
+        <Secao titulo="Combustível" dica="Pode marcar mais de um">
           <Opcoes
             opcoes={COMBUSTIVEIS.map((c) => ({ value: c, label: c }))}
-            selecionado={rascunho.combustivel}
-            onSelect={(v) => set('combustivel', v)}
+            selecionados={rascunho.combustivel ?? []}
+            onSelect={(v) => alternar('combustivel', v)}
           />
         </Secao>
 
-        <Secao titulo="Cor">
+        <Secao titulo="Cor" dica="Pode marcar mais de uma">
           <Opcoes
             opcoes={CORES.map((c) => ({ value: c, label: c }))}
-            selecionado={rascunho.cor}
-            onSelect={(v) => set('cor', v)}
+            selecionados={rascunho.cor ?? []}
+            onSelect={(v) => alternar('cor', v)}
           />
         </Secao>
 
@@ -230,10 +241,13 @@ export function FiltrosBuscaSheet({ visible, onClose, valor, onAplicar }: Filtro
   )
 }
 
-function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+function Secao({ titulo, dica, children }: { titulo: string; dica?: string; children: React.ReactNode }) {
   return (
     <View style={{ gap: spacing.xs }}>
-      <Txt variant="captionMedium" color="textDim">{titulo.toUpperCase()}</Txt>
+      <View style={styles.tituloRow}>
+        <Txt variant="captionMedium" color="textDim">{titulo.toUpperCase()}</Txt>
+        {dica ? <Txt variant="caption" color="textMuted">{dica}</Txt> : null}
+      </View>
       {children}
     </View>
   )
@@ -241,21 +255,26 @@ function Secao({ titulo, children }: { titulo: string; children: React.ReactNode
 
 interface OpcoesProps<T extends string> {
   opcoes: { value: T; label: string }[]
+  /** Escolha única. */
   selecionado?: T
+  /** Multiescolha — quando presente, manda em `selecionado`. */
+  selecionados?: T[]
   onSelect: (v: T) => void
 }
 
 /** Grade de pílulas que quebram linha — cabe mais opção que um ScrollView horizontal. */
-function Opcoes<T extends string>({ opcoes, selecionado, onSelect }: OpcoesProps<T>) {
+function Opcoes<T extends string>({ opcoes, selecionado, selecionados, onSelect }: OpcoesProps<T>) {
   const { colors } = useTheme()
   return (
     <View style={styles.pilulas}>
       {opcoes.map((o) => {
-        const ativo = o.value === selecionado
+        const ativo = selecionados ? selecionados.includes(o.value) : o.value === selecionado
         return (
           <Pressable
             key={o.value}
             onPress={() => onSelect(o.value)}
+            accessibilityRole={selecionados ? 'checkbox' : 'radio'}
+            accessibilityState={{ checked: ativo, selected: ativo }}
             style={[
               styles.pilula,
               {
@@ -282,6 +301,7 @@ function Opcoes<T extends string>({ opcoes, selecionado, onSelect }: OpcoesProps
 
 const styles = StyleSheet.create({
   linha: { flexDirection: 'row', gap: spacing.sm },
+  tituloRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.sm },
   pilulas: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   pilula: {
     paddingHorizontal: 14,

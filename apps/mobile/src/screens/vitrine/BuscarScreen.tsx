@@ -68,8 +68,18 @@ export default function BuscarScreen() {
     if (filtros.ano_max != null) itens.push({ chave: 'ano_max', label: `até ${filtros.ano_max}`, limpar: { ano_max: undefined } })
     if (filtros.km_max != null) itens.push({ chave: 'km_max', label: `até ${formatNumber(filtros.km_max)} km`, limpar: { km_max: undefined } })
     if (filtros.cambio) itens.push({ chave: 'cambio', label: filtros.cambio, limpar: { cambio: undefined } })
-    if (filtros.combustivel) itens.push({ chave: 'combustivel', label: filtros.combustivel, limpar: { combustivel: undefined } })
-    if (filtros.cor) itens.push({ chave: 'cor', label: filtros.cor, limpar: { cor: undefined } })
+    // Combustível e cor são multiescolha: um chip por opção, cada um tirando só
+    // a sua (o critério some quando a última é removida).
+    for (const chave of ['combustivel', 'cor'] as const) {
+      for (const v of filtros[chave] ?? []) {
+        const resto = (filtros[chave] ?? []).filter((x) => x !== v)
+        itens.push({
+          chave: `${chave}:${v}`,
+          label: v,
+          limpar: { [chave]: resto.length > 0 ? resto : undefined },
+        })
+      }
+    }
     if (filtros.ordenacao) itens.push({ chave: 'ordenacao', label: ROTULO_ORDENACAO[filtros.ordenacao], limpar: { ordenacao: undefined } })
     return itens
   }, [filtros])
