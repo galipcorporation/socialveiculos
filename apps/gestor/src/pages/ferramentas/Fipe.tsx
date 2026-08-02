@@ -12,6 +12,9 @@ const TIPOS = [
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
+/** FIPE usa "32000" como ano-sentinela para zero km (comum em elétricos recém-lançados). */
+const formatAnoNome = (nome: string) => nome.replace(/^32000\b/i, 'Zero KM (0km)')
+
 export function FipePage() {
   const [tipo, setTipo] = useState('carro')
   const [marcas, setMarcas] = useState<FipeItem[]>([])
@@ -196,7 +199,7 @@ export function FipePage() {
                     disabled={!modeloCod || loadingAnos}
                   >
                     <option value="">{!modeloCod ? 'Aguardando modelo...' : 'Selecione o ano'}</option>
-                    {anos.map(a => <option key={a.codigo} value={a.codigo}>{a.nome}</option>)}
+                    {anos.map(a => <option key={a.codigo} value={a.codigo}>{formatAnoNome(a.nome)}</option>)}
                   </select>
                   {loadingAnos && (
                     <div className="fipe-select-loader">
