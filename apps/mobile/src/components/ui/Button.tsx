@@ -47,7 +47,13 @@ export function Button({
     Animated.spring(scale, { toValue: to, useNativeDriver: true, speed: 40, bounciness: 4 }).start()
 
   return (
-    <Animated.View style={[{ transform: [{ scale }] }, full && { alignSelf: 'stretch' }, style]}>
+    <Animated.View
+      style={[
+        { transform: [{ scale }], borderRadius: radius.md, overflow: 'hidden' },
+        full && { alignSelf: 'stretch' },
+        style,
+      ]}
+    >
       <Pressable
         onPress={() => {
           if (inactive) return
