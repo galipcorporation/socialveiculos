@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../lib/api'
+import { SearchSelect } from '../../components/SearchSelect'
 
 interface FipeItem { codigo: string; nome: string }
 interface FipeResult { fipe: number | null; fipe_disponivel: boolean }
@@ -25,6 +26,14 @@ export function FipePage() {
   const [modeloCod, setModeloCod] = useState('')
   const [anoCod, setAnoCod] = useState('')
 
+  // Texto exibido nos campos de busca — independente do código selecionado.
+  const [marcaDisplay, setMarcaDisplay] = useState('')
+  const [modeloDisplay, setModeloDisplay] = useState('')
+  const [anoDisplay, setAnoDisplay] = useState('')
+  const [buscaMarca, setBuscaMarca] = useState('')
+  const [buscaModelo, setBuscaModelo] = useState('')
+  const [buscaAno, setBuscaAno] = useState('')
+
   const [result, setResult] = useState<FipeResult | null>(null)
   const [loadingMarcas, setLoadingMarcas] = useState(false)
   const [loadingModelos, setLoadingModelos] = useState(false)
@@ -34,6 +43,8 @@ export function FipePage() {
 
   useEffect(() => {
     setMarcaCod(''); setModeloCod(''); setAnoCod('')
+    setMarcaDisplay(''); setModeloDisplay(''); setAnoDisplay('')
+    setBuscaMarca(''); setBuscaModelo(''); setBuscaAno('')
     setModelos([]); setAnos([]); setResult(null); setErro(null)
     setLoadingMarcas(true)
     api.get<FipeItem[]>(`/veiculos/fipe/marcas?tipo=${tipo}`)
@@ -44,7 +55,10 @@ export function FipePage() {
 
   useEffect(() => {
     if (!marcaCod) return
-    setModeloCod(''); setAnoCod(''); setAnos([]); setResult(null)
+    setModeloCod(''); setAnoCod('')
+    setModeloDisplay(''); setAnoDisplay('')
+    setBuscaModelo(''); setBuscaAno('')
+    setAnos([]); setResult(null)
     setLoadingModelos(true)
     api.get<FipeItem[]>(`/veiculos/fipe/marcas/${marcaCod}/modelos?tipo=${tipo}`)
       .then(setModelos)
@@ -54,13 +68,33 @@ export function FipePage() {
 
   useEffect(() => {
     if (!modeloCod) return
-    setAnoCod(''); setResult(null)
+    setAnoCod(''); setAnoDisplay(''); setBuscaAno('')
+    setResult(null)
     setLoadingAnos(true)
     api.get<FipeItem[]>(`/veiculos/fipe/marcas/${marcaCod}/modelos/${modeloCod}/anos?tipo=${tipo}`)
       .then(setAnos)
       .catch(() => setErro('Não foi possível carregar os anos.'))
       .finally(() => setLoadingAnos(false))
   }, [modeloCod])
+
+  const marcasFiltradas = useMemo(() => {
+    const q = buscaMarca.trim().toLowerCase()
+    if (!q) return marcas
+    return marcas.filter(m => m.nome.toLowerCase().includes(q))
+  }, [marcas, buscaMarca])
+
+  const modelosFiltrados = useMemo(() => {
+    const q = buscaModelo.trim().toLowerCase()
+    if (!q) return modelos
+    return modelos.filter(m => m.nome.toLowerCase().includes(q))
+  }, [modelos, buscaModelo])
+
+  const anosFiltrados = useMemo(() => {
+    const q = buscaAno.trim().toLowerCase()
+    const formatadas = anos.map(a => ({ ...a, nome: formatAnoNome(a.nome) }))
+    if (!q) return formatadas
+    return formatadas.filter(a => a.nome.toLowerCase().includes(q))
+  }, [anos, buscaAno])
 
   const consultar = async () => {
     if (!marcaCod || !modeloCod || !anoCod) return
@@ -85,6 +119,12 @@ export function FipePage() {
     setMarcaCod('')
     setModeloCod('')
     setAnoCod('')
+    setMarcaDisplay('')
+    setModeloDisplay('')
+    setAnoDisplay('')
+    setBuscaMarca('')
+    setBuscaModelo('')
+    setBuscaAno('')
     setModelos([])
     setAnos([])
     setResult(null)
@@ -131,25 +171,16 @@ export function FipePage() {
               <div className={`fipe-step-line ${modeloCod ? 'active' : ''}`}></div>
             </div>
             <div className="fipe-step-right">
-              <div className="form-group">
-                <label className="fipe-select-label">Marca</label>
-                <div className="fipe-select-container">
-                  <select
-                    className="filter-select"
-                    value={marcaCod}
-                    onChange={e => setMarcaCod(e.target.value)}
-                    disabled={loadingMarcas || !marcas.length}
-                  >
-                    <option value="">Selecione a marca</option>
-                    {marcas.map(m => <option key={m.codigo} value={m.codigo}>{m.nome}</option>)}
-                  </select>
-                  {loadingMarcas && (
-                    <div className="fipe-select-loader">
-                      <span className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5 }} />
-                    </div>
-                  )}
-                </div>
-              </div>
+              <SearchSelect
+                label="Marca"
+                placeholder={loadingMarcas ? 'Carregando marcas…' : 'Buscar marca…'}
+                value={marcaCod}
+                displayValue={marcaDisplay}
+                options={marcasFiltradas.map(m => ({ id: m.codigo, label: m.nome }))}
+                onSearch={setBuscaMarca}
+                onSelect={(id, label) => { setMarcaCod(id); setMarcaDisplay(label) }}
+                loading={loadingMarcas}
+              />
             </div>
           </div>
 
@@ -160,25 +191,27 @@ export function FipePage() {
               <div className={`fipe-step-line ${anoCod ? 'active' : ''}`}></div>
             </div>
             <div className="fipe-step-right">
-              <div className="form-group">
-                <label className={`fipe-select-label ${!marcaCod ? 'disabled' : ''}`}>Modelo</label>
-                <div className="fipe-select-container">
-                  <select
-                    className="filter-select"
-                    value={modeloCod}
-                    onChange={e => setModeloCod(e.target.value)}
-                    disabled={!marcaCod || loadingModelos}
-                  >
-                    <option value="">{!marcaCod ? 'Aguardando marca...' : 'Selecione o modelo'}</option>
-                    {modelos.map(m => <option key={m.codigo} value={String(m.codigo)}>{m.nome}</option>)}
-                  </select>
-                  {loadingModelos && (
-                    <div className="fipe-select-loader">
-                      <span className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5 }} />
-                    </div>
-                  )}
+              {marcaCod ? (
+                <SearchSelect
+                  label="Modelo"
+                  placeholder={loadingModelos ? 'Carregando modelos…' : 'Buscar modelo…'}
+                  value={modeloCod}
+                  displayValue={modeloDisplay}
+                  options={modelosFiltrados.map(m => ({ id: String(m.codigo), label: m.nome }))}
+                  onSearch={setBuscaModelo}
+                  onSelect={(id, label) => { setModeloCod(id); setModeloDisplay(label) }}
+                  loading={loadingModelos}
+                />
+              ) : (
+                <div className="form-group">
+                  <label className="fipe-select-label disabled">Modelo</label>
+                  <div className="fipe-select-container">
+                    <select className="filter-select" disabled>
+                      <option>Aguardando marca...</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -189,25 +222,27 @@ export function FipePage() {
               <div className="fipe-step-line"></div>
             </div>
             <div className="fipe-step-right">
-              <div className="form-group">
-                <label className={`fipe-select-label ${!modeloCod ? 'disabled' : ''}`}>Ano / Modelo</label>
-                <div className="fipe-select-container">
-                  <select
-                    className="filter-select"
-                    value={anoCod}
-                    onChange={e => setAnoCod(e.target.value)}
-                    disabled={!modeloCod || loadingAnos}
-                  >
-                    <option value="">{!modeloCod ? 'Aguardando modelo...' : 'Selecione o ano'}</option>
-                    {anos.map(a => <option key={a.codigo} value={a.codigo}>{formatAnoNome(a.nome)}</option>)}
-                  </select>
-                  {loadingAnos && (
-                    <div className="fipe-select-loader">
-                      <span className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5 }} />
-                    </div>
-                  )}
+              {modeloCod ? (
+                <SearchSelect
+                  label="Ano / Modelo"
+                  placeholder={loadingAnos ? 'Carregando anos…' : 'Buscar ano…'}
+                  value={anoCod}
+                  displayValue={anoDisplay}
+                  options={anosFiltrados.map(a => ({ id: a.codigo, label: a.nome }))}
+                  onSearch={setBuscaAno}
+                  onSelect={(id, label) => { setAnoCod(id); setAnoDisplay(label) }}
+                  loading={loadingAnos}
+                />
+              ) : (
+                <div className="form-group">
+                  <label className="fipe-select-label disabled">Ano / Modelo</label>
+                  <div className="fipe-select-container">
+                    <select className="filter-select" disabled>
+                      <option>Aguardando modelo...</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 

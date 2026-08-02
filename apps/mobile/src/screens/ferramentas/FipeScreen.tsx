@@ -111,6 +111,10 @@ export default function FipeScreen() {
         options={(marcasQ.data ?? []).map((m) => ({ value: m.codigo, label: m.nome }))}
         selected={marcaCod}
         onSelect={setMarcaCod}
+        buscavel
+        buscaPlaceholder="Buscar marca…"
+        carregando={marcasQ.isLoading}
+        vazioTexto="Não foi possível carregar as marcas."
       />
       <OptionSheet
         visible={sheet === 'modelo'}
@@ -119,6 +123,10 @@ export default function FipeScreen() {
         options={(modelosQ.data ?? []).map((m) => ({ value: m.codigo, label: m.nome }))}
         selected={modeloCod}
         onSelect={setModeloCod}
+        buscavel
+        buscaPlaceholder="Buscar modelo…"
+        carregando={modelosQ.isLoading}
+        vazioTexto="Nenhum modelo para esta marca."
       />
       <OptionSheet
         visible={sheet === 'ano'}
@@ -127,6 +135,10 @@ export default function FipeScreen() {
         options={(anosQ.data ?? []).map((a) => ({ value: a.codigo, label: formatAnoNome(a.nome) }))}
         selected={anoCod}
         onSelect={setAnoCod}
+        buscavel
+        buscaPlaceholder="Buscar ano…"
+        carregando={anosQ.isLoading}
+        vazioTexto="Nenhum ano disponível para este modelo."
       />
     </Screen>
   )
