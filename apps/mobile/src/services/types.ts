@@ -678,6 +678,8 @@ export interface Contrato {
   numero: string
   tipo: 'compra_venda' | 'compra'
   status: StatusContrato
+  veiculo_id?: string
+  cliente_id?: string
   veiculo_nome?: string
   cliente_nome?: string
   valor_venda?: number

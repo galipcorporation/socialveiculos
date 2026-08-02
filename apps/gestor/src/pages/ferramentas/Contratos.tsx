@@ -68,6 +68,8 @@ interface VeiculoItem {
 interface CampoExtra {
   chave: string
   label: string
+  tipo?: string
+  padrao?: string
 }
 
 interface TemplateItem {
@@ -99,6 +101,11 @@ const formatData = (iso: string) => {
   if (isYesterday) return `Ontem, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
   return d.toLocaleDateString('pt-BR')
 }
+
+/** Campo extra numérico é dinheiro quando o modelo declara o padrão em R$ (valor da
+ *  troca, saldo remanescente). Multa em % e dias de garantia são número puro. */
+const campoEhMoeda = (campo: CampoExtra) =>
+  campo.tipo === 'numero' && /^R\$/.test(campo.padrao || '')
 
 const TIPO_LABELS: Record<string, string> = {
   compra_venda: 'Compra e Venda',
@@ -878,6 +885,80 @@ function EditorTemplateContent({ template, onClose, onSaved }: {
 
 
 /* ══════════════════════════════════════════════════════════════
+   CAMPO EXTRA DO MODELO
+   ══════════════════════════════════════════════════════════════ */
+
+/** Input de um campo extra respeitando o `tipo` declarado no modelo.
+ *
+ * O valor guardado é sempre o texto que vai entrar no contrato (dd/mm/aaaa,
+ * "R$ 1.500,00") — não o formato do input. Por isso a data converte de/para ISO
+ * e o dinheiro passa por `mascararMoeda` em vez de `type="number"` cru.
+ */
+function CampoExtraInput({ campo, valor, onChange }: {
+  campo: CampoExtra
+  valor: string
+  onChange: (v: string) => void
+}) {
+  const input = (() => {
+    if (campo.tipo === 'data') {
+      const br = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(valor)
+      return (
+        <input
+          type="date"
+          value={br ? `${br[3]}-${br[2]}-${br[1]}` : ''}
+          onChange={e => {
+            const [a, m, d] = e.target.value.split('-')
+            onChange(e.target.value ? `${d}/${m}/${a}` : '')
+          }}
+        />
+      )
+    }
+    if (campoEhMoeda(campo)) {
+      return (
+        <input
+          type="text"
+          inputMode="numeric"
+          placeholder="R$ 0,00"
+          value={valor.replace(/^R\$\s*/, '')}
+          onChange={e => {
+            const m = mascararMoeda(e.target.value)
+            onChange(m ? `R$ ${m}` : '')
+          }}
+        />
+      )
+    }
+    if (campo.tipo === 'numero') {
+      return (
+        <input
+          type="text"
+          inputMode="decimal"
+          placeholder={campo.label}
+          value={valor}
+          onChange={e => onChange(e.target.value.replace(/[^\d.,]/g, ''))}
+        />
+      )
+    }
+    return (
+      <input
+        type="text"
+        placeholder={campo.label}
+        value={valor}
+        onChange={e => onChange(e.target.value)}
+      />
+    )
+  })()
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <span style={{ display: 'block', fontSize: 12, color: 'var(--sv-text-muted)', marginBottom: 4 }}>
+        {campo.label}
+      </span>
+      {input}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
    MODAL — Novo Contrato
    ══════════════════════════════════════════════════════════════ */
 
@@ -1010,13 +1091,11 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
                   <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                     <label>Campos do modelo "{templateSelecionado.nome}"</label>
                     {templateSelecionado.campos_extras.map(campo => (
-                      <input
+                      <CampoExtraInput
                         key={campo.chave}
-                        type="text"
-                        placeholder={campo.label}
-                        value={valoresExtras[campo.chave] || ''}
-                        onChange={e => setValoresExtras(prev => ({ ...prev, [campo.chave]: e.target.value }))}
-                        style={{ marginBottom: 8 }}
+                        campo={campo}
+                        valor={valoresExtras[campo.chave] || ''}
+                        onChange={v => setValoresExtras(prev => ({ ...prev, [campo.chave]: v }))}
                       />
                     ))}
                   </div>

@@ -13,6 +13,7 @@ import type { Contrato, NotaFiscal, StatusNota } from '../../services/types'
 import { STATUS_NOTA_LABEL } from '../../services/types'
 import { formatBRL } from '../../lib/format'
 import type { RootScreenProps } from '../../navigation/types'
+import { extractErrorDetails } from '../../lib/api'
 
 const TONE: Record<StatusNota, 'success' | 'warning' | 'neutral' | 'error' | 'info'> = {
   autorizada: 'success',
@@ -55,6 +56,8 @@ export default function NotasFiscaisScreen({ route }: RootScreenProps<'NotasFisc
       toast.show('success', 'Carta de correção emitida.')
       setCce(null)
       setCceTexto('')
+    } catch (e) {
+      toast.show('error', extractErrorDetails(e).message)
     } finally {
       setCceEnviando(false)
     }
@@ -80,6 +83,8 @@ export default function NotasFiscaisScreen({ route }: RootScreenProps<'NotasFisc
       setEmitirAberto(false)
       // Reflete a autorização assíncrona.
       setTimeout(() => queryClient.invalidateQueries({ queryKey: ['notas-fiscais'] }), 3000)
+    } catch (e) {
+      toast.show('error', extractErrorDetails(e).message)
     } finally {
       setEmitindo(false)
     }
@@ -104,6 +109,8 @@ export default function NotasFiscaisScreen({ route }: RootScreenProps<'NotasFisc
       toast.show('success', 'Cancelamento solicitado.')
       setCancelar(null)
       setJustificativa('')
+    } catch (e) {
+      toast.show('error', extractErrorDetails(e).message)
     } finally {
       setCancelando(false)
     }

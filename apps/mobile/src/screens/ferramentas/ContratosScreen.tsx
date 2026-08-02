@@ -117,6 +117,7 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
   const [abrindoPdf, setAbrindoPdf] = useState(false)
   const [statusSheet, setStatusSheet] = useState(false)
   const [confirmarCancelamento, setConfirmarCancelamento] = useState(false)
+  const [editarAberto, setEditarAberto] = useState(false)
 
   const statusMut = useMutation({
     mutationFn: (s: StatusContrato) => contratosService.alterarStatus(contrato.id, s),
@@ -178,8 +179,9 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
 
         <SelectField label="Status" value={STATUS_CONTRATO_LABEL[contrato.status]} onPress={() => setStatusSheet(true)} icon="swap-horizontal-outline" containerStyle={{ marginTop: spacing.xs }} />
         <Button title="Abrir PDF do contrato" icon="document-outline" loading={abrindoPdf} onPress={abrirPdf} full />
+        <Button title="Editar dados do contrato" variant="tonal" icon="create-outline" onPress={() => setEditarAberto(true)} full />
         {contrato.tipo === 'compra_venda' && (
-          <Button title="Emitir NF-e deste contrato" variant="tonal" icon="receipt-outline" onPress={() => { onClose(); navigation.navigate('NotasFiscais') }} full />
+          <Button title="Emitir NF-e deste contrato" variant="outline" icon="receipt-outline" onPress={() => { onClose(); navigation.navigate('NotasFiscais') }} full />
         )}
       </View>
 
@@ -211,9 +213,141 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
           <Button title="Voltar" variant="ghost" onPress={() => setConfirmarCancelamento(false)} full />
         </View>
       </Sheet>
+
+      <EditarContratoSheet visible={editarAberto} onClose={() => { setEditarAberto(false); onClose(); }} contrato={contrato} />
     </Sheet>
   )
 }
+
+function EditarContratoSheet({ visible, onClose, contrato }: { visible: boolean; onClose: () => void; contrato: Contrato }) {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const [tipo, setTipo] = useState<'compra_venda' | 'compra'>(contrato.tipo)
+  const [veiculo, setVeiculo] = useState<{ id: string; nome: string } | null>(
+    contrato.veiculo_id && contrato.veiculo_nome ? { id: contrato.veiculo_id, nome: contrato.veiculo_nome } : null
+  )
+  const [cliente, setCliente] = useState<{ id: string; nome: string } | null>(
+    contrato.cliente_id && contrato.cliente_nome ? { id: contrato.cliente_id, nome: contrato.cliente_nome } : null
+  )
+  const [valor, setValor] = useState(contrato.valor_venda ? maskMoedaInput(String(Math.round(contrato.valor_venda * 100))) : '')
+  const [entrada, setEntrada] = useState(contrato.valor_entrada ? maskMoedaInput(String(Math.round(contrato.valor_entrada * 100))) : '')
+  const [parcelas, setParcelas] = useState(contrato.parcelas ? String(contrato.parcelas) : '')
+  const [obs, setObs] = useState(contrato.observacoes ?? '')
+  const [salvando, setSalvando] = useState(false)
+  const [veiculoSheet, setVeiculoSheet] = useState(false)
+  const [clienteSheet, setClienteSheet] = useState(false)
+
+  useEffect(() => {
+    setTipo(contrato.tipo)
+    setVeiculo(contrato.veiculo_id && contrato.veiculo_nome ? { id: contrato.veiculo_id, nome: contrato.veiculo_nome } : null)
+    setCliente(contrato.cliente_id && contrato.cliente_nome ? { id: contrato.cliente_id, nome: contrato.cliente_nome } : null)
+    setValor(contrato.valor_venda ? maskMoedaInput(String(Math.round(contrato.valor_venda * 100))) : '')
+    setEntrada(contrato.valor_entrada ? maskMoedaInput(String(Math.round(contrato.valor_entrada * 100))) : '')
+    setParcelas(contrato.parcelas ? String(contrato.parcelas) : '')
+    setObs(contrato.observacoes ?? '')
+  }, [contrato])
+
+  const veiculosQ = useQuery({
+    queryKey: ['veiculos', 'contratos'],
+    queryFn: () => veiculosService.listar({ status: 'disponivel' }),
+    enabled: visible,
+  })
+  const clientesQ = useQuery({
+    queryKey: ['clientes', 'contratos'],
+    queryFn: () => clientesService.listar(),
+    enabled: visible,
+  })
+
+  const salvar = async () => {
+    if (!veiculo || !cliente) { toast.show('error', 'Escolha o veículo e o cliente.'); return }
+    setSalvando(true)
+    try {
+      const input: Partial<ContratoInput> = {
+        tipo,
+        veiculo_id: veiculo.id,
+        cliente_id: cliente.id,
+        valor_venda: parseMoedaInput(valor) || undefined,
+        valor_entrada: parseMoedaInput(entrada) || undefined,
+        parcelas: parseInt(parcelas.replace(/\D/g, ''), 10) || undefined,
+        observacoes: obs.trim() || undefined,
+      }
+      await contratosService.atualizar(contrato.id, input)
+      await queryClient.invalidateQueries({ queryKey: ['contratos'] })
+      toast.show('success', 'Contrato atualizado.')
+      onClose()
+    } catch (err) {
+      toast.show('error', extractErrorDetails(err).message)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <Sheet visible={visible} onClose={onClose} title={`Editar contrato ${contrato.numero}`}>
+      <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+        <SegmentedControl
+          options={[{ value: 'compra_venda', label: 'Compra e venda' }, { value: 'compra', label: 'Compra' }]}
+          selected={tipo}
+          onSelect={(v) => setTipo(v as 'compra_venda' | 'compra')}
+        />
+        <SelectField
+          label="Veículo"
+          value={veiculo?.nome}
+          placeholder={veiculosQ.isLoading ? 'Carregando…' : 'Escolher do estoque'}
+          icon="car-sport-outline"
+          onPress={() => setVeiculoSheet(true)}
+        />
+        <SelectField
+          label="Cliente"
+          value={cliente?.nome}
+          placeholder={clientesQ.isLoading ? 'Carregando…' : 'Escolher cliente'}
+          icon="person-outline"
+          onPress={() => setClienteSheet(true)}
+        />
+        <Input label="Valor" value={valor} onChangeText={(t) => setValor(maskMoedaInput(t))} keyboardType="numeric" placeholder="0,00" icon="cash-outline" />
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <Input label="Entrada" value={entrada} onChangeText={(t) => setEntrada(maskMoedaInput(t))} keyboardType="numeric" placeholder="0,00" containerStyle={{ flex: 1 }} />
+          <Input label="Parcelas" value={parcelas} onChangeText={(t) => setParcelas(t.replace(/\D/g, ''))} keyboardType="number-pad" placeholder="48" containerStyle={{ width: 90 }} />
+        </View>
+        <Input label="Observações" value={obs} onChangeText={setObs} multiline style={{ minHeight: 56, textAlignVertical: 'top' }} />
+        <Button title="Salvar alterações" icon="save-outline" loading={salvando} onPress={salvar} full />
+      </View>
+
+      <OptionSheet
+        visible={veiculoSheet}
+        onClose={() => setVeiculoSheet(false)}
+        title="Veículo do estoque"
+        options={(veiculosQ.data ?? []).map((v) => ({
+          value: v.id,
+          label: `${v.marca} ${v.modelo}${v.versao ? ` ${v.versao}` : ''}`,
+          sublabel: [v.placa, formatBRL(v.preco_venda)].filter(Boolean).join(' · '),
+        }))}
+        onSelect={(id) => {
+          const v = (veiculosQ.data ?? []).find((x) => x.id === id)
+          if (!v) return
+          setVeiculo({ id: v.id, nome: `${v.marca} ${v.modelo}${v.versao ? ` ${v.versao}` : ''}` })
+          if (!valor && v.preco_venda) setValor(maskMoedaInput(String(Math.round(v.preco_venda * 100))))
+        }}
+      />
+
+      <OptionSheet
+        visible={clienteSheet}
+        onClose={() => setClienteSheet(false)}
+        title="Cliente"
+        options={(clientesQ.data ?? []).map((c) => ({
+          value: c.id,
+          label: c.nome,
+          sublabel: [c.telefone, c.cpf].filter(Boolean).join(' · '),
+        }))}
+        onSelect={(id) => {
+          const c = (clientesQ.data ?? []).find((x) => x.id === id)
+          if (c) setCliente({ id: c.id, nome: c.nome })
+        }}
+      />
+    </Sheet>
+  )
+}
+
 
 function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const queryClient = useQueryClient()

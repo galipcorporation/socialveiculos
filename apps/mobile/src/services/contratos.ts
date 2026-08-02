@@ -1,6 +1,8 @@
 // Contratos — lista + detalhe + PDF + templates contra /v1/contratos e
 // /v1/templates-contrato.
 import { api } from '../lib/api'
+import { useAuthStore } from '../stores/authStore'
+import { useLojaAtivaStore } from '../stores/lojaAtivaStore'
 import type { Contrato, StatusContrato } from './types'
 
 // O backend (`ContratoCreateRequest`) só aceita **ids** — `veiculo_nome` /
@@ -119,6 +121,8 @@ interface ContratoDTO {
   numero: string
   tipo: 'compra_venda' | 'compra'
   status: StatusContrato
+  veiculo_id?: string | null
+  cliente_id?: string | null
   veiculo_nome?: string | null
   cliente_nome?: string | null
   valor_venda?: number | null
@@ -142,6 +146,8 @@ function mapContrato(c: ContratoDTO): Contrato {
     numero: c.numero,
     tipo: c.tipo,
     status: c.status,
+    veiculo_id: c.veiculo_id ?? undefined,
+    cliente_id: c.cliente_id ?? undefined,
     veiculo_nome: c.veiculo_nome ?? undefined,
     cliente_nome: c.cliente_nome ?? undefined,
     valor_venda: c.valor_venda ?? undefined,
@@ -181,8 +187,23 @@ export const contratosService = {
   },
 
   async pdfUrl(id: string): Promise<string> {
-    // O PDF é servido autenticado; retornamos a URL absoluta do endpoint.
-    return `${API_BASE}/contratos/${id}/pdf`
+    // O PDF é servido autenticado; anexamos o token de sessão e o ID da loja
+    // atual como query parameters para permitir que o navegador do celular o baixe
+    // sem precisar de headers HTTP.
+    const { token } = useAuthStore.getState()
+    const { lojaId } = useLojaAtivaStore.getState()
+    let url = `${API_BASE}/contratos/${id}/pdf`
+    const params: string[] = []
+    if (token) {
+      params.push(`token=${encodeURIComponent(token)}`)
+    }
+    if (lojaId) {
+      params.push(`loja_id=${encodeURIComponent(lojaId)}`)
+    }
+    if (params.length) {
+      url += `?${params.join('&')}`
+    }
+    return url
   },
 
   async criar(input: ContratoInput): Promise<Contrato> {
@@ -202,6 +223,21 @@ export const contratosService = {
     const c = await api.patch<ContratoDTO>(`/contratos/${id}`, { status })
     return mapContrato(c)
   },
+
+  async atualizar(id: string, input: Partial<ContratoInput> & { status?: StatusContrato }): Promise<Contrato> {
+    const c = await api.patch<ContratoDTO>(`/contratos/${id}`, {
+      tipo: input.tipo,
+      status: input.status,
+      veiculo_id: input.veiculo_id,
+      cliente_id: input.cliente_id,
+      valor_venda: input.valor_venda,
+      valor_entrada: input.valor_entrada,
+      parcelas: input.parcelas,
+      observacoes: input.observacoes,
+    })
+    return mapContrato(c)
+  },
+
 
   async templates(): Promise<TemplateContrato[]> {
     const data = await api.get<{ items: TemplateDTO[] }>('/templates-contrato')
