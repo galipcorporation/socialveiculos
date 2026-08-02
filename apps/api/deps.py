@@ -2,7 +2,7 @@
 Social Veículos — Dependências de Autenticação e Autorização (FastAPI)
 """
 
-from fastapi import Depends, HTTPException, status, Header
+from fastapi import Depends, HTTPException, status, Header, Query
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -29,13 +29,15 @@ forbidden_exception = HTTPException(
 
 async def get_current_user(
     token: Optional[str] = Depends(oauth2_scheme),
+    token_query: Optional[str] = Query(None, alias="token"),
     db: AsyncSession = Depends(get_db)
 ) -> Usuario:
     """Valida o token JWT e retorna o Usuário autenticado."""
-    if not token:
+    actual_token = token or token_query
+    if not actual_token:
         raise credentials_exception
         
-    payload = decode_access_token(token)
+    payload = decode_access_token(actual_token)
     if not payload:
         raise credentials_exception
         
@@ -88,29 +90,31 @@ async def get_current_b2b_user(
     current_user: Usuario = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
     x_loja_id: Optional[str] = Header(default=None, alias="X-Loja-Id"),
+    loja_id_query: Optional[str] = Query(None, alias="loja_id"),
 ) -> B2BContext:
     """
     Garante que o usuário pertence ao ecossistema B2B (Gestor, Vendedor ou Admin).
 
     - Admin de plataforma (suporte): opera qualquer loja ativa, escolhida via
-      header ``X-Loja-Id``. Sem o header, nenhuma loja é assumida — o front deve
-      exibir o seletor de loja (respondemos 409 nas rotas que exigem loja).
+      header ``X-Loja-Id`` ou query parameter ``loja_id``. Sem o header/query,
+      nenhuma loja é assumida — o front deve exibir o seletor de loja (409).
     - Gestor/Vendedor: fica preso ao vínculo ativo de sua própria loja.
     """
     # Clientes finais B2C não podem acessar rotas do Gestor/B2B
     if current_user.papel == PapelUsuario.CLIENTE:
         raise forbidden_exception
 
-    # Admin de plataforma: acessa qualquer loja ativa via header X-Loja-Id.
+    # Admin de plataforma: acessa qualquer loja ativa via header X-Loja-Id ou query param.
     if current_user.papel == PapelUsuario.ADMIN_PLATAFORMA:
-        if not x_loja_id:
+        loja_alvo = x_loja_id or loja_id_query
+        if not loja_alvo:
             # Sem loja escolhida: bloqueia toda rota B2B com 409 para o front
             # abrir o seletor de loja. Rotas admin-globais (/v1/admin/*) usam
             # exige_admin_plataforma e não passam por aqui.
             raise loja_nao_selecionada_exception
 
         loja_res = await db.execute(
-            select(Loja).where(Loja.id == x_loja_id, Loja.ativa == True)
+            select(Loja).where(Loja.id == loja_alvo, Loja.ativa == True)
         )
         loja = loja_res.scalar_one_or_none()
         if not loja:

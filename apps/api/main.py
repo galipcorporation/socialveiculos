@@ -251,6 +251,7 @@ from routers.stories import router as stories_router
 from routers.triagem import router as triagem_router
 from routers.notificacoes import router as notificacoes_router
 from routers.esteira import router as esteira_router
+from routers.aura import router as aura_router
 from fastapi import Depends
 
 # Incluir roteadores
@@ -286,6 +287,7 @@ app.include_router(stories_router)
 app.include_router(triagem_router)
 app.include_router(notificacoes_router)
 app.include_router(esteira_router)
+app.include_router(aura_router)
 
 
 

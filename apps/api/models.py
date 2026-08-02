@@ -302,6 +302,8 @@ class Loja(Base):
     percentual_comissao_padrao = Column(Float, nullable=False, default=0.0, server_default="0")
     verificada = Column(Boolean, default=False)
     ativa = Column(Boolean, default=True)
+    # AURA (M124): teto de perguntas por mês. NULL = usa AURA_COTA_PADRAO.
+    aura_cota_mensal = Column(Integer, nullable=True)
     # Destaque pago: loja aparece priorizada no feed da vitrine pública
     destaque = Column(Boolean, default=False, nullable=False, server_default="0")
     destaque_ate = Column(DateTime, nullable=True)  # expiração opcional do destaque; nulo = sem prazo
@@ -1274,6 +1276,71 @@ class MarketingUsage(Base):
     tokens_output = Column(Integer, default=0)
     byok = Column(Boolean, default=False)   # True = usou chave da própria loja
     created_at = Column(DateTime, default=_now)
+
+
+# ═══════════════════════════════════════════════════════════════
+# AURA — assistente interna do lojista (M124)
+# ═══════════════════════════════════════════════════════════════
+# Tabela própria, e não um terceiro tipo em `conversa`: a conversa da AURA não
+# tem dois lados humanos, não tem proposta vinculada nem status de negociação, e
+# é privada POR USUÁRIO (o gestor não lê o que o vendedor perguntou). Ver ADR-3
+# da spec. `autor` é String e não Enum nativo de propósito — enum novo no
+# Postgres exige CREATE TYPE antes do create_table e já derrubou produção uma
+# vez (ARMADILHAS-PRODUCAO §2).
+
+AURA_AUTOR_USUARIO = "usuario"
+AURA_AUTOR_AURA = "aura"
+
+
+class AuraConversa(Base):
+    """Conversa da AURA — uma por usuário por loja, privada."""
+    __tablename__ = "aura_conversa"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
+    usuario_id = Column(String(36), ForeignKey("usuario.id", ondelete="CASCADE"), nullable=False)
+    silenciada = Column(Boolean, default=False, nullable=False, server_default="0")
+    ultima_mensagem_em = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_now)
+
+    mensagens = relationship(
+        "AuraMensagem", back_populates="conversa", cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        UniqueConstraint("loja_id", "usuario_id", name="uq_aura_conversa_loja_usuario"),
+        Index("ix_aura_conversa_loja_usuario", "loja_id", "usuario_id"),
+    )
+
+
+class AuraMensagem(Base):
+    """Um turno da conversa. Guarda o rastro do que produziu a resposta."""
+    __tablename__ = "aura_mensagem"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    conversa_id = Column(String(36), ForeignKey("aura_conversa.id", ondelete="CASCADE"), nullable=False)
+    # Redundante com a conversa de propósito: toda consulta de auditoria e todo
+    # teste de isolamento filtram por loja sem precisar de JOIN.
+    loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
+    autor = Column(String(10), nullable=False)  # AURA_AUTOR_USUARIO | AURA_AUTOR_AURA
+    conteudo = Column(Text, nullable=False)
+    atalhos = Column(Text, nullable=True)   # JSON array [{rotulo, destino, params}]
+    buscas = Column(Text, nullable=True)    # JSON: critérios e contagens de cada consulta
+    tokens_input = Column(Integer, default=0)
+    tokens_output = Column(Integer, default=0)
+    latencia_ms = Column(Integer, nullable=True)
+    provedor = Column(String(50), nullable=True)
+    modelo = Column(String(100), nullable=True)
+    avaliacao = Column(Integer, nullable=True)  # 1 = útil, -1 = não útil, NULL = sem avaliação
+    atalho_seguido = Column(String(100), nullable=True)  # métrica de utilidade
+    created_at = Column(DateTime, default=_now)
+
+    conversa = relationship("AuraConversa", back_populates="mensagens")
+
+    __table_args__ = (
+        Index("ix_aura_mensagem_conversa", "conversa_id", "created_at"),
+        Index("ix_aura_mensagem_loja", "loja_id"),
+    )
 
 
 class Simulacao(Base):

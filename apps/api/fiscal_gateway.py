@@ -131,16 +131,24 @@ def _item_veiculo(config: ConfiguracaoFiscal, veiculo, valor_total: float, cfop:
 def montar_payload_venda(config: ConfiguracaoFiscal, loja, cliente, veiculo, valor_total: float) -> dict:
     """Monta o payload mínimo de uma NF-e de venda (saída) de veículo usado a
     partir da configuração fiscal da loja + dados da venda."""
-    return {
+    dados = {
         "natureza_operacao": config.natureza_operacao,
         "data_emissao": None,  # Focus usa now() se omitido
         "tipo_documento": 1,   # saída
         "finalidade_emissao": 1,  # normal
         "cnpj_emitente": loja.cnpj,
-        "nome_destinatario": getattr(cliente, "nome", None),
-        "cpf_destinatario": getattr(cliente, "cpf", None),
         "items": [_item_veiculo(config, veiculo, valor_total, config.cfop_venda)],
     }
+    nome = getattr(cliente, "nome", None) if cliente else None
+    cpf = getattr(cliente, "cpf", None) if cliente else None
+    cnpj = getattr(cliente, "cnpj", None) if cliente else None
+    if nome:
+        dados["nome_destinatario"] = nome
+    if cnpj:
+        dados["cnpj_destinatario"] = cnpj
+    elif cpf:
+        dados["cpf_destinatario"] = cpf
+    return dados
 
 
 def montar_payload_entrada(config: ConfiguracaoFiscal, loja, fornecedor, veiculo, valor_total: float) -> dict:

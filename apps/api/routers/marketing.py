@@ -8,7 +8,6 @@ import json
 import os
 from typing import Optional, List
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,15 +16,15 @@ from sqlalchemy.orm import selectinload
 
 from database import get_db
 from deps import get_current_b2b_user, B2BContext
+from ia_client import chamar_ia
 from lib_formatacao import formatar_moeda
-from models import Veiculo, MarketingUsage
+from models import Veiculo
 from modulos import exige_modulo, Modulo
 
 router = APIRouter(prefix="/v1/marketing", tags=["Marketing"])
 
 # IA da plataforma: Groq (Llama), API compatível com OpenAI. Mesma stack do
 # Assistente do Vendedor — texto curto de anúncio não justifica modelo premium.
-GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
 GROQ_MARKETING_MODEL = os.getenv("GROQ_MARKETING_MODEL", "llama-3.3-70b-versatile")
 
 # Tom/rede definem o estilo do texto gerado.
@@ -91,125 +90,21 @@ async def _chamar_ia(
     usuario_id: str,
     db: AsyncSession,
 ) -> str:
-    import logging
-    logger = logging.getLogger("marketing")
-
-    candidatos = []
-    groq_key = os.getenv("GROQ_API_KEY", "").strip()
-    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-
-    if groq_key:
-        candidatos.append(("groq", groq_key, GROQ_BASE_URL, GROQ_MARKETING_MODEL))
-    if openai_key:
-        candidatos.append(("openai", openai_key, "https://api.openai.com/v1", "gpt-4o-mini"))
-    if anthropic_key:
-        candidatos.append(("anthropic", anthropic_key, "https://api.anthropic.com/v1", "claude-haiku-4-5-20251001"))
-
-    if not candidatos:
-        raise HTTPException(
-            status_code=503,
-            detail="Nenhuma chave de IA configurada no servidor (GROQ_API_KEY / OPENAI_API_KEY). Verifique as variáveis de ambiente no Vercel.",
-        )
-
-    erros = []
-
-    async with httpx.AsyncClient() as client:
-        for provedor, api_key, base_url, modelo in candidatos:
-            try:
-                if provedor == "anthropic":
-                    resp = await client.post(
-                        f"{base_url}/messages",
-                        headers={
-                            "x-api-key": api_key,
-                            "anthropic-version": "2023-06-01",
-                            "content-type": "application/json",
-                        },
-                        json={
-                            "model": modelo,
-                            "max_tokens": 700,
-                            "system": prompt_system,
-                            "messages": [{"role": "user", "content": conteudo}],
-                        },
-                        timeout=30.0,
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    content_blocks = data.get("content", [])
-                    texto = content_blocks[0].get("text", "") if content_blocks else ""
-                    tokens_in = data.get("usage", {}).get("input_tokens", 0)
-                    tokens_out = data.get("usage", {}).get("output_tokens", 0)
-                else:
-                    # Groq ou OpenAI (formato compatível OpenAI)
-                    json_body = {
-                        "model": modelo,
-                        "max_tokens": 700,
-                        "messages": [
-                            {"role": "system", "content": prompt_system},
-                            {"role": "user", "content": conteudo},
-                        ],
-                    }
-                    # Adiciona response_format json_object
-                    json_body_formatted = {**json_body, "response_format": {"type": "json_object"}}
-                    resp = await client.post(
-                        f"{base_url}/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "content-type": "application/json",
-                        },
-                        json=json_body_formatted,
-                        timeout=30.0,
-                    )
-
-                    # Se 400 por causa do response_format, tenta sem response_format
-                    if resp.status_code == 400 and "response_format" in resp.text:
-                        resp = await client.post(
-                            f"{base_url}/chat/completions",
-                            headers={
-                                "Authorization": f"Bearer {api_key}",
-                                "content-type": "application/json",
-                            },
-                            json=json_body,
-                            timeout=30.0,
-                        )
-
-                    resp.raise_for_status()
-                    data = resp.json()
-                    escolhas = data.get("choices", [])
-                    texto = escolhas[0].get("message", {}).get("content", "") if escolhas else ""
-                    usage = data.get("usage", {})
-                    tokens_in = usage.get("prompt_tokens", 0)
-                    tokens_out = usage.get("completion_tokens", 0)
-
-                if texto:
-                    db.add(MarketingUsage(
-                        loja_id=loja_id,
-                        usuario_id=usuario_id,
-                        funcionalidade="marketing",
-                        provedor=provedor,
-                        modelo=modelo,
-                        tokens_input=tokens_in,
-                        tokens_output=tokens_out,
-                        byok=False,
-                    ))
-                    await db.commit()
-                    return texto
-            except httpx.HTTPStatusError as exc:
-                body_snippet = exc.response.text[:200]
-                logger.error(f"[MARKETING IA] Provedor {provedor} HTTP {exc.response.status_code}: {body_snippet}")
-                erros.append(f"{provedor}: HTTP {exc.response.status_code} ({body_snippet})")
-            except httpx.RequestError as exc:
-                logger.error(f"[MARKETING IA] Provedor {provedor} erro de conexão: {exc}")
-                erros.append(f"{provedor}: erro de conexão")
-            except Exception as exc:
-                logger.error(f"[MARKETING IA] Provedor {provedor} erro inesperado: {exc}")
-                erros.append(f"{provedor}: {exc}")
-
-    detalhe_erro = " | ".join(erros) if erros else "Sem resposta do provedor de IA."
-    raise HTTPException(
-        status_code=502,
-        detail=f"Falha ao conectar com o serviço de IA ({detalhe_erro}). Verifique a chave GROQ_API_KEY no servidor Vercel.",
+    """Fachada fina sobre `ia_client.chamar_ia` — a cadeia de provedores, o BYOK
+    e a contagem de tokens vivem lá, compartilhados com a AURA (M124)."""
+    resposta = await chamar_ia(
+        db=db,
+        loja_id=loja_id,
+        usuario_id=usuario_id,
+        funcionalidade="marketing",
+        prompt_system=prompt_system,
+        conteudo=conteudo,
+        max_tokens=700,
+        temperatura=0.7,
+        json_mode=True,
+        modelo_groq=GROQ_MARKETING_MODEL,
     )
+    return resposta.texto
 
 
 @router.post(
