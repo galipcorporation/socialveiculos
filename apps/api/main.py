@@ -225,6 +225,7 @@ from routers.auth import router as auth_router
 from routers.veiculos import router as veiculos_router
 from routers.aprovacoes import router as aprovacoes_router
 from routers.admin import router as admin_router
+from routers.admin_plataforma import router as admin_plataforma_router
 from routers.catalogo import router as catalogo_router
 from routers.clientes import router as clientes_router
 from routers.leads import router as leads_router
@@ -261,6 +262,7 @@ app.include_router(auth_router)
 app.include_router(veiculos_router)
 app.include_router(aprovacoes_router)
 app.include_router(admin_router)
+app.include_router(admin_plataforma_router)
 app.include_router(catalogo_router)
 app.include_router(clientes_router)
 app.include_router(leads_router)

@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional, List, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
-from models import StatusVeiculo, OrigemVeiculo, TipoCambio, TipoCombustivel, TipoMidia, StatusAprovacao, TipoAcaoAprovacao, PapelUsuario, TipoLancamento, EtapaLead, OrigemLead, StatusAssinatura, StatusPagamento, StatusPropostaRepasse, TipoConversa, StatusNegociacaoConversa, BancoSimulador, StatusSimulacao, StatusResultadoBanco, TipoContrato, StatusContrato, TipoInteracao, MotivoPerda
+from models import StatusVeiculo, OrigemVeiculo, TipoCambio, TipoCombustivel, TipoMidia, StatusAprovacao, TipoAcaoAprovacao, PapelUsuario, TipoLancamento, TipoLancamentoPlataforma, EtapaLead, OrigemLead, StatusAssinatura, StatusPagamento, StatusPropostaRepasse, TipoConversa, StatusNegociacaoConversa, BancoSimulador, StatusSimulacao, StatusResultadoBanco, TipoContrato, StatusContrato, TipoInteracao, MotivoPerda
 
 
 # ── Validação e sanitização (CRM Clientes) ─────────────────────
@@ -1300,6 +1300,106 @@ class AdminVencimentoItem(BaseModel):
     valor_mensal: Optional[float] = None
     proximo_vencimento: Optional[datetime] = None
     dias_para_vencer: Optional[int] = None
+
+
+# ── Admin — caixa da plataforma (prestação de contas entre sócios) ──
+
+class PlataformaLancamentoCreate(BaseModel):
+    """
+    Aporte de sócio, despesa da operação ou receita avulsa.
+
+    Mensalidade de loja NÃO entra aqui: ela é registrada como `Pagamento` ao
+    ativar/renovar a assinatura, e o resumo soma de lá (dono único do fato).
+    """
+    tipo: TipoLancamentoPlataforma
+    categoria: str = Field(min_length=1, max_length=80)
+    valor: float = Field(gt=0)
+    data: Optional[datetime] = None       # ausente = agora
+    descricao: Optional[str] = Field(default=None, max_length=300)
+    recorrente: bool = False
+    observacoes: Optional[str] = None
+
+    @field_validator("categoria")
+    @classmethod
+    def _limpar_categoria(cls, v: str) -> str:
+        # sanitizar_texto devolve None para string só de espaços/controle; como a
+        # coluna é NOT NULL, isso viraria 500 no insert — recusar aqui, com 422.
+        limpo = sanitizar_texto(v, 80)
+        if not limpo:
+            raise ValueError("Categoria não pode ser vazia.")
+        return limpo
+
+    @field_validator("descricao")
+    @classmethod
+    def _limpar_descricao(cls, v: Optional[str]) -> Optional[str]:
+        return sanitizar_texto(v, 300)
+
+
+class PlataformaLancamentoItem(BaseModel):
+    id: str
+    tipo: TipoLancamentoPlataforma
+    categoria: str
+    descricao: Optional[str] = None
+    valor: float
+    data: datetime
+    recorrente: bool = False
+    observacoes: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlataformaValorPorChave(BaseModel):
+    """Par rótulo/valor — aportes por sócio, despesas por categoria, receita por origem."""
+    chave: str
+    valor: float
+
+
+class PlataformaResumoResponse(BaseModel):
+    """KPIs do caixa da plataforma. Todo número aqui vem do banco, nada é digitado duas vezes."""
+    caixa: float                      # aportes + receitas − despesas, desde o início
+    mrr: float                        # soma das assinaturas ativas
+    pagantes: int
+    trials: int
+    receita_mes: float                # recebido no mês corrente (assinaturas + destaque + avulsa)
+    despesa_mes: float
+    aporte_mes: float
+    burn_mensal: float                # média de despesa dos últimos 3 meses
+    runway_meses: Optional[float] = None   # None = MRR já cobre o burn (ou sem burn)
+    aportes_por_socio: List[PlataformaValorPorChave] = []
+    despesas_por_categoria: List[PlataformaValorPorChave] = []
+    custo_fixo_estimado: float        # base da projeção: recorrentes/mês, ou o burn se não houver
+    ticket_medio: float               # valor médio da assinatura ativa (ou preço do plano mais barato)
+
+
+class PlataformaProjecaoPonto(BaseModel):
+    mes: int                          # 0 = hoje
+    rotulo: str                       # "ago/26"
+    caixa: float
+    receita: float
+    custos: float
+    pagantes: float
+
+
+class PlataformaProjecaoCenario(BaseModel):
+    id: str                           # base | pessimista | otimista
+    nome: str
+    novas_lojas_mes: List[int]        # ritmo assumido (primeiros meses, depois o último se repete)
+    pontos: List[PlataformaProjecaoPonto]
+    pico_negativo: float              # menor caixa do período (≤ 0 = quanto precisa aportar)
+    break_even_mes: Optional[int] = None
+    payback_mes: Optional[int] = None
+    resultado_12m: float
+    roi_12m: Optional[float] = None   # None quando não houve investimento a recuperar
+
+
+class PlataformaProjecaoResponse(BaseModel):
+    caixa_inicial: float
+    custo_fixo_mensal: float
+    preco_nova_loja: float            # oferta de entrada; ≠ ticket médio da carteira
+    churn_percent: float
+    horizonte_meses: int
+    cenarios: List[PlataformaProjecaoCenario]
 
 
 # ── Admin — usuários e reset de senha ────────────────────────────

@@ -141,6 +141,9 @@ TipoInteracao,interacao_lead,tipo,WHATSAPP,whatsapp
 TipoLancamento,lancamento_financeiro,tipo,COMISSAO,comissao
 TipoLancamento,lancamento_financeiro,tipo,DESPESA,despesa
 TipoLancamento,lancamento_financeiro,tipo,RECEITA,receita
+TipoLancamentoPlataforma,lancamento_plataforma,tipo,APORTE,aporte
+TipoLancamentoPlataforma,lancamento_plataforma,tipo,DESPESA,despesa
+TipoLancamentoPlataforma,lancamento_plataforma,tipo,RECEITA,receita
 TipoMidia,midia,tipo,FOTO,foto
 TipoMidia,midia,tipo,VIDEO,video
 TomAssistente,assistente_config,tom,AMIGAVEL,amigavel

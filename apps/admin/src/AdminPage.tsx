@@ -1257,9 +1257,751 @@ function ModalFinanceiro({ lojaId, lojaNome, onClose, onSaved }: ModalFinanceiro
   )
 }
 
-// ── Aba Financeiro (cobrança e vencimentos) ───────────────────────
+// ── Aba Financeiro ────────────────────────────────────────────────
+// Quatro perguntas de sócio, uma sub-aba cada: como estamos (visão geral),
+// quem me deve (cobranças), o que entrou/saiu (lançamentos) e o fechamento
+// do mês para mandar ao sócio (prestação de contas).
+
+interface PlataformaResumo {
+  caixa: number
+  mrr: number
+  pagantes: number
+  trials: number
+  receita_mes: number
+  despesa_mes: number
+  aporte_mes: number
+  burn_mensal: number
+  runway_meses: number | null
+  aportes_por_socio: { chave: string; valor: number }[]
+  despesas_por_categoria: { chave: string; valor: number }[]
+  custo_fixo_estimado: number
+  ticket_medio: number
+}
+
+interface ProjecaoPonto {
+  mes: number
+  rotulo: string
+  caixa: number
+  receita: number
+  custos: number
+  pagantes: number
+}
+
+interface ProjecaoCenario {
+  id: string
+  nome: string
+  novas_lojas_mes: number[]
+  pontos: ProjecaoPonto[]
+  pico_negativo: number
+  break_even_mes: number | null
+  payback_mes: number | null
+  resultado_12m: number
+  roi_12m: number | null
+}
+
+interface ProjecaoResposta {
+  caixa_inicial: number
+  custo_fixo_mensal: number
+  preco_nova_loja: number
+  churn_percent: number
+  horizonte_meses: number
+  cenarios: ProjecaoCenario[]
+}
+
+interface LancamentoPlataformaItem {
+  id: string
+  tipo: 'aporte' | 'despesa' | 'receita'
+  categoria: string
+  descricao: string | null
+  valor: number
+  data: string
+  recorrente: boolean
+  observacoes: string | null
+  created_at: string | null
+}
+
+// Cores de série do design system (--sv-primary/secondary/tertiary). O par
+// laranja↔verde fica na faixa de alerta para daltonismo (ΔE ~7), por isso o
+// gráfico traz rótulo direto em cada linha e tabela de valores — nunca só a cor.
+const CORES_CENARIO: Record<string, string> = {
+  base: 'var(--sv-primary)',
+  pessimista: 'var(--sv-secondary)',
+  otimista: 'var(--sv-tertiary)',
+}
+
+function mesAtualISO() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function mesAnteriorISO() {
+  const d = new Date()
+  d.setMonth(d.getMonth() - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+type SubAbaFin = 'visao' | 'cobrancas' | 'lancamentos' | 'prestacao'
 
 function AbaFinanceiro() {
+  const [sub, setSub] = useState<SubAbaFin>('visao')
+
+  const SUBS: { id: SubAbaFin; label: string }[] = [
+    { id: 'visao', label: 'Visão geral' },
+    { id: 'cobrancas', label: 'Cobranças' },
+    { id: 'lancamentos', label: 'Lançamentos' },
+    { id: 'prestacao', label: 'Prestação de contas' },
+  ]
+
+  return (
+    <div style={{ marginTop: '24px' }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, flexWrap: 'wrap' }}>
+        {SUBS.map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setSub(id)}
+            className={`crm-tab-btn ${sub === id ? 'active' : ''}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {sub === 'visao' && <SubVisaoGeral />}
+      {sub === 'cobrancas' && <SubCobrancas />}
+      {sub === 'lancamentos' && <SubLancamentos />}
+      {sub === 'prestacao' && <SubPrestacaoContas />}
+    </div>
+  )
+}
+
+// ── Visão geral: KPIs + projeção de caixa ─────────────────────────
+
+function SubVisaoGeral() {
+  const [resumo, setResumo] = useState<PlataformaResumo | null>(null)
+  const [projecao, setProjecao] = useState<ProjecaoResposta | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+  const [horizonte, setHorizonte] = useState(18)
+  const [verTabela, setVerTabela] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    setErro(null)
+    Promise.all([
+      api.get<PlataformaResumo>('/admin/plataforma/resumo'),
+      api.get<ProjecaoResposta>('/admin/plataforma/projecao', { meses: String(horizonte) }),
+    ])
+      .then(([r, p]) => { setResumo(r); setProjecao(p) })
+      .catch((err: any) => setErro(err?.message || 'Erro ao carregar o financeiro da plataforma.'))
+      .finally(() => setLoading(false))
+  }, [horizonte])
+
+  if (loading) return <LoadingState msg="Calculando o caixa…" />
+  if (erro) return <ErroAlerta msg={erro} />
+  if (!resumo || !projecao) return <EmptyState msg="Sem dados financeiros." />
+
+  const kpis = [
+    {
+      label: 'Caixa atual', valor: fmtMoeda(resumo.caixa),
+      det: 'aportes + recebido − despesas', negativo: resumo.caixa < 0,
+    },
+    {
+      label: 'MRR', valor: fmtMoeda(resumo.mrr),
+      det: `${resumo.pagantes} pagante(s)${resumo.trials ? ` · ${resumo.trials} sem pagamento ainda` : ''}`,
+    },
+    {
+      label: 'Recebido no mês', valor: fmtMoeda(resumo.receita_mes),
+      det: `despesas ${fmtMoeda(resumo.despesa_mes)} · aportes ${fmtMoeda(resumo.aporte_mes)}`,
+    },
+    {
+      label: 'Burn mensal', valor: fmtMoeda(resumo.burn_mensal),
+      det: 'média de despesa dos últimos 3 meses',
+    },
+    {
+      label: 'Runway',
+      valor: resumo.runway_meses != null ? `${resumo.runway_meses} meses` : (resumo.mrr >= resumo.burn_mensal && resumo.mrr > 0 ? 'MRR cobre o burn' : '—'),
+      det: 'caixa ÷ (burn − MRR)',
+    },
+    {
+      label: 'Ticket médio', valor: fmtMoeda(resumo.ticket_medio),
+      det: `custo fixo estimado ${fmtMoeda(resumo.custo_fixo_estimado)}/mês`,
+    },
+  ]
+
+  return (
+    <div>
+      <div className="kpi-grid">
+        {kpis.map((k) => (
+          <div key={k.label} className="kpi-card">
+            <div>
+              <div className="kpi-label">{k.label}</div>
+              <div className="kpi-value" style={k.negativo ? { color: 'var(--sv-error)' } : undefined}>{k.valor}</div>
+              <div style={{ fontSize: 12, color: 'var(--sv-text-muted)', marginTop: 6 }}>{k.det}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="glass-card" style={{ padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
+          <h3 style={{ margin: 0, fontSize: 16, color: 'var(--sv-text)' }}>Caixa projetado</h3>
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            {[12, 18, 24].map((m) => (
+              <button key={m} className={`btn ${horizonte === m ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => setHorizonte(m)}>
+                {m} meses
+              </button>
+            ))}
+          </span>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', margin: '0 0 16px' }}>
+          Parte do caixa de hoje ({fmtMoeda(projecao.caixa_inicial)}), custo fixo de {fmtMoeda(projecao.custo_fixo_mensal)}/mês,
+          loja nova entrando a {fmtMoeda(projecao.preco_nova_loja)} (preço de entrada) e churn de {projecao.churn_percent}%/mês.
+          Só o ritmo de novas lojas é hipótese.
+        </p>
+
+        <GraficoProjecao cenarios={projecao.cenarios} />
+
+        <div style={{ overflow: 'auto', marginTop: 20 }}>
+          <table className="stock-table">
+            <thead>
+              <tr>
+                <th>Cenário</th>
+                <th>Ritmo</th>
+                <th style={{ textAlign: 'right' }}>Aporte necessário</th>
+                <th style={{ textAlign: 'right' }}>Break-even</th>
+                <th style={{ textAlign: 'right' }}>Payback</th>
+                <th style={{ textAlign: 'right' }}>Resultado 12m</th>
+                <th style={{ textAlign: 'right' }}>ROI 12m</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projecao.cenarios.map((c) => (
+                <tr key={c.id}>
+                  <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>
+                    <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: CORES_CENARIO[c.id], marginRight: 8 }} />
+                    {c.nome}
+                  </td>
+                  <td style={{ color: 'var(--sv-text-dim)', fontSize: 13 }}>
+                    +{c.novas_lojas_mes.join(', ')} lojas/mês
+                  </td>
+                  <td style={{ textAlign: 'right', color: c.pico_negativo < 0 ? 'var(--sv-error)' : 'var(--sv-text-dim)' }}>
+                    {c.pico_negativo < 0 ? fmtMoeda(-c.pico_negativo) : 'não precisa'}
+                  </td>
+                  <td style={{ textAlign: 'right', color: 'var(--sv-text-dim)' }}>
+                    {c.break_even_mes ? `mês ${c.break_even_mes}` : 'além do período'}
+                  </td>
+                  <td style={{ textAlign: 'right', color: 'var(--sv-text-dim)' }}>
+                    {c.payback_mes === 0 ? 'já positivo' : c.payback_mes ? `mês ${c.payback_mes}` : 'além do período'}
+                  </td>
+                  <td style={{ textAlign: 'right', color: c.resultado_12m >= 0 ? 'var(--sv-success)' : 'var(--sv-error)' }}>
+                    {fmtMoeda(c.resultado_12m)}
+                  </td>
+                  <td style={{ textAlign: 'right', color: 'var(--sv-text-dim)' }}>
+                    {c.roi_12m != null ? `${Math.round(c.roi_12m * 100)}%` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <button className="btn btn-secondary" style={{ marginTop: 14, padding: '4px 12px', fontSize: 12 }}
+          onClick={() => setVerTabela((v) => !v)}>
+          {verTabela ? 'Ocultar' : 'Ver'} tabela mês a mês
+        </button>
+
+        {verTabela && (
+          <div style={{ overflow: 'auto', marginTop: 12 }}>
+            <table className="stock-table">
+              <thead>
+                <tr>
+                  <th>Mês</th>
+                  {projecao.cenarios.map((c) => <th key={c.id} style={{ textAlign: 'right' }}>{c.nome}</th>)}
+                  <th style={{ textAlign: 'right' }}>Pagantes (base)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projecao.cenarios[0].pontos.map((p, i) => (
+                  <tr key={p.mes}>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>{i === 0 ? 'hoje' : p.rotulo}</td>
+                    {projecao.cenarios.map((c) => (
+                      <td key={c.id} style={{ textAlign: 'right', color: c.pontos[i].caixa < 0 ? 'var(--sv-error)' : 'var(--sv-text-dim)' }}>
+                        {fmtMoeda(c.pontos[i].caixa)}
+                      </td>
+                    ))}
+                    <td style={{ textAlign: 'right', color: 'var(--sv-text-dim)' }}>{p.pagantes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginTop: 20 }}>
+        <ListaValores titulo="Aportes por sócio" itens={resumo.aportes_por_socio}
+          vazio="Nenhum aporte lançado ainda." cor="var(--sv-primary)" />
+        <ListaValores titulo="Despesas por categoria (90 dias)" itens={resumo.despesas_por_categoria}
+          vazio="Nenhuma despesa lançada nos últimos 90 dias." cor="var(--sv-secondary)" />
+      </div>
+    </div>
+  )
+}
+
+function ListaValores({ titulo, itens, vazio, cor }: {
+  titulo: string
+  itens: { chave: string; valor: number }[]
+  vazio: string
+  cor: string
+}) {
+  const maximo = Math.max(...itens.map((i) => i.valor), 1)
+  return (
+    <div className="glass-card" style={{ padding: 20 }}>
+      <h3 style={{ margin: '0 0 14px', fontSize: 14, color: 'var(--sv-text)' }}>{titulo}</h3>
+      {itens.length === 0 ? (
+        <p style={{ fontSize: 13, color: 'var(--sv-text-muted)', margin: 0 }}>{vazio}</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {itens.map((i) => (
+            <div key={i.chave}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                <span style={{ color: 'var(--sv-text-dim)' }}>{i.chave}</span>
+                <span style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{fmtMoeda(i.valor)}</span>
+              </div>
+              <div style={{ height: 6, background: 'var(--sv-overlay-soft)', borderRadius: 3 }}>
+                <div style={{ width: `${Math.max(3, (i.valor / maximo) * 100)}%`, height: '100%', background: cor, borderRadius: 3 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GraficoProjecao({ cenarios }: { cenarios: ProjecaoCenario[] }) {
+  const [hover, setHover] = useState<number | null>(null)
+
+  const n = cenarios[0].pontos.length - 1
+  const W = 920, H = 340, ML = 92, MR = 120, MT = 12, MB = 30
+  const PW = W - ML - MR, PH = H - MT - MB
+
+  const valores = cenarios.flatMap((c) => c.pontos.map((p) => p.caixa))
+  let lo = Math.min(0, ...valores), hi = Math.max(0, ...valores)
+  const folga = (hi - lo) * 0.08 || 100
+  lo -= folga; hi += folga
+
+  const x = (i: number) => ML + (PW * i) / n
+  const y = (v: number) => MT + PH * (1 - (v - lo) / (hi - lo))
+
+  const passoBruto = (hi - lo) / 4
+  const pot = Math.pow(10, Math.floor(Math.log10(passoBruto || 1)))
+  const passo = [1, 2, 2.5, 5, 10].map((m) => m * pot).find((p) => passoBruto <= p) || 10 * pot
+
+  const ticks: number[] = []
+  for (let t = Math.ceil(lo / passo) * passo; t <= hi; t += passo) ticks.push(t)
+
+  const compacto = (v: number) => {
+    // Sem o clamp, um tick de −0,004 vira "−R$ 0,00" no eixo.
+    const n = Math.abs(v) < 0.005 ? 0 : v
+    return Math.abs(n) >= 1000
+      ? `R$ ${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`
+      : fmtMoeda(n)
+  }
+
+  // Rótulo direto no fim de cada linha, com anticolisão — é o que garante a
+  // leitura sem depender da cor (par laranja↔verde é fraco para daltônicos).
+  const fins = cenarios
+    .map((c) => ({ c, yv: y(c.pontos[n].caixa) }))
+    .sort((a, b) => a.yv - b.yv)
+  for (let i = 1; i < fins.length; i++) {
+    if (fins[i].yv - fins[i - 1].yv < 16) fins[i].yv = fins[i - 1].yv + 16
+  }
+
+  const passoRotulo = Math.ceil(n / 9)
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 8, fontSize: 12.5, color: 'var(--sv-text-dim)' }}>
+        {cenarios.map((c) => (
+          <span key={c.id}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: CORES_CENARIO[c.id], marginRight: 6 }} />
+            {c.nome}
+          </span>
+        ))}
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}
+        onMouseLeave={() => setHover(null)}
+        role="img"
+        aria-label={`Projeção de caixa em ${n} meses nos cenários ${cenarios.map((c) => c.nome).join(', ')}. Os valores estão na tabela abaixo.`}
+      >
+        {ticks.map((t) => {
+          const zero = Math.abs(t) < passo / 2
+          return (
+            <g key={t}>
+              <line x1={ML} x2={W - MR} y1={y(t)} y2={y(t)}
+                stroke={zero ? 'var(--sv-border-hover)' : 'var(--sv-border)'} strokeWidth={1}
+                strokeDasharray={zero ? '4 3' : undefined} />
+              <text x={ML - 10} y={y(t) + 4} textAnchor="end" fontSize={11} fill="var(--sv-text-muted)">
+                {compacto(t)}
+              </text>
+            </g>
+          )
+        })}
+
+        {cenarios[0].pontos.map((p, i) => (
+          i % passoRotulo === 0 ? (
+            <text key={p.mes} x={x(i)} y={H - 8} textAnchor="middle" fontSize={11} fill="var(--sv-text-muted)">
+              {i === 0 ? 'hoje' : p.rotulo}
+            </text>
+          ) : null
+        ))}
+
+        {cenarios.map((c) => (
+          <path key={c.id} fill="none" stroke={CORES_CENARIO[c.id]} strokeWidth={2} strokeLinejoin="round"
+            d={c.pontos.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p.caixa).toFixed(1)}`).join(' ')} />
+        ))}
+
+        {hover != null && (
+          <g>
+            <line x1={x(hover)} x2={x(hover)} y1={MT} y2={MT + PH} stroke="var(--sv-border-hover)" strokeWidth={1} />
+            {cenarios.map((c) => (
+              <circle key={c.id} cx={x(hover)} cy={y(c.pontos[hover].caixa)} r={4}
+                fill={CORES_CENARIO[c.id]} stroke="var(--sv-surface-solid)" strokeWidth={2} />
+            ))}
+          </g>
+        )}
+
+        {fins.map(({ c, yv }) => (
+          <g key={c.id}>
+            <circle cx={W - MR + 8} cy={yv} r={4} fill={CORES_CENARIO[c.id]} />
+            <text x={W - MR + 17} y={yv + 4} fontSize={11.5} fill="var(--sv-text-dim)">
+              {c.nome.split(' (')[0]}
+            </text>
+          </g>
+        ))}
+
+        <rect x={ML} y={MT} width={PW} height={PH} fill="transparent"
+          onMouseMove={(e) => {
+            const svg = e.currentTarget.ownerSVGElement
+            if (!svg) return
+            const r = svg.getBoundingClientRect()
+            const sx = ((e.clientX - r.left) * W) / r.width
+            setHover(Math.max(0, Math.min(n, Math.round(((sx - ML) / PW) * n))))
+          }} />
+      </svg>
+
+      {hover != null && (
+        <div style={{
+          position: 'absolute', top: 8, right: 8, pointerEvents: 'none',
+          background: 'var(--sv-surface-elevated)', border: '1px solid var(--sv-border)',
+          borderRadius: 'var(--sv-radius)', padding: '10px 12px', fontSize: 12.5, minWidth: 190,
+        }}>
+          <div style={{ color: 'var(--sv-text-muted)', marginBottom: 6 }}>
+            {hover === 0 ? 'hoje' : cenarios[0].pontos[hover].rotulo}
+          </div>
+          {cenarios.map((c) => (
+            <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}>
+              <span style={{ color: 'var(--sv-text-dim)' }}>
+                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: CORES_CENARIO[c.id], marginRight: 6 }} />
+                {c.nome.split(' (')[0]}
+              </span>
+              <span style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{fmtMoeda(c.pontos[hover].caixa)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Lançamentos: aporte, despesa, receita avulsa ──────────────────
+
+const CATEGORIAS_SUGERIDAS = [
+  'Infra (Fly/Supabase)', 'Tráfego pago', 'Contador', 'Domínio', 'Ferramentas',
+  'Comissão de venda', 'Marketing', 'Jurídico', 'Outros',
+]
+
+function SubLancamentos() {
+  const [itens, setItens] = useState<LancamentoPlataformaItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+  const [filtroMes, setFiltroMes] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState('')
+  const { confirm } = useUIStore()
+
+  const hojeISO = new Date().toISOString().slice(0, 10)
+  const [form, setForm] = useState({
+    tipo: 'despesa' as LancamentoPlataformaItem['tipo'],
+    categoria: '',
+    descricao: '',
+    valor: '',
+    data: hojeISO,
+    recorrente: false,
+  })
+
+  const carregar = useCallback(() => {
+    setLoading(true)
+    const params: Record<string, string> = {}
+    if (filtroMes) params.mes = filtroMes
+    if (filtroTipo) params.tipo = filtroTipo
+    api.get<LancamentoPlataformaItem[]>('/admin/plataforma/lancamentos', params)
+      .then(setItens)
+      .catch((err: any) => setErro(err?.message || 'Erro ao carregar os lançamentos.'))
+      .finally(() => setLoading(false))
+  }, [filtroMes, filtroTipo])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  const submeter = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const valor = parseMoeda(form.valor)
+    if (valor <= 0) { setErro('Informe um valor maior que zero.'); return }
+    setSalvando(true)
+    setErro(null)
+    try {
+      await api.post('/admin/plataforma/lancamentos', {
+        tipo: form.tipo,
+        categoria: form.categoria.trim(),
+        descricao: form.descricao.trim() || null,
+        valor,
+        // Meio-dia evita que o fuso do navegador jogue o lançamento para o dia anterior.
+        data: `${form.data}T12:00:00`,
+        recorrente: form.recorrente,
+      })
+      setForm((f) => ({ ...f, categoria: '', descricao: '', valor: '', recorrente: false }))
+      carregar()
+    } catch (err: any) {
+      setErro(err?.message || 'Erro ao registrar o lançamento.')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const excluir = async (item: LancamentoPlataformaItem) => {
+    const ok = await confirm({
+      title: 'Excluir lançamento',
+      message: `Excluir ${fmtMoeda(item.valor)} de "${item.categoria}"? O caixa e a prestação de contas do mês mudam na hora.`,
+      confirmText: 'Excluir',
+      danger: true,
+    })
+    if (!ok) return
+    try {
+      await api.delete(`/admin/plataforma/lancamentos/${item.id}`)
+      carregar()
+    } catch (err: any) {
+      setErro(err?.message || 'Erro ao excluir o lançamento.')
+    }
+  }
+
+  const rotuloTipo: Record<string, string> = { aporte: 'Aporte', despesa: 'Despesa', receita: 'Receita avulsa' }
+
+  return (
+    <div>
+      {erro && <ErroAlerta msg={erro} onFechar={() => setErro(null)} />}
+
+      <div className="glass-card" style={{ padding: 24, marginBottom: 20 }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 16, color: 'var(--sv-text)' }}>Novo lançamento</h3>
+        <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', margin: '0 0 16px' }}>
+          Aporte de sócio, despesa da operação ou receita fora de assinatura.
+          Mensalidade de loja não entra aqui — ela é registrada na aba Cobranças e já conta no caixa.
+        </p>
+        <form onSubmit={submeter}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+            <div className="form-group">
+              <label>Tipo</label>
+              <select value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value as LancamentoPlataformaItem['tipo'] }))}>
+                <option value="despesa">Despesa</option>
+                <option value="aporte">Aporte de sócio</option>
+                <option value="receita">Receita avulsa</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>{form.tipo === 'aporte' ? 'Sócio' : 'Categoria'}</label>
+              <input value={form.categoria} required list="cats-plataforma"
+                placeholder={form.tipo === 'aporte' ? 'Victor' : 'Infra (Fly/Supabase)'}
+                onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value }))} />
+              <datalist id="cats-plataforma">
+                {CATEGORIAS_SUGERIDAS.map((c) => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+            <div className="form-group">
+              <label>Valor (R$)</label>
+              <input type="text" inputMode="numeric" value={form.valor} required placeholder="0,00"
+                onChange={(e) => setForm((f) => ({ ...f, valor: mascararMoeda(e.target.value) }))} />
+            </div>
+            <div className="form-group">
+              <label>Data</label>
+              <input type="date" value={form.data} required
+                onChange={(e) => setForm((f) => ({ ...f, data: e.target.value }))} />
+            </div>
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label>Descrição (opcional)</label>
+              <input value={form.descricao} placeholder="ex.: Fly.io + Supabase de julho"
+                onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
+            {form.tipo === 'despesa' && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--sv-text-dim)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={form.recorrente}
+                  onChange={(e) => setForm((f) => ({ ...f, recorrente: e.target.checked }))} />
+                Custo fixo mensal (entra na base da projeção)
+              </label>
+            )}
+            <button type="submit" className="btn btn-primary" disabled={salvando} style={{ marginLeft: 'auto' }}>
+              {salvando ? <span className="spinner" /> : <><Plus size={16} /> Lançar</>}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label>Mês</label>
+          <input type="month" value={filtroMes} onChange={(e) => setFiltroMes(e.target.value)} />
+        </div>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label>Tipo</label>
+          <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+            <option value="">Todos</option>
+            <option value="aporte">Aportes</option>
+            <option value="despesa">Despesas</option>
+            <option value="receita">Receitas avulsas</option>
+          </select>
+        </div>
+        {(filtroMes || filtroTipo) && (
+          <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: 13 }}
+            onClick={() => { setFiltroMes(''); setFiltroTipo('') }}>Limpar</button>
+        )}
+      </div>
+
+      {loading ? (
+        <LoadingState />
+      ) : itens.length === 0 ? (
+        <EmptyState msg="Nenhum lançamento. Comece registrando os custos que já paga hoje (Fly, Supabase, domínio)." />
+      ) : (
+        <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
+          <table className="stock-table">
+            <thead>
+              <tr>
+                {['Data', 'Tipo', 'Sócio/categoria', 'Descrição', 'Valor', ''].map((h, i) => (
+                  <th key={h || i} style={h === 'Valor' ? { textAlign: 'right' } : undefined}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {itens.map((it) => (
+                <tr key={it.id}>
+                  <td style={{ color: 'var(--sv-text-dim)' }}>{fmtDataHora(it.data)}</td>
+                  <td style={{ color: 'var(--sv-text-dim)' }}>
+                    {rotuloTipo[it.tipo]}
+                    {it.recorrente && (
+                      <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--sv-text-muted)' }}>· fixo</span>
+                    )}
+                  </td>
+                  <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{it.categoria}</td>
+                  <td style={{ color: 'var(--sv-text-muted)' }}>{it.descricao || '—'}</td>
+                  <td style={{ textAlign: 'right', color: it.tipo === 'despesa' ? 'var(--sv-error)' : 'var(--sv-success)' }}>
+                    {it.tipo === 'despesa' ? '− ' : '+ '}{fmtMoeda(it.valor)}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12 }}
+                      onClick={() => excluir(it)} aria-label="Excluir lançamento">
+                      <X size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Prestação de contas: relatório mensal para o sócio ────────────
+
+function SubPrestacaoContas() {
+  const [mes, setMes] = useState(mesAnteriorISO())
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [carregando, setCarregando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelado = false
+    let urlAtual: string | null = null
+    setCarregando(true)
+    setErro(null)
+    api.blobUrl('/admin/plataforma/prestacao-contas', { mes, formato: 'html' })
+      .then((url) => {
+        if (cancelado) { URL.revokeObjectURL(url); return }
+        urlAtual = url
+        setPreviewUrl((anterior) => { if (anterior) URL.revokeObjectURL(anterior); return url })
+      })
+      .catch((err: any) => setErro(err?.message || 'Erro ao gerar o relatório.'))
+      .finally(() => { if (!cancelado) setCarregando(false) })
+    return () => {
+      cancelado = true
+      if (urlAtual) URL.revokeObjectURL(urlAtual)
+    }
+  }, [mes])
+
+  const baixarPdf = () =>
+    api.download('/admin/plataforma/prestacao-contas', { mes, formato: 'pdf' }, `prestacao-contas-${mes}.pdf`)
+      .catch((err: any) => setErro(err?.message || 'Erro ao gerar o PDF.'))
+
+  const imprimir = () => {
+    const frame = document.getElementById('frame-prestacao') as HTMLIFrameElement | null
+    frame?.contentWindow?.print()
+  }
+
+  return (
+    <div>
+      {erro && <ErroAlerta msg={erro} onFechar={() => setErro(null)} />}
+
+      <div className="glass-card" style={{ padding: 20, marginBottom: 20, display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label>Mês de referência</label>
+          <input type="month" value={mes} max={mesAtualISO()} onChange={(e) => setMes(e.target.value)} />
+        </div>
+        <button className="btn btn-primary" onClick={baixarPdf} disabled={carregando}>
+          <Download size={16} /> Baixar PDF
+        </button>
+        <button className="btn btn-secondary" onClick={imprimir} disabled={carregando || !previewUrl}>
+          <Printer size={16} /> Imprimir
+        </button>
+        <p style={{ fontSize: 13, color: 'var(--sv-text-dim)', margin: 0, flex: 1, minWidth: 220 }}>
+          Fechar até o dia 5 e enviar ao sócio. Mensalidades e destaques vêm do sistema;
+          aportes e despesas, dos lançamentos.
+        </p>
+      </div>
+
+      {carregando ? (
+        <LoadingState msg="Montando o relatório…" />
+      ) : previewUrl ? (
+        <iframe
+          id="frame-prestacao"
+          src={previewUrl}
+          title={`Prestação de contas de ${mes}`}
+          style={{
+            width: '100%', height: '80vh', border: '1px solid var(--sv-border)',
+            borderRadius: 'var(--sv-radius-lg)', background: '#ffffff',
+          }}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+// ── Cobranças: assinaturas vencendo (revisão semanal do Pix) ──────
+
+function SubCobrancas() {
   const [itens, setItens] = useState<VencimentoItem[]>([])
   const [loading, setLoading] = useState(true)
   const [janela, setJanela] = useState(30)

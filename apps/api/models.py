@@ -173,6 +173,13 @@ class TipoLancamento(str, enum.Enum):
     COMISSAO = "comissao"
 
 
+class TipoLancamentoPlataforma(str, enum.Enum):
+    """Caixa da própria Social Veículos — não confundir com TipoLancamento (caixa da loja)."""
+    APORTE = "aporte"      # dinheiro que um sócio põe na operação
+    DESPESA = "despesa"    # custo da plataforma (infra, tráfego, contador...)
+    RECEITA = "receita"    # receita avulsa; mensalidade NÃO entra aqui (ver LancamentoPlataforma)
+
+
 class StatusAssinatura(str, enum.Enum):
     ATIVA = "ativa"
     CANCELADA = "cancelada"
@@ -928,6 +935,37 @@ class DestaquePagamento(Base):
 
     __table_args__ = (
         Index("ix_destaque_pagamento_loja", "loja_id"),
+    )
+
+
+class LancamentoPlataforma(Base):
+    """
+    Caixa da Social Veículos (a empresa), para prestação de contas entre os sócios.
+
+    **Não guarda mensalidade de loja.** A receita de assinatura tem um dono só —
+    `Pagamento` (e `DestaquePagamento` para destaque na vitrine) — e o resumo
+    financeiro soma de lá. Repetir a mensalidade aqui criaria um segundo dono do
+    mesmo fato, que diverge em silêncio na primeira renovação lançada dos dois lados.
+    Só entram: aporte de sócio, despesa da operação e receita avulsa (fora de assinatura).
+    """
+    __tablename__ = "lancamento_plataforma"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    tipo = Column(Enum(TipoLancamentoPlataforma), nullable=False)
+    # Sócio (quando aporte) ou categoria de custo (infra, trafego, contador, ferramentas...)
+    categoria = Column(String(80), nullable=False)
+    descricao = Column(String(300), nullable=True)
+    valor = Column(Float, nullable=False)
+    data = Column(DateTime, nullable=False, default=_now)
+    # Custo que se repete todo mês (infra, contador) — separa burn estrutural de gasto pontual
+    recorrente = Column(Boolean, nullable=False, default=False, server_default="0")
+    observacoes = Column(Text, nullable=True)
+    criado_por_admin_id = Column(String(36), ForeignKey("usuario.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=_now)
+
+    __table_args__ = (
+        Index("ix_lancamento_plataforma_data", "data"),
+        Index("ix_lancamento_plataforma_tipo", "tipo"),
     )
 
 
