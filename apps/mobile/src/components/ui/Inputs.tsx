@@ -10,29 +10,40 @@ import { Txt } from './Txt'
 interface InputProps extends TextInputProps {
   label?: string
   error?: string
+  warning?: boolean
+  warningText?: string
   hint?: string
   icon?: keyof typeof Ionicons.glyphMap
   right?: React.ReactNode
   containerStyle?: StyleProp<ViewStyle>
 }
 
-export function Input({ label, error, hint, icon, right, containerStyle, style, ...rest }: InputProps) {
+export function Input({ label, error, warning, warningText, hint, icon, right, containerStyle, style, ...rest }: InputProps) {
   const { colors } = useTheme()
   const [focused, setFocused] = useState(false)
   const [senhaVisivel, setSenhaVisivel] = useState(false)
 
-  const borderColor = error ? colors.error : focused ? colors.primary : colors.border
+  const borderColor = error ? colors.error : warning ? colors.warning : focused ? colors.primary : colors.border
   // Campo de senha sem "right" próprio ganha o olho automaticamente.
   const olhoAutomatico = !!rest.secureTextEntry && !right
   const secureTextEntry = olhoAutomatico ? !senhaVisivel : rest.secureTextEntry
 
   return (
     <View style={[{ gap: 6 }, containerStyle]}>
-      {label ? <Txt variant="captionMedium" color="textDim">{label}</Txt> : null}
+      {label || warning ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          {label ? <Txt variant="captionMedium" color="textDim">{label}</Txt> : <View />}
+          {warning ? (
+            <Txt variant="caption" style={{ color: colors.warning }}>
+              {warningText ?? '(Em branco)'}
+            </Txt>
+          ) : null}
+        </View>
+      ) : null}
       <View
         style={[
           styles.inputWrap,
-          { backgroundColor: colors.inputBg, borderColor, borderWidth: focused || error ? 1.5 : 1 },
+          { backgroundColor: colors.inputBg, borderColor, borderWidth: focused || error || warning ? 1.5 : 1 },
         ]}
       >
         {icon ? <Ionicons name={icon} size={18} color={focused ? colors.primary : colors.textMuted} /> : null}
@@ -107,23 +118,36 @@ interface SelectFieldProps {
   placeholder?: string
   onPress: () => void
   error?: string
+  warning?: boolean
+  warningText?: string
   icon?: keyof typeof Ionicons.glyphMap
   containerStyle?: StyleProp<ViewStyle>
 }
 
-export function SelectField({ label, value, placeholder = 'Selecionar…', onPress, error, icon, containerStyle }: SelectFieldProps) {
+export function SelectField({ label, value, placeholder = 'Selecionar…', onPress, error, warning, warningText, icon, containerStyle }: SelectFieldProps) {
   const { colors } = useTheme()
+  const borderColor = error ? colors.error : warning ? colors.warning : colors.border
+
   return (
     <View style={[{ gap: 6 }, containerStyle]}>
-      {label ? <Txt variant="captionMedium" color="textDim">{label}</Txt> : null}
+      {label || warning ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          {label ? <Txt variant="captionMedium" color="textDim">{label}</Txt> : <View />}
+          {warning ? (
+            <Txt variant="caption" style={{ color: colors.warning }}>
+              {warningText ?? '(Em branco)'}
+            </Txt>
+          ) : null}
+        </View>
+      ) : null}
       <Pressable
         onPress={onPress}
         style={({ pressed }) => [
           styles.inputWrap,
           {
             backgroundColor: pressed ? colors.overlay : colors.inputBg,
-            borderColor: error ? colors.error : colors.border,
-            borderWidth: 1,
+            borderColor,
+            borderWidth: error || warning ? 1.5 : 1,
           },
         ]}
       >

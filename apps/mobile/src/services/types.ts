@@ -686,6 +686,8 @@ export interface Contrato {
   valor_entrada?: number
   parcelas?: number
   observacoes?: string
+  template_id?: string
+  dados_extras?: Record<string, string>
   created_at: string
 }
 

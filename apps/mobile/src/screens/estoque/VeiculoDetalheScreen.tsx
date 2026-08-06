@@ -21,6 +21,7 @@ import {
 } from '../../services/types'
 
 const MAX_DOC_BYTES = 20 * 1024 * 1024
+import { compartilharVeiculo } from '../../lib/share'
 import { formatBRL, formatKm, formatPlaca, maskMoedaInput, parseMoedaInput } from '../../lib/format'
 import { useAuthStore } from '../../stores/authStore'
 import type { RootScreenProps } from '../../navigation/types'
@@ -71,10 +72,7 @@ export default function VeiculoDetalheScreen({ route }: RootScreenProps<'Veiculo
 
   const compartilhar = () => {
     if (!v) return
-    const texto = `${v.marca} ${v.modelo}${v.versao ? ' ' + v.versao : ''} ${v.ano_modelo}\n${
-      v.km != null ? formatKm(v.km) + ' · ' : ''
-    }${formatBRL(v.preco_venda)}\n\nFale com a gente para saber mais!`
-    Share.share({ message: texto }).catch(() => {})
+    compartilharVeiculo(v)
   }
 
   if (q.isError) {

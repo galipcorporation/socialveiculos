@@ -16,6 +16,7 @@ import { useToggleFavorito } from '../../hooks/useToggleFavorito'
 import { extractErrorDetails } from '../../lib/api'
 import { formatBRL, formatKm } from '../../lib/format'
 import { abrirWhatsapp, abrirWhatsappComLead } from '../../lib/whatsapp'
+import { compartilharVeiculo } from '../../lib/share'
 import type { VitrineScreenProps } from '../../navigation/types'
 
 export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroDetalhe'>) {
@@ -57,6 +58,11 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
     await abrirWhatsappComLead(a.id, a.loja_whatsapp, texto)
   }
 
+  const compartilhar = () => {
+    if (!a) return
+    compartilharVeiculo(a, true)
+  }
+
   return (
     <Screen scroll={false} padded={false}>
       <AppHeader title={a ? `${a.marca} ${a.modelo}` : 'Veículo'} large={false} back />
@@ -69,9 +75,14 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
           <Screen padded={false} style={{ paddingBottom: 0 }}>
             <View>
               <MediaCarousel veiculo={a} height={260} borderRadius={0} />
-              <Pressable onPress={() => favoritar(id, a.favoritado_por_mim)} hitSlop={10} style={[styles.fav, { backgroundColor: colors.backdrop }]}>
-                <Ionicons name={a.favoritado_por_mim ? 'heart' : 'heart-outline'} size={22} color={a.favoritado_por_mim ? colors.error : '#fff'} />
-              </Pressable>
+              <View style={styles.topActions}>
+                <Pressable onPress={compartilhar} hitSlop={10} style={[styles.actionBtn, { backgroundColor: colors.backdrop }]}>
+                  <Ionicons name="share-outline" size={20} color="#fff" />
+                </Pressable>
+                <Pressable onPress={() => favoritar(id, a.favoritado_por_mim)} hitSlop={10} style={[styles.actionBtn, { backgroundColor: colors.backdrop }]}>
+                  <Ionicons name={a.favoritado_por_mim ? 'heart' : 'heart-outline'} size={20} color={a.favoritado_por_mim ? colors.error : '#fff'} />
+                </Pressable>
+              </View>
               <View style={styles.badges}>
                 {a.novidade && <Badge label="Novo" tone="success" size="sm" />}
               </View>
@@ -161,7 +172,8 @@ function Spec({ icon, label, valor }: { icon: keyof typeof Ionicons.glyphMap; la
 }
 
 const styles = StyleSheet.create({
-  fav: { position: 'absolute', top: spacing.sm, right: spacing.sm, width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  topActions: { position: 'absolute', top: spacing.sm, right: spacing.sm, flexDirection: 'row', gap: spacing.xs, zIndex: 12, elevation: 6 },
+  actionBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   badges: { position: 'absolute', top: spacing.sm, left: spacing.sm, flexDirection: 'row', gap: 4 },
   acoes: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1 },
 })

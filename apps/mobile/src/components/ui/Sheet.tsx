@@ -185,12 +185,9 @@ export function OptionSheet<T extends string>({
         <View style={styles.optionEstado}>
           <Txt variant="body" color="textDim">Carregando…</Txt>
         </View>
-      ) : filtradas.length === 0 ? (
-        <View style={styles.optionEstado}>
-          <Txt variant="body" color="textDim" align="center">
-            {busca.trim() ? 'Nada encontrado para esta busca.' : vazioTexto}
-          </Txt>
-          {onUsarBusca && busca.trim() ? (
+      ) : (
+        <View style={{ gap: 4, paddingBottom: spacing.xs }}>
+          {onUsarBusca && busca.trim() && !options.some((o) => o.label.toLowerCase() === busca.trim().toLowerCase()) ? (
             <Pressable
               onPress={() => {
                 onUsarBusca(busca.trim())
@@ -198,52 +195,66 @@ export function OptionSheet<T extends string>({
               }}
               style={({ pressed }) => [
                 styles.option,
-                { backgroundColor: pressed ? colors.overlaySoft : colors.primary + '1c', marginTop: spacing.sm },
-              ]}
-            >
-              <Ionicons name="add-circle-outline" size={19} color={colors.primary} />
-              <Txt variant="bodyMedium" color="primaryText">{usarBuscaLabel(busca.trim())}</Txt>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : (
-      <View style={{ gap: 4, paddingBottom: spacing.xs }}>
-        {filtradas.map((opt) => {
-          const ativo = opt.value === selected
-          return (
-            <Pressable
-              key={opt.value}
-              onPress={() => {
-                onSelect(opt.value)
-                onClose()
-              }}
-              style={({ pressed }) => [
-                styles.option,
                 {
-                  backgroundColor: ativo
-                    ? colors.primary + '1c'
-                    : pressed
-                      ? colors.overlaySoft
-                      : 'transparent',
+                  backgroundColor: pressed ? colors.overlaySoft : colors.primary + '1c',
+                  marginBottom: spacing.xs,
+                  borderWidth: 1,
+                  borderColor: colors.primary + '40',
                 },
               ]}
             >
-              {opt.icon ? (
-                <Ionicons name={opt.icon} size={19} color={ativo ? colors.primary : colors.textDim} />
-              ) : null}
+              <Ionicons name="person-add-outline" size={19} color={colors.primary} />
               <View style={{ flex: 1 }}>
-                <Txt variant="bodyMedium" color={ativo ? 'primaryText' : 'text'}>
-                  {opt.label}
-                </Txt>
-                {opt.sublabel ? (
-                  <Txt variant="caption" color="textDim">{opt.sublabel}</Txt>
-                ) : null}
+                <Txt variant="bodyMedium" color="primaryText">{usarBuscaLabel(busca.trim())}</Txt>
+                <Txt variant="caption" color="textMuted">Cadastra como novo cliente no CRM</Txt>
               </View>
-              {ativo ? <Ionicons name="checkmark" size={19} color={colors.primary} /> : null}
             </Pressable>
-          )
-        })}
-      </View>
+          ) : null}
+
+          {filtradas.length === 0 ? (
+            <View style={styles.optionEstado}>
+              <Txt variant="body" color="textDim" align="center">
+                {busca.trim() ? 'Nenhum cliente com este nome na carteira.' : vazioTexto}
+              </Txt>
+            </View>
+          ) : (
+            filtradas.map((opt) => {
+              const ativo = opt.value === selected
+              return (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => {
+                    onSelect(opt.value)
+                    onClose()
+                  }}
+                  style={({ pressed }) => [
+                    styles.option,
+                    {
+                      backgroundColor: ativo
+                        ? colors.primary + '1c'
+                        : pressed
+                          ? colors.overlaySoft
+                          : 'transparent',
+                    },
+                  ]}
+                >
+                  {opt.icon ? (
+                    <Ionicons name={opt.icon} size={19} color={ativo ? colors.primary : colors.textDim} />
+                  ) : null}
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="bodyMedium" color={ativo ? 'primaryText' : 'text'}>
+                      {opt.label}
+                    </Txt>
+                    {opt.sublabel ? (
+                      <Txt variant="caption" color="textDim">{opt.sublabel}</Txt>
+                    ) : null}
+                  </View>
+                  {ativo ? <Ionicons name="checkmark" size={19} color={colors.primary} /> : null}
+                </Pressable>
+              )
+            })
+          )}
+        </View>
       )}
     </Sheet>
   )

@@ -1878,6 +1878,9 @@ class ContratoUpdateRequest(BaseModel):
     parcelas: Optional[int] = None
     observacoes: Optional[str] = None
     dados_ocr: Optional[str] = None
+    template_id: Optional[str] = None
+    dados_extras: Optional[dict] = None
+
 
 
 class ContratoResponse(BaseModel):

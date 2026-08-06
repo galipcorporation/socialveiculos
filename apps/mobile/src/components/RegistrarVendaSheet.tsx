@@ -32,6 +32,7 @@ export function RegistrarVendaSheet({
   const user = useAuthStore((s) => s.user)
 
   const [comprador, setComprador] = useState(compradorInicial ?? '')
+  const [compradorId, setCompradorId] = useState<string | null>(null)
   const [compradorAberto, setCompradorAberto] = useState(false)
   const [valor, setValor] = useState(veiculo?.preco_venda ? maskMoedaInput(String(Math.round(veiculo.preco_venda * 100))) : '')
   // Vendedor responsável: guardamos o Usuario.id (não o nome — nome é ambíguo
@@ -89,6 +90,7 @@ export function RegistrarVendaSheet({
     mutationFn: () => {
       if (!veiculoSelecionado) throw new Error('Selecione um veículo.')
       return veiculosService.registrarVenda(veiculoSelecionado.id, {
+        cliente_id: compradorId || undefined,
         comprador_nome: comprador.trim(),
         valor_venda: vTotal,
         vendedor_id: vendedorId || undefined,
@@ -135,20 +137,29 @@ export function RegistrarVendaSheet({
           onPress={() => setVeiculoAberto(true)}
           icon="car-outline"
         />
-        <SelectField
-          label="Comprador"
-          value={comprador || undefined}
-          placeholder={clientesQ.isLoading ? 'Carregando…' : 'Buscar cliente'}
-          onPress={() => setCompradorAberto(true)}
-          icon="person-outline"
-        />
+        <View>
+          <SelectField
+            label="Comprador"
+            value={comprador || undefined}
+            placeholder={clientesQ.isLoading ? 'Carregando…' : 'Buscar ou digitar nome'}
+            onPress={() => setCompradorAberto(true)}
+            icon="person-outline"
+          />
+          <Txt variant="caption" color={comprador ? (compradorId ? 'success' : 'primaryText') : 'textDim'} style={{ marginTop: 4 }}>
+            {comprador
+              ? compradorId
+                ? '✓ Cliente selecionado da carteira (vinculado ao CRM)'
+                : `✨ “${comprador}” será cadastrado na carteira e incluído no CRM ao fechar.`
+              : '💡 Selecione um cliente cadastrado ou digite o nome de um novo para incluir no CRM.'}
+          </Txt>
+        </View>
         <Input label="Valor da venda" placeholder="0,00" keyboardType="numeric" value={valor} onChangeText={(t) => setValor(maskMoedaInput(t))} icon="cash-outline" />
 
         {/* Composição do pagamento */}
         <View style={{ gap: spacing.sm }}>
           <Txt variant="captionMedium" color="textDim">Composição do pagamento (opcional)</Txt>
-          <Input label="Dinheiro / à vista" placeholder="0,00" keyboardType="numeric" value={dinheiro} onChangeText={(t) => setDinheiro(maskMoedaInput(t))} icon="wallet-outline" />
-          <Input label="Financiamento" placeholder="0,00" keyboardType="numeric" value={financiado} onChangeText={(t) => setFinanciado(maskMoedaInput(t))} icon="card-outline" />
+          <Input label="Dinheiro / à vista" placeholder="0,00" keyboardType="numeric" value={dinheiro} onChangeText={(t) => setDinheiro(maskMoedaInput(t))} icon="wallet-outline" onFocus={() => { if (!dinheiro && falta > 0) setDinheiro(maskMoedaInput(String(Math.round(falta * 100)))) }} hint={!dinheiro && falta > 0 ? `Saldo restante: ${formatBRL(falta)}` : undefined} />
+          <Input label="Financiamento" placeholder="0,00" keyboardType="numeric" value={financiado} onChangeText={(t) => setFinanciado(maskMoedaInput(t))} icon="card-outline" onFocus={() => { if (!financiado && falta > 0) setFinanciado(maskMoedaInput(String(Math.round(falta * 100)))) }} hint={!financiado && falta > 0 ? `Saldo restante: ${formatBRL(falta)}` : undefined} />
           <Input label="Troca (valor avaliado)" placeholder="0,00" keyboardType="numeric" value={troca} onChangeText={(t) => setTroca(maskMoedaInput(t))} icon="swap-horizontal-outline" />
           {parseMoedaInput(troca) > 0 && (
             <Input label="Veículo da troca" placeholder="Ex.: Chevrolet Onix 2019" value={trocaDesc} onChangeText={setTrocaDesc} icon="car-outline" hint="Entra no estoque como rascunho (inativo) para avaliação." />
@@ -261,7 +272,7 @@ export function RegistrarVendaSheet({
         buscaPlaceholder="Buscar por nome, telefone ou CPF…"
         carregando={clientesQ.isLoading}
         vazioTexto="Nenhum cliente na carteira ainda."
-        selected={(clientesQ.data ?? []).find((c) => c.nome === comprador)?.id ?? ''}
+        selected={compradorId ?? (clientesQ.data ?? []).find((c) => c.nome === comprador)?.id ?? ''}
         options={(clientesQ.data ?? []).map((c) => ({
           value: c.id,
           label: c.nome,
@@ -269,10 +280,16 @@ export function RegistrarVendaSheet({
         }))}
         onSelect={(id) => {
           const c = (clientesQ.data ?? []).find((x) => x.id === id)
-          if (c) setComprador(c.nome)
+          if (c) {
+            setComprador(c.nome)
+            setCompradorId(c.id)
+          }
         }}
-        onUsarBusca={setComprador}
-        usarBuscaLabel={(t) => `Vender para “${t}” (novo)`}
+        onUsarBusca={(t) => {
+          setComprador(t)
+          setCompradorId(null)
+        }}
+        usarBuscaLabel={(t) => `Vender para “${t}” (cadastrar novo cliente)`}
       />
 
     </Sheet>

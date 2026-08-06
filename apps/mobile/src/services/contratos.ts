@@ -18,6 +18,8 @@ export interface ContratoInput {
   valor_entrada?: number
   parcelas?: number
   observacoes?: string
+  template_id?: string
+  dados_extras?: Record<string, string>
 }
 
 export interface CampoExtraTemplate {
@@ -129,6 +131,8 @@ interface ContratoDTO {
   valor_entrada?: number | null
   parcelas?: number | null
   observacoes?: string | null
+  template_id?: string | null
+  dados_extras?: Record<string, string> | null
   created_at: string
 }
 interface TemplateDTO {
@@ -154,6 +158,8 @@ function mapContrato(c: ContratoDTO): Contrato {
     valor_entrada: c.valor_entrada ?? undefined,
     parcelas: c.parcelas ?? undefined,
     observacoes: c.observacoes ?? undefined,
+    template_id: c.template_id ?? undefined,
+    dados_extras: c.dados_extras ?? undefined,
     created_at: c.created_at,
   }
 }
@@ -215,6 +221,8 @@ export const contratosService = {
       valor_entrada: input.valor_entrada ?? null,
       parcelas: input.parcelas ?? null,
       observacoes: input.observacoes || null,
+      template_id: input.template_id || null,
+      dados_extras: input.dados_extras || null,
     })
     return mapContrato(c)
   },
@@ -234,6 +242,8 @@ export const contratosService = {
       valor_entrada: input.valor_entrada,
       parcelas: input.parcelas,
       observacoes: input.observacoes,
+      template_id: input.template_id,
+      dados_extras: input.dados_extras,
     })
     return mapContrato(c)
   },

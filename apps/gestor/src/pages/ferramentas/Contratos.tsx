@@ -25,6 +25,8 @@ interface ContratoItem {
   parcelas?: number
   observacoes?: string
   dados_ocr?: string
+  template_id?: string
+  dados_extras?: Record<string, string>
   created_at: string
   updated_at: string
   veiculo_nome?: string
@@ -899,12 +901,15 @@ function CampoExtraInput({ campo, valor, onChange }: {
   valor: string
   onChange: (v: string) => void
 }) {
+  const isEmBranco = !valor || !valor.trim()
   const input = (() => {
     if (campo.tipo === 'data') {
       const br = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(valor)
       return (
         <input
           type="date"
+          className={isEmBranco ? 'border-warning' : ''}
+          style={isEmBranco ? { borderColor: '#f59e0b' } : undefined}
           value={br ? `${br[3]}-${br[2]}-${br[1]}` : ''}
           onChange={e => {
             const [a, m, d] = e.target.value.split('-')
@@ -918,6 +923,8 @@ function CampoExtraInput({ campo, valor, onChange }: {
         <input
           type="text"
           inputMode="numeric"
+          className={isEmBranco ? 'border-warning' : ''}
+          style={isEmBranco ? { borderColor: '#f59e0b' } : undefined}
           placeholder="R$ 0,00"
           value={valor.replace(/^R\$\s*/, '')}
           onChange={e => {
@@ -932,6 +939,8 @@ function CampoExtraInput({ campo, valor, onChange }: {
         <input
           type="text"
           inputMode="decimal"
+          className={isEmBranco ? 'border-warning' : ''}
+          style={isEmBranco ? { borderColor: '#f59e0b' } : undefined}
           placeholder={campo.label}
           value={valor}
           onChange={e => onChange(e.target.value.replace(/[^\d.,]/g, ''))}
@@ -941,6 +950,8 @@ function CampoExtraInput({ campo, valor, onChange }: {
     return (
       <input
         type="text"
+        className={isEmBranco ? 'border-warning' : ''}
+        style={isEmBranco ? { borderColor: '#f59e0b' } : undefined}
         placeholder={campo.label}
         value={valor}
         onChange={e => onChange(e.target.value)}
@@ -950,16 +961,23 @@ function CampoExtraInput({ campo, valor, onChange }: {
 
   return (
     <div style={{ marginBottom: 8 }}>
-      <span style={{ display: 'block', fontSize: 12, color: 'var(--sv-text-muted)', marginBottom: 4 }}>
-        {campo.label}
-      </span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <span style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>
+          {campo.label}
+        </span>
+        {isEmBranco && (
+          <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 500 }}>
+            (Em branco)
+          </span>
+        )}
+      </div>
       {input}
     </div>
   )
 }
 
 /* ══════════════════════════════════════════════════════════════
-   MODAL — Novo Contrato
+   MODAL — Novo / Editar Contrato
    ══════════════════════════════════════════════════════════════ */
 
 function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: ContratoItem; onClose: () => void; onSaved: () => void }) {
@@ -975,8 +993,8 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
   const [observacoes, setObservacoes] = useState(contrato?.observacoes || '')
   const [saving, setSaving] = useState(false)
   const [templates, setTemplates] = useState<TemplateItem[]>([])
-  const [templateId, setTemplateId] = useState('')
-  const [valoresExtras, setValoresExtras] = useState<Record<string, string>>({})
+  const [templateId, setTemplateId] = useState(contrato?.template_id || '')
+  const [valoresExtras, setValoresExtras] = useState<Record<string, string>>(contrato?.dados_extras || {})
 
   useEffect(() => {
     api.get<{ items: TemplateItem[] }>('/templates-contrato')
@@ -1022,28 +1040,21 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
   const handleSubmit = async () => {
     setSaving(true)
     try {
+      const payload = {
+        tipo,
+        cliente_id: clienteId || null,
+        veiculo_id: veiculoId || null,
+        valor_venda: parseMoeda(valorStr) || null,
+        valor_entrada: parseMoeda(entradaStr) || null,
+        parcelas: parcelas ? parseInt(parcelas) : null,
+        observacoes: observacoes || null,
+        template_id: templateId || null,
+        dados_extras: Object.keys(valoresExtras).length > 0 ? valoresExtras : null,
+      }
       if (isEditing) {
-        await api.patch(`/contratos/${contrato!.id}`, {
-          tipo,
-          cliente_id: clienteId || null,
-          veiculo_id: veiculoId || null,
-          valor_venda: parseMoeda(valorStr) || null,
-          valor_entrada: parseMoeda(entradaStr) || null,
-          parcelas: parcelas ? parseInt(parcelas) : null,
-          observacoes: observacoes || null,
-        })
+        await api.patch(`/contratos/${contrato!.id}`, payload)
       } else {
-        await api.post('/contratos', {
-          tipo,
-          cliente_id: clienteId || null,
-          veiculo_id: veiculoId || null,
-          valor_venda: parseMoeda(valorStr) || null,
-          valor_entrada: parseMoeda(entradaStr) || null,
-          parcelas: parcelas ? parseInt(parcelas) : null,
-          observacoes: observacoes || null,
-          template_id: templateId || null,
-          dados_extras: Object.keys(valoresExtras).length > 0 ? valoresExtras : null,
-        })
+        await api.post('/contratos', payload)
       }
       onSaved()
     } catch (err) {
@@ -1074,33 +1085,29 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
               </select>
             </div>
 
-            {/* Modelo — só na criação; edição altera os dados do contrato já existente */}
-            {!isEditing && (
-              <>
-                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                  <label>Modelo de Contrato</label>
-                  <select value={templateId} onChange={e => { setTemplateId(e.target.value); setValoresExtras({}) }}>
-                    <option value="">Nenhum (usar layout padrão do sistema)</option>
-                    {templates.map(t => (
-                      <option key={t.id} value={t.id}>{t.nome}</option>
-                    ))}
-                  </select>
-                </div>
+            {/* Modelo */}
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label>Modelo de Contrato</label>
+              <select value={templateId} onChange={e => { setTemplateId(e.target.value); setValoresExtras({}) }}>
+                <option value="">Nenhum (usar layout padrão do sistema)</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.nome}</option>
+                ))}
+              </select>
+            </div>
 
-                {templateSelecionado && templateSelecionado.campos_extras.length > 0 && (
-                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                    <label>Campos do modelo "{templateSelecionado.nome}"</label>
-                    {templateSelecionado.campos_extras.map(campo => (
-                      <CampoExtraInput
-                        key={campo.chave}
-                        campo={campo}
-                        valor={valoresExtras[campo.chave] || ''}
-                        onChange={v => setValoresExtras(prev => ({ ...prev, [campo.chave]: v }))}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
+            {templateSelecionado && templateSelecionado.campos_extras.length > 0 && (
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Campos do modelo "{templateSelecionado.nome}"</label>
+                {templateSelecionado.campos_extras.map(campo => (
+                  <CampoExtraInput
+                    key={campo.chave}
+                    campo={campo}
+                    valor={valoresExtras[campo.chave] || ''}
+                    onChange={v => setValoresExtras(prev => ({ ...prev, [campo.chave]: v }))}
+                  />
+                ))}
+              </div>
             )}
 
             {/* Cliente */}
@@ -1130,7 +1137,14 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
                 sub: v.placa || undefined,
               }))}
               onSearch={setVeiculoSearch}
-              onSelect={(id, label) => { setVeiculoId(id); setVeiculoDisplay(label) }}
+              onSelect={(id, label) => {
+                setVeiculoId(id); setVeiculoDisplay(label)
+                // Pré-preencher valor da venda com o preço do veículo selecionado
+                const veic = veiculos.find(v => v.id === id)
+                if (veic?.preco_venda && !parseMoeda(valorStr)) {
+                  setValorStr(mascararMoeda(veic.preco_venda))
+                }
+              }}
             />
 
             {/* Valores */}

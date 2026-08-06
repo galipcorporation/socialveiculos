@@ -37,6 +37,7 @@ export interface OutroPagamento {
 }
 
 export interface RegistrarVendaInput {
+  cliente_id?: string | null
   comprador_nome: string
   valor_venda: number
   /** Usuario.id do vendedor responsável. Ausente = quem está registrando.
@@ -329,8 +330,8 @@ export const veiculosService = {
           }]
         : []
     const resp = await api.post<VenderRespDTO>(`/veiculos/${idVeiculo}/vender`, {
-      cliente_id: null,
-      cliente_novo: { nome: input.comprador_nome.trim(), cpf: null, telefone: null },
+      cliente_id: input.cliente_id || null,
+      cliente_novo: !input.cliente_id && input.comprador_nome?.trim() ? { nome: input.comprador_nome.trim(), cpf: null, telefone: null } : null,
       valor_venda: input.valor_venda || null,
       pagamento_dinheiro: input.valor_dinheiro || null,
       financiamento: input.valor_financiado ? { valor: input.valor_financiado, parcelas: null } : null,

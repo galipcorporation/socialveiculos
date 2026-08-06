@@ -82,6 +82,8 @@ def _contrato_to_response(c: Contrato) -> ContratoResponse:
 
     cliente_nome = c.cliente.nome if c.cliente else None
 
+    dados_extras_dict = json.loads(c.dados_extras) if c.dados_extras else None
+
     return ContratoResponse(
         id=c.id,
         loja_id=c.loja_id,
@@ -95,6 +97,8 @@ def _contrato_to_response(c: Contrato) -> ContratoResponse:
         parcelas=c.parcelas,
         observacoes=c.observacoes,
         dados_ocr=c.dados_ocr,
+        template_id=c.template_id,
+        dados_extras=dados_extras_dict,
         created_at=c.created_at,
         updated_at=c.updated_at,
         veiculo_nome=veiculo_nome,
@@ -260,6 +264,10 @@ async def atualizar_contrato(
 
     status_anterior = contrato.status
     update_data = body.model_dump(exclude_unset=True)
+    if "dados_extras" in update_data:
+        val_extras = update_data.pop("dados_extras")
+        contrato.dados_extras = json.dumps(val_extras) if val_extras is not None else None
+
     for key, value in update_data.items():
         setattr(contrato, key, value)
 
@@ -646,15 +654,72 @@ async def vender_veiculo(
         proposta_pendente.status = StatusPropostaRepasse.REJEITADA
         proposta_pendente.updated_at = utcnow()
 
-    # 2c. Fechar leads em aberto deste veículo (o carro foi vendido)
+    # 2c. Fechar leads em aberto e garantir registro no CRM (etapa FECHAMENTO)
+    lead_fechado: Optional[Lead] = None
     leads_res = await db.execute(
         select(Lead).where(
             Lead.veiculo_id == veiculo.id,
             Lead.etapa.notin_([EtapaLead.FECHAMENTO, EtapaLead.PERDIDO]),
         )
     )
-    for lead_aberto in leads_res.scalars().all():
-        lead_aberto.etapa = EtapaLead.FECHAMENTO
+    leads_abertos = leads_res.scalars().all()
+    if leads_abertos:
+        for lead_aberto in leads_abertos:
+            lead_aberto.etapa = EtapaLead.FECHAMENTO
+            lead_aberto.cliente_id = cliente.id
+            lead_aberto.valor_proposta = valor_venda
+            lead_aberto.updated_at = utcnow()
+            lead_fechado = lead_aberto
+    elif body.lead_id:
+        lead_by_id_res = await db.execute(
+            select(Lead).where(
+                Lead.id == body.lead_id,
+                Lead.loja_id == ctx.loja.id,
+            )
+        )
+        lead_by_id = lead_by_id_res.scalar_one_or_none()
+        if lead_by_id:
+            lead_by_id.etapa = EtapaLead.FECHAMENTO
+            lead_by_id.cliente_id = cliente.id
+            lead_by_id.veiculo_id = veiculo.id
+            lead_by_id.valor_proposta = valor_venda
+            lead_by_id.updated_at = utcnow()
+            lead_fechado = lead_by_id
+
+    # Se nenhum Lead prévio foi atualizado, garante a criação/vínculo de um Lead
+    # na etapa FECHAMENTO para que o comprador e a venda apareçam no CRM.
+    if not lead_fechado:
+        lead_existente_res = await db.execute(
+            select(Lead).where(
+                Lead.loja_id == ctx.loja.id,
+                Lead.cliente_id == cliente.id,
+                Lead.veiculo_id == veiculo.id,
+            )
+        )
+        lead_existente = lead_existente_res.scalar_one_or_none()
+        if lead_existente:
+            lead_existente.etapa = EtapaLead.FECHAMENTO
+            lead_existente.valor_proposta = valor_venda
+            lead_existente.updated_at = utcnow()
+            lead_fechado = lead_existente
+        else:
+            try:
+                origem_lead = OrigemLead(body.origem) if body.origem else OrigemLead.MANUAL
+            except ValueError:
+                origem_lead = OrigemLead.MANUAL
+
+            lead_fechado = Lead(
+                loja_id=ctx.loja.id,
+                cliente_id=cliente.id,
+                veiculo_id=veiculo.id,
+                etapa=EtapaLead.FECHAMENTO,
+                origem=origem_lead,
+                responsavel_id=vendedor_id,
+                valor_proposta=valor_venda,
+                observacoes=f"Venda de {veiculo.marca} {veiculo.modelo} concluída",
+            )
+            db.add(lead_fechado)
+            await db.flush()  # garante lead_fechado.id
 
     # 3. Criar contrato de compra e venda (trocas = dação em pagamento)
     observacoes = body.observacoes or ""
@@ -753,7 +818,7 @@ async def vender_veiculo(
         comprador_id=cliente.id,
         vendedor_id=vendedor_id,
         origem=origem,
-        lead_id=body.lead_id,
+        lead_id=lead_fechado.id if lead_fechado else body.lead_id,
     )
     db.add(esteira)
     await db.flush()  # garante esteira.id para os itens

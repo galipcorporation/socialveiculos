@@ -364,8 +364,8 @@ export function VenderModal({
             <div className="fv-sec-label">Pagamento</div>
             <div className="fv-pay-adders">
               <button type="button" className="fv-pay-adder" onClick={() => setFormAberto('troca')}>🚗 Troca</button>
-              <button type="button" className="fv-pay-adder" disabled={temDinheiro} onClick={() => setFormAberto('dinheiro')}>💵 Dinheiro</button>
-              <button type="button" className="fv-pay-adder" disabled={temFinanciamento} onClick={() => setFormAberto('financiamento')}>🏦 Financiamento</button>
+              <button type="button" className="fv-pay-adder" disabled={temDinheiro} onClick={() => { setFormAberto('dinheiro'); if (falta > 0) setDValorStr(mascararMoeda(falta)) }}>💵 Dinheiro</button>
+              <button type="button" className="fv-pay-adder" disabled={temFinanciamento} onClick={() => { setFormAberto('financiamento'); if (falta > 0) setFValorStr(mascararMoeda(falta)) }}>🏦 Financiamento</button>
               <button type="button" className="fv-pay-adder" onClick={() => setFormAberto('outros')}>📄 Outros</button>
             </div>
 
