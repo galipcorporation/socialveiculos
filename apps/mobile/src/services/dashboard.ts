@@ -55,4 +55,9 @@ export const dashboardService = {
   async marcarLida(idNotificacao: string): Promise<void> {
     await api.post(`/notificacoes/${idNotificacao}/ler`)
   },
+
+  async marcarTodasLidas(): Promise<void> {
+    await api.post('/notificacoes/ler-todas')
+  },
 }
+

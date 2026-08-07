@@ -12,6 +12,7 @@ interface SheetProps {
   visible: boolean
   onClose: () => void
   title?: string
+  headerRight?: React.ReactNode
   children: React.ReactNode
   /** Altura máxima em fração da tela (0-1). */
   maxHeight?: number
@@ -19,7 +20,7 @@ interface SheetProps {
 }
 
 /** Bottom sheet base — backdrop com fade, painel com slide. */
-export function Sheet({ visible, onClose, title, children, maxHeight = 0.85, scrollable = true }: SheetProps) {
+export function Sheet({ visible, onClose, title, headerRight, children, maxHeight = 0.85, scrollable = true }: SheetProps) {
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
   const { height: alturaJanela } = useWindowDimensions()
@@ -76,12 +77,15 @@ export function Sheet({ visible, onClose, title, children, maxHeight = 0.85, scr
             ]}
           >
             <View style={[styles.handle, { backgroundColor: colors.overlayStrong }]} />
-            {title ? (
+            {title || headerRight ? (
               <View style={styles.titleRow}>
-                <Txt variant="title">{title}</Txt>
-                <Pressable onPress={onClose} hitSlop={10} style={[styles.closeBtn, { backgroundColor: colors.overlaySoft }]}>
-                  <Ionicons name="close" size={18} color={colors.textDim} />
-                </Pressable>
+                {title ? <Txt variant="title">{title}</Txt> : <View />}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  {headerRight}
+                  <Pressable onPress={onClose} hitSlop={10} style={[styles.closeBtn, { backgroundColor: colors.overlaySoft }]}>
+                    <Ionicons name="close" size={18} color={colors.textDim} />
+                  </Pressable>
+                </View>
               </View>
             ) : null}
             <Body

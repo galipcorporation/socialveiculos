@@ -49,8 +49,10 @@ const ConversaAssistenteScreen = lazy(() => import('../screens/ferramentas/Conve
 const AssistenteConfigScreen = lazy(() => import('../screens/ferramentas/AssistenteConfigScreen'))
 const RedeSocialScreen = lazy(() => import('../screens/rede/RedeSocialScreen'))
 
+import { navigationRef } from './navigationRef'
+
+export { navigationRef }
 const Stack = createNativeStackNavigator<RootStackParamList>()
-export const navigationRef = createNavigationContainerRef<RootStackParamList>()
 
 /** Envolve uma tela lazy em Suspense — usado como `component` do Stack.Screen. */
 function comSuspense<P extends object>(LazyComponent: React.LazyExoticComponent<React.ComponentType<P>>) {

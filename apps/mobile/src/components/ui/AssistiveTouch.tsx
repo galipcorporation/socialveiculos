@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useModulosLiberados } from '../../hooks/useModulosLiberados'
-import { navigationRef } from '../../navigation/RootNavigator'
+import { navigationRef } from '../../navigation/navigationRef'
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing } from '../../theme/tokens'
 import { Sheet } from './Sheet'

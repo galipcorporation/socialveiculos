@@ -301,7 +301,28 @@ export default function DashboardScreen() {
       </ScrollView>
 
       {/* Sheet de notificações */}
-      <Sheet visible={alertasAbertos} onClose={() => setAlertasAbertos(false)} title="Notificações">
+      <Sheet
+        visible={alertasAbertos}
+        onClose={() => setAlertasAbertos(false)}
+        title="Notificações"
+        headerRight={
+          alertas.length > 0 ? (
+            <Pressable
+              onPress={() => {
+                dashboardService.marcarTodasLidas().then(() => {
+                  queryClient.invalidateQueries({ queryKey: ['dashboard', 'notificacoes'] })
+                })
+              }}
+              hitSlop={8}
+              style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, paddingHorizontal: 4, paddingVertical: 2 }]}
+            >
+              <Txt variant="captionMedium" style={{ color: colors.primary }}>
+                Limpar tudo
+              </Txt>
+            </Pressable>
+          ) : null
+        }
+      >
         {alertas.length === 0 ? (
           <EmptyState icon="notifications-off-outline" title="Sem notificações" subtitle="Você está em dia com tudo." />
         ) : (
