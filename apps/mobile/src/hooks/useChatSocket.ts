@@ -20,8 +20,13 @@ interface MensagemBroadcast {
   autor_nome?: string | null
   conteudo: string
   lida?: boolean
+  /** Aviso do backend (veículo vendido/reservado/reaberto): sem autor humano. */
+  sistema?: boolean
   created_at?: string | null
 }
+
+// Recusa do servidor (ex.: enviar em conversa arquivada) chega como {erro, conversa_id},
+// sem `conteudo` — `ehMensagem` já descarta, e o composer da tela nem deixa enviar.
 
 function ehMensagem(v: unknown): v is MensagemBroadcast {
   if (!v || typeof v !== 'object') return false
@@ -94,10 +99,11 @@ export function useChatSocket({
           const nova: Mensagem = {
             id: payload.id,
             conversa_id: payload.conversa_id,
-            autor: propria ? o.autorProprio : o.autorRemoto,
+            autor: payload.sistema ? 'sistema' : propria ? o.autorProprio : o.autorRemoto,
             texto: payload.conteudo,
             created_at: payload.created_at ?? new Date().toISOString(),
             lida: payload.lida ?? false,
+            sistema: payload.sistema ?? false,
           }
 
           if (o.chaveMensagens && payload.conversa_id === o.conversaId) {

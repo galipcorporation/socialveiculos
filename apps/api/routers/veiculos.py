@@ -23,6 +23,14 @@ from sqlalchemy import func, or_, case
 
 from datetime import datetime, timezone
 from storage import storage_provider, detectar_tipo_por_conteudo, sanitizar_nome_arquivo
+from conversas_service import (
+    MOTIVO_INDISPONIVEL,
+    MOTIVO_RESERVADO,
+    MOTIVO_VENDIDO,
+    arquivar_conversas_do_veiculo,
+    emitir_avisos,
+    reabrir_conversas_do_veiculo,
+)
 from database import get_db
 from lib_formatacao import formatar_moeda
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria, get_optional_user
@@ -887,7 +895,21 @@ async def trocar_status_veiculo(
     if data.status != StatusVeiculo.DISPONIVEL:
         veiculo.publicado_marketplace = False
 
+    # O chat da vitrine é um por veículo: se o carro saiu, a conversa dele é
+    # arquivada com aviso; se voltou a ficar disponível, é reaberta. REPASSE
+    # continua vendável ao consumidor, então não arquiva.
+    avisos_conversas: list[dict] = []
+    if data.status in (StatusVeiculo.VENDIDO, StatusVeiculo.RESERVADO, StatusVeiculo.INATIVO):
+        motivo = {
+            StatusVeiculo.VENDIDO: MOTIVO_VENDIDO,
+            StatusVeiculo.RESERVADO: MOTIVO_RESERVADO,
+        }.get(data.status, MOTIVO_INDISPONIVEL)
+        avisos_conversas = await arquivar_conversas_do_veiculo(db, veiculo, motivo)
+    elif data.status == StatusVeiculo.DISPONIVEL and status_anterior != StatusVeiculo.DISPONIVEL:
+        avisos_conversas = await reabrir_conversas_do_veiculo(db, veiculo)
+
     await db.commit()
+    await emitir_avisos(db, avisos_conversas)
     await db.refresh(veiculo)
 
     # Registrar Auditoria

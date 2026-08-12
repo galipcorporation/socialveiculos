@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func, or_, desc
 
+from conversas_service import MOTIVO_VENDIDO, arquivar_conversas_do_veiculo, emitir_avisos
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
 from lib_formatacao import formatar_moeda, valor_por_extenso, data_por_extenso
@@ -662,11 +663,17 @@ async def vender_veiculo(
             Lead.etapa.notin_([EtapaLead.FECHAMENTO, EtapaLead.PERDIDO]),
         )
     )
-    leads_abertos = leads_res.scalars().all()
+    # Só o lead de QUEM COMPROU vira FECHAMENTO. Os leads das outras pessoas que
+    # falavam deste carro não são do comprador — fechá-los (e reescrever o
+    # `cliente_id` para o comprador, como acontecia antes) apagava o interesse
+    # dessas pessoas do funil. Eles são desvinculados do veículo mais abaixo, no
+    # arquivamento das conversas, e continuam no funil como "sem veículo definido".
+    leads_abertos = [
+        lead for lead in leads_res.scalars().all() if lead.cliente_id == cliente.id
+    ]
     if leads_abertos:
         for lead_aberto in leads_abertos:
             lead_aberto.etapa = EtapaLead.FECHAMENTO
-            lead_aberto.cliente_id = cliente.id
             lead_aberto.valor_proposta = valor_venda
             lead_aberto.updated_at = utcnow()
             lead_fechado = lead_aberto
@@ -720,6 +727,13 @@ async def vender_veiculo(
             )
             db.add(lead_fechado)
             await db.flush()  # garante lead_fechado.id
+
+    # 2d. Arquivar as conversas B2C deste veículo — o carro saiu, o chat dele vira
+    #     somente-leitura com aviso, e os leads de quem não comprou seguem no funil
+    #     sem veículo. Roda DEPOIS do 2c (que já fechou o lead do comprador).
+    avisos_conversas = await arquivar_conversas_do_veiculo(
+        db, veiculo, MOTIVO_VENDIDO, comprador_cliente_id=cliente.id
+    )
 
     # 3. Criar contrato de compra e venda (trocas = dação em pagamento)
     observacoes = body.observacoes or ""
@@ -865,6 +879,9 @@ async def vender_veiculo(
     await db.commit()
     await db.refresh(contrato)
     await db.refresh(esteira)
+
+    # Broadcast só após o commit — o WS nunca anuncia o que pode sofrer rollback.
+    await emitir_avisos(db, avisos_conversas)
 
     detalhe_trocas = f" {len(trocas_criadas)} veículo(s) recebidos em troca." if trocas_criadas else ""
     detalhe_excedente = f" Excedente de {formatar_moeda(excedente)} somado à comissão do vendedor." if excedente > 0 else ""

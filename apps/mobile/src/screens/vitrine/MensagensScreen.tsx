@@ -65,7 +65,7 @@ export default function MensagensScreen() {
             <EmptyState icon="chatbubbles-outline" title="Nenhuma conversa" subtitle="Abra um anúncio e toque em Conversar para falar com a loja." />
           }
           renderItem={({ item }) => (
-            <Card onPress={() => navigation.navigate('ConversaVitrine', { id: item.id, nome: item.loja_nome })}>
+            <Card onPress={() => navigation.navigate('ConversaVitrine', { id: item.id, nome: item.loja_nome, arquivada: item.arquivada, motivoArquivo: item.motivo_arquivo })}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                 <Avatar nome={item.loja_nome} size={46} />
                 <View style={{ flex: 1 }}>

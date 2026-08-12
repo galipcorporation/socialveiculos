@@ -12,8 +12,14 @@ import { formatHora } from '../../lib/format'
 import { useChatSocket } from '../../hooks/useChatSocket'
 import type { VitrineScreenProps } from '../../navigation/types'
 
+const MOTIVO_ARQUIVO_LABEL: Record<string, string> = {
+  vendido: 'Veículo vendido',
+  reservado: 'Veículo reservado',
+  indisponivel: 'Veículo fora do anúncio',
+}
+
 export default function ConversaVitrineScreen({ route }: VitrineScreenProps<'ConversaVitrine'>) {
-  const { id, nome } = route.params
+  const { id, nome, arquivada, motivoArquivo } = route.params
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
@@ -54,7 +60,7 @@ export default function ConversaVitrineScreen({ route }: VitrineScreenProps<'Con
 
   const enviar = () => {
     const t = texto.trim()
-    if (!t) return
+    if (!t || arquivada) return
     setTexto('')
     enviarMut.mutate(t)
   }
@@ -83,19 +89,33 @@ export default function ConversaVitrineScreen({ route }: VitrineScreenProps<'Con
           />
         )}
 
-        <View style={[styles.composer, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom + spacing.xs }]}>
-          <TextInput
-            value={texto}
-            onChangeText={setTexto}
-            placeholder="Escreva uma mensagem…"
-            placeholderTextColor={colors.textMuted}
-            multiline
-            style={[styles.input, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }]}
-          />
-          <Pressable onPress={enviar} disabled={!texto.trim()} style={[styles.enviar, { backgroundColor: texto.trim() ? colors.primary : colors.overlay }]}>
-            <Ionicons name="send" size={18} color={texto.trim() ? colors.onPrimary : colors.textMuted} />
-          </Pressable>
-        </View>
+        {/* Veículo saiu do estoque: a conversa fica como histórico e o próximo
+            interesse nasce como conversa nova, no anúncio do outro carro. */}
+        {arquivada ? (
+          <View style={[styles.arquivada, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom + spacing.sm }]}>
+            <Ionicons name="archive-outline" size={18} color={colors.textMuted} />
+            <View style={{ flex: 1 }}>
+              <Txt variant="bodySemibold">{MOTIVO_ARQUIVO_LABEL[motivoArquivo ?? ''] ?? 'Conversa arquivada'}</Txt>
+              <Txt variant="caption" color="textDim">
+                Para falar de outro veículo, abra o anúncio dele e inicie um novo contato.
+              </Txt>
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.composer, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom + spacing.xs }]}>
+            <TextInput
+              value={texto}
+              onChangeText={setTexto}
+              placeholder="Escreva uma mensagem…"
+              placeholderTextColor={colors.textMuted}
+              multiline
+              style={[styles.input, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }]}
+            />
+            <Pressable onPress={enviar} disabled={!texto.trim()} style={[styles.enviar, { backgroundColor: texto.trim() ? colors.primary : colors.overlay }]}>
+              <Ionicons name="send" size={18} color={texto.trim() ? colors.onPrimary : colors.textMuted} />
+            </Pressable>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </Screen>
   )
@@ -104,6 +124,15 @@ export default function ConversaVitrineScreen({ route }: VitrineScreenProps<'Con
 const Bolha = React.memo(function Bolha({ mensagem }: { mensagem: Mensagem }) {
   const { colors, dark } = useTheme()
   const minha = mensagem.autor === 'cliente'
+
+  if (mensagem.sistema) {
+    return (
+      <View style={[styles.sistema, { backgroundColor: colors.overlay, borderColor: colors.border }]}>
+        <Txt variant="caption" color="textDim" style={{ textAlign: 'center' }}>{mensagem.texto}</Txt>
+      </View>
+    )
+  }
+
   return (
     <View
       style={[
@@ -123,6 +152,8 @@ const Bolha = React.memo(function Bolha({ mensagem }: { mensagem: Mensagem }) {
 
 const styles = StyleSheet.create({
   bolha: { maxWidth: '80%', borderRadius: radius.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  sistema: { alignSelf: 'center', maxWidth: '90%', borderWidth: 1, borderRadius: radius.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, marginVertical: spacing.xs },
+  arquivada: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1 },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingTop: spacing.xs, borderTopWidth: 1 },
   input: { flex: 1, borderRadius: radius.lg, borderWidth: 1, paddingHorizontal: spacing.sm, paddingTop: 10, paddingBottom: 10, maxHeight: 110, fontFamily: fonts.regular, fontSize: 15 },
   enviar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },

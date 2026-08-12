@@ -1693,12 +1693,18 @@ class ConversaB2CResponse(BaseModel):
     tipo: TipoConversa
     loja_id: Optional[str] = None
     loja_nome: Optional[str] = None
+    # Slug, não UUID: as rotas públicas da vitrine resolvem loja por slug (B057).
+    loja_slug: Optional[str] = None
     cliente_id: Optional[str] = None
     cliente_nome: Optional[str] = None
     veiculo_id: Optional[str] = None
     veiculo_modelo: Optional[str] = None
     veiculo_marca: Optional[str] = None
     ativa: bool
+    # Arquivamento por saída do veículo (vendido/reservado/despublicado).
+    arquivada_em: Optional[datetime] = None
+    motivo_arquivo: Optional[str] = None
+    veiculo_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     ultima_mensagem: Optional[str] = None
@@ -1713,9 +1719,10 @@ class MensagemB2CResponse(BaseModel):
     conversa_id: str
     autor_id: Optional[str] = None
     autor_nome: Optional[str] = None
-    autor_tipo: Literal["loja", "cliente"]
+    autor_tipo: Literal["loja", "cliente", "sistema"]
     conteudo: str
     lida: bool
+    sistema: bool = False
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

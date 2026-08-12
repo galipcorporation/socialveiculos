@@ -766,6 +766,11 @@ class Conversa(Base):
     status_manual = Column(Enum(StatusNegociacaoConversa), nullable=True)
 
     ativa = Column(Boolean, default=True)
+    # Arquivamento automático: quando o veículo de contexto sai (vendido, reservado,
+    # despublicado), a conversa vira somente-leitura. `motivo_arquivo` é VARCHAR e não
+    # enum nativo de propósito (ver ARMADILHAS-PRODUCAO.md §2 — CREATE TYPE duplicado).
+    arquivada_em = Column(DateTime, nullable=True)
+    motivo_arquivo = Column(String(30), nullable=True)  # vendido | reservado | indisponivel
     backup_url = Column(String(512), nullable=True)
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
@@ -789,6 +794,9 @@ class Mensagem(Base):
 
     conteudo = Column(Text, nullable=False)
     lida = Column(Boolean, default=False)
+    # Aviso gerado pelo próprio sistema (veículo vendido, conversa arquivada).
+    # Não tem autor humano: `autor_id` fica nulo e a UI renderiza centralizado.
+    sistema = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=_now)
 
     conversa = relationship("Conversa", back_populates="mensagens")

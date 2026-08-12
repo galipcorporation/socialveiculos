@@ -15,6 +15,10 @@ interface ConversaB2CDTO {
   ultima_mensagem?: string | null
   ultima_mensagem_data?: string | null
   mensagens_nao_lidas?: number
+  // Arquivamento por saída do veículo. Opcionais: a API pode ser a antiga (B111).
+  ativa?: boolean
+  arquivada_em?: string | null
+  motivo_arquivo?: string | null
 }
 interface ConversaB2BDTO {
   id: string
@@ -34,10 +38,11 @@ interface MensagemDTO {
   autor_nome?: string | null
   // B2C (/vitrine/chat) informa quem é o autor de fato; B2B (/b2b/chat) informa
   // apenas se a mensagem é minha (não há "loja"/"cliente" entre lojas parceiras).
-  autor_tipo?: 'loja' | 'cliente'
+  autor_tipo?: 'loja' | 'cliente' | 'sistema'
   minha?: boolean
   conteudo: string
   lida: boolean
+  sistema?: boolean
   created_at: string
 }
 
@@ -53,7 +58,7 @@ function mapMensagem(m: MensagemDTO): Mensagem {
   // No painel da loja, "minha" (do lado direito) é sempre a própria loja —
   // tanto no B2C (autor_tipo já vem calculado pelo backend) quanto no B2B
   // (minha === true quando o autor é o usuário logado).
-  const autor: 'loja' | 'cliente' = m.autor_tipo ?? (m.minha ? 'loja' : 'cliente')
+  const autor: 'loja' | 'cliente' | 'sistema' = m.autor_tipo ?? (m.minha ? 'loja' : 'cliente')
   return {
     id: m.id,
     conversa_id: m.conversa_id,
@@ -61,6 +66,7 @@ function mapMensagem(m: MensagemDTO): Mensagem {
     texto: m.conteudo,
     created_at: m.created_at,
     lida: m.lida,
+    sistema: m.sistema ?? autor === 'sistema',
   }
 }
 
@@ -75,6 +81,8 @@ function mapConversaB2C(c: ConversaB2CDTO): Conversa {
     ultima_mensagem: c.ultima_mensagem ?? '',
     ultima_mensagem_em: c.ultima_mensagem_data ?? new Date(0).toISOString(),
     nao_lidas: c.mensagens_nao_lidas ?? 0,
+    arquivada: !!c.arquivada_em || c.ativa === false,
+    motivo_arquivo: c.motivo_arquivo ?? null,
   }
 }
 

@@ -17,6 +17,10 @@ export type RootStackParamList = {
     veiculoInteresse?: string
     statusNegociacao?: string | null
     temPropostaVinculada?: boolean
+    /** B2C: conversa de veículo que saiu do estoque — somente-leitura. */
+    arquivada?: boolean
+    /** vendido | reservado | indisponivel */
+    motivoArquivo?: string | null
   }
   PosVenda: undefined
   EsteiraDetalhe: { id: string }
@@ -57,7 +61,8 @@ export type VitrineStackParamList = {
   VitrineTabs: undefined
   CarroDetalhe: { id: string }
   PerfilLoja: { id: string }
-  ConversaVitrine: { id: string; nome: string }
+  /** `arquivada`: veículo saiu do estoque, conversa é só histórico. */
+  ConversaVitrine: { id: string; nome: string; arquivada?: boolean; motivoArquivo?: string | null }
   EditarPerfil: undefined
   LojasSeguidas: undefined
 }

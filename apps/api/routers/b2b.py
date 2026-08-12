@@ -573,6 +573,9 @@ async def processar_proposta_repasse(
             detail="Proposta não encontrada."
         )
 
+    # Avisos de arquivamento das conversas B2C do veículo (repasse aceito = carro vendido).
+    avisos_conversas: list[dict] = []
+
     # Regras de transição de status
     if data.status == StatusPropostaRepasse.CANCELADA:
         if proposta.loja_proponente_id != context.loja_id:
@@ -638,9 +641,20 @@ async def processar_proposta_repasse(
                 for outra in res_outras.scalars().all():
                     outra.status = StatusPropostaRepasse.REJEITADA
 
+                # O carro saiu por repasse: as conversas B2C dele viram somente-leitura
+                # com aviso, e os leads da vitrine seguem no funil sem veículo.
+                from conversas_service import MOTIVO_VENDIDO, arquivar_conversas_do_veiculo
+                avisos_conversas = await arquivar_conversas_do_veiculo(
+                    db, proposta.veiculo, MOTIVO_VENDIDO
+                )
+
     proposta.updated_at = utcnow()
     await db.commit()
     await db.refresh(proposta)
+
+    # Broadcast só depois do commit (o manager vive neste módulo).
+    from conversas_service import emitir_avisos
+    await emitir_avisos(db, avisos_conversas)
 
     await registrar_auditoria(
         db=db,

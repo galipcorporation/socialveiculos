@@ -24,6 +24,13 @@ const STATUS_NEGOCIACAO_LABEL: Record<string, string> = {
   nao_fechou: 'Não fechou',
 }
 
+// Chat B2C é um por veículo: quando o carro sai, o backend arquiva a conversa.
+const MOTIVO_ARQUIVO_LABEL: Record<string, string> = {
+  vendido: 'vendido',
+  reservado: 'reservado',
+  indisponivel: 'fora do anúncio',
+}
+
 function corStatusNegociacao(status: string, colors: any): string {
   if (status === 'aceita' || status === 'fechou') return colors.success
   if (status === 'rejeitada' || status === 'cancelada' || status === 'nao_fechou') return colors.error
@@ -95,6 +102,8 @@ export default function ChatScreen() {
                   veiculoInteresse: item.veiculo_interesse,
                   statusNegociacao: item.status_negociacao,
                   temPropostaVinculada: item.tem_proposta_vinculada,
+                  arquivada: item.arquivada,
+                  motivoArquivo: item.motivo_arquivo,
                 })
               }
             />
@@ -157,6 +166,7 @@ function ConversaCard({ conversa, onPress }: { conversa: Conversa; onPress: () =
           {conversa.veiculo_interesse ? (
             <Txt variant="caption" color="textDim" numberOfLines={1}>
               🚗 {conversa.veiculo_interesse}
+              {conversa.arquivada ? ` · ${MOTIVO_ARQUIVO_LABEL[conversa.motivo_arquivo ?? ''] ?? 'arquivada'}` : ''}
             </Txt>
           ) : parceiro ? (
             <Txt variant="caption" color="textDim" numberOfLines={1}>

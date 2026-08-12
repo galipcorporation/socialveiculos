@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, Fragment } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api, extractErrorDetails, type ApiErrorDetails } from '../lib/api'
 import { useAuthStore } from '../stores/authStore'
 import { useUIStore } from '../stores/uiStore'
@@ -141,6 +142,9 @@ interface Mensagem {
   autor_nome: string
   conteudo: string
   lida: boolean
+  // Aviso do próprio sistema (veículo vendido/reservado): sem autor, renderizado
+  // centralizado. Opcional porque a API antiga não manda o campo (B111).
+  sistema?: boolean
   created_at: string
 }
 
@@ -1322,13 +1326,49 @@ interface LeadTriagem {
   justificativa?: string
 }
 
+/**
+ * Conversa B2C (cliente ↔ loja). É um chat POR VEÍCULO: quando o carro sai do
+ * estoque a conversa é arquivada pelo backend e vira somente-leitura — o próximo
+ * interesse do mesmo cliente nasce como conversa nova, no veículo novo.
+ * Campos de arquivamento são opcionais: a API pode ser a antiga durante o deploy (B111).
+ */
+interface ConversaCliente {
+  id: string
+  tipo: 'b2c'
+  cliente_id?: string
+  cliente_nome?: string
+  veiculo_id?: string
+  veiculo_marca?: string
+  veiculo_modelo?: string
+  veiculo_status?: string
+  ativa: boolean
+  arquivada_em?: string | null
+  motivo_arquivo?: string | null
+  created_at: string
+  updated_at: string
+  ultima_mensagem?: string
+  ultima_mensagem_data?: string
+  mensagens_nao_lidas?: number
+}
+
+const MOTIVO_ARQUIVO_LABEL: Record<string, string> = {
+  vendido: 'Vendido',
+  reservado: 'Reservado',
+  indisponivel: 'Fora do anúncio',
+}
+
+function conversaArquivada(c?: ConversaCliente | null): boolean {
+  return !!c && (!!c.arquivada_em || c.ativa === false)
+}
+
 function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: string | null, user: any, addToast: (t: ToastType, m: string, details?: any) => void, subTab: 'parceiros' | 'clientes', setSubTab: (t: 'parceiros' | 'clientes') => void }) {
   const { unreadB2B, unreadB2C } = useChatStore()
-  const [conversas, setConversas] = useState<Conversa[]>([])
+  const navigate = useNavigate()
+  const [conversas, setConversas] = useState<ConversaCliente[]>([])
   const [triagens, setTriagens] = useState<Record<string, LeadTriagem>>({})
-  const [filtered, setFiltered] = useState<Conversa[]>([])
+  const [filtered, setFiltered] = useState<ConversaCliente[]>([])
   const [search, setSearch] = useState('')
-  const [activeConversa, setActiveConversa] = useState<Conversa | null>(null)
+  const [activeConversa, setActiveConversa] = useState<ConversaCliente | null>(null)
   const [mensagens, setMensagens] = useState<Mensagem[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [loadingConversas, setLoadingConversas] = useState(true)
@@ -1342,7 +1382,7 @@ function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: 
   const fetchConversas = useCallback(async () => {
     setLoadingConversas(true)
     try {
-      const data = await api.get<Conversa[]>('/vitrine/chat/conversas')
+      const data = await api.get<ConversaCliente[]>('/vitrine/chat/conversas')
       setConversas(data)
       setFiltered(data)
       const tData = await api.get<LeadTriagem[]>('/gestor/triagem')
@@ -1374,7 +1414,7 @@ function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: 
   useEffect(() => { fetchConversas() }, [fetchConversas])
   useEffect(() => { messageEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens])
 
-  const activeConversaRef = useRef<Conversa | null>(null)
+  const activeConversaRef = useRef<ConversaCliente | null>(null)
 
   useEffect(() => {
     activeConversaRef.current = activeConversa
@@ -1413,13 +1453,14 @@ function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: 
     return () => { sock.close(); wsRef.current = null }
   }, [token])
 
-  const applyFilter = (list: Conversa[], ruido: boolean, q: string) => {
+  const applyFilter = (list: ConversaCliente[], ruido: boolean, q: string) => {
     let r = ruido ? list.filter(c => triagens[c.id]?.classificacao === 'ruido') : list
     if (q) {
       const lower = q.toLowerCase()
       r = r.filter(c =>
-        ((c as any).cliente_nome ?? 'Cliente').toLowerCase().includes(lower) ||
-        ((c as any).ultima_mensagem ?? '').toLowerCase().includes(lower)
+        (c.cliente_nome ?? 'Cliente').toLowerCase().includes(lower) ||
+        (c.ultima_mensagem ?? '').toLowerCase().includes(lower) ||
+        `${c.veiculo_marca ?? ''} ${c.veiculo_modelo ?? ''}`.toLowerCase().includes(lower)
       )
     }
     return r
@@ -1436,7 +1477,7 @@ function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: 
     setFiltered(applyFilter(conversas, next, search))
   }
 
-  const handleSelectConversa = (conv: Conversa) => {
+  const handleSelectConversa = (conv: ConversaCliente) => {
     setActiveConversa(conv)
     fetchMensagens(conv.id)
   }
@@ -1462,7 +1503,7 @@ function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: 
   }
 
   const handleSend = async () => {
-    if (!activeConversa || !newMessage.trim()) return
+    if (!activeConversa || !newMessage.trim() || conversaArquivada(activeConversa)) return
     const content = newMessage.trim()
     setNewMessage('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
@@ -1486,8 +1527,52 @@ function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: 
     return nome.split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase()
   }
 
-  const clienteNome = (conv: Conversa) => (conv as any).cliente_nome || 'Cliente'
+  const clienteNome = (conv: ConversaCliente) => conv.cliente_nome || 'Cliente'
+  const veiculoDaConversa = (conv: ConversaCliente) =>
+    [conv.veiculo_marca, conv.veiculo_modelo].filter(Boolean).join(' ')
   const activeTriagem = activeConversa ? triagens[activeConversa.id] : null
+
+  // Um chat = um veículo. As conversas de carros que já saíram descem para um
+  // grupo próprio em vez de disputar espaço com quem ainda está negociando.
+  const conversasVivas = filtered.filter(c => !conversaArquivada(c))
+  const conversasArquivadas = filtered.filter(c => conversaArquivada(c))
+
+  const renderConversaItem = (conv: ConversaCliente) => {
+    const triagem = triagens[conv.id]
+    const arquivada = conversaArquivada(conv)
+    const veiculo = veiculoDaConversa(conv)
+    return (
+      <div
+        key={conv.id}
+        className={`gc-conv-item${activeConversa?.id === conv.id ? ' active' : ''}${arquivada ? ' arquivada' : ''}`}
+        onClick={() => handleSelectConversa(conv)}
+      >
+        <div className="gc-conv-avatar">{gcInitials(clienteNome(conv))}</div>
+        <div className="gc-conv-info">
+          <div className="gc-conv-name">{clienteNome(conv)}</div>
+          {/* O veículo é o assunto da conversa — sem ele o vendedor não sabe de
+              qual carro o cliente está falando. */}
+          {veiculo && <div className="gc-conv-veiculo">{veiculo}</div>}
+          <div className="gc-conv-preview">{conv.ultima_mensagem || 'Sem mensagens.'}</div>
+        </div>
+        <div className="gc-conv-meta">
+          {arquivada && (
+            <span className="gc-conv-arquivada-tag">
+              {MOTIVO_ARQUIVO_LABEL[conv.motivo_arquivo ?? ''] ?? 'Arquivada'}
+            </span>
+          )}
+          {triagem && (
+            <span className={triagem.classificacao === 'quente' ? 'gc-conv-lead-hot' : 'gc-conv-lead-cold'} style={{ marginBottom: 4 }}>
+              {triagem.classificacao === 'quente' ? '🔥' : '❄️'} {triagem.score}
+            </span>
+          )}
+          {conv.mensagens_nao_lidas !== undefined && conv.mensagens_nao_lidas > 0 ? (
+            <span className="gc-conv-badge">{conv.mensagens_nao_lidas}</span>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="gc-chat-shell">
@@ -1553,32 +1638,17 @@ function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: 
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--sv-text-dim)', fontSize: 13 }}>
               {filtroRuido ? 'Nenhum ruído encontrado.' : 'Nenhuma conversa de cliente.'}
             </div>
-          ) : filtered.map(conv => {
-            const triagem = triagens[conv.id]
-            return (
-              <div
-                key={conv.id}
-                className={`gc-conv-item${activeConversa?.id === conv.id ? ' active' : ''}`}
-                onClick={() => handleSelectConversa(conv)}
-              >
-                <div className="gc-conv-avatar">{gcInitials(clienteNome(conv))}</div>
-                <div className="gc-conv-info">
-                  <div className="gc-conv-name">{clienteNome(conv)}</div>
-                  <div className="gc-conv-preview">{(conv as any).ultima_mensagem || 'Sem mensagens.'}</div>
-                </div>
-                <div className="gc-conv-meta">
-                  {triagem && (
-                    <span className={triagem.classificacao === 'quente' ? 'gc-conv-lead-hot' : 'gc-conv-lead-cold'} style={{ marginBottom: 4 }}>
-                      {triagem.classificacao === 'quente' ? '🔥' : '❄️'} {triagem.score}
-                    </span>
-                  )}
-                  {conv.mensagens_nao_lidas !== undefined && conv.mensagens_nao_lidas > 0 ? (
-                    <span className="gc-conv-badge">{conv.mensagens_nao_lidas}</span>
-                  ) : null}
-                </div>
-              </div>
-            )
-          })}
+          ) : (
+            <>
+              {conversasVivas.map(conv => renderConversaItem(conv))}
+              {conversasArquivadas.length > 0 && (
+                <>
+                  <div className="gc-conv-group">Arquivadas · {conversasArquivadas.length}</div>
+                  {conversasArquivadas.map(conv => renderConversaItem(conv))}
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -1590,7 +1660,12 @@ function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: 
               <div className="gc-chat-head-left">
                 <div className="gc-chat-head-avatar">{gcInitials(clienteNome(activeConversa))}</div>
                 <div className="gc-chat-head-info">
-                  <h4>{clienteNome(activeConversa)}</h4>
+                  <h4>
+                    {clienteNome(activeConversa)}
+                    {veiculoDaConversa(activeConversa) && (
+                      <span className="gc-chat-head-veiculo">· {veiculoDaConversa(activeConversa)}</span>
+                    )}
+                  </h4>
                   {activeTriagem && (
                     <span style={{ color: activeTriagem.classificacao === 'quente' ? '#ef4444' : 'var(--sv-text-muted)', fontSize: 11 }}>
                       {activeTriagem.classificacao === 'quente' ? '🔥 Lead quente' : '❄️ Possível ruído'}
@@ -1624,36 +1699,58 @@ function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: 
                         {parseUTC(msg.created_at).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
                       </div>
                     )}
-                    <div className={`gc-msg-row${mine ? ' me' : ' other'}`}>
-                      {!mine && <div className="gc-msg-avatar">{gcInitials(msg.autor_nome)}</div>}
-                      <div>
-                        <div className="gc-msg-bubble">{msg.conteudo}</div>
-                        <div className="gc-msg-time">{parseUTC(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                    {msg.sistema ? (
+                      <div className="gc-msg-sistema">{msg.conteudo}</div>
+                    ) : (
+                      <div className={`gc-msg-row${mine ? ' me' : ' other'}`}>
+                        {!mine && <div className="gc-msg-avatar">{gcInitials(msg.autor_nome)}</div>}
+                        <div>
+                          <div className="gc-msg-bubble">{msg.conteudo}</div>
+                          <div className="gc-msg-time">{parseUTC(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </Fragment>
                 )
               })}
               <div ref={messageEndRef} />
             </div>
 
-            <div className="gc-chat-input-bar">
-              <div className="gc-chat-input-wrap">
-                <textarea
-                  ref={textareaRef}
-                  rows={1}
-                  placeholder="Responder ao cliente…"
-                  value={newMessage}
-                  onChange={e => { setNewMessage(e.target.value); autoResize() }}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-                />
+            {conversaArquivada(activeConversa) ? (
+              <div className="gc-chat-arquivada">
+                <div>
+                  <strong>
+                    Conversa arquivada
+                    {activeConversa.motivo_arquivo ? ` — ${MOTIVO_ARQUIVO_LABEL[activeConversa.motivo_arquivo] ?? activeConversa.motivo_arquivo}` : ''}
+                  </strong>
+                  <span>
+                    O veículo desta conversa saiu do estoque. O histórico fica aqui; para oferecer
+                    outro carro, use o lead do cliente no CRM.
+                  </span>
+                </div>
+                <button className="btn quick-action-btn" onClick={() => navigate('/crm')}>
+                  Abrir CRM
+                </button>
               </div>
-              <button className="gc-chat-send" onClick={handleSend} disabled={!newMessage.trim()}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
-                </svg>
-              </button>
-            </div>
+            ) : (
+              <div className="gc-chat-input-bar">
+                <div className="gc-chat-input-wrap">
+                  <textarea
+                    ref={textareaRef}
+                    rows={1}
+                    placeholder="Responder ao cliente…"
+                    value={newMessage}
+                    onChange={e => { setNewMessage(e.target.value); autoResize() }}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+                  />
+                </div>
+                <button className="gc-chat-send" onClick={handleSend} disabled={!newMessage.trim()}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <div className="gc-chat-empty">

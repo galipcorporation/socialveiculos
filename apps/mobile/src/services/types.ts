@@ -346,10 +346,12 @@ export interface Negociacao {
 export interface Mensagem {
   id: string
   conversa_id: string
-  autor: 'loja' | 'cliente'
+  autor: 'loja' | 'cliente' | 'sistema'
   texto: string
   created_at: string
   lida: boolean
+  /** Aviso gerado pelo backend (veículo vendido/reservado): sem autor, centralizado. */
+  sistema?: boolean
 }
 
 export type TipoConversa = 'cliente' | 'parceiro'
@@ -374,6 +376,13 @@ export interface Conversa {
   status_negociacao?: StatusNegociacaoConversa | null
   /** Para tipo 'parceiro' (B2B): true se há PropostaRepasse vinculada (status não é editável manualmente). */
   tem_proposta_vinculada?: boolean
+  /**
+   * Para tipo 'cliente' (B2C): o chat é um por veículo. Quando o carro sai do
+   * estoque o backend arquiva a conversa, que passa a ser somente-leitura.
+   */
+  arquivada?: boolean
+  /** vendido | reservado | indisponivel */
+  motivo_arquivo?: string | null
 }
 
 // ── Pós-venda (esteira) ────────────────────────────────────
@@ -644,11 +653,16 @@ export interface ConversaVitrine {
   id: string
   loja_id: string
   loja_nome: string
+  loja_slug?: string
   loja_verificada: boolean
   veiculo_interesse?: string
   ultima_mensagem: string
   ultima_mensagem_em: string
   nao_lidas: number
+  /** Chat de veículo que saiu do estoque: histórico, sem campo de digitação. */
+  arquivada?: boolean
+  /** vendido | reservado | indisponivel */
+  motivo_arquivo?: string | null
 }
 
 // ── Módulos pagos (gate) ───────────────────────────────────

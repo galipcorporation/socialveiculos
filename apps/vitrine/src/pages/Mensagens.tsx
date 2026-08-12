@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { createReconnectingSocket, type ReconnectingSocket } from '../lib/ws'
 import { useAuthStore } from '../stores/authStore'
@@ -12,10 +12,15 @@ interface Conversa {
   tipo: string
   loja_id: string
   loja_nome: string
+  // Campos novos nascem opcionais: durante o deploy parcial a API ainda é a antiga (B111).
+  loja_slug?: string
   veiculo_id?: string
   veiculo_modelo?: string
   veiculo_marca?: string
+  veiculo_status?: string
   ativa: boolean
+  arquivada_em?: string | null
+  motivo_arquivo?: string | null
   created_at: string
   updated_at: string
   ultima_mensagem?: string
@@ -29,7 +34,18 @@ interface Mensagem {
   autor_nome: string
   conteudo: string
   lida: boolean
+  sistema?: boolean
   created_at: string
+}
+
+const MOTIVO_LABEL: Record<string, string> = {
+  vendido: 'Veículo vendido',
+  reservado: 'Veículo reservado',
+  indisponivel: 'Veículo indisponível',
+}
+
+function estaArquivada(c: Conversa | null): boolean {
+  return !!c && (!!c.arquivada_em || c.ativa === false)
 }
 
 function formatTime(iso?: string) {
@@ -57,6 +73,7 @@ export function Mensagens() {
   const { isAuthenticated, token, openLoginModal } = useAuthStore()
   const userId = useAuthStore.getState().user?.id
   const location = useLocation()
+  const navigate = useNavigate()
   const initialConversaId = (location.state as { conversaId?: string } | null)?.conversaId
 
   const [conversas, setConversas] = useState<Conversa[]>([])
@@ -116,6 +133,12 @@ export function Mensagens() {
       onMessage: (e) => {
         try {
           const msg = JSON.parse(e.data)
+          // O servidor recusa envio em conversa arquivada pelo próprio socket.
+          if (msg.erro) {
+            useUIStore.getState().showError(msg.erro)
+            fetchConversas()
+            return
+          }
           if (msg.conversa_id === selected.id) {
             setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
           }
@@ -157,7 +180,7 @@ export function Mensagens() {
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault()
     const content = newMsg.trim()
-    if (!content || !selected) return
+    if (!content || !selected || estaArquivada(selected)) return
     setNewMsg('')
     if (textareaRef.current) { textareaRef.current.style.height = 'auto' }
 
@@ -176,6 +199,41 @@ export function Mensagens() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+  }
+
+  // Conversa de veículo que saiu do estoque fica no fim da lista, num grupo próprio:
+  // ela continua consultável, mas não disputa atenção com as negociações vivas.
+  const grupos = {
+    ativas: filtered.filter(c => !estaArquivada(c)),
+    arquivadas: filtered.filter(c => estaArquivada(c)),
+  }
+
+  const renderItemConversa = (c: Conversa) => {
+    const arquivada = estaArquivada(c)
+    return (
+      <div
+        key={c.id}
+        className={`vt-conv-item${selected?.id === c.id ? ' active' : ''}${arquivada ? ' arquivada' : ''}`}
+        onClick={() => selectConversa(c)}
+      >
+        <div className="vt-conv-avatar">{initials(c.loja_nome)}</div>
+        <div className="vt-conv-info">
+          <div className="vt-conv-name">{c.loja_nome}</div>
+          {c.veiculo_modelo && (
+            <div className="vt-conv-sub">{c.veiculo_marca} {c.veiculo_modelo}</div>
+          )}
+          <div className="vt-conv-preview">{c.ultima_mensagem || 'Nenhuma mensagem.'}</div>
+        </div>
+        <div className="vt-conv-meta">
+          <span className="vt-conv-time">{formatTime(c.ultima_mensagem_data)}</span>
+          {arquivada && (
+            <span className="vt-badge vt-badge-muted">
+              {MOTIVO_LABEL[c.motivo_arquivo ?? ''] ?? 'Arquivada'}
+            </span>
+          )}
+        </div>
+      </div>
+    )
   }
 
   if (!isAuthenticated) {
@@ -221,25 +279,17 @@ export function Mensagens() {
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--vt-text-dim)', fontSize: 14 }}>
               {search ? 'Nenhuma conversa encontrada.' : 'Nenhuma conversa ainda.'}
             </div>
-          ) : filtered.map(c => (
-            <div
-              key={c.id}
-              className={`vt-conv-item${selected?.id === c.id ? ' active' : ''}`}
-              onClick={() => selectConversa(c)}
-            >
-              <div className="vt-conv-avatar">{initials(c.loja_nome)}</div>
-              <div className="vt-conv-info">
-                <div className="vt-conv-name">{c.loja_nome}</div>
-                {c.veiculo_modelo && (
-                  <div className="vt-conv-sub">{c.veiculo_marca} {c.veiculo_modelo}</div>
-                )}
-                <div className="vt-conv-preview">{c.ultima_mensagem || 'Nenhuma mensagem.'}</div>
-              </div>
-              <div className="vt-conv-meta">
-                <span className="vt-conv-time">{formatTime(c.ultima_mensagem_data)}</span>
-              </div>
-            </div>
-          ))}
+          ) : (
+            <>
+              {grupos.ativas.map(c => renderItemConversa(c))}
+              {grupos.arquivadas.length > 0 && (
+                <>
+                  <div className="vt-conv-group">Arquivadas · {grupos.arquivadas.length}</div>
+                  {grupos.arquivadas.map(c => renderItemConversa(c))}
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -286,6 +336,18 @@ export function Mensagens() {
                 const isMe = m.autor_id === userId
                 const prevIsMe = i > 0 && mensagens[i - 1].autor_id === userId
                 const showDate = i === 0 || new Date(m.created_at).toDateString() !== new Date(mensagens[i - 1].created_at).toDateString()
+                if (m.sistema) {
+                  return (
+                    <React.Fragment key={m.id}>
+                      {showDate && (
+                        <div className="vt-msg-date">
+                          {new Date(m.created_at).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                        </div>
+                      )}
+                      <div className="vt-msg-sistema">{m.conteudo}</div>
+                    </React.Fragment>
+                  )
+                }
                 return (
                   <React.Fragment key={m.id}>
                     {showDate && (
@@ -308,22 +370,38 @@ export function Mensagens() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
-            <div className="vt-chat-input-bar">
-              <div className="vt-chat-input-wrap">
-                <textarea
-                  ref={textareaRef}
-                  rows={1}
-                  placeholder="Mensagem…"
-                  value={newMsg}
-                  onChange={e => { setNewMsg(e.target.value); autoResize() }}
-                  onKeyDown={handleKeyDown}
-                />
+            {/* Input — some quando o veículo saiu: a conversa vira histórico e o
+                caminho para continuar é abrir um chat do próximo veículo. */}
+            {estaArquivada(selected) ? (
+              <div className="vt-chat-arquivada">
+                <div className="vt-chat-arquivada-txt">
+                  <strong>{MOTIVO_LABEL[selected.motivo_arquivo ?? ''] ?? 'Conversa arquivada'}</strong>
+                  <span>Esta conversa virou histórico. Para falar de outro veículo, abra o anúncio dele.</span>
+                </div>
+                <button
+                  className="vt-btn vt-btn-primary"
+                  onClick={() => navigate(selected.loja_slug ? `/loja/${selected.loja_slug}` : '/')}
+                >
+                  Ver estoque da loja
+                </button>
               </div>
-              <button className="vt-chat-send" onClick={() => handleSend()} disabled={!newMsg.trim()} aria-label="Enviar mensagem">
-                <SendIcon />
-              </button>
-            </div>
+            ) : (
+              <div className="vt-chat-input-bar">
+                <div className="vt-chat-input-wrap">
+                  <textarea
+                    ref={textareaRef}
+                    rows={1}
+                    placeholder="Mensagem…"
+                    value={newMsg}
+                    onChange={e => { setNewMsg(e.target.value); autoResize() }}
+                    onKeyDown={handleKeyDown}
+                  />
+                </div>
+                <button className="vt-chat-send" onClick={() => handleSend()} disabled={!newMsg.trim()} aria-label="Enviar mensagem">
+                  <SendIcon />
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <div className="vt-chat-empty">

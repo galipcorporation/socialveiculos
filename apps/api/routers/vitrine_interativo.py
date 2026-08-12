@@ -24,9 +24,23 @@ from schemas import (
     MeuVeiculoResponse, VeiculoDocumentoResponse,
 )
 from auth import decode_access_token
+from conversas_service import reabrir_conversa
 from routers.b2b import manager
 
 router = APIRouter(prefix="/v1/vitrine", tags=["Vitrine Interativa B2C"])
+
+# Conversa arquivada é somente-leitura: o veículo que a originou saiu do estoque.
+# Quem quer falar de outro carro abre o anúncio dele e inicia uma conversa nova —
+# é isso que mantém "um chat = um veículo" e a gestão do vendedor por carro.
+_ERRO_ARQUIVADA = (
+    "Esta conversa foi arquivada porque o veículo não está mais disponível. "
+    "Para falar sobre outro veículo, inicie um novo contato pelo anúncio dele."
+)
+
+
+def _conversa_editavel(conversa: Conversa) -> None:
+    if conversa.arquivada_em is not None or conversa.ativa is False:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_ERRO_ARQUIVADA)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -151,8 +165,8 @@ async def listar_conversas_cliente(
     loja_ids = {c.loja_id for c in conversas}
     veiculo_ids = {c.veiculo_id for c in conversas if c.veiculo_id}
 
-    lojas_res = await db.execute(select(Loja.id, Loja.nome).where(Loja.id.in_(loja_ids)))
-    nomes_loja = {lid: nome for lid, nome in lojas_res.all()}
+    lojas_res = await db.execute(select(Loja.id, Loja.nome, Loja.slug).where(Loja.id.in_(loja_ids)))
+    dados_loja = {lid: (nome, slug) for lid, nome, slug in lojas_res.all()}
 
     veiculos_por_id: dict[str, Veiculo] = {}
     if veiculo_ids:
@@ -199,13 +213,17 @@ async def listar_conversas_cliente(
                 id=c.id,
                 tipo=c.tipo,
                 loja_id=c.loja_id,
-                loja_nome=nomes_loja.get(c.loja_id, "Loja Parceira"),
+                loja_nome=dados_loja.get(c.loja_id, ("Loja Parceira", None))[0],
+                loja_slug=dados_loja.get(c.loja_id, (None, None))[1],
                 cliente_id=c.cliente_id,
                 cliente_nome=current_user.nome,
                 veiculo_id=c.veiculo_id,
                 veiculo_modelo=veiculo.modelo if veiculo else None,
                 veiculo_marca=veiculo.marca if veiculo else None,
+                veiculo_status=veiculo.status.value if veiculo and veiculo.status else None,
                 ativa=c.ativa,
+                arquivada_em=c.arquivada_em,
+                motivo_arquivo=c.motivo_arquivo,
                 created_at=c.created_at,
                 updated_at=c.updated_at,
                 ultima_mensagem=last_msg[0] if last_msg else None,
@@ -290,11 +308,16 @@ async def listar_conversas_b2c_loja(
         response_data.append(ConversaB2CResponse(
             id=c.id, tipo=c.tipo,
             loja_id=c.loja_id, loja_nome=ctx.loja.nome if ctx.loja else "",
+            loja_slug=ctx.loja.slug if ctx.loja else None,
             cliente_id=c.cliente_id, cliente_nome=nomes_cliente.get(c.cliente_id, "Cliente"),
             veiculo_id=c.veiculo_id,
             veiculo_marca=veiculo.marca if veiculo else None,
             veiculo_modelo=veiculo.modelo if veiculo else None,
-            ativa=c.ativa, created_at=c.created_at, updated_at=c.updated_at,
+            veiculo_status=veiculo.status.value if veiculo and veiculo.status else None,
+            ativa=c.ativa,
+            arquivada_em=c.arquivada_em,
+            motivo_arquivo=c.motivo_arquivo,
+            created_at=c.created_at, updated_at=c.updated_at,
             ultima_mensagem=last_msg[0] if last_msg else None,
             ultima_mensagem_data=last_msg[1] if last_msg else None,
             mensagens_nao_lidas=unread_por_conversa.get(c.id, 0)
@@ -338,8 +361,9 @@ async def listar_mensagens_b2c_loja(
         MensagemB2CResponse(
             id=m.id, conversa_id=m.conversa_id,
             autor_id=m.autor_id, conteudo=m.conteudo,
-            autor_tipo="cliente" if m.autor_id == conv.cliente_id else "loja",
-            lida=m.lida, created_at=m.created_at,
+            autor_nome="Sistema" if m.sistema else None,
+            autor_tipo="sistema" if m.sistema else ("cliente" if m.autor_id == conv.cliente_id else "loja"),
+            lida=m.lida, sistema=bool(m.sistema), created_at=m.created_at,
         )
         for m in mensagens
     ]
@@ -367,6 +391,8 @@ async def enviar_mensagem_b2c_loja(
     conversa = conv_res.scalar_one_or_none()
     if not conversa:
         raise HTTPException(status_code=404, detail="Conversa não encontrada ou sem acesso.")
+
+    _conversa_editavel(conversa)
 
     conteudo = payload.get("conteudo")
     if not conteudo:
@@ -460,6 +486,11 @@ async def iniciar_conversa_b2c(
         db.add(conversa)
         await db.flush() # Gerar ID da conversa
         nova_conversa_criada = True
+    elif conversa.arquivada_em is not None or not conversa.ativa:
+        # O veículo voltou a ficar disponível (reserva desfeita, venda cancelada):
+        # a mesma conversa volta à vida em vez de nascer uma duplicata do par
+        # cliente+veículo. A saudação NÃO é reenviada (ver B104).
+        reabrir_conversa(conversa)
 
     # 3. Adicionar mensagem inicial — SÓ quando a conversa acabou de nascer.
     # Reabrir o chat de um veículo já negociado ("Conversar" de novo) não pode
@@ -574,12 +605,16 @@ async def iniciar_conversa_b2c(
         tipo=conversa.tipo,
         loja_id=conversa.loja_id,
         loja_nome=loja.nome if loja else "Loja Parceira",
+        loja_slug=loja.slug if loja else None,
         cliente_id=conversa.cliente_id,
         cliente_nome=current_user.nome,
         veiculo_id=conversa.veiculo_id,
         veiculo_modelo=veiculo.modelo,
         veiculo_marca=veiculo.marca,
+        veiculo_status=veiculo.status.value if veiculo.status else None,
         ativa=conversa.ativa,
+        arquivada_em=conversa.arquivada_em,
+        motivo_arquivo=conversa.motivo_arquivo,
         created_at=conversa.created_at,
         updated_at=conversa.updated_at,
         ultima_mensagem=ultima_msg.conteudo if ultima_msg else None,
@@ -627,7 +662,9 @@ async def listar_mensagens_conversa(
     for m in mensagens:
         # Determinar nome do autor
         autor_nome = "Você"
-        if m.autor_id != current_user.id:
+        if m.sistema:
+            autor_nome = "Sistema"
+        elif m.autor_id != current_user.id:
             autor_stmt = select(Usuario).where(Usuario.id == m.autor_id)
             autor_res = await db.execute(autor_stmt)
             autor = autor_res.scalar_one_or_none()
@@ -639,9 +676,10 @@ async def listar_mensagens_conversa(
                 conversa_id=m.conversa_id,
                 autor_id=m.autor_id,
                 autor_nome=autor_nome,
-                autor_tipo="cliente" if m.autor_id == current_user.id else "loja",
+                autor_tipo="sistema" if m.sistema else ("cliente" if m.autor_id == current_user.id else "loja"),
                 conteudo=m.conteudo,
                 lida=m.lida,
+                sistema=bool(m.sistema),
                 created_at=m.created_at
             )
         )
@@ -668,6 +706,8 @@ async def enviar_mensagem_conversa(
     conversa = c_res.scalar_one_or_none()
     if not conversa:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversa não encontrada.")
+
+    _conversa_editavel(conversa)
 
     nova_msg = Mensagem(
         conversa_id=id,
@@ -742,7 +782,11 @@ async def chat_websocket_b2c_endpoint(websocket: WebSocket, token: Optional[str]
                     c_res = await db.execute(c_stmt)
                     conversa = c_res.scalar_one_or_none()
 
-                    if conversa:
+                    # Conversa arquivada (veículo saiu) é somente-leitura também no
+                    # socket — sem isso o REST bloqueia e o WS continua aceitando.
+                    if conversa and (conversa.arquivada_em is not None or conversa.ativa is False):
+                        await websocket.send_json({"erro": _ERRO_ARQUIVADA, "conversa_id": conversa_id})
+                    elif conversa:
                         # Adicionar mensagem
                         nova_msg = Mensagem(
                             conversa_id=conversa_id,

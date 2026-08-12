@@ -131,19 +131,25 @@ interface ConversaB2CDTO {
   id: string
   loja_id?: string | null
   loja_nome?: string | null
+  loja_slug?: string | null
   veiculo_marca?: string | null
   veiculo_modelo?: string | null
   ultima_mensagem?: string | null
   ultima_mensagem_data?: string | null
   mensagens_nao_lidas?: number
+  // Arquivamento por saída do veículo. Opcionais: a API pode ser a antiga (B111).
+  ativa?: boolean
+  arquivada_em?: string | null
+  motivo_arquivo?: string | null
 }
 interface MensagemB2CDTO {
   id: string
   conversa_id: string
   autor_id?: string | null
-  autor_tipo: 'loja' | 'cliente'
+  autor_tipo: 'loja' | 'cliente' | 'sistema'
   conteudo: string
   lida: boolean
+  sistema?: boolean
   created_at: string
 }
 
@@ -191,11 +197,14 @@ function mapConversa(c: ConversaB2CDTO): ConversaVitrine {
     id: c.id,
     loja_id: c.loja_id ?? '',
     loja_nome: c.loja_nome ?? 'Loja',
+    loja_slug: c.loja_slug ?? undefined,
     loja_verificada: false,
     veiculo_interesse: veiculo,
     ultima_mensagem: c.ultima_mensagem ?? '',
     ultima_mensagem_em: c.ultima_mensagem_data ?? new Date(0).toISOString(),
     nao_lidas: c.mensagens_nao_lidas ?? 0,
+    arquivada: !!c.arquivada_em || c.ativa === false,
+    motivo_arquivo: c.motivo_arquivo ?? null,
   }
 }
 
@@ -207,6 +216,7 @@ function mapMensagem(m: MensagemB2CDTO): Mensagem {
     texto: m.conteudo,
     created_at: m.created_at,
     lida: m.lida,
+    sistema: m.sistema ?? m.autor_tipo === 'sistema',
   }
 }
 

@@ -4857,6 +4857,35 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .gc-conv-lead-hot { font-size: 11px; font-weight: 700; color: #ef4444; }
 .gc-conv-lead-cold { font-size: 11px; font-weight: 700; color: var(--sv-text-muted); }
 
+/* Chat B2C é um por veículo — o carro é o assunto e aparece no item da lista. */
+.gc-conv-veiculo { font-size: 11px; color: var(--sv-primary); font-weight: 600; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Conversa arquivada: o veículo saiu do estoque, o histórico continua consultável. */
+.gc-conv-item.arquivada .gc-conv-avatar { opacity: 0.5; }
+.gc-conv-item.arquivada .gc-conv-name,
+.gc-conv-item.arquivada .gc-conv-preview { color: var(--sv-text-muted); }
+.gc-conv-arquivada-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--sv-text-muted);
+  background: var(--sv-surface-dim);
+  border: 1px solid var(--sv-border);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+.gc-conv-group {
+  padding: 14px 16px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sv-text-muted);
+  border-bottom: 1px solid var(--sv-border);
+}
+.gc-chat-head-veiculo { font-size: 12px; font-weight: 600; color: var(--sv-primary); margin-left: 6px; }
+
 /* Chat area */
 .gc-chat-area {
   flex: 1;
@@ -5029,6 +5058,43 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   background: var(--sv-surface);
   flex-shrink: 0;
 }
+
+/* Aviso do sistema no corpo do chat (veículo vendido/reservado/reaberto). */
+.gc-msg-sistema {
+  align-self: center;
+  max-width: 80%;
+  margin: 10px auto;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--sv-surface-dim);
+  border: 1px solid var(--sv-border);
+  color: var(--sv-text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* Substitui o campo de resposta quando a conversa está arquivada. */
+.gc-chat-arquivada {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--sv-border);
+  background: var(--sv-surface);
+  flex-shrink: 0;
+}
+.gc-chat-arquivada > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.gc-chat-arquivada strong { font-size: 13px; color: var(--sv-text); }
+.gc-chat-arquivada span { font-size: 12px; color: var(--sv-text-dim); }
+.gc-chat-arquivada .btn { flex-shrink: 0; white-space: nowrap; }
 
 .gc-chat-input-wrap {
   flex: 1;

@@ -30,8 +30,14 @@ function corStatusNegociacao(status: string, colors: any): string {
   return colors.warning
 }
 
+const MOTIVO_ARQUIVO_LABEL: Record<string, string> = {
+  vendido: 'Veículo vendido',
+  reservado: 'Veículo reservado',
+  indisponivel: 'Veículo fora do anúncio',
+}
+
 export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
-  const { id, nome, tipo, veiculoInteresse, temPropostaVinculada } = route.params
+  const { id, nome, tipo, veiculoInteresse, temPropostaVinculada, arquivada, motivoArquivo } = route.params
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
@@ -99,7 +105,7 @@ export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
 
   const enviar = () => {
     const t = texto.trim()
-    if (!t) return
+    if (!t || arquivada) return
     setTexto('')
     enviarMut.mutate(t)
   }
@@ -180,7 +186,30 @@ export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
           />
         )}
 
-        {/* Composer */}
+        {/* Conversa arquivada: o veículo saiu do estoque e o chat vira histórico.
+            Oferecer outro carro é conversa nova, aberta pelo lead no CRM. */}
+        {arquivada ? (
+          <View
+            style={[
+              styles.arquivada,
+              {
+                backgroundColor: colors.surface,
+                borderTopColor: colors.border,
+                paddingBottom: insets.bottom + spacing.sm,
+              },
+            ]}
+          >
+            <Ionicons name="archive-outline" size={18} color={colors.textMuted} />
+            <View style={{ flex: 1 }}>
+              <Txt variant="bodySemibold">
+                {MOTIVO_ARQUIVO_LABEL[motivoArquivo ?? ''] ?? 'Conversa arquivada'}
+              </Txt>
+              <Txt variant="caption" color="textDim">
+                Só leitura. Para oferecer outro veículo, retome o cliente pelo CRM.
+              </Txt>
+            </View>
+          </View>
+        ) : (
         <View
           style={[
             styles.composer,
@@ -216,6 +245,7 @@ export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
             <Ionicons name="send" size={18} color={texto.trim() ? colors.onPrimary : colors.textMuted} />
           </Pressable>
         </View>
+        )}
       </KeyboardAvoidingView>
     </Screen>
   )
@@ -224,6 +254,18 @@ export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
 const Bolha = React.memo(function Bolha({ mensagem }: { mensagem: Mensagem }) {
   const { colors, dark } = useTheme()
   const minha = mensagem.autor === 'loja'
+
+  // Aviso do sistema (veículo vendido/reservado): centralizado, sem dono.
+  if (mensagem.sistema) {
+    return (
+      <View style={[styles.sistema, { backgroundColor: colors.overlay, borderColor: colors.border }]}>
+        <Txt variant="caption" color="textDim" style={{ textAlign: 'center' }}>
+          {mensagem.texto}
+        </Txt>
+      </View>
+    )
+  }
+
   return (
     <View
       style={[
@@ -293,6 +335,23 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
+  },
+  sistema: {
+    alignSelf: 'center',
+    maxWidth: '90%',
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    marginVertical: spacing.xs,
+  },
+  arquivada: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
   },
   composer: {
     flexDirection: 'row',

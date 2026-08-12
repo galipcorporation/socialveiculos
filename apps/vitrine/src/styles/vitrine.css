@@ -1268,6 +1268,20 @@ a {
 }
 .vt-conv-item:hover { background: var(--vt-surface-hover); }
 .vt-conv-item.active { background: var(--vt-primary-light); }
+/* Conversa de veículo que saiu do estoque: legível, mas sem competir com as vivas. */
+.vt-conv-item.arquivada .vt-conv-avatar,
+.vt-conv-item.arquivada .vt-conv-preview { opacity: .55; }
+.vt-conv-item.arquivada .vt-conv-name { color: var(--vt-text-dim); }
+
+.vt-conv-group {
+  padding: 14px 16px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--vt-text-muted);
+  border-bottom: 1px solid var(--vt-border);
+}
 
 .vt-conv-avatar {
   width: 46px;
@@ -1482,6 +1496,43 @@ a {
   gap: 10px;
   flex-shrink: 0;
 }
+
+/* Aviso do sistema no corpo do chat (veículo vendido/reservado/reaberto). */
+.vt-msg-sistema {
+  align-self: center;
+  max-width: 88%;
+  margin: 10px 0;
+  padding: 8px 14px;
+  border-radius: var(--vt-radius-full);
+  background: var(--vt-surface-hover);
+  border: 1px solid var(--vt-border);
+  color: var(--vt-text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* Barra que substitui o campo de digitação numa conversa arquivada. */
+.vt-chat-arquivada {
+  padding: 12px 20px;
+  background: var(--vt-surface);
+  border-top: 1px solid var(--vt-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.vt-chat-arquivada-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.vt-chat-arquivada-txt strong { font-size: 13px; font-weight: 700; }
+.vt-chat-arquivada-txt span { font-size: 12px; color: var(--vt-text-dim); }
+.vt-chat-arquivada .vt-btn { flex-shrink: 0; white-space: nowrap; }
 .vt-chat-input-wrap {
   flex: 1;
   background: var(--vt-surface-hover);
