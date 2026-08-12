@@ -79,7 +79,14 @@ class ApiClient {
     this.baseUrl = baseUrl
   }
 
-  private async request<T>(path: string, options: FetchOptions = {}): Promise<T> {
+  /**
+   * Executa a requisição já autenticada (Bearer + X-Loja-Id) e devolve a
+   * `Response` crua — sem interpretar o corpo. Endpoints que não respondem JSON
+   * (ex.: o HTML do contrato) precisam do mesmo cabeçalho e do mesmo retry de
+   * 401 que os demais, então o transporte mora aqui e a leitura do corpo fica
+   * com quem chamou.
+   */
+  private async fetchComAuth(path: string, options: FetchOptions = {}): Promise<Response> {
     const { params, ...fetchOptions } = options
 
     let url = `${this.baseUrl}${path}`
@@ -115,34 +122,42 @@ class ApiClient {
         const novoToken = await renovarToken()
 
         headers['Authorization'] = `Bearer ${novoToken}`
-        const retryRes = await fetch(url, { ...fetchOptions, headers })
-
-        if (!retryRes.ok) {
-          const error = await retryRes.json().catch(() => ({}))
-          throw new ApiError(friendlyHttpMessage(retryRes.status, error.error), {
-            status: retryRes.status,
-            path,
-            timestamp: new Date().toISOString(),
-          })
-        }
-
-        return retryRes.status === 204 ? (undefined as T) : retryRes.json()
+        return fetch(url, { ...fetchOptions, headers })
       }
     }
 
+    return response
+  }
+
+  private async erroDaResposta(response: Response, path: string): Promise<ApiError> {
+    const body = await response.json().catch(() => ({}))
+    return new ApiError(friendlyHttpMessage(response.status, body.error ?? body.detail), {
+      status: response.status,
+      path,
+      timestamp: new Date().toISOString(),
+      requestId: response.headers.get('x-request-id') ?? undefined,
+    })
+  }
+
+  private async request<T>(path: string, options: FetchOptions = {}): Promise<T> {
+    const response = await this.fetchComAuth(path, options)
+
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}))
-      const ts = new Date().toISOString()
-      const requestId = response.headers.get('x-request-id') ?? undefined
-      throw new ApiError(friendlyHttpMessage(response.status, body.error ?? body.detail), {
-        status: response.status,
-        path,
-        timestamp: ts,
-        requestId,
-      })
+      throw await this.erroDaResposta(response, path)
     }
 
     return response.status === 204 ? (undefined as T) : response.json()
+  }
+
+  /** GET que devolve o corpo como texto (HTML, CSV…) em vez de JSON. */
+  async getText(path: string, params?: QueryParams): Promise<string> {
+    const response = await this.fetchComAuth(path, { method: 'GET', params })
+
+    if (!response.ok) {
+      throw await this.erroDaResposta(response, path)
+    }
+
+    return response.text()
   }
 
   get<T>(path: string, params?: QueryParams): Promise<T> {

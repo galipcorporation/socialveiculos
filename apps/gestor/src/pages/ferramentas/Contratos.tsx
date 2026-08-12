@@ -71,6 +71,7 @@ interface CampoExtra {
   chave: string
   label: string
   tipo?: string
+  /** Valor usual do campo — entrega o contrato redigido em vez de vazio. */
   padrao?: string
 }
 
@@ -1004,6 +1005,20 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
 
   const templateSelecionado = templates.find(t => t.id === templateId)
 
+  // Trocar de modelo troca o conjunto de campos: parte dos `padrao` do novo
+  // modelo e preserva o que já estava preenchido nas chaves em comum.
+  const escolherTemplate = (novoId: string) => {
+    setTemplateId(novoId)
+    const novo = templates.find(t => t.id === novoId)
+    setValoresExtras(prev => {
+      const proximo: Record<string, string> = {}
+      for (const campo of novo?.campos_extras || []) {
+        proximo[campo.chave] = prev[campo.chave] ?? campo.padrao ?? ''
+      }
+      return proximo
+    })
+  }
+
   // Busca de clientes e veículos
   const [clientes, setClientes] = useState<ClienteItem[]>([])
   const [veiculos, setVeiculos] = useState<VeiculoItem[]>([])
@@ -1040,6 +1055,11 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
   const handleSubmit = async () => {
     setSaving(true)
     try {
+      // Modelo e campos vão nos dois casos: até o PATCH aceitá-los, um contrato
+      // criado sem modelo (todos os do app) ficava preso ao layout legado.
+      const preenchidos = Object.fromEntries(
+        Object.entries(valoresExtras).filter(([, v]) => v.trim() !== ''),
+      )
       const payload = {
         tipo,
         cliente_id: clienteId || null,
@@ -1049,7 +1069,7 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
         parcelas: parcelas ? parseInt(parcelas) : null,
         observacoes: observacoes || null,
         template_id: templateId || null,
-        dados_extras: Object.keys(valoresExtras).length > 0 ? valoresExtras : null,
+        dados_extras: Object.keys(preenchidos).length > 0 ? preenchidos : null,
       }
       if (isEditing) {
         await api.patch(`/contratos/${contrato!.id}`, payload)
@@ -1085,10 +1105,11 @@ function NovoContratoModal({ contrato, onClose, onSaved }: { contrato?: Contrato
               </select>
             </div>
 
-            {/* Modelo */}
+            {/* Modelo — também na edição: é o que permite trocar o documento de
+                um contrato já criado (e adotar um modelo em quem nasceu sem). */}
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label>Modelo de Contrato</label>
-              <select value={templateId} onChange={e => { setTemplateId(e.target.value); setValoresExtras({}) }}>
+              <select value={templateId} onChange={e => escolherTemplate(e.target.value)}>
                 <option value="">Nenhum (usar layout padrão do sistema)</option>
                 {templates.map(t => (
                   <option key={t.id} value={t.id}>{t.nome}</option>

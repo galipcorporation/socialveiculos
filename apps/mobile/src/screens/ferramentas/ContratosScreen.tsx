@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { FlatList, Linking, Switch, View } from 'react-native'
+import { FlatList, Switch, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -13,8 +13,8 @@ import { clientesService, contratosService, veiculosService } from '../../servic
 import type { CampoExtraTemplate, ContratoInput, TemplateContrato } from '../../services/contratos'
 import { CATALOGO_VARIAVEIS, labelsDe } from '../../services/contratos'
 import { RichEditor } from '../../components/RichEditor'
-import type { Contrato, StatusContrato } from '../../services/types'
-import { STATUS_CONTRATO_LABEL } from '../../services/types'
+import type { Contrato, StatusContrato, TipoContrato } from '../../services/types'
+import { STATUS_CONTRATO_LABEL, TIPO_CONTRATO_LABEL } from '../../services/types'
 import { formatBRL, formatData, maskMoedaInput, parseMoedaInput } from '../../lib/format'
 import { extractErrorDetails } from '../../lib/api'
 import type { RootScreenProps } from '../../navigation/types'
@@ -105,7 +105,7 @@ export default function ContratosScreen({ route }: RootScreenProps<'Contratos'>)
 
       {aba === 'contratos' && <Fab icon="add" label="Contrato" onPress={() => setNovoAberto(true)} />}
       {selecionado && <DetalheSheet contrato={selecionado} onClose={() => setSelecionado(null)} />}
-      <NovoContratoSheet visible={novoAberto} onClose={() => setNovoAberto(false)} />
+      <ContratoFormSheet visible={novoAberto} onClose={() => setNovoAberto(false)} />
     </Screen>
   )
 }
@@ -114,10 +114,15 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
   const queryClient = useQueryClient()
   const toast = useToast()
   const navigation = useNavigation<any>()
-  const [abrindoPdf, setAbrindoPdf] = useState(false)
   const [statusSheet, setStatusSheet] = useState(false)
   const [confirmarCancelamento, setConfirmarCancelamento] = useState(false)
-  const [editarAberto, setEditarAberto] = useState(false)
+  const [editando, setEditando] = useState(false)
+
+  // Só para nomear o modelo aplicado; o formulário busca a lista por conta.
+  const templatesQ = useQuery({ queryKey: ['templates'], queryFn: () => contratosService.templates() })
+  const modeloNome = contrato.template_id
+    ? templatesQ.data?.find((t) => t.id === contrato.template_id)?.nome ?? 'Modelo removido'
+    : 'Layout padrão do sistema'
 
   const statusMut = useMutation({
     mutationFn: (s: StatusContrato) => contratosService.alterarStatus(contrato.id, s),
@@ -151,37 +156,31 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
     statusMut.mutate(s)
   }
 
-  const abrirPdf = async () => {
-    setAbrindoPdf(true)
-    try {
-      const url = await contratosService.pdfUrl(contrato.id)
-      const ok = await Linking.canOpenURL(url)
-      if (ok) await Linking.openURL(url)
-      else toast.show('info', 'PDF não disponível offline.')
-    } catch {
-      toast.show('info', 'PDF não disponível offline.')
-    } finally {
-      setAbrindoPdf(false)
-    }
+  // O documento abre dentro do app: a rota do contrato é autenticada e o
+  // navegador do celular, sem o token, só exibia o 401 da API.
+  const abrirDocumento = () => {
+    onClose()
+    navigation.navigate('ContratoDocumento', { contratoId: contrato.id, numero: contrato.numero })
   }
 
   return (
     <Sheet visible onClose={onClose} title={contrato.numero}>
       <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
         <Badge label={STATUS_CONTRATO_LABEL[contrato.status]} tone={TONE[contrato.status]} />
-        <Linha label="Tipo" valor={contrato.tipo === 'compra_venda' ? 'Compra e venda' : 'Compra'} />
+        <Linha label="Tipo" valor={TIPO_CONTRATO_LABEL[contrato.tipo]} />
         <Linha label="Veículo" valor={contrato.veiculo_nome ?? '—'} />
         <Linha label="Cliente" valor={contrato.cliente_nome ?? '—'} />
         <Linha label="Valor da venda" valor={formatBRL(contrato.valor_venda)} />
         {contrato.valor_entrada != null && <Linha label="Entrada" valor={formatBRL(contrato.valor_entrada)} />}
         {contrato.parcelas ? <Linha label="Parcelas" valor={`${contrato.parcelas}x`} /> : null}
+        <Linha label="Modelo" valor={modeloNome} />
         <Linha label="Criado em" valor={formatData(contrato.created_at)} />
 
         <SelectField label="Status" value={STATUS_CONTRATO_LABEL[contrato.status]} onPress={() => setStatusSheet(true)} icon="swap-horizontal-outline" containerStyle={{ marginTop: spacing.xs }} />
-        <Button title="Abrir PDF do contrato" icon="document-outline" loading={abrindoPdf} onPress={abrirPdf} full />
-        <Button title="Editar dados do contrato" variant="tonal" icon="create-outline" onPress={() => setEditarAberto(true)} full />
+        <Button title="Abrir documento do contrato" icon="document-outline" onPress={abrirDocumento} full />
+        <Button title="Editar contrato" variant="tonal" icon="create-outline" onPress={() => setEditando(true)} full />
         {contrato.tipo === 'compra_venda' && (
-          <Button title="Emitir NF-e deste contrato" variant="outline" icon="receipt-outline" onPress={() => { onClose(); navigation.navigate('NotasFiscais') }} full />
+          <Button title="Emitir NF-e deste contrato" variant="tonal" icon="receipt-outline" onPress={() => { onClose(); navigation.navigate('NotasFiscais') }} full />
         )}
       </View>
 
@@ -214,43 +213,52 @@ function DetalheSheet({ contrato, onClose }: { contrato: Contrato; onClose: () =
         </View>
       </Sheet>
 
-      <EditarContratoSheet visible={editarAberto} onClose={() => { setEditarAberto(false); onClose(); }} contrato={contrato} />
+      <ContratoFormSheet
+        visible={editando}
+        contrato={contrato}
+        onClose={() => setEditando(false)}
+        onSalvo={onClose}
+      />
     </Sheet>
   )
 }
 
-function EditarContratoSheet({ visible, onClose, contrato }: { visible: boolean; onClose: () => void; contrato: Contrato }) {
+/**
+ * Formulário de contrato — criação e edição.
+ *
+ * O modelo de contrato (e os campos personalizados dele) só existia no painel
+ * web: no celular todo contrato nascia sem `template_id` e saía no layout
+ * legado, ignorando os modelos que o lojista edita na aba "Modelos". Editar
+ * também não existia, então não havia como corrigir depois.
+ */
+function ContratoFormSheet({ visible, contrato, onClose, onSalvo }: {
+  visible: boolean
+  contrato?: Contrato
+  onClose: () => void
+  onSalvo?: () => void
+}) {
   const queryClient = useQueryClient()
   const toast = useToast()
-  const [tipo, setTipo] = useState<'compra_venda' | 'compra'>(contrato.tipo)
+  const editando = !!contrato
+  const [tipo, setTipo] = useState<TipoContrato>(contrato?.tipo ?? 'compra_venda')
+  // Guarda id + rótulo: o backend vincula pelo id, a tela mostra o nome. Antes
+  // só o nome era guardado e o contrato nascia sem veículo e sem cliente.
   const [veiculo, setVeiculo] = useState<{ id: string; nome: string } | null>(
-    contrato.veiculo_id && contrato.veiculo_nome ? { id: contrato.veiculo_id, nome: contrato.veiculo_nome } : null
+    contrato?.veiculo_id ? { id: contrato.veiculo_id, nome: contrato.veiculo_nome ?? 'Veículo' } : null,
   )
   const [cliente, setCliente] = useState<{ id: string; nome: string } | null>(
-    contrato.cliente_id && contrato.cliente_nome ? { id: contrato.cliente_id, nome: contrato.cliente_nome } : null
+    contrato?.cliente_id ? { id: contrato.cliente_id, nome: contrato.cliente_nome ?? 'Cliente' } : null,
   )
-  const [valor, setValor] = useState(contrato.valor_venda ? maskMoedaInput(String(Math.round(contrato.valor_venda * 100))) : '')
-  const [entrada, setEntrada] = useState(contrato.valor_entrada ? maskMoedaInput(String(Math.round(contrato.valor_entrada * 100))) : '')
-  const [parcelas, setParcelas] = useState(contrato.parcelas ? String(contrato.parcelas) : '')
-  const [obs, setObs] = useState(contrato.observacoes ?? '')
-  const [templateId, setTemplateId] = useState<string | undefined>(contrato.template_id)
-  const [dadosExtras, setDadosExtras] = useState<Record<string, string>>(contrato.dados_extras ?? {})
+  const [valor, setValor] = useState(contrato?.valor_venda ? maskMoedaInput(String(Math.round(contrato.valor_venda * 100))) : '')
+  const [entrada, setEntrada] = useState(contrato?.valor_entrada ? maskMoedaInput(String(Math.round(contrato.valor_entrada * 100))) : '')
+  const [parcelas, setParcelas] = useState(contrato?.parcelas ? String(contrato.parcelas) : '')
+  const [obs, setObs] = useState(contrato?.observacoes ?? '')
+  const [templateId, setTemplateId] = useState<string | null>(contrato?.template_id ?? null)
+  const [valoresExtras, setValoresExtras] = useState<Record<string, string>>(contrato?.dados_extras ?? {})
   const [salvando, setSalvando] = useState(false)
   const [veiculoSheet, setVeiculoSheet] = useState(false)
   const [clienteSheet, setClienteSheet] = useState(false)
-  const [templateSheet, setTemplateSheet] = useState(false)
-
-  useEffect(() => {
-    setTipo(contrato.tipo)
-    setVeiculo(contrato.veiculo_id && contrato.veiculo_nome ? { id: contrato.veiculo_id, nome: contrato.veiculo_nome } : null)
-    setCliente(contrato.cliente_id && contrato.cliente_nome ? { id: contrato.cliente_id, nome: contrato.cliente_nome } : null)
-    setValor(contrato.valor_venda ? maskMoedaInput(String(Math.round(contrato.valor_venda * 100))) : '')
-    setEntrada(contrato.valor_entrada ? maskMoedaInput(String(Math.round(contrato.valor_entrada * 100))) : '')
-    setParcelas(contrato.parcelas ? String(contrato.parcelas) : '')
-    setObs(contrato.observacoes ?? '')
-    setTemplateId(contrato.template_id)
-    setDadosExtras(contrato.dados_extras ?? {})
-  }, [contrato])
+  const [modeloSheet, setModeloSheet] = useState(false)
 
   const veiculosQ = useQuery({
     queryKey: ['veiculos', 'contratos'],
@@ -268,212 +276,23 @@ function EditarContratoSheet({ visible, onClose, contrato }: { visible: boolean;
     enabled: visible,
   })
 
-  const templateSelecionado = (templatesQ.data ?? []).find((t) => t.id === templateId)
+  const modelo = templatesQ.data?.find((t) => t.id === templateId)
 
-  const salvar = async () => {
-    if (!veiculo || !cliente) { toast.show('error', 'Escolha o veículo e o cliente.'); return }
-    setSalvando(true)
-    try {
-      const input: Partial<ContratoInput> = {
-        tipo,
-        veiculo_id: veiculo.id,
-        cliente_id: cliente.id,
-        valor_venda: parseMoedaInput(valor) || undefined,
-        valor_entrada: parseMoedaInput(entrada) || undefined,
-        parcelas: parseInt(parcelas.replace(/\D/g, ''), 10) || undefined,
-        observacoes: obs.trim() || undefined,
-        template_id: templateId || undefined,
-        dados_extras: Object.keys(dadosExtras).length > 0 ? dadosExtras : undefined,
+  // Trocar de modelo troca o conjunto de campos: começa pelos `padrao` do novo
+  // modelo para o contrato sair redigido, e preserva o que já estava preenchido
+  // nas chaves que os dois modelos têm em comum.
+  const escolherModelo = (novoId: string | null) => {
+    setTemplateId(novoId)
+    const novo = templatesQ.data?.find((t) => t.id === novoId)
+    setValoresExtras((prev) => {
+      const proximo: Record<string, string> = {}
+      for (const campo of novo?.camposExtras ?? []) {
+        proximo[campo.chave] = prev[campo.chave] ?? campo.padrao ?? ''
       }
-      await contratosService.atualizar(contrato.id, input)
-      await queryClient.invalidateQueries({ queryKey: ['contratos'] })
-      toast.show('success', 'Contrato atualizado.')
-      onClose()
-    } catch (err) {
-      toast.show('error', extractErrorDetails(err).message)
-    } finally {
-      setSalvando(false)
-    }
+      return proximo
+    })
+    setModeloSheet(false)
   }
-
-  return (
-    <Sheet visible={visible} onClose={onClose} title={`Editar contrato ${contrato.numero}`}>
-      <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
-        <SegmentedControl
-          options={[{ value: 'compra_venda', label: 'Compra e venda' }, { value: 'compra', label: 'Compra' }]}
-          selected={tipo}
-          onSelect={(v) => setTipo(v as 'compra_venda' | 'compra')}
-        />
-        <SelectField
-          label="Modelo de contrato"
-          value={templateSelecionado?.nome ?? (templateId ? 'Modelo personalizado' : 'Padrão do sistema')}
-          placeholder={templatesQ.isLoading ? 'Carregando…' : 'Usar modelo padrão'}
-          icon="document-text-outline"
-          onPress={() => setTemplateSheet(true)}
-        />
-        <SelectField
-          label="Veículo"
-          value={veiculo?.nome}
-          placeholder={veiculosQ.isLoading ? 'Carregando…' : 'Escolher do estoque'}
-          icon="car-sport-outline"
-          warning={!veiculo}
-          onPress={() => setVeiculoSheet(true)}
-        />
-        <SelectField
-          label="Cliente"
-          value={cliente?.nome}
-          placeholder={clientesQ.isLoading ? 'Carregando…' : 'Escolher cliente'}
-          icon="person-outline"
-          warning={!cliente}
-          onPress={() => setClienteSheet(true)}
-        />
-        <Input
-          label="Valor"
-          value={valor}
-          onChangeText={(t) => setValor(maskMoedaInput(t))}
-          keyboardType="numeric"
-          placeholder="0,00"
-          icon="cash-outline"
-          warning={!valor || valor === '0,00'}
-        />
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <Input
-            label="Entrada"
-            value={entrada}
-            onChangeText={(t) => setEntrada(maskMoedaInput(t))}
-            keyboardType="numeric"
-            placeholder="0,00"
-            warning={!entrada || entrada === '0,00'}
-            containerStyle={{ flex: 1 }}
-          />
-          <Input
-            label="Parcelas"
-            value={parcelas}
-            onChangeText={(t) => setParcelas(t.replace(/\D/g, ''))}
-            keyboardType="number-pad"
-            placeholder="48"
-            warning={!parcelas || parcelas === '0'}
-            containerStyle={{ width: 110 }}
-          />
-        </View>
-
-        {templateSelecionado && templateSelecionado.camposExtras.length > 0 && (
-          <View style={{ gap: spacing.xs, marginTop: spacing.xs, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' }}>
-            <Txt variant="captionMedium" color="textDim">Variáveis do modelo "{templateSelecionado.nome}"</Txt>
-            {templateSelecionado.camposExtras.map((campo) => {
-              const val = dadosExtras[campo.chave] ?? ''
-              return (
-                <Input
-                  key={campo.chave}
-                  label={campo.label}
-                  value={val}
-                  onChangeText={(text) => setDadosExtras((prev) => ({ ...prev, [campo.chave]: text }))}
-                  placeholder={`Preencher ${campo.label.toLowerCase()}…`}
-                  warning={!val.trim()}
-                />
-              )
-            })}
-          </View>
-        )}
-
-        <Input
-          label="Observações"
-          value={obs}
-          onChangeText={setObs}
-          multiline
-          placeholder="Observações do contrato…"
-          warning={!obs.trim()}
-          style={{ minHeight: 56, textAlignVertical: 'top' }}
-        />
-        <Button title="Salvar alterações" icon="save-outline" loading={salvando} onPress={salvar} full />
-      </View>
-
-      <OptionSheet
-        visible={templateSheet}
-        onClose={() => setTemplateSheet(false)}
-        title="Modelo de contrato"
-        options={[
-          { value: '', label: 'Nenhum (usar padrão do sistema)' },
-          ...(templatesQ.data ?? []).map((t) => ({
-            value: t.id,
-            label: t.nome,
-            sublabel: t.camposExtras.length > 0 ? `${t.camposExtras.length} campo(s) personalizado(s)` : 'Sem campos personalizados',
-          })),
-        ]}
-        onSelect={(id) => {
-          setTemplateId(id || undefined)
-        }}
-      />
-
-      <OptionSheet
-        visible={veiculoSheet}
-        onClose={() => setVeiculoSheet(false)}
-        title="Veículo do estoque"
-        options={(veiculosQ.data ?? []).map((v) => ({
-          value: v.id,
-          label: `${v.marca} ${v.modelo}${v.versao ? ` ${v.versao}` : ''}`,
-          sublabel: [v.placa, formatBRL(v.preco_venda)].filter(Boolean).join(' · '),
-        }))}
-        onSelect={(id) => {
-          const v = (veiculosQ.data ?? []).find((x) => x.id === id)
-          if (!v) return
-          setVeiculo({ id: v.id, nome: `${v.marca} ${v.modelo}${v.versao ? ` ${v.versao}` : ''}` })
-          if (!valor && v.preco_venda) setValor(maskMoedaInput(String(Math.round(v.preco_venda * 100))))
-        }}
-      />
-
-      <OptionSheet
-        visible={clienteSheet}
-        onClose={() => setClienteSheet(false)}
-        title="Cliente"
-        options={(clientesQ.data ?? []).map((c) => ({
-          value: c.id,
-          label: c.nome,
-          sublabel: [c.telefone, c.cpf].filter(Boolean).join(' · '),
-        }))}
-        onSelect={(id) => {
-          const c = (clientesQ.data ?? []).find((x) => x.id === id)
-          if (c) setCliente({ id: c.id, nome: c.nome })
-        }}
-      />
-    </Sheet>
-  )
-}
-
-function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const queryClient = useQueryClient()
-  const toast = useToast()
-  const [tipo, setTipo] = useState<'compra_venda' | 'compra'>('compra_venda')
-  const [veiculo, setVeiculo] = useState<{ id: string; nome: string } | null>(null)
-  const [cliente, setCliente] = useState<{ id: string; nome: string } | null>(null)
-  const [valor, setValor] = useState('')
-  const [entrada, setEntrada] = useState('')
-  const [parcelas, setParcelas] = useState('')
-  const [obs, setObs] = useState('')
-  const [templateId, setTemplateId] = useState<string | undefined>(undefined)
-  const [dadosExtras, setDadosExtras] = useState<Record<string, string>>({})
-  const [salvando, setSalvando] = useState(false)
-  const [veiculoSheet, setVeiculoSheet] = useState(false)
-  const [clienteSheet, setClienteSheet] = useState(false)
-  const [templateSheet, setTemplateSheet] = useState(false)
-
-  const veiculosQ = useQuery({
-    queryKey: ['veiculos', 'contratos'],
-    queryFn: () => veiculosService.listar({ status: 'disponivel' }),
-    enabled: visible,
-  })
-  const clientesQ = useQuery({
-    queryKey: ['clientes', 'contratos'],
-    queryFn: () => clientesService.listar(),
-    enabled: visible,
-  })
-  const templatesQ = useQuery({
-    queryKey: ['templates'],
-    queryFn: () => contratosService.templates(),
-    enabled: visible,
-  })
-
-  const templateSelecionado = (templatesQ.data ?? []).find((t) => t.id === templateId)
 
   const salvar = async () => {
     if (!veiculo || !cliente) { toast.show('error', 'Escolha o veículo e o cliente.'); return }
@@ -487,15 +306,28 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
         valor_entrada: parseMoedaInput(entrada) || undefined,
         parcelas: parseInt(parcelas.replace(/\D/g, ''), 10) || undefined,
         observacoes: obs.trim() || undefined,
-        template_id: templateId || undefined,
-        dados_extras: Object.keys(dadosExtras).length > 0 ? dadosExtras : undefined,
+        template_id: templateId,
+        // Campo em branco não vai: o modelo cai no `padrao` dele no lugar.
+        dados_extras: Object.fromEntries(
+          Object.entries(valoresExtras).filter(([, v]) => v.trim() !== ''),
+        ),
       }
-      await contratosService.criar(input)
+      if (editando) {
+        await contratosService.atualizar(contrato.id, input)
+      } else {
+        await contratosService.criar(input)
+      }
       await queryClient.invalidateQueries({ queryKey: ['contratos'] })
-      toast.show('success', 'Contrato criado.')
-      setVeiculo(null); setCliente(null); setValor(''); setEntrada(''); setParcelas(''); setObs(''); setTemplateId(undefined); setDadosExtras({})
+      toast.show('success', editando ? 'Contrato atualizado.' : 'Contrato criado.')
+      if (!editando) {
+        setVeiculo(null); setCliente(null); setValor(''); setEntrada(''); setParcelas(''); setObs('')
+        setTemplateId(null); setValoresExtras({})
+      }
       onClose()
+      onSalvo?.()
     } catch (err) {
+      // Sem este catch, falha de rede/422 fechava o sheet sem aviso e o usuário
+      // achava que o contrato tinha sido criado (padrão nº 18).
       toast.show('error', extractErrorDetails(err).message)
     } finally {
       setSalvando(false)
@@ -503,26 +335,25 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
   }
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Novo contrato">
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title={editando ? `Editar ${contrato.numero}` : 'Novo contrato'}
+    >
       <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
         <SegmentedControl
-          options={[{ value: 'compra_venda', label: 'Compra e venda' }, { value: 'compra', label: 'Compra' }]}
+          options={(Object.keys(TIPO_CONTRATO_LABEL) as TipoContrato[]).map((t) => ({
+            value: t,
+            label: TIPO_CONTRATO_LABEL[t],
+          }))}
           selected={tipo}
-          onSelect={(v) => setTipo(v as 'compra_venda' | 'compra')}
-        />
-        <SelectField
-          label="Modelo de contrato"
-          value={templateSelecionado?.nome ?? (templateId ? 'Modelo personalizado' : 'Padrão do sistema')}
-          placeholder={templatesQ.isLoading ? 'Carregando…' : 'Usar modelo padrão'}
-          icon="document-text-outline"
-          onPress={() => setTemplateSheet(true)}
+          onSelect={(v) => setTipo(v as TipoContrato)}
         />
         <SelectField
           label="Veículo"
           value={veiculo?.nome}
           placeholder={veiculosQ.isLoading ? 'Carregando…' : 'Escolher do estoque'}
           icon="car-sport-outline"
-          warning={!veiculo}
           onPress={() => setVeiculoSheet(true)}
         />
         <SelectField
@@ -530,86 +361,46 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
           value={cliente?.nome}
           placeholder={clientesQ.isLoading ? 'Carregando…' : 'Escolher cliente'}
           icon="person-outline"
-          warning={!cliente}
           onPress={() => setClienteSheet(true)}
         />
-        <Input
-          label="Valor"
-          value={valor}
-          onChangeText={(t) => setValor(maskMoedaInput(t))}
-          keyboardType="numeric"
-          placeholder="0,00"
-          icon="cash-outline"
-          warning={!valor || valor === '0,00'}
-        />
+        <Input label="Valor" value={valor} onChangeText={(t) => setValor(maskMoedaInput(t))} keyboardType="numeric" placeholder="0,00" icon="cash-outline" />
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <Input
-            label="Entrada"
-            value={entrada}
-            onChangeText={(t) => setEntrada(maskMoedaInput(t))}
-            keyboardType="numeric"
-            placeholder="0,00"
-            warning={!entrada || entrada === '0,00'}
-            containerStyle={{ flex: 1 }}
-          />
-          <Input
-            label="Parcelas"
-            value={parcelas}
-            onChangeText={(t) => setParcelas(t.replace(/\D/g, ''))}
-            keyboardType="number-pad"
-            placeholder="48"
-            warning={!parcelas || parcelas === '0'}
-            containerStyle={{ width: 110 }}
-          />
+          <Input label="Entrada" value={entrada} onChangeText={(t) => setEntrada(maskMoedaInput(t))} keyboardType="numeric" placeholder="0,00" containerStyle={{ flex: 1 }} />
+          <Input label="Parcelas" value={parcelas} onChangeText={(t) => setParcelas(t.replace(/\D/g, ''))} keyboardType="number-pad" placeholder="48" containerStyle={{ width: 90 }} />
         </View>
+        <Input label="Observações" value={obs} onChangeText={setObs} multiline style={{ minHeight: 56, textAlignVertical: 'top' }} />
 
-        {templateSelecionado && templateSelecionado.camposExtras.length > 0 && (
-          <View style={{ gap: spacing.xs, marginTop: spacing.xs, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' }}>
-            <Txt variant="captionMedium" color="textDim">Variáveis do modelo "{templateSelecionado.nome}"</Txt>
-            {templateSelecionado.camposExtras.map((campo) => {
-              const val = dadosExtras[campo.chave] ?? ''
-              return (
-                <Input
-                  key={campo.chave}
-                  label={campo.label}
-                  value={val}
-                  onChangeText={(text) => setDadosExtras((prev) => ({ ...prev, [campo.chave]: text }))}
-                  placeholder={`Preencher ${campo.label.toLowerCase()}…`}
-                  warning={!val.trim()}
-                />
-              )
-            })}
+        <SelectField
+          label="Modelo do documento"
+          value={modelo?.nome}
+          placeholder={templatesQ.isLoading ? 'Carregando…' : 'Layout padrão do sistema'}
+          icon="document-text-outline"
+          onPress={() => setModeloSheet(true)}
+        />
+        {modelo && modelo.camposExtras.length > 0 && (
+          <View style={{ gap: spacing.sm }}>
+            <Txt variant="captionMedium" color="textDim">Campos do modelo “{modelo.nome}”</Txt>
+            {modelo.camposExtras.map((campo) => (
+              <Input
+                key={campo.chave}
+                label={campo.label}
+                value={valoresExtras[campo.chave] ?? ''}
+                onChangeText={(t) => setValoresExtras((prev) => ({ ...prev, [campo.chave]: t }))}
+                placeholder={campo.padrao ? `Padrão: ${campo.padrao}` : undefined}
+                keyboardType={campo.tipo === 'numero' ? 'numeric' : 'default'}
+              />
+            ))}
           </View>
         )}
 
-        <Input
-          label="Observações"
-          value={obs}
-          onChangeText={setObs}
-          multiline
-          placeholder="Observações do contrato…"
-          warning={!obs.trim()}
-          style={{ minHeight: 56, textAlignVertical: 'top' }}
+        <Button
+          title={editando ? 'Salvar alterações' : 'Criar contrato'}
+          icon="checkmark"
+          loading={salvando}
+          onPress={salvar}
+          full
         />
-        <Button title="Criar contrato" icon="checkmark" loading={salvando} onPress={salvar} full />
       </View>
-
-      <OptionSheet
-        visible={templateSheet}
-        onClose={() => setTemplateSheet(false)}
-        title="Modelo de contrato"
-        options={[
-          { value: '', label: 'Nenhum (usar padrão do sistema)' },
-          ...(templatesQ.data ?? []).map((t) => ({
-            value: t.id,
-            label: t.nome,
-            sublabel: t.camposExtras.length > 0 ? `${t.camposExtras.length} campo(s) personalizado(s)` : 'Sem campos personalizados',
-          })),
-        ]}
-        onSelect={(id) => {
-          setTemplateId(id || undefined)
-        }}
-      />
 
       <OptionSheet
         visible={veiculoSheet}
@@ -641,6 +432,24 @@ function NovoContratoSheet({ visible, onClose }: { visible: boolean; onClose: ()
           const c = (clientesQ.data ?? []).find((x) => x.id === id)
           if (c) setCliente({ id: c.id, nome: c.nome })
         }}
+      />
+
+      <OptionSheet
+        visible={modeloSheet}
+        onClose={() => setModeloSheet(false)}
+        title="Modelo do documento"
+        selected={templateId ?? '__padrao__'}
+        options={[
+          { value: '__padrao__', label: 'Layout padrão do sistema', sublabel: 'Contrato gerado pelo próprio sistema' },
+          ...(templatesQ.data ?? []).map((t) => ({
+            value: t.id,
+            label: t.nome,
+            sublabel: t.camposExtras.length > 0
+              ? `${t.camposExtras.length} campo(s) para preencher`
+              : 'Sem campos personalizados',
+          })),
+        ]}
+        onSelect={(id) => escolherModelo(id === '__padrao__' ? null : id)}
       />
     </Sheet>
   )

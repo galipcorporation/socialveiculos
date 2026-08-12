@@ -1556,7 +1556,10 @@ class Contrato(Base):
 
     tipo = Column(Enum(TipoContrato), default=TipoContrato.COMPRA_VENDA, nullable=False)
     status = Column(Enum(StatusContrato), default=StatusContrato.RASCUNHO, nullable=False)
-    numero = Column(String(20), unique=True, nullable=False)  # CV-2026-0001
+    # CV-2026-0001 — sequencial POR LOJA. O unique global de antes brigava com
+    # isso: a segunda loja a emitir o primeiro contrato do ano batia no
+    # IntegrityError e recebia 500.
+    numero = Column(String(20), nullable=False)
 
     valor_venda = Column(Float, nullable=True)
     valor_entrada = Column(Float, nullable=True)
@@ -1584,6 +1587,7 @@ class Contrato(Base):
         Index("ix_contrato_veiculo", "veiculo_id"),
         Index("ix_contrato_cliente", "cliente_id"),
         Index("ix_contrato_status", "status"),
+        UniqueConstraint("loja_id", "numero", name="uq_contrato_loja_numero"),
     )
 
 

@@ -1,9 +1,7 @@
 // Contratos — lista + detalhe + PDF + templates contra /v1/contratos e
 // /v1/templates-contrato.
 import { api } from '../lib/api'
-import { useAuthStore } from '../stores/authStore'
-import { useLojaAtivaStore } from '../stores/lojaAtivaStore'
-import type { Contrato, StatusContrato } from './types'
+import type { Contrato, StatusContrato, TipoContrato } from './types'
 
 // O backend (`ContratoCreateRequest`) só aceita **ids** — `veiculo_nome` /
 // `cliente_nome` eram descartados em silêncio pelo Pydantic, e o contrato
@@ -11,20 +9,26 @@ import type { Contrato, StatusContrato } from './types'
 // derivado do relacionamento, ele voltava vazio: contrato sem veículo nem
 // cliente na lista, e PDF com as variáveis todas em branco.
 export interface ContratoInput {
-  tipo: 'compra_venda' | 'compra'
+  tipo: TipoContrato
   veiculo_id?: string
   cliente_id?: string
   valor_venda?: number
   valor_entrada?: number
   parcelas?: number
   observacoes?: string
-  template_id?: string
-  dados_extras?: Record<string, string>
+  /** Modelo de contrato; `null` desvincula e volta ao layout padrão. */
+  template_id?: string | null
+  /** Valores dos campos personalizados do modelo, por chave. */
+  dados_extras?: Record<string, string> | null
 }
 
 export interface CampoExtraTemplate {
   chave: string
   label: string
+  /** Orienta o teclado do input no formulário do contrato. */
+  tipo?: string
+  /** Valor usual — entrega o campo já preenchido em vez de vazio. */
+  padrao?: string
 }
 
 export interface TemplateContrato {
@@ -121,7 +125,7 @@ export function labelsDe(groups: VarGroup[]): Record<string, string> {
 interface ContratoDTO {
   id: string
   numero: string
-  tipo: 'compra_venda' | 'compra'
+  tipo: TipoContrato
   status: StatusContrato
   veiculo_id?: string | null
   cliente_id?: string | null
@@ -154,12 +158,12 @@ function mapContrato(c: ContratoDTO): Contrato {
     cliente_id: c.cliente_id ?? undefined,
     veiculo_nome: c.veiculo_nome ?? undefined,
     cliente_nome: c.cliente_nome ?? undefined,
+    template_id: c.template_id ?? undefined,
+    dados_extras: c.dados_extras ?? undefined,
     valor_venda: c.valor_venda ?? undefined,
     valor_entrada: c.valor_entrada ?? undefined,
     parcelas: c.parcelas ?? undefined,
     observacoes: c.observacoes ?? undefined,
-    template_id: c.template_id ?? undefined,
-    dados_extras: c.dados_extras ?? undefined,
     created_at: c.created_at,
   }
 }
@@ -175,7 +179,23 @@ function mapTemplate(t: TemplateDTO): TemplateContrato {
   }
 }
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000/v1'
+/** Corpo aceito por POST /contratos e PATCH /contratos/{id} — os dois campos do
+ *  modelo vão como `null` quando vazios, que é como a API desvincula. */
+function corpoContrato(input: ContratoInput) {
+  return {
+    tipo: input.tipo,
+    veiculo_id: input.veiculo_id || null,
+    cliente_id: input.cliente_id || null,
+    valor_venda: input.valor_venda ?? null,
+    valor_entrada: input.valor_entrada ?? null,
+    parcelas: input.parcelas ?? null,
+    observacoes: input.observacoes || null,
+    template_id: input.template_id || null,
+    dados_extras: input.dados_extras && Object.keys(input.dados_extras).length > 0
+      ? input.dados_extras
+      : null,
+  }
+}
 
 export const contratosService = {
   async lista(): Promise<Contrato[]> {
@@ -192,38 +212,22 @@ export const contratosService = {
     }
   },
 
-  async pdfUrl(id: string): Promise<string> {
-    // O PDF é servido autenticado; anexamos o token de sessão e o ID da loja
-    // atual como query parameters para permitir que o navegador do celular o baixe
-    // sem precisar de headers HTTP.
-    const { token } = useAuthStore.getState()
-    const { lojaId } = useLojaAtivaStore.getState()
-    let url = `${API_BASE}/contratos/${id}/pdf`
-    const params: string[] = []
-    if (token) {
-      params.push(`token=${encodeURIComponent(token)}`)
-    }
-    if (lojaId) {
-      params.push(`loja_id=${encodeURIComponent(lojaId)}`)
-    }
-    if (params.length) {
-      url += `?${params.join('&')}`
-    }
-    return url
+  /**
+   * Documento do contrato pronto para leitura/impressão (o endpoint `/pdf`
+   * devolve HTML paginado, não um PDF binário).
+   *
+   * Entregávamos só a URL para o `Linking` abrir no navegador do celular — mas
+   * a rota exige `Authorization` + `X-Loja-Id`, que o navegador externo não
+   * tem: o contrato virava a tela branca com
+   * `{"detail":"Credenciais inválidas ou token expirado"}`. Buscamos o HTML
+   * pelo cliente autenticado e o app o renderiza numa WebView interna.
+   */
+  async documentoHtml(id: string): Promise<string> {
+    return api.getText(`/contratos/${id}/pdf`)
   },
 
   async criar(input: ContratoInput): Promise<Contrato> {
-    const c = await api.post<ContratoDTO>('/contratos', {
-      tipo: input.tipo,
-      veiculo_id: input.veiculo_id || null,
-      cliente_id: input.cliente_id || null,
-      valor_venda: input.valor_venda ?? null,
-      valor_entrada: input.valor_entrada ?? null,
-      parcelas: input.parcelas ?? null,
-      observacoes: input.observacoes || null,
-      template_id: input.template_id || null,
-      dados_extras: input.dados_extras || null,
-    })
+    const c = await api.post<ContratoDTO>('/contratos', corpoContrato(input))
     return mapContrato(c)
   },
 
@@ -232,19 +236,9 @@ export const contratosService = {
     return mapContrato(c)
   },
 
-  async atualizar(id: string, input: Partial<ContratoInput> & { status?: StatusContrato }): Promise<Contrato> {
-    const c = await api.patch<ContratoDTO>(`/contratos/${id}`, {
-      tipo: input.tipo,
-      status: input.status,
-      veiculo_id: input.veiculo_id,
-      cliente_id: input.cliente_id,
-      valor_venda: input.valor_venda,
-      valor_entrada: input.valor_entrada,
-      parcelas: input.parcelas,
-      observacoes: input.observacoes,
-      template_id: input.template_id,
-      dados_extras: input.dados_extras,
-    })
+  /** Edita um contrato existente — inclusive o modelo e os campos dele. */
+  async atualizar(id: string, input: ContratoInput): Promise<Contrato> {
+    const c = await api.patch<ContratoDTO>(`/contratos/${id}`, corpoContrato(input))
     return mapContrato(c)
   },
 

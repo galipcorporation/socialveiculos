@@ -1885,9 +1885,11 @@ class ContratoUpdateRequest(BaseModel):
     parcelas: Optional[int] = None
     observacoes: Optional[str] = None
     dados_ocr: Optional[str] = None
+    # O modelo e seus campos só podiam ser escolhidos na criação: quem gerava o
+    # contrato pelo celular (que não pergunta o modelo) ficava preso ao layout
+    # legado para sempre. Enviar `template_id: null` desvincula o modelo.
     template_id: Optional[str] = None
     dados_extras: Optional[dict] = None
-
 
 
 class ContratoResponse(BaseModel):

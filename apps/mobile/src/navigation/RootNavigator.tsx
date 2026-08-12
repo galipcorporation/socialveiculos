@@ -40,6 +40,7 @@ const SimuladorScreen = lazy(() => import('../screens/ferramentas/SimuladorScree
 const FiscalScreen = lazy(() => import('../screens/mais/config/FiscalScreen'))
 const FipeScreen = lazy(() => import('../screens/ferramentas/FipeScreen'))
 const ContratosScreen = lazy(() => import('../screens/ferramentas/ContratosScreen'))
+const ContratoDocumentoScreen = lazy(() => import('../screens/ferramentas/ContratoDocumentoScreen'))
 const NotasFiscaisScreen = lazy(() => import('../screens/ferramentas/NotasFiscaisScreen'))
 const MeuSiteScreen = lazy(() => import('../screens/ferramentas/MeuSiteScreen'))
 const MarketingScreen = lazy(() => import('../screens/ferramentas/MarketingScreen'))
@@ -83,6 +84,7 @@ const Simulador = comSuspense(SimuladorScreen)
 const Fiscal = comSuspense(FiscalScreen)
 const Fipe = comSuspense(FipeScreen)
 const Contratos = comSuspense(ContratosScreen)
+const ContratoDocumento = comSuspense(ContratoDocumentoScreen)
 const NotasFiscais = comSuspense(NotasFiscaisScreen)
 const MeuSite = comSuspense(MeuSiteScreen)
 const Marketing = comSuspense(MarketingScreen)
@@ -208,6 +210,7 @@ export default function RootNavigator() {
             <Stack.Screen name="Fiscal" component={Fiscal} />
             <Stack.Screen name="Fipe" component={Fipe} />
             <Stack.Screen name="Contratos" component={Contratos} />
+            <Stack.Screen name="ContratoDocumento" component={ContratoDocumento} />
             <Stack.Screen name="NotasFiscais" component={NotasFiscais} />
             <Stack.Screen name="MeuSite" component={MeuSite} />
             <Stack.Screen name="Marketing" component={Marketing} />
