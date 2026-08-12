@@ -14,7 +14,7 @@
       "package": "com.socialveiculos.mobile",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0e2349",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -31,10 +31,11 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "imageWidth": 180,
+          "imageWidth": 240,
           "resizeMode": "contain",
           "backgroundColor": "#f1f5f9",
           "dark": {
+            "image": "./assets/splash-icon-dark.png",
             "backgroundColor": "#121315"
           }
         }

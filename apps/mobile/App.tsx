@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useCallback } from 'react'
 import { View } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -22,6 +22,9 @@ import { ThemeProvider, useTheme } from './src/theme/ThemeContext'
 import { ToastProvider } from './src/components/ui'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
+// Sai da splash em fade em vez de corte seco: o fundo dela e o mesmo bg do tema,
+// entao a marca dissolve sobre a primeira tela sem pulo de cor.
+SplashScreen.setOptions({ duration: 350, fade: true })
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,7 +39,10 @@ const queryClient = new QueryClient({
 function AppInner({ fontsReady }: { fontsReady: boolean }) {
   const { colors, dark } = useTheme()
 
-  useEffect(() => {
+  // Esconder a splash no efeito de carregamento das fontes a derrubava antes do
+  // primeiro layout do navigator, e o intervalo aparecia como um flash de fundo
+  // vazio. Aqui ela so sai depois que a primeira tela ja desenhou.
+  const aoDesenhar = useCallback(() => {
     if (fontsReady) SplashScreen.hideAsync().catch(() => {})
   }, [fontsReady])
 
@@ -45,10 +51,12 @@ function AppInner({ fontsReady }: { fontsReady: boolean }) {
   }
 
   return (
-    <ToastProvider>
-      <RootNavigator />
-      <StatusBar style={dark ? 'light' : 'dark'} />
-    </ToastProvider>
+    <View style={{ flex: 1, backgroundColor: colors.bg }} onLayout={aoDesenhar}>
+      <ToastProvider>
+        <RootNavigator />
+        <StatusBar style={dark ? 'light' : 'dark'} />
+      </ToastProvider>
+    </View>
   )
 }
 
