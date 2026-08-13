@@ -229,7 +229,7 @@ export function NotasFiscaisPage() {
           <div className="empty-state">Nenhuma NF-e emitida ainda.</div>
         ) : (
           <div className="table-scroll">
-          <table className="stock-table">
+          <table className="stock-table responsive-table">
             <thead>
               <tr>
                 <th>Número</th>
@@ -243,8 +243,8 @@ export function NotasFiscaisPage() {
             <tbody>
               {notas.map((n) => (
                 <tr key={n.id}>
-                  <td>{n.serie}/{n.numero}</td>
-                  <td>
+                  <td className="cell-title" data-label="Número">{n.serie}/{n.numero}</td>
+                  <td data-label="Status">
                     <span style={{ color: STATUS_COLORS[n.status] || 'var(--sv-text-dim)', fontWeight: 600 }}>
                       {STATUS_LABELS[n.status] || n.status}
                     </span>
@@ -255,10 +255,10 @@ export function NotasFiscaisPage() {
                       <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>{n.justificativa_cancelamento}</div>
                     )}
                   </td>
-                  <td>{formatBRL(n.valor_total)}</td>
-                  <td className="col-secondary" style={{ fontFamily: 'monospace', fontSize: 12 }}>{n.chave_acesso || '—'}</td>
-                  <td className="col-secondary">
-                    <div style={{ display: 'flex', gap: 8 }}>
+                  <td data-label="Valor">{formatBRL(n.valor_total)}</td>
+                  <td className="col-secondary" data-label="Chave de acesso" style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all' }}>{n.chave_acesso || '—'}</td>
+                  <td className="col-secondary" data-label="Documentos">
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {n.danfe_pdf_url && (
                         <a href={n.danfe_pdf_url} target="_blank" rel="noreferrer" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                           <FileText style={{ width: 14, height: 14 }} /> DANFE
@@ -271,9 +271,9 @@ export function NotasFiscaisPage() {
                       )}
                     </div>
                   </td>
-                  <td>
+                  <td className="cell-actions" data-label="Ações">
                     {n.status === 'autorizada' && (
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <button
                           className="btn btn-outline"
                           style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}

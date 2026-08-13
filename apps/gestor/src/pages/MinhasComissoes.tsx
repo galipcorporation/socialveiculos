@@ -117,7 +117,7 @@ export function MinhasComissoes() {
       ) : (
         <div className="glass-card" style={{ padding: 0 }}>
           <div className="table-scroll">
-          <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: 14 }}>
+          <table className="responsive-table" style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr style={{ textAlign: 'left', color: 'var(--sv-text-dim)', fontSize: 12, textTransform: 'uppercase' }}>
                 <th style={{ padding: '12px 16px' }}>Veículo</th>
@@ -131,12 +131,12 @@ export function MinhasComissoes() {
             <tbody>
               {visiveis.map((v) => (
                 <tr key={v.esteira_id} style={{ borderTop: '1px solid var(--sv-border)' }}>
-                  <td style={{ padding: '12px 16px' }}>{v.veiculo_nome ?? '—'}</td>
-                  <td style={{ padding: '12px 16px' }}>{formatData(v.aberta_em)}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>{formatBRL(v.valor_venda)}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>{percentual(v)}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700 }}>{formatBRL(v.comissao_valor)}</td>
-                  <td style={{ padding: '12px 16px' }}><StatusChip venda={v} /></td>
+                  <td className="cell-title" data-label="Veículo" style={{ padding: '12px 16px' }}>{v.veiculo_nome ?? '—'}</td>
+                  <td data-label="Data da venda" style={{ padding: '12px 16px' }}>{formatData(v.aberta_em)}</td>
+                  <td data-label="Valor da venda" style={{ padding: '12px 16px', textAlign: 'right' }}>{formatBRL(v.valor_venda)}</td>
+                  <td data-label="%" style={{ padding: '12px 16px', textAlign: 'right' }}>{percentual(v)}</td>
+                  <td data-label="Comissão" style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700 }}>{formatBRL(v.comissao_valor)}</td>
+                  <td data-label="Status" style={{ padding: '12px 16px' }}><StatusChip venda={v} /></td>
                 </tr>
               ))}
             </tbody>

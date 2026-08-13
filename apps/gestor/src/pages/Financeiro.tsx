@@ -497,7 +497,7 @@ export function Financeiro() {
       ) : (
         <div className="glass-card" style={{ padding: 0 }}>
           <div className="table-scroll">
-          <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontSize: '14px' }}>
+          <table className="responsive-table" style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontSize: '14px' }}>
             <thead>
               <tr style={{ textAlign: 'left', color: 'var(--sv-text-dim)', fontSize: '12px', textTransform: 'uppercase' }}>
                 <th style={{ padding: '12px 16px' }}>Status</th>
@@ -512,7 +512,7 @@ export function Financeiro() {
             <tbody>
               {lancamentos.map((l) => (
                 <tr key={l.id} style={{ borderTop: '1px solid var(--sv-border)', opacity: l.status_pagamento === 'pendente' ? 0.6 : 1 }}>
-                  <td style={{ padding: '12px 16px', width: '100px' }}>
+                  <td data-label="Status" style={{ padding: '12px 16px', width: '100px' }}>
                     <button 
                       onClick={() => toggleStatusPagamento(l)}
                       title="Clique para alterar o status"
@@ -531,17 +531,17 @@ export function Financeiro() {
                       {l.status_pagamento}
                     </button>
                   </td>
-                  <td style={{ padding: '12px 16px' }}>
+                  <td data-label="Tipo" style={{ padding: '12px 16px' }}>
                     <span style={{ color: TIPO_COR[l.tipo], fontWeight: 600 }}>{TIPO_LABEL[l.tipo]}</span>
                   </td>
-                  <td style={{ padding: '12px 16px' }}>{l.descricao}</td>
-                  <td style={{ padding: '12px 16px', color: 'var(--sv-text-dim)', fontSize: '13px' }}>
+                  <td data-label="Descrição" style={{ padding: '12px 16px' }}>{l.descricao}</td>
+                  <td data-label="Veículo" style={{ padding: '12px 16px', color: 'var(--sv-text-dim)', fontSize: '13px' }}>
                     {l.veiculo_nome ? l.veiculo_nome : '-'}
                   </td>
-                  <td style={{ padding: '12px 16px', color: 'var(--sv-text-dim)' }}>
+                  <td data-label="Data" style={{ padding: '12px 16px', color: 'var(--sv-text-dim)' }}>
                     {new Date(l.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                   </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: TIPO_COR[l.tipo] }}>
+                  <td data-label="Valor" style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: TIPO_COR[l.tipo] }}>
                     {editandoValorId === l.id ? (
                       <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
                         <input
@@ -582,7 +582,7 @@ export function Financeiro() {
                       </button>
                     )}
                   </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                  <td className="cell-actions" data-label="Ações" style={{ padding: '12px 16px', textAlign: 'right' }}>
                     <button
                       className="btn btn-glass"
                       onClick={() => abrirExclusao(l)}

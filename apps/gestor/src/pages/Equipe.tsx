@@ -286,7 +286,7 @@ export function Equipe() {
       ) : (
         <div className="glass-card" style={{ padding: 0 }}>
           <div className="table-scroll">
-          <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: '14px' }}>
+          <table className="responsive-table" style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: '14px' }}>
             <thead>
               <tr style={{ textAlign: 'left', color: 'var(--sv-text-dim)', fontSize: '12px', textTransform: 'uppercase' }}>
                 <th style={{ padding: '12px 16px' }}>Nome</th>
@@ -300,10 +300,10 @@ export function Equipe() {
             <tbody>
               {membros.map((m) => (
                 <tr key={m.id} style={{ borderTop: '1px solid var(--sv-border)' }}>
-                  <td style={{ padding: '12px 16px', fontWeight: 600 }}>{m.nome}</td>
-                  <td style={{ padding: '12px 16px', color: 'var(--sv-text-dim)' }}>{m.email}</td>
-                  <td style={{ padding: '12px 16px' }}>{PAPEL_LABEL[m.papel] ?? m.papel}</td>
-                  <td style={{ padding: '12px 16px' }}>
+                  <td className="cell-title" data-label="Nome" style={{ padding: '12px 16px', fontWeight: 600 }}>{m.nome}</td>
+                  <td data-label="E-mail" style={{ padding: '12px 16px', color: 'var(--sv-text-dim)', wordBreak: 'break-word' }}>{m.email}</td>
+                  <td data-label="Papel" style={{ padding: '12px 16px' }}>{PAPEL_LABEL[m.papel] ?? m.papel}</td>
+                  <td data-label="Comissão" style={{ padding: '12px 16px' }}>
                     {m.papel === 'vendedor' ? (
                       <ComissaoInput
                         membro={m}
@@ -315,12 +315,12 @@ export function Equipe() {
                       <span style={{ color: 'var(--sv-text-muted)' }}>—</span>
                     )}
                   </td>
-                  <td style={{ padding: '12px 16px' }}>
+                  <td data-label="Status" style={{ padding: '12px 16px' }}>
                     <span style={{ color: m.ativo ? 'var(--sv-success)' : 'var(--sv-text-muted)', fontWeight: 600 }}>
                       {m.ativo ? 'Ativo' : 'Inativo'}
                     </span>
                   </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                  <td className="cell-actions" style={{ padding: '12px 16px', textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                     {m.papel === 'vendedor' && (
                       <>
                         <button className="btn btn-outline btn-sm" onClick={() => setMembroAcessos(m)}>

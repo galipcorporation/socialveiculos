@@ -74,9 +74,9 @@ function fmtData(iso: string) {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="glass-card" style={{ padding: 'var(--sv-space-6)', minWidth: 140 }}>
+    <div className="glass-card" style={{ padding: 'var(--sv-space-5)', minWidth: 0 }}>
       <p style={{ color: 'var(--sv-text-muted)', fontSize: 'var(--sv-text-sm)', marginBottom: 'var(--sv-space-2)' }}>{label}</p>
-      <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--sv-text-primary)' }}>{value.toLocaleString('pt-BR')}</p>
+      <p style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 700, color: 'var(--sv-text-primary)' }}>{value.toLocaleString('pt-BR')}</p>
     </div>
   )
 }
@@ -116,7 +116,7 @@ function ModalNovaLoja({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+      <div className="modal-container modal-sm glass-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">Nova Loja</h3>
           <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
@@ -181,7 +181,7 @@ function AbaOverview() {
   if (!stats) return <EmptyState msg="Não foi possível carregar as estatísticas." />
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sv-space-4)', marginTop: 'var(--sv-space-6)' }}>
+    <div className="admin-stats-grid">
       <StatCard label="Total de Lojas" value={stats.total_lojas} />
       <StatCard label="Lojas Ativas" value={stats.lojas_ativas} />
       <StatCard label="Veículos" value={stats.total_veiculos} />
@@ -238,8 +238,8 @@ function AbaLojas() {
 
   return (
     <div style={{ marginTop: 'var(--sv-space-6)' }}>
-      <div style={{ display: 'flex', gap: 'var(--sv-space-3)', marginBottom: 'var(--sv-space-4)', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
+      <div className="admin-toolbar">
+        <div className="admin-search">
           <Search size={16} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--sv-text-muted)' }} />
           <input
             className="form-input"
@@ -259,8 +259,8 @@ function AbaLojas() {
       ) : lojasFiltradas.length === 0 ? (
         <EmptyState msg={busca ? 'Nenhuma loja encontrada para essa busca.' : 'Nenhuma loja cadastrada.'} />
       ) : (
-        <div className="glass-card" style={{ overflow: 'auto' }}>
-          <table style={{ width: '100%', minWidth: 680, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
+        <div className="glass-card admin-table-card">
+          <table className="responsive-table" style={{ width: '100%', minWidth: 680, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--sv-border)' }}>
                 {['Nome', 'Cidade / UF', 'WhatsApp', 'Status', 'Destaque', 'Criado em', 'Ações'].map((h) => (
@@ -271,12 +271,12 @@ function AbaLojas() {
             <tbody>
               {lojasFiltradas.map((loja) => (
                 <tr key={loja.id} style={{ borderBottom: '1px solid var(--sv-border)' }}>
-                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-primary)', fontWeight: 500 }}>{loja.nome}</td>
-                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>
+                  <td className="cell-title" data-label="Nome" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-primary)', fontWeight: 500 }}>{loja.nome}</td>
+                  <td data-label="Cidade / UF" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>
                     {loja.cidade && loja.estado ? `${loja.cidade} / ${loja.estado}` : loja.cidade || loja.estado || '—'}
                   </td>
-                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <td data-label="WhatsApp" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <span>{loja.whatsapp || '—'}</span>
                       {loja.whatsapp_divergente && (
                         <span
@@ -294,7 +294,7 @@ function AbaLojas() {
                       )}
                     </div>
                   </td>
-                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
+                  <td data-label="Status" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
                     <span style={{
                       display: 'inline-block',
                       padding: '2px 10px',
@@ -307,7 +307,7 @@ function AbaLojas() {
                       {loja.ativa ? 'Ativa' : 'Inativa'}
                     </span>
                   </td>
-                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
+                  <td data-label="Destaque" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
                     {loja.destaque ? (
                       <span
                         title={loja.destaque_ate ? `Vence em ${fmtData(loja.destaque_ate)}` : 'Sem prazo definido'}
@@ -324,8 +324,8 @@ function AbaLojas() {
                       <span style={{ color: 'var(--sv-text-muted)', fontSize: 'var(--sv-text-xs)' }}>—</span>
                     )}
                   </td>
-                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>{fmtData(loja.created_at)}</td>
-                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
+                  <td data-label="Criado em" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>{fmtData(loja.created_at)}</td>
+                  <td className="cell-actions" data-label="Ações" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
                     <div style={{ display: 'flex', gap: 'var(--sv-space-2)', flexWrap: 'wrap' }}>
                       <button
                         className="btn btn-secondary"
@@ -432,7 +432,7 @@ function ModalEditarLoja({ loja, onClose, onSaved }: { loja: LojaItem; onClose: 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+      <div className="modal-container modal-sm glass-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">Editar Loja</h3>
           <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
@@ -562,7 +562,7 @@ function ModalAssinaturaLoja({ loja, onClose }: { loja: LojaItem; onClose: () =>
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+      <div className="modal-container modal-md glass-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">Assinatura — {loja.nome}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
@@ -930,7 +930,7 @@ function ModalDestaqueLoja({ loja, onClose, onSaved }: { loja: LojaItem; onClose
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+      <div className="modal-container modal-md glass-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">Destaque na vitrine — {loja.nome}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
@@ -1166,8 +1166,8 @@ function AbaContrato() {
 
   return (
     <div style={{ marginTop: 'var(--sv-space-6)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sv-space-4)' }}>
-        <p style={{ color: 'var(--sv-text-muted)', fontSize: 'var(--sv-text-sm)', maxWidth: 480 }}>
+      <div className="admin-section-head">
+        <p style={{ color: 'var(--sv-text-muted)', fontSize: 'var(--sv-text-sm)', maxWidth: 480, minWidth: 0 }}>
           Texto do contrato de assinatura (Social Veículos ↔ Loja). A versão vigente é a usada por padrão ao ativar uma nova assinatura.
         </p>
         <button className="btn btn-primary" onClick={() => setEditorAberto(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1182,8 +1182,8 @@ function AbaContrato() {
       ) : versoes.length === 0 ? (
         <EmptyState msg="Nenhuma versão do contrato cadastrada ainda. Clique em “Nova versão” para colar o texto atual." />
       ) : (
-        <div className="glass-card" style={{ overflow: 'auto' }}>
-          <table style={{ width: '100%', minWidth: 520, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
+        <div className="glass-card admin-table-card">
+          <table className="responsive-table" style={{ width: '100%', minWidth: 520, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--sv-border)' }}>
                 {['Versão', 'Status', 'Criado em', 'Ações'].map((h) => (
@@ -1194,8 +1194,8 @@ function AbaContrato() {
             <tbody>
               {versoes.map((v) => (
                 <tr key={v.id} style={{ borderBottom: '1px solid var(--sv-border)' }}>
-                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-primary)', fontWeight: 500 }}>{v.versao}</td>
-                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
+                  <td className="cell-title" data-label="Versão" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-primary)', fontWeight: 500 }}>{v.versao}</td>
+                  <td data-label="Status" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
                     {v.vigente ? (
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -1208,8 +1208,8 @@ function AbaContrato() {
                       <span style={{ color: 'var(--sv-text-muted)', fontSize: 'var(--sv-text-xs)' }}>—</span>
                     )}
                   </td>
-                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>{fmtData(v.created_at)}</td>
-                  <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
+                  <td data-label="Criado em" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>{fmtData(v.created_at)}</td>
+                  <td className="cell-actions" data-label="Ações" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
                     {!v.vigente && (
                       <button
                         className="btn btn-secondary"
@@ -1266,7 +1266,7 @@ function ModalNovaVersaoContrato({ versaoSugerida, onClose, onSaved }: { versaoS
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 900, width: '100%' }}>
+      <div className="modal-container modal-lg glass-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">Nova versão do contrato</h3>
           <button className="modal-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
@@ -1339,8 +1339,8 @@ function AbaAuditoria() {
         <EmptyState msg="Nenhum log de auditoria registrado." />
       ) : (
         <>
-          <div className="glass-card" style={{ overflow: 'auto' }}>
-            <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
+          <div className="glass-card admin-table-card">
+            <table className="responsive-table" style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--sv-border)' }}>
                   {['Ação', 'Entidade', 'Usuário', 'Data'].map((h) => (
@@ -1351,10 +1351,10 @@ function AbaAuditoria() {
               <tbody>
                 {slice.map((log) => (
                   <tr key={log.id} style={{ borderBottom: '1px solid var(--sv-border)' }}>
-                    <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-primary)', fontFamily: 'monospace', fontSize: 'var(--sv-text-xs)' }}>{log.acao}</td>
-                    <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>{log.entidade || '—'}</td>
-                    <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>{log.ator_nome || '—'}</td>
-                    <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-muted)' }}>{fmtData(log.created_at)}</td>
+                    <td className="cell-title" data-label="Ação" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-primary)', fontFamily: 'monospace', fontSize: 'var(--sv-text-xs)', wordBreak: 'break-word' }}>{log.acao}</td>
+                    <td data-label="Entidade" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>{log.entidade || '—'}</td>
+                    <td data-label="Usuário" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-secondary)' }}>{log.ator_nome || '—'}</td>
+                    <td data-label="Data" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-muted)' }}>{fmtData(log.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1496,8 +1496,8 @@ function AbaErros() {
         <EmptyState msg="Nenhum erro de servidor registrado." />
       ) : (
         <>
-          <div className="glass-card" style={{ overflow: 'auto' }}>
-            <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
+          <div className="glass-card admin-table-card">
+            <table className="responsive-table" style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--sv-border)' }}>
                   {['Origem', 'Rota', 'Status', 'Request ID', 'Data', 'Ações'].map((h) => (
@@ -1512,7 +1512,7 @@ function AbaErros() {
 
                   return (
                     <tr key={log.id} style={{ borderBottom: '1px solid var(--sv-border)' }}>
-                      <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
+                      <td data-label="Origem" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
                         <span style={{
                           display: 'inline-block',
                           padding: '2px 8px',
@@ -1525,10 +1525,10 @@ function AbaErros() {
                           {log.entidade || '—'}
                         </span>
                       </td>
-                      <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-primary)', fontFamily: 'monospace', fontSize: 'var(--sv-text-xs)' }}>
+                      <td data-label="Rota" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-primary)', fontFamily: 'monospace', fontSize: 'var(--sv-text-xs)', wordBreak: 'break-all' }}>
                         {det.path || '—'}
                       </td>
-                      <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
+                      <td data-label="Status" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
                         <span style={{
                           display: 'inline-block',
                           padding: '2px 8px',
@@ -1541,12 +1541,12 @@ function AbaErros() {
                           {det.status ?? '5xx'}
                         </span>
                       </td>
-                      <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-muted)', fontFamily: 'monospace', fontSize: 'var(--sv-text-xs)' }}>
+                      <td data-label="Request ID" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-muted)', fontFamily: 'monospace', fontSize: 'var(--sv-text-xs)', wordBreak: 'break-all' }}>
                         {log.entidade_id || '—'}
                       </td>
-                      <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-muted)' }}>{fmtData(log.created_at)}</td>
-                      <td style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
-                        <div style={{ display: 'flex', gap: '6px' }}>
+                      <td data-label="Data" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)', color: 'var(--sv-text-muted)' }}>{fmtData(log.created_at)}</td>
+                      <td className="cell-actions" data-label="Ações" style={{ padding: 'var(--sv-space-3) var(--sv-space-4)' }}>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                           <button
                             className="btn btn-secondary"
                             style={{ padding: '3px 8px', fontSize: 'var(--sv-text-xs)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
@@ -1618,27 +1618,15 @@ export function AdminPage() {
         </div>
       </div>
 
-      {/* Abas */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--sv-border)', marginTop: 'var(--sv-space-4)' }}>
+      {/* Abas — rolam na horizontal quando não cabem (mobile) */}
+      <div className="admin-tabs" role="tablist">
         {ABAS.map(({ id, label, Icon }) => (
           <button
             key={id}
+            role="tab"
+            aria-selected={aba === id}
             onClick={() => setAba(id)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--sv-space-2)',
-              padding: 'var(--sv-space-3) var(--sv-space-5)',
-              background: 'none',
-              border: 'none',
-              borderBottom: aba === id ? '2px solid var(--sv-accent)' : '2px solid transparent',
-              color: aba === id ? 'var(--sv-accent)' : 'var(--sv-text-muted)',
-              fontWeight: aba === id ? 600 : 400,
-              cursor: 'pointer',
-              fontSize: 'var(--sv-text-sm)',
-              transition: 'all .15s',
-              marginBottom: -1,
-            }}
+            className={`admin-tab${aba === id ? ' is-active' : ''}`}
           >
             <Icon size={16} />
             {label}

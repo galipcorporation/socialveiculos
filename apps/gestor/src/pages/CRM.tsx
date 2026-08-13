@@ -1627,7 +1627,7 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
         </div>
       ) : (
         <div className="table-scroll">
-        <table className="stock-table">
+        <table className="stock-table responsive-table">
           <thead>
             <tr>
               <th>Nome</th>
@@ -1640,14 +1640,14 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
           <tbody>
             {clientes.map(c => (
               <tr key={c.id}>
-                <td>
+                <td className="cell-title" data-label="Nome">
                   <div style={{ fontWeight: 600, color: 'var(--sv-text)' }}>{c.nome}</div>
                   {c.email && <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>{c.email}</div>}
                 </td>
-                <td>{c.telefone || '—'}</td>
-                <td className="col-secondary">{c.cpf || c.cnpj || '—'}</td>
-                <td className="col-secondary">{c.cidade ? `${c.cidade} / ${c.estado || ''}` : '—'}</td>
-                <td>
+                <td data-label="Contato">{c.telefone || '—'}</td>
+                <td className="col-secondary" data-label="CPF / CNPJ">{c.cpf || c.cnpj || '—'}</td>
+                <td className="col-secondary" data-label="Cidade / Estado">{c.cidade ? `${c.cidade} / ${c.estado || ''}` : '—'}</td>
+                <td className="cell-actions" data-label="Ações">
                   <div className="actions-cell">
                     <button
                       className="action-btn"
