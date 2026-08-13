@@ -106,7 +106,7 @@ export default function LojasSeguidasScreen() {
           <SkeletonCard />
         </View>
       ) : lojasQ.isError ? (
-        <ErrorState onRetry={() => lojasQ.refetch()} />
+        <ErrorState error={lojasQ.error} onRetry={() => lojasQ.refetch()} />
       ) : (
         <FlatList
           data={lojasQ.data ?? []}

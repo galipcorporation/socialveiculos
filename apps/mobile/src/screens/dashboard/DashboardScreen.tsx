@@ -124,7 +124,7 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
       >
         {kpisQ.isError ? (
-          <ErrorState onRetry={refetch} />
+          <ErrorState error={kpisQ.error} onRetry={refetch} />
         ) : (
           <>
             {escopo === 'vendedor' && (

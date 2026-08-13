@@ -66,7 +66,7 @@ export default function ContratosScreen({ route }: RootScreenProps<'Contratos'>)
           {[0, 1, 2].map((i) => <SkeletonCard key={i} withImage={false} />)}
         </View>
       ) : q.isError ? (
-        <ErrorState onRetry={() => q.refetch()} />
+        <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : (
         <FlatList
           ref={listRef}
@@ -511,7 +511,7 @@ function ModelosTab() {
   }
 
   if (q.isError) {
-    return <ErrorState onRetry={() => q.refetch()} />
+    return <ErrorState error={q.error} onRetry={() => q.refetch()} />
   }
 
   return (

@@ -93,6 +93,53 @@ def can(usuario: Usuario, acao: Acao, recurso: Recurso, modulos_liberados: Optio
     return False
 
 
+# Texto do 403 é lido direto pelo usuário final (o app e o painel mostram o
+# `detail` na tela de erro), então fala de tela e de quem libera — e não de
+# "recurso"/"ação" da matriz acima.
+_NOME_ACAO = {
+    Acao.CRIAR: "cadastrar",
+    Acao.EDITAR: "editar",
+    Acao.EXCLUIR: "excluir",
+    Acao.VER: "ver",
+    Acao.APROVAR: "aprovar",
+    Acao.PUBLICAR: "publicar",
+    Acao.ADMINISTRAR: "administrar",
+}
+
+_NOME_RECURSO = {
+    Recurso.VEICULO: "os veículos do estoque",
+    Recurso.CRM_CLIENTE: "os clientes do CRM",
+    Recurso.CRM_LEAD: "os leads do CRM",
+    Recurso.FINANCEIRO: "o Financeiro",
+    Recurso.CONFIGURACOES: "as configurações da loja",
+    Recurso.MEMBRO_EQUIPE: "a equipe da loja",
+    Recurso.APROVACOES: "as aprovações",
+}
+
+_NOME_PAPEL = {
+    PapelUsuario.GESTOR: "gestor",
+    PapelUsuario.VENDEDOR: "vendedor",
+    PapelUsuario.CLIENTE: "cliente",
+}
+
+
+def mensagem_permissao_negada(usuario: Usuario, acao: Acao, recurso: Recurso) -> str:
+    """Texto de 403 para o usuário final: o que faltou e quem resolve."""
+    if not usuario.ativo:
+        return (
+            "Seu usuário está desativado. Peça ao gestor da loja para reativar "
+            "seu acesso em Equipe."
+        )
+
+    papel = _NOME_PAPEL.get(usuario.papel, "seu perfil")
+    alvo = _NOME_RECURSO.get(recurso, "este recurso")
+    verbo = _NOME_ACAO.get(acao, acao.value)
+    return (
+        f"Seu perfil ({papel}) não pode {verbo} {alvo}. "
+        "Peça ao gestor da loja para liberar esse acesso em Equipe."
+    )
+
+
 def exige_permissao(acao: Acao, recurso: Recurso) -> Callable:
     """
     Dependência do FastAPI que lança HTTP 403 Forbidden se o usuário ativo
@@ -109,7 +156,7 @@ def exige_permissao(acao: Acao, recurso: Recurso) -> Callable:
         if not can(context.usuario, acao, recurso, modulos_liberados):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permissão negada para {acao.value} o recurso {recurso.value}."
+                detail=mensagem_permissao_negada(context.usuario, acao, recurso),
             )
         return context.usuario
 

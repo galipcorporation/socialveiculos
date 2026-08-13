@@ -104,7 +104,7 @@ export default function EstoqueScreen() {
           {[0, 1, 2, 3].map((i) => <SkeletonCard key={i} />)}
         </View>
       ) : listaQ.isError ? (
-        <ErrorState onRetry={() => listaQ.refetch()} />
+        <ErrorState error={listaQ.error} onRetry={() => listaQ.refetch()} />
       ) : (
         <FlatList
           data={filtrados}
