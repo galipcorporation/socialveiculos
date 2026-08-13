@@ -51,6 +51,10 @@ class UserResponse(BaseModel):
     telefone: Optional[str] = None
     modulos: Optional[str] = None  # JSON array de módulos liberados (vendedor)
     loja_id: Optional[str] = None
+    # Preferências do app — o mobile decide por aqui se desenha o botão
+    # flutuante e se ainda deve perguntar sobre ele no primeiro acesso.
+    botao_flutuante: bool = True
+    botao_flutuante_perguntar: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,6 +79,17 @@ class UpdateMeRequest(BaseModel):
     """Edição do próprio perfil. E-mail e papel não mudam por aqui."""
     nome: Optional[str] = Field(None, min_length=2, max_length=200)
     telefone: Optional[str] = Field(None, max_length=20)
+
+
+class PreferenciasMeRequest(BaseModel):
+    """
+    Preferências de interface do próprio usuário. Campo omitido = não mexe.
+
+    Fica fora do PATCH /me porque perfil gera auditoria: gravar "perfil
+    atualizado" toda vez que alguém liga/desliga um botão polui o log.
+    """
+    botao_flutuante: Optional[bool] = None
+    botao_flutuante_perguntar: Optional[bool] = None
 
 
 class LoginRequest(_EmailNormalizadoMixin):
@@ -813,6 +828,30 @@ async def atualizar_me(
         )
         await db.commit()
         await db.refresh(current_user)
+    return await montar_user_response(current_user, db)
+
+
+@router.patch("/me/preferencias", response_model=UserResponse, dependencies=[Depends(rate_limit(30, 60))])
+async def atualizar_preferencias_me(
+    data: PreferenciasMeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Salva as preferências de interface do usuário logado.
+
+    Hoje: o botão flutuante de ações rápidas do app (mostrar ou não) e se o
+    modal de primeiro acesso deve continuar perguntando. A preferência é do
+    usuário, não da loja — o mesmo aparelho pode ser usado por dois vendedores
+    com contas diferentes, e cada um vê a sua escolha.
+    """
+    if data.botao_flutuante is not None:
+        current_user.botao_flutuante = data.botao_flutuante
+    if data.botao_flutuante_perguntar is not None:
+        current_user.botao_flutuante_perguntar = data.botao_flutuante_perguntar
+
+    await db.commit()
+    await db.refresh(current_user)
     return await montar_user_response(current_user, db)
 
 

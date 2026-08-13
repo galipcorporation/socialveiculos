@@ -26,7 +26,7 @@ import CredenciaisBancoScreen from '../screens/mais/config/CredenciaisBancoScree
 import CredenciaisIAScreen from '../screens/mais/config/CredenciaisIAScreen'
 import RedesSociaisScreen from '../screens/mais/config/RedesSociaisScreen'
 import DetranScreen from '../screens/mais/config/DetranScreen'
-import { AssistiveTouch } from '../components/ui'
+import { AssistiveTouchGate } from '../components/ui'
 
 // Telas de módulos contratáveis (não-núcleo): carregadas sob demanda para não
 // pesar no bundle inicial de quem não tem — ou ainda não abriu — o módulo.
@@ -224,7 +224,7 @@ export default function RootNavigator() {
           <Stack.Screen name="Login" component={LoginScreen} options={{ animation: 'fade' }} />
         )}
       </Stack.Navigator>
-      {lojistaLogado && experiencia === 'lojista' ? <AssistiveTouch /> : null}
+      {lojistaLogado && experiencia === 'lojista' ? <AssistiveTouchGate /> : null}
     </NavigationContainer>
   )
 }

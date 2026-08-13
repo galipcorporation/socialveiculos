@@ -15,6 +15,10 @@ export interface User {
   telefone?: string | null
   modulos?: string | null
   loja_id?: string | null
+  /** Mostrar o botão flutuante de ações rápidas (AssistiveTouch). */
+  botao_flutuante?: boolean
+  /** Ainda perguntar sobre o botão flutuante no primeiro acesso. */
+  botao_flutuante_perguntar?: boolean
 }
 
 interface AuthState {
