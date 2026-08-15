@@ -112,6 +112,19 @@
 
   --sv-toggle-off: rgba(255, 255, 255, 0.25);
   --sv-toggle-off-hover: rgba(255, 255, 255, 0.35);
+
+  /* ── Aliases semânticos ──────────────────────────────────────
+     Nomes usados no TSX (herdados do app admin) que não existiam
+     aqui: sem eles a declaração inteira vira inválida e a cor cai
+     para o valor herdado — foi o que deixava o painel admin com
+     texto e fundos errados. Como apontam para os tokens acima,
+     acompanham automaticamente o tema claro.                     */
+  --sv-text-primary: var(--sv-text);
+  --sv-text-secondary: var(--sv-text-dim);
+  --sv-bg-base: var(--sv-bg);
+  --sv-bg-surface: var(--sv-surface);
+  --sv-accent: var(--sv-primary);
+  --sv-danger: var(--sv-error);
 }
 
 /* ── Tema Claro ──────────────────────────────────────────────
@@ -1471,8 +1484,11 @@ a:hover {
     grid-column: unset !important;
   }
 
-  /* Stock table: hide (only when it has mobile cards to replace it), show mobile cards */
-  .table-scroll:has(.stock-table) { display: none; }
+  /* Stock table: só esconde quando existe de fato uma lista de cards irmã
+     para substituí-la (Estoque). Sem essa checagem, CRM, Contratos, Notas
+     Fiscais e Marketing simplesmente sumiam no mobile — a tabela era
+     escondida e nada era renderizado no lugar. */
+  .table-scroll:has(.stock-table):has(~ .mobile-vehicle-cards) { display: none; }
   .mobile-vehicle-cards { display: flex; }
 
   /* Pagination compact */
@@ -5704,3 +5720,399 @@ svg[stroke="currentColor"] {
 }
 .rich-var::before { content: "{"; opacity: .5; margin-right: 2px; }
 .rich-var::after { content: "}"; opacity: .5; margin-left: 2px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   MODAL CONTAINER
+   `.modal-container` era usada no TSX (painel admin) sem existir no
+   CSS: o modal ficava sem altura máxima nem rolagem própria, então no
+   celular o formulário estourava a viewport e o rodapé com os botões
+   ficava inalcançável. A largura vem da escala .modal-sm/md/lg/xl.
+   ═══════════════════════════════════════════════════════════════ */
+
+.modal-container {
+  width: 100%;
+  max-width: var(--sv-modal-w, 680px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--sv-radius-xl);
+  animation: modal-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-container.modal-sm { --sv-modal-w: 480px; }  /* confirmação, form curto */
+.modal-container.modal-md { --sv-modal-w: 680px; }  /* formulário padrão */
+.modal-container.modal-lg { --sv-modal-w: 900px; }  /* muitos campos */
+.modal-container.modal-xl { --sv-modal-w: 1100px; } /* abas, tabelas, editor */
+
+/* O modal usa .glass-card, que levanta 2px no hover — indesejado aqui. */
+.modal-container:hover { transform: none; box-shadow: var(--sv-shadow-lg); }
+
+/* Rodapé aninhado dentro do corpo rolável não repete o padding lateral. */
+.modal-body > .modal-footer {
+  padding-left: 0;
+  padding-right: 0;
+  padding-bottom: 0;
+}
+
+/* Nunca ultrapassar a viewport (o overlay já reserva 24px de padding). */
+@media (max-width: 1148px) {
+  .modal-container { max-width: calc(100vw - 32px); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TABELA RESPONSIVA (vira lista de cards no mobile)
+   Em telas estreitas a tabela deixa de rolar na horizontal e cada
+   <tr> vira um card, com o rótulo da coluna vindo do data-label da
+   célula. Marque a tabela com .responsive-table e cada <td> com
+   data-label="Nome da coluna".
+   ═══════════════════════════════════════════════════════════════ */
+
+/* No desktop a marcação é neutra — a tabela mantém o estilo que já tinha
+   (.stock-table ou os estilos inline da página). */
+.responsive-table { width: 100%; }
+
+@media (max-width: 768px) {
+  /* O wrapper deixa de rolar: o conteúdo agora cabe na largura. */
+  .table-scroll:has(.responsive-table) { overflow-x: visible; }
+
+  /* Card que só existia para emoldurar a tabela sai do caminho — senão
+     fica um card em volta da lista de cards. */
+  .glass-card:has(> .table-scroll > .responsive-table) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  .responsive-table,
+  .responsive-table tbody,
+  .responsive-table tr,
+  .responsive-table td {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .responsive-table thead { display: none; }
+
+  .responsive-table tr {
+    border: 1px solid var(--sv-border) !important;
+    border-radius: var(--sv-radius-md);
+    background: var(--sv-surface-solid);
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+
+  .responsive-table tr:last-child { margin-bottom: 0; }
+
+  /* Zebra/hover da .stock-table não fazem sentido em modo card. */
+  .responsive-table tbody tr:nth-child(even) td,
+  .responsive-table tbody tr:hover td { background: transparent; }
+
+  .responsive-table td {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    padding: 5px 0 !important;
+    border: none !important;
+    text-align: left !important;
+    white-space: normal !important;
+  }
+
+  .responsive-table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    min-width: 96px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--sv-text-muted);
+  }
+
+  /* Célula sem rótulo (ou marcada como principal) ocupa a linha toda. */
+  .responsive-table td:not([data-label])::before,
+  .responsive-table td[data-label='']::before,
+  .responsive-table td.cell-title::before { display: none; }
+
+  .responsive-table td.cell-title {
+    display: block !important;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--sv-text);
+    padding-bottom: 8px !important;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--sv-border) !important;
+  }
+
+  /* min-width pensado para a tabela larga não vaza no card. */
+  .responsive-table td.cell-title > * { min-width: 0 !important; }
+
+  /* Ações: rótulo escondido, botões em linha própria e alcançáveis. */
+  .responsive-table td.cell-actions {
+    padding-top: 10px !important;
+    margin-top: 6px;
+    border-top: 1px solid var(--sv-border) !important;
+    justify-content: flex-start !important;
+  }
+
+  .responsive-table td.cell-actions::before { display: none; }
+
+  /* Linha de ações sem nenhum botão não vira um bloco vazio com borda. */
+  .responsive-table td:empty { display: none !important; }
+
+  .responsive-table td.cell-actions > * {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+
+  /* Alvo de toque confortável nos botões de ação do card. */
+  .responsive-table td.cell-actions .btn {
+    min-height: 34px;
+    padding: 6px 12px !important;
+  }
+
+  /* Botão que ocupa a linha inteira do card centraliza o rótulo. */
+  .responsive-table td.cell-actions > .btn {
+    justify-content: center;
+    text-align: center;
+  }
+
+  /* Colunas de baixa prioridade somem no card (já ficam no desktop). */
+  .responsive-table td.col-secondary.hide-mobile,
+  .responsive-table th.col-secondary.hide-mobile { display: none !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PAINEL ADMIN — shell, abas e barra de ferramentas
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Mesmo modelo de rolagem do .app-layout: a casca ocupa a viewport e quem
+   rola é o miolo. Sem isso o scroll cai no <body>, que tem height:100% e
+   overflow-x:hidden — e o fim da lista fica inalcançável no celular.
+   100dvh acompanha a barra de endereço do navegador móvel. */
+.admin-shell {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--sv-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 24px;
+  min-height: 56px;
+  border-bottom: 1px solid var(--sv-border);
+  background: var(--sv-surface);
+  flex-shrink: 0;
+}
+
+.admin-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-topbar-brand span {
+  font-weight: 700;
+  font-size: var(--sv-text-sm);
+  color: var(--sv-text);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.admin-topbar-user-name {
+  font-size: var(--sv-text-xs);
+  color: var(--sv-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 30vw;
+}
+
+.admin-main {
+  flex: 1;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Cartão que embrulha uma tabela: rola na horizontal no desktop e some
+   (vira só o container dos cards) quando a tabela colapsa no mobile. */
+.admin-table-card { overflow-x: auto; }
+
+@media (max-width: 768px) {
+  .admin-table-card {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    overflow: visible;
+  }
+  .admin-table-card:hover { transform: none; box-shadow: none !important; }
+}
+
+/* O padding já vem do .admin-main; evita a margem dobrada. */
+.admin-main .page-content {
+  padding: 0;
+  overflow: visible;
+}
+
+.admin-main .page-header { margin-bottom: 8px; }
+
+/* Abas: em telas estreitas rolam na horizontal em vez de vazar da tela. */
+.admin-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--sv-border);
+  margin-top: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.admin-tabs::-webkit-scrollbar { display: none; }
+
+.admin-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--sv-text-muted);
+  cursor: pointer;
+  font-size: var(--sv-text-sm);
+  font-family: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color .15s, border-color .15s;
+  margin-bottom: -1px;
+}
+
+.admin-tab:hover { color: var(--sv-text-dim); }
+
+.admin-tab.is-active {
+  color: var(--sv-primary);
+  border-bottom-color: var(--sv-primary);
+  font-weight: 600;
+}
+
+/* Busca + ação principal */
+.admin-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.admin-toolbar .admin-search {
+  position: relative;
+  flex: 1 1 220px;
+  max-width: 320px;
+  min-width: 0;
+}
+
+.admin-toolbar .admin-search input { width: 100%; }
+
+/* Cabeçalho de seção: título à esquerda, ação à direita, quebra no mobile. */
+.admin-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+@media (max-width: 768px) {
+  .admin-topbar { padding: 8px 14px; gap: 8px; }
+  .admin-topbar-brand span { font-size: var(--sv-text-xs); }
+  .admin-topbar-user { gap: 10px; }
+  .admin-main { padding: 20px 14px; }
+  .admin-tab { padding: 10px 14px; font-size: var(--sv-text-xs); }
+  .admin-toolbar .admin-search { max-width: none; flex-basis: 100%; }
+  .admin-stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+}
+
+@media (max-width: 420px) {
+  .admin-topbar-user-name { display: none; }
+  .admin-stats-grid { grid-template-columns: 1fr; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AJUSTES GERAIS DE MOBILE
+   ═══════════════════════════════════════════════════════════════ */
+
+img, video, canvas { max-width: 100%; }
+
+/* Rótulo de botão nunca quebra no meio ("Nova / Loja"). */
+.btn { white-space: nowrap; }
+
+@media (max-width: 768px) {
+  /* iOS dá zoom no foco quando a fonte do campo é < 16px. */
+  .form-input,
+  .form-select,
+  .form-textarea,
+  input[type='text'],
+  input[type='email'],
+  input[type='tel'],
+  input[type='number'],
+  input[type='password'],
+  input[type='search'],
+  input[type='date'],
+  select,
+  textarea { font-size: 16px; }
+
+  /* Modais ocupam a tela inteira, como já acontece com .modal-glass. */
+  .modal-overlay { padding: 0; align-items: stretch; }
+
+  .modal-container {
+    max-width: 100% !important;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+
+  .modal-header { padding: 16px 18px; }
+  .modal-header h3 { font-size: 17px; }
+  .modal-body { padding: 18px; }
+  .modal-footer { padding: 14px 18px; gap: 8px; }
+  .modal-footer .btn { flex: 1; justify-content: center; }
+
+  /* Grades de formulário de 2+ colunas colapsam. */
+  .modal-form-grid { grid-template-columns: 1fr !important; }
+}

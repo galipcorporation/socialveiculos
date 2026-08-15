@@ -465,7 +465,7 @@ function ContratosTabContent({
         </div>
       ) : (
         <div className="table-scroll">
-        <table className="stock-table">
+        <table className="stock-table responsive-table">
           <thead>
             <tr>
               <th>Documento</th>
@@ -479,7 +479,7 @@ function ContratosTabContent({
           <tbody>
             {contratos.map(c => (
               <tr key={c.id}>
-                <td>
+                <td className="cell-title" data-label="Documento">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{
                       width: 32, height: 32, borderRadius: 6,
@@ -501,10 +501,10 @@ function ContratosTabContent({
                     </div>
                   </div>
                 </td>
-                <td>{c.cliente_nome || '—'}</td>
-                <td className="col-secondary" style={{ color: 'var(--sv-text-muted)' }}>{formatData(c.created_at)}</td>
-                <td style={{ fontWeight: 600 }}>{formatBRL(c.valor_venda)}</td>
-                <td className="col-secondary">
+                <td data-label="Cliente">{c.cliente_nome || '—'}</td>
+                <td className="col-secondary" data-label="Data" style={{ color: 'var(--sv-text-muted)' }}>{formatData(c.created_at)}</td>
+                <td data-label="Valor" style={{ fontWeight: 600 }}>{formatBRL(c.valor_venda)}</td>
+                <td className="col-secondary" data-label="Status">
                   <select
                     className={`status-select ${STATUS_CLASSES[c.status] || ''}`}
                     value={c.status}
@@ -516,7 +516,7 @@ function ContratosTabContent({
                     ))}
                   </select>
                 </td>
-                <td>
+                <td className="cell-actions" data-label="Ações">
                   <div className="actions-cell">
                     <button
                       className="action-btn"

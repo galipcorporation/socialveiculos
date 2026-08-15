@@ -399,7 +399,7 @@ export function GradeAnuncios() {
 
       {/* Grade */}
       <div className="table-scroll" style={{ marginBottom: 14 }}>
-        <table className="stock-table" style={{ minWidth: 900 }}>
+        <table className="stock-table responsive-table" style={{ minWidth: 900 }}>
           <thead>
             <tr>
               <th style={thStyle(34)}>
@@ -437,7 +437,7 @@ export function GradeAnuncios() {
                 key={linha.veiculo_id}
                 style={linha.vendido ? { background: 'rgba(244,63,94,0.045)' } : undefined}
               >
-                <td style={tdStyle()}>
+                <td data-label="Selecionar" style={tdStyle()}>
                   <input
                     type="checkbox"
                     checked={selecao.has(linha.veiculo_id)}
@@ -445,7 +445,7 @@ export function GradeAnuncios() {
                     aria-label={`Selecionar ${linha.titulo}`}
                   />
                 </td>
-                <td style={tdStyle()}>
+                <td className="cell-title" data-label="Veículo" style={tdStyle()}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 250 }}>
                     {linha.foto ? (
                       <img src={linha.foto} alt="" style={fotoStyle} />
@@ -469,14 +469,14 @@ export function GradeAnuncios() {
                     </div>
                   </div>
                 </td>
-                <td className="vehicle-price" style={{ fontVariantNumeric: 'tabular-nums', fontSize: 13, whiteSpace: 'nowrap' }}>
+                <td className="vehicle-price" data-label="Preço" style={{ fontVariantNumeric: 'tabular-nums', fontSize: 13, whiteSpace: 'nowrap' }}>
                   {moeda(linha.preco_venda)}
                 </td>
                 {portais.map((portal) => {
                   const celula = linha.celulas.find((c) => c.portal === portal.nome)
                     || { portal: portal.nome, status: 'nao_publicado' }
                   return (
-                    <td key={portal.nome} style={tdStyle('center')}>
+                    <td key={portal.nome} data-label={portal.rotulo} style={tdStyle('center')}>
                       <ChipCelula
                         celula={celula}
                         portal={portal}
