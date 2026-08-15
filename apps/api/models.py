@@ -346,6 +346,13 @@ class Usuario(Base):
     mfa_ativo = Column(Boolean, default=False)
     mfa_secret_pendente = Column(String(100), nullable=True)  # B031: enroll não sobrescreve o secret ativo
 
+    # Preferências do app (por usuário, não por loja) — o botão flutuante de
+    # ações rápidas (AssistiveTouch) atrapalha quem trabalha em tela pequena,
+    # então cada um decide se quer o seu. `perguntar` controla o modal de
+    # primeiro acesso: some quando o usuário marca "não perguntar novamente".
+    botao_flutuante = Column(Boolean, default=True, nullable=False, server_default="1")
+    botao_flutuante_perguntar = Column(Boolean, default=True, nullable=False, server_default="1")
+
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 

@@ -37,6 +37,8 @@ erDiagram
         bool ativo
         string mfa_secret
         bool mfa_ativo
+        bool botao_flutuante
+        bool botao_flutuante_perguntar
         datetime created_at
         datetime updated_at
     }

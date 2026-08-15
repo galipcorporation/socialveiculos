@@ -15,6 +15,7 @@ export { Avatar, Fab, KpiCard } from './Misc'
 export { ToastProvider, useToast } from './Toast'
 export { Paywall } from './Paywall'
 export { AssistiveTouch } from './AssistiveTouch'
+export { AssistiveTouchGate } from './AssistiveTouchGate'
 
 
 

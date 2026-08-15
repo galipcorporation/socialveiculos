@@ -14,6 +14,13 @@ export interface PerfilMeInput {
   telefone?: string
 }
 
+export interface PreferenciasMeInput {
+  /** Mostrar o botão flutuante de ações rápidas. */
+  botao_flutuante?: boolean
+  /** Continuar perguntando sobre o botão no início do app. */
+  botao_flutuante_perguntar?: boolean
+}
+
 export const authService = {
   async login(email: string, senha: string): Promise<LoginResult> {
     return api.post<LoginResult>('/auth/login', { email: email.trim(), senha })
@@ -30,6 +37,11 @@ export const authService = {
       ...(input.nome !== undefined ? { nome: input.nome.trim() } : {}),
       ...(input.telefone !== undefined ? { telefone: input.telefone.trim() } : {}),
     })
+  },
+
+  /** Salva as preferências de interface (botão flutuante) do usuário logado. */
+  async atualizarPreferencias(input: PreferenciasMeInput): Promise<User> {
+    return api.patch<User>('/auth/me/preferencias', input)
   },
 
   /** Envia a foto de perfil (galeria/câmera) e devolve o usuário atualizado. */
