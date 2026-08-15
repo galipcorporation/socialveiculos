@@ -20,10 +20,10 @@ jobs:
         with:
           node-version: 20
 
+      # A versão vem do campo packageManager do package.json (pnpm@10.x).
+      # Fixar "version: 9" aqui quebrava o install: engines.pnpm exige >=10.
       - name: Install pnpm
         uses: pnpm/action-setup@v3
-        with:
-          version: 9
 
       - name: Get pnpm store directory
         shell: bash
@@ -45,6 +45,8 @@ jobs:
         run: |
           pnpm --filter @sv/gestor run build --emptyOutDir
           pnpm --filter @sv/vitrine run build --emptyOutDir
+          pnpm --filter @sv/admin run build --emptyOutDir
+          pnpm --filter @sv/site run build --emptyOutDir
 
       # Configuração de Python para Backend API
       - name: Set up Python
