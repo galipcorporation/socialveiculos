@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { Animated, StyleSheet, View, type DimensionValue, type StyleProp, type ViewStyle } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useTheme } from '../../theme/ThemeContext'
+import { descreverErro } from '../../lib/api'
 import { radius, spacing } from '../../theme/tokens'
 import { Txt } from './Txt'
 import { Button } from './Button'
@@ -89,23 +90,40 @@ export function EmptyState({ icon = 'file-tray-outline', title, subtitle, action
 }
 
 interface ErrorStateProps {
+  /**
+   * Erro da query (`q.error`). É o que permite distinguir falta de permissão,
+   * paywall e queda de rede — passe sempre que houver um.
+   */
+  error?: unknown
+  /** Texto fixo, para casos sem erro de API ("Veículo não encontrado."). */
   message?: string
   onRetry?: () => void
 }
 
-export function ErrorState({ message = 'Algo deu errado ao carregar os dados.', onRetry }: ErrorStateProps) {
+export function ErrorState({ error, message, onRetry }: ErrorStateProps) {
   const { colors } = useTheme()
+  // Sem `error`, mantém o comportamento antigo (título e texto genéricos).
+  const info = error !== undefined ? descreverErro(error) : null
+  const titulo = info?.titulo ?? 'Não foi possível carregar'
+  const texto = message ?? info?.mensagem ?? 'Algo deu errado ao carregar os dados.'
+  const icone = info?.icone ?? 'cloud-offline-outline'
+  // Erro de permissão/paywall/sessão não é falha de carregamento: pintar de
+  // vermelho de alerta sugeria bug do app quando o que falta é liberação.
+  const bloqueioDeAcesso = info?.tipo === 'permissao' || info?.tipo === 'paywall' || info?.tipo === 'sessao'
+  const tom = bloqueioDeAcesso ? colors.textMuted : colors.error
+  const acaoLabel = info ? info.acaoLabel : 'Tentar de novo'
+
   return (
     <View style={styles.center}>
-      <View style={[styles.emptyIcon, { backgroundColor: colors.error + '1a' }]}>
-        <Ionicons name="cloud-offline-outline" size={30} color={colors.error} />
+      <View style={[styles.emptyIcon, { backgroundColor: tom + '1a' }]}>
+        <Ionicons name={icone} size={30} color={tom} />
       </View>
-      <Txt variant="title" align="center">Não foi possível carregar</Txt>
+      <Txt variant="title" align="center">{titulo}</Txt>
       <Txt variant="caption" color="textDim" align="center" style={{ maxWidth: 280 }}>
-        {message}
+        {texto}
       </Txt>
-      {onRetry ? (
-        <Button title="Tentar de novo" onPress={onRetry} variant="tonal" size="sm" icon="refresh" style={{ marginTop: spacing.sm }} />
+      {onRetry && acaoLabel ? (
+        <Button title={acaoLabel} onPress={onRetry} variant="tonal" size="sm" icon="refresh" style={{ marginTop: spacing.sm }} />
       ) : null}
     </View>
   )

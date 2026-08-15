@@ -26,6 +26,16 @@ forbidden_exception = HTTPException(
     detail="Você não tem permissão para acessar este recurso",
 )
 
+# Conta de cliente final tentando o painel da loja: o app mostra este texto
+# na tela, então ele explica o que aconteceu em vez de só negar.
+conta_cliente_exception = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail=(
+        "Esta conta é de cliente da vitrine e não tem acesso ao painel da loja. "
+        "Entre com o usuário da loja para continuar."
+    ),
+)
+
 
 async def get_current_user(
     token: Optional[str] = Depends(oauth2_scheme),
@@ -102,7 +112,7 @@ async def get_current_b2b_user(
     """
     # Clientes finais B2C não podem acessar rotas do Gestor/B2B
     if current_user.papel == PapelUsuario.CLIENTE:
-        raise forbidden_exception
+        raise conta_cliente_exception
 
     # Admin de plataforma: acessa qualquer loja ativa via header X-Loja-Id ou query param.
     if current_user.papel == PapelUsuario.ADMIN_PLATAFORMA:
@@ -139,9 +149,15 @@ async def get_current_b2b_user(
     row = res.first()
 
     if not row:
+        # Vínculo desativado no painel (Equipe) ou loja inativa derruba *todas*
+        # as telas do app de uma vez. O texto precisa dizer isso: senão o
+        # usuário vê "não foi possível carregar" e fica tentando recarregar.
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Usuário B2B sem loja ativa associada.",
+            detail=(
+                "Seu acesso a esta loja está inativo. Peça ao gestor para "
+                "reativar seu usuário em Equipe."
+            ),
         )
 
     membro, loja = row

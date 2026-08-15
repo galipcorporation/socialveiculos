@@ -10,19 +10,74 @@ interface FetchOptions extends RequestInit {
   params?: QueryParams
 }
 
+/**
+ * Natureza do erro, para a UI escolher o texto e decidir se "Tentar de novo"
+ * faz sentido. Sem isso todo 403 de permissão virava "Algo deu errado" com um
+ * botão de retry que nunca resolve — o usuário fica preso sem saber que falta
+ * liberação, e não erro de rede (ver B-mobile: retorno genérico no ErrorState).
+ */
+export type ApiErrorTipo =
+  | 'rede'
+  | 'sessao'
+  | 'permissao'
+  | 'paywall'
+  | 'nao_encontrado'
+  | 'validacao'
+  | 'limite'
+  | 'servidor'
+  | 'desconhecido'
+
 export interface ApiErrorDetails {
   status: number
   path: string
   timestamp: string
   requestId?: string
+  /** `code` do corpo padronizado da API (ex.: "INTERNAL_ERROR"), quando vier. */
+  codigo?: string
+  /** Módulo do paywall (header `X-Paywall-Modulo`) nos 402. */
+  modulo?: string
 }
 
 export class ApiError extends Error {
   details: ApiErrorDetails
-  constructor(message: string, details: ApiErrorDetails) {
+  tipo: ApiErrorTipo
+  /** True quando repetir a mesma requisição pode dar certo sem nenhuma ação externa. */
+  retentavel: boolean
+  constructor(message: string, details: ApiErrorDetails, tipo: ApiErrorTipo = classificar(details.status)) {
     super(message)
     this.name = 'ApiError'
     this.details = details
+    this.tipo = tipo
+    this.retentavel = tipo === 'rede' || tipo === 'servidor' || tipo === 'limite'
+  }
+}
+
+function classificar(status: number): ApiErrorTipo {
+  if (status === 0) return 'rede'
+  if (status === 401) return 'sessao'
+  if (status === 402) return 'paywall'
+  if (status === 403) return 'permissao'
+  if (status === 404) return 'nao_encontrado'
+  if (status === 422) return 'validacao'
+  if (status === 429) return 'limite'
+  if (status >= 500) return 'servidor'
+  return 'desconhecido'
+}
+
+/**
+ * `fetch` que converte falha de transporte (offline, DNS, timeout, TLS) em
+ * `ApiError` tipo "rede". Sem isso o erro chegava na tela como um `TypeError`
+ * cru ("Network request failed") e caía no mesmo texto genérico de um 403.
+ */
+async function fetchOuErroDeRede(url: string, init: RequestInit, path: string): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch {
+    throw new ApiError('Sem conexão com o servidor. Verifique sua internet e tente de novo.', {
+      status: 0,
+      path,
+      timestamp: new Date().toISOString(),
+    })
   }
 }
 
@@ -45,11 +100,18 @@ function renovarToken(): Promise<string> {
       })
     }
 
-    const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    })
+    // Queda de rede aqui não é sessão expirada: `fetchOuErroDeRede` lança
+    // ApiError('rede') e o logout abaixo só roda quando o servidor de fato
+    // recusou o refresh token.
+    const refreshRes = await fetchOuErroDeRede(
+      `${API_BASE}/auth/refresh`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      },
+      '/auth/refresh'
+    )
 
     if (!refreshRes.ok) {
       logout()
@@ -113,7 +175,7 @@ class ApiClient {
       headers['X-Loja-Id'] = lojaId
     }
 
-    const response = await fetch(url, { ...fetchOptions, headers })
+    const response = await fetchOuErroDeRede(url, { ...fetchOptions, headers }, path)
 
     if (response.status === 401 && path !== '/auth/login' && path !== '/auth/refresh') {
       const { refreshToken, user } = useAuthStore.getState()
@@ -122,7 +184,7 @@ class ApiClient {
         const novoToken = await renovarToken()
 
         headers['Authorization'] = `Bearer ${novoToken}`
-        return fetch(url, { ...fetchOptions, headers })
+        return fetchOuErroDeRede(url, { ...fetchOptions, headers }, path)
       }
     }
 
@@ -131,11 +193,14 @@ class ApiClient {
 
   private async erroDaResposta(response: Response, path: string): Promise<ApiError> {
     const body = await response.json().catch(() => ({}))
-    return new ApiError(friendlyHttpMessage(response.status, body.error ?? body.detail), {
+    const doServidor = typeof body.error === 'string' ? body.error : typeof body.detail === 'string' ? body.detail : undefined
+    return new ApiError(friendlyHttpMessage(response.status, doServidor), {
       status: response.status,
       path,
       timestamp: new Date().toISOString(),
       requestId: response.headers.get('x-request-id') ?? undefined,
+      codigo: typeof body.code === 'string' ? body.code : undefined,
+      modulo: response.headers.get('x-paywall-modulo') ?? undefined,
     })
   }
 
@@ -208,12 +273,89 @@ export function extractErrorDetails(err: unknown): { message: string; details?: 
 
 function friendlyHttpMessage(status: number, serverMessage?: string): string {
   if (status === 401) return 'Sessão expirada. Faça login novamente.'
-  if (status === 403) return 'Você não tem permissão para realizar esta ação.'
-  if (status === 404) return 'O recurso solicitado não foi encontrado.'
+  // 402/403 preservam o texto da API: é ele que diz *qual* liberação falta
+  // (vínculo inativo, papel sem a ação, módulo não contratado). Trocar por um
+  // texto fixo apagava a única informação acionável da tela.
+  if (status === 402) return serverMessage || 'Este módulo não está incluído no plano da loja.'
+  if (status === 403) return serverMessage || 'Você não tem permissão para realizar esta ação.'
+  if (status === 404) return serverMessage || 'O recurso solicitado não foi encontrado.'
   if (status === 422) return serverMessage || 'Os dados enviados são inválidos.'
   if (status === 429) return 'Muitas requisições. Aguarde um momento e tente de novo.'
   if (status >= 500) return 'Erro no servidor. Nossa equipe já foi notificada.'
   return serverMessage || 'Erro de comunicação com o servidor.'
+}
+
+export interface ErroApresentavel {
+  tipo: ApiErrorTipo
+  titulo: string
+  mensagem: string
+  icone: 'cloud-offline-outline' | 'lock-closed-outline' | 'sparkles-outline' | 'log-in-outline' | 'alert-circle-outline'
+  /** Rótulo do botão, ou `null` quando repetir não leva a lugar nenhum. */
+  acaoLabel: string | null
+}
+
+/**
+ * Traduz um erro em título/mensagem/ícone para os estados de falha das telas.
+ * Concentrado aqui para Início, Estoque, CRM etc. contarem a mesma história.
+ */
+export function descreverErro(err: unknown): ErroApresentavel {
+  const { message } = extractErrorDetails(err)
+  const tipo: ApiErrorTipo = err instanceof ApiError ? err.tipo : 'desconhecido'
+
+  switch (tipo) {
+    case 'rede':
+      return {
+        tipo,
+        titulo: 'Sem conexão',
+        mensagem: 'Não conseguimos falar com o servidor. Verifique sua internet e tente de novo.',
+        icone: 'cloud-offline-outline',
+        acaoLabel: 'Tentar de novo',
+      }
+    case 'permissao':
+      return {
+        tipo,
+        titulo: 'Acesso não liberado',
+        mensagem: message,
+        icone: 'lock-closed-outline',
+        // Quem libera é o gestor no painel; o retry serve para reconferir
+        // depois disso, por isso o rótulo não promete que vai carregar.
+        acaoLabel: 'Verificar novamente',
+      }
+    case 'paywall':
+      return {
+        tipo,
+        titulo: 'Módulo não incluído no plano',
+        mensagem: message,
+        icone: 'sparkles-outline',
+        acaoLabel: null,
+      }
+    case 'sessao':
+      return {
+        tipo,
+        titulo: 'Sessão expirada',
+        mensagem: 'Entre de novo para continuar.',
+        icone: 'log-in-outline',
+        acaoLabel: null,
+      }
+    case 'nao_encontrado':
+      return { tipo, titulo: 'Não encontrado', mensagem: message, icone: 'alert-circle-outline', acaoLabel: null }
+    case 'limite':
+      return {
+        tipo,
+        titulo: 'Muitas requisições',
+        mensagem: 'Aguarde alguns segundos antes de tentar de novo.',
+        icone: 'alert-circle-outline',
+        acaoLabel: 'Tentar de novo',
+      }
+    default:
+      return {
+        tipo: 'desconhecido',
+        titulo: 'Não foi possível carregar',
+        mensagem: message || 'Algo deu errado ao carregar os dados.',
+        icone: 'cloud-offline-outline',
+        acaoLabel: 'Tentar de novo',
+      }
+  }
 }
 
 export const api = new ApiClient(API_BASE)

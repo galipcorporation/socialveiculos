@@ -105,7 +105,7 @@ export default function CrmScreen() {
           {[0, 1, 2, 3].map((i) => <SkeletonCard key={i} withImage={false} />)}
         </View>
       ) : leadsQ.isError ? (
-        <ErrorState onRetry={() => leadsQ.refetch()} />
+        <ErrorState error={leadsQ.error} onRetry={() => leadsQ.refetch()} />
       ) : (
         <FlatList
           data={filtrados}

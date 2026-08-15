@@ -274,8 +274,11 @@ function reportarErroServidor(data: {
 
 function friendlyHttpMessage(status: number, serverMessage?: string): string {
   if (status === 401) return 'Sessão expirada. Faça login novamente.'
-  if (status === 403) return 'Você não tem permissão para realizar esta ação.'
-  if (status === 404) return 'O recurso solicitado não foi encontrado.'
+  // 402/403 preservam o texto da API: é ele que diz qual liberação falta
+  // (vínculo inativo, papel sem a ação, módulo não contratado).
+  if (status === 402) return serverMessage || 'Este módulo não está incluído no plano da loja.'
+  if (status === 403) return serverMessage || 'Você não tem permissão para realizar esta ação.'
+  if (status === 404) return serverMessage || 'O recurso solicitado não foi encontrado.'
   if (status === 422) return serverMessage || 'Os dados enviados são inválidos.'
   if (status === 429) return 'Muitas requisições. Aguarde um momento e tente de novo.'
   if (status === 503) return serverMessage || 'Serviço indisponível no momento. Tente novamente em instantes.'

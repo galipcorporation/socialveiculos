@@ -26,6 +26,17 @@ class Modulo(str, enum.Enum):
     SITE = "site"
 
 
+# Nome comercial de cada módulo, para a mensagem de paywall.
+NOMES_MODULO = {
+    Modulo.CONTRATOS: "Contratos",
+    Modulo.SIMULADOR: "Simulador de Crédito",
+    Modulo.MARKETING: "Marketing com IA",
+    Modulo.ASSISTENTE_IA: "Assistente de IA",
+    Modulo.FISCAL: "Emissor de NF-e",
+    Modulo.SITE: "Construtor de Sites",
+}
+
+
 # Módulos do núcleo do CRM: não são contratáveis por fora (não estão no enum
 # Modulo acima), então o gestor sempre pode liberá-los a um vendedor.
 # Fonte única: `equipe.py` valida contra esta lista e `admin.py` a usa como
@@ -95,12 +106,17 @@ def exige_modulo(modulo: Modulo) -> Callable:
         if not context.loja_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Usuário sem loja associada.",
+                detail="Seu usuário não está vinculado a nenhuma loja ativa.",
             )
         if not await modulo_ativo(db, context.loja_id, modulo):
+            # O `detail` vai direto para a tela (app e painel), então diz o
+            # nome comercial do módulo e quem contrata.
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=f"Módulo '{modulo.value}' não contratado ou assinatura inadimplente.",
+                detail=(
+                    f"O módulo {NOMES_MODULO.get(modulo, modulo.value)} não está ativo no plano da loja. "
+                    "Fale com o gestor para contratar ou regularizar a assinatura."
+                ),
                 headers={"X-Paywall-Modulo": modulo.value},
             )
         return context

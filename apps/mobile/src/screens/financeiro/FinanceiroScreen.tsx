@@ -89,7 +89,7 @@ export default function FinanceiroScreen() {
     <View style={{ flex: 1 }}>
       <AppHeader title="Financeiro" subtitle={periodoLabel} back />
       {listaQ.isError ? (
-        <ErrorState onRetry={() => listaQ.refetch()} />
+        <ErrorState error={listaQ.error} onRetry={() => listaQ.refetch()} />
       ) : (
         <FlatList
           data={listaQ.data ?? []}

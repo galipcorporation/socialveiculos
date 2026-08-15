@@ -60,7 +60,7 @@ export default function PosVendaScreen() {
           {[0, 1, 2].map((i) => <SkeletonCard key={i} withImage={false} />)}
         </View>
       ) : q.isError ? (
-        <ErrorState onRetry={() => q.refetch()} />
+        <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : (
         <FlatList
           data={filtradas}

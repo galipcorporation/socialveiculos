@@ -4,7 +4,6 @@ import { WebView } from 'react-native-webview'
 import { useQuery } from '@tanstack/react-query'
 import { AppHeader, ErrorState, Screen } from '../../components/ui'
 import { contratosService } from '../../services'
-import { extractErrorDetails } from '../../lib/api'
 import { useTheme } from '../../theme/ThemeContext'
 import type { RootScreenProps } from '../../navigation/types'
 
@@ -44,7 +43,7 @@ export default function ContratoDocumentoScreen({ route }: RootScreenProps<'Cont
           <ActivityIndicator color={colors.primary} />
         </View>
       ) : q.isError ? (
-        <ErrorState message={extractErrorDetails(q.error).message} onRetry={() => q.refetch()} />
+        <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : (
         <WebView
           originWhitelist={['*']}

@@ -92,7 +92,7 @@ export default function FeedScreen() {
       {q.isLoading ? (
         <View style={{ paddingHorizontal: spacing.md }}>{[0, 1, 2].map((i) => <SkeletonCard key={i} />)}</View>
       ) : q.isError ? (
-        <ErrorState onRetry={() => q.refetch()} />
+        <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : (
         <FlatList
           data={q.data ?? []}

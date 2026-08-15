@@ -108,7 +108,7 @@ function FeedTab() {
   }
 
   if (q.isLoading) return <View style={{ padding: spacing.md }}>{[0, 1, 2].map((i) => <SkeletonCard key={i} />)}</View>
-  if (q.isError) return <ErrorState onRetry={() => q.refetch()} />
+  if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />
 
   return (
     <>
@@ -262,7 +262,7 @@ function PropostasTab() {
   }
 
   if (q.isLoading) return <View style={{ padding: spacing.md }}>{[0, 1].map((i) => <SkeletonCard key={i} withImage={false} />)}</View>
-  if (q.isError) return <ErrorState onRetry={() => q.refetch()} />
+  if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />
 
   return (
     <FlatList
@@ -350,7 +350,7 @@ function ParceirosTab() {
       {q.isLoading ? (
         <View style={{ padding: spacing.md }}>{[0, 1, 2].map((i) => <SkeletonCard key={i} withImage={false} />)}</View>
       ) : q.isError ? (
-        <ErrorState onRetry={() => q.refetch()} />
+        <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : (
         <FlatList
           data={q.data ?? []}
