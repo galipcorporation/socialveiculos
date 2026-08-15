@@ -727,7 +727,7 @@ async def listar_parceiros(
     if not lojas:
         return []
 
-    loja_ids = [l.id for l in lojas]
+    loja_ids = [loja.id for loja in lojas]
 
     # Batch: total de veículos disponíveis por loja (evita N+1)
     res_totais = await db.execute(
@@ -747,10 +747,10 @@ async def listar_parceiros(
     seguidas = {row[0] for row in res_seg.all()}
 
     return [
-        LojaResponse.model_validate(l).model_copy(
-            update={"total_veiculos": totais.get(l.id, 0), "seguindo": l.id in seguidas}
+        LojaResponse.model_validate(loja).model_copy(
+            update={"total_veiculos": totais.get(loja.id, 0), "seguindo": loja.id in seguidas}
         )
-        for l in lojas
+        for loja in lojas
     ]
 
 

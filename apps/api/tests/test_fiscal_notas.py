@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import AsyncMock, patch
 from fiscal_gateway import montar_payload_venda
 from models import ConfiguracaoFiscal, Loja, ClientePF, Veiculo
 

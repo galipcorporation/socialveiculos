@@ -5,6 +5,7 @@ Sem autenticação. Filtro de saída B2C: nunca expõe placa/custo/margem.
 
 from typing import List, Optional
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy import func
@@ -214,8 +215,6 @@ async def solicitar_pre_aprovacao(data: PreAprovacaoRequest, db: AsyncSession = 
     )
     db.add(lead)
     await db.flush()
-
-from urllib.parse import quote
 
 
 # ── Captura de Lead da Vitrine (M108) ──────────────────────────
