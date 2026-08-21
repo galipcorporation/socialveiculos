@@ -1090,6 +1090,15 @@ function ehVideo(midia) {
   if (EXT_FOTO.test(midia.url)) return false;
   return midia.tipo === "video";
 }
+const MuteIcon = ({ muted }) => muted ? /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+  /* @__PURE__ */ jsx("polygon", { points: "11 5 6 9 2 9 2 15 6 15 11 19 11 5" }),
+  /* @__PURE__ */ jsx("line", { x1: "23", y1: "9", x2: "17", y2: "15" }),
+  /* @__PURE__ */ jsx("line", { x1: "17", y1: "9", x2: "23", y2: "15" })
+] }) : /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+  /* @__PURE__ */ jsx("polygon", { points: "11 5 6 9 2 9 2 15 6 15 11 19 11 5" }),
+  /* @__PURE__ */ jsx("path", { d: "M15.54 8.46a5 5 0 010 7.07" }),
+  /* @__PURE__ */ jsx("path", { d: "M19.07 4.93a10 10 0 010 14.14" })
+] });
 const CarIcon$1 = () => /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: [
   /* @__PURE__ */ jsx("rect", { x: "1", y: "6", width: "22", height: "10", rx: "3" }),
   /* @__PURE__ */ jsx("circle", { cx: "6", cy: "18", r: "2" }),
@@ -1117,6 +1126,17 @@ function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir }) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [errosPorIdx, setErrosPorIdx] = useState({});
   const imgError = !!errosPorIdx[currentIdx];
+  const [muted, setMuted] = useState(true);
+  const videoRef = useRef(null);
+  const toggleMute = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setMuted((m) => {
+      const next2 = !m;
+      if (videoRef.current) videoRef.current.muted = next2;
+      return next2;
+    });
+  };
   const midias = veiculo.midias ?? [];
   const currentMidia = midias.length > 0 ? midias[currentIdx] : null;
   const midiaEhVideo = currentMidia ? ehVideo(currentMidia) : false;
@@ -1162,7 +1182,35 @@ function CarCard({ veiculo, onFavoritar, onConversar, onWhatsApp, onSeguir }) {
       )
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "vt-car-card-image", children: [
-      currentMidia && !imgError ? midiaEhVideo ? /* @__PURE__ */ jsx("video", { src: currentMidia.url, controls: true, muted: true, playsInline: true, style: { width: "100%", height: "100%", objectFit: "cover" } }) : /* @__PURE__ */ jsx(Link, { to: `/carro/${veiculo.id}`, className: "vt-car-card-media-link", style: { width: "100%", height: "100%", display: "block" }, children: /* @__PURE__ */ jsx("img", { src: currentMidia.thumb_url || currentMidia.url, alt: `${veiculo.marca} ${veiculo.modelo}`, loading: "lazy", decoding: "async", onError: () => setErrosPorIdx((e) => ({ ...e, [currentIdx]: true })) }) }) : /* @__PURE__ */ jsx(Link, { to: `/carro/${veiculo.id}`, className: "vt-car-card-media-link", style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsxs("div", { className: "vt-car-card-placeholder", children: [
+      currentMidia && !imgError ? midiaEhVideo ? /* @__PURE__ */ jsxs("div", { style: { position: "relative", width: "100%", height: "100%" }, children: [
+        /* @__PURE__ */ jsx("video", { ref: videoRef, src: currentMidia.url, muted, loop: true, playsInline: true, autoPlay: true, style: { width: "100%", height: "100%", objectFit: "cover" } }),
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            type: "button",
+            className: "vt-video-mute-btn",
+            onClick: toggleMute,
+            "aria-label": muted ? "Ativar som" : "Silenciar",
+            style: {
+              position: "absolute",
+              left: 10,
+              bottom: 10,
+              zIndex: 2,
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              border: "none",
+              background: "rgba(0,0,0,0.55)",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer"
+            },
+            children: /* @__PURE__ */ jsx("span", { style: { width: 16, height: 16, display: "flex" }, children: /* @__PURE__ */ jsx(MuteIcon, { muted }) })
+          }
+        )
+      ] }) : /* @__PURE__ */ jsx(Link, { to: `/carro/${veiculo.id}`, className: "vt-car-card-media-link", style: { width: "100%", height: "100%", display: "block" }, children: /* @__PURE__ */ jsx("img", { src: currentMidia.thumb_url || currentMidia.url, alt: `${veiculo.marca} ${veiculo.modelo}`, loading: "lazy", decoding: "async", onError: () => setErrosPorIdx((e) => ({ ...e, [currentIdx]: true })) }) }) : /* @__PURE__ */ jsx(Link, { to: `/carro/${veiculo.id}`, className: "vt-car-card-media-link", style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsxs("div", { className: "vt-car-card-placeholder", children: [
         /* @__PURE__ */ jsx(CarIcon$1, {}),
         /* @__PURE__ */ jsx("span", { children: "Sem foto disponível" })
       ] }) }),
@@ -1509,8 +1557,10 @@ function Feed() {
     if (isAuthenticated) {
       api.get("/vitrine/stories").then(setStories).catch(() => {
       });
+    } else {
+      setStories([]);
     }
-  }, []);
+  }, [isAuthenticated]);
   const handleAvatarSelect = (e) => {
     var _a;
     const file = (_a = e.target.files) == null ? void 0 : _a[0];
@@ -2102,6 +2152,14 @@ function createReconnectingSocket(path, opts) {
     }
   };
 }
+const MOTIVO_LABEL = {
+  vendido: "Veículo vendido",
+  reservado: "Veículo reservado",
+  indisponivel: "Veículo indisponível"
+};
+function estaArquivada(c) {
+  return !!c && (!!c.arquivada_em || c.ativa === false);
+}
 function formatTime(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -2124,6 +2182,7 @@ function Mensagens() {
   const { isAuthenticated, token, openLoginModal } = useAuthStore();
   const userId = (_a = useAuthStore.getState().user) == null ? void 0 : _a.id;
   const location = useLocation();
+  const navigate = useNavigate();
   const initialConversaId = (_b = location.state) == null ? void 0 : _b.conversaId;
   const [conversas, setConversas] = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -2184,6 +2243,11 @@ function Mensagens() {
       onMessage: (e) => {
         try {
           const msg = JSON.parse(e.data);
+          if (msg.erro) {
+            useUIStore.getState().showError(msg.erro);
+            fetchConversas();
+            return;
+          }
           if (msg.conversa_id === selected.id) {
             setMensagens((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
           }
@@ -2223,7 +2287,7 @@ function Mensagens() {
   const handleSend = async (e) => {
     var _a2;
     const content = newMsg.trim();
-    if (!content || !selected) return;
+    if (!content || !selected || estaArquivada(selected)) return;
     setNewMsg("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -2232,11 +2296,7 @@ function Mensagens() {
       socketRef.current.send(JSON.stringify({ conversa_id: selected.id, conteudo: content }));
     } else {
       try {
-        await api.post(`/vitrine/conversas/${selected.id}/mensagens`, {
-          veiculo_id: selected.veiculo_id || "",
-          loja_id: selected.loja_id,
-          mensagem: content
-        });
+        await api.post(`/vitrine/conversas/${selected.id}/mensagens`, { conteudo: content });
         fetchMensagens(selected.id);
       } catch (err) {
         console.error("Erro ao enviar mensagem:", err);
@@ -2249,6 +2309,37 @@ function Mensagens() {
       e.preventDefault();
       handleSend();
     }
+  };
+  const grupos = {
+    ativas: filtered.filter((c) => !estaArquivada(c)),
+    arquivadas: filtered.filter((c) => estaArquivada(c))
+  };
+  const renderItemConversa = (c) => {
+    const arquivada = estaArquivada(c);
+    return /* @__PURE__ */ jsxs(
+      "div",
+      {
+        className: `vt-conv-item${(selected == null ? void 0 : selected.id) === c.id ? " active" : ""}${arquivada ? " arquivada" : ""}`,
+        onClick: () => selectConversa(c),
+        children: [
+          /* @__PURE__ */ jsx("div", { className: "vt-conv-avatar", children: initials(c.loja_nome) }),
+          /* @__PURE__ */ jsxs("div", { className: "vt-conv-info", children: [
+            /* @__PURE__ */ jsx("div", { className: "vt-conv-name", children: c.loja_nome }),
+            c.veiculo_modelo && /* @__PURE__ */ jsxs("div", { className: "vt-conv-sub", children: [
+              c.veiculo_marca,
+              " ",
+              c.veiculo_modelo
+            ] }),
+            /* @__PURE__ */ jsx("div", { className: "vt-conv-preview", children: c.ultima_mensagem || "Nenhuma mensagem." })
+          ] }),
+          /* @__PURE__ */ jsxs("div", { className: "vt-conv-meta", children: [
+            /* @__PURE__ */ jsx("span", { className: "vt-conv-time", children: formatTime(c.ultima_mensagem_data) }),
+            arquivada && /* @__PURE__ */ jsx("span", { className: "vt-badge vt-badge-muted", children: MOTIVO_LABEL[c.motivo_arquivo ?? ""] ?? "Arquivada" })
+          ] })
+        ]
+      },
+      c.id
+    );
   };
   if (!isAuthenticated) {
     return /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "80vh", gap: 16, padding: 24, textAlign: "center" }, children: [
@@ -2280,27 +2371,16 @@ function Mensagens() {
           )
         ] })
       ] }),
-      /* @__PURE__ */ jsx("div", { className: "vt-conv-list", children: loadingConversas ? /* @__PURE__ */ jsx("div", { style: { display: "flex", justifyContent: "center", padding: 24 }, children: /* @__PURE__ */ jsx("div", { className: "spinner" }) }) : filtered.length === 0 ? /* @__PURE__ */ jsx("div", { style: { padding: 24, textAlign: "center", color: "var(--vt-text-dim)", fontSize: 14 }, children: search ? "Nenhuma conversa encontrada." : "Nenhuma conversa ainda." }) : filtered.map((c) => /* @__PURE__ */ jsxs(
-        "div",
-        {
-          className: `vt-conv-item${(selected == null ? void 0 : selected.id) === c.id ? " active" : ""}`,
-          onClick: () => selectConversa(c),
-          children: [
-            /* @__PURE__ */ jsx("div", { className: "vt-conv-avatar", children: initials(c.loja_nome) }),
-            /* @__PURE__ */ jsxs("div", { className: "vt-conv-info", children: [
-              /* @__PURE__ */ jsx("div", { className: "vt-conv-name", children: c.loja_nome }),
-              c.veiculo_modelo && /* @__PURE__ */ jsxs("div", { className: "vt-conv-sub", children: [
-                c.veiculo_marca,
-                " ",
-                c.veiculo_modelo
-              ] }),
-              /* @__PURE__ */ jsx("div", { className: "vt-conv-preview", children: c.ultima_mensagem || "Nenhuma mensagem." })
-            ] }),
-            /* @__PURE__ */ jsx("div", { className: "vt-conv-meta", children: /* @__PURE__ */ jsx("span", { className: "vt-conv-time", children: formatTime(c.ultima_mensagem_data) }) })
-          ]
-        },
-        c.id
-      )) })
+      /* @__PURE__ */ jsx("div", { className: "vt-conv-list", children: loadingConversas ? /* @__PURE__ */ jsx("div", { style: { display: "flex", justifyContent: "center", padding: 24 }, children: /* @__PURE__ */ jsx("div", { className: "spinner" }) }) : filtered.length === 0 ? /* @__PURE__ */ jsx("div", { style: { padding: 24, textAlign: "center", color: "var(--vt-text-dim)", fontSize: 14 }, children: search ? "Nenhuma conversa encontrada." : "Nenhuma conversa ainda." }) : /* @__PURE__ */ jsxs(Fragment, { children: [
+        grupos.ativas.map((c) => renderItemConversa(c)),
+        grupos.arquivadas.length > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
+          /* @__PURE__ */ jsxs("div", { className: "vt-conv-group", children: [
+            "Arquivadas · ",
+            grupos.arquivadas.length
+          ] }),
+          grupos.arquivadas.map((c) => renderItemConversa(c))
+        ] })
+      ] }) })
     ] }),
     /* @__PURE__ */ jsx("div", { className: "vt-chat-area", children: selected ? /* @__PURE__ */ jsxs(Fragment, { children: [
       /* @__PURE__ */ jsx("div", { className: "vt-chat-head", children: /* @__PURE__ */ jsxs("div", { className: "vt-chat-head-left", children: [
@@ -2327,6 +2407,12 @@ function Mensagens() {
           const isMe = m.autor_id === userId;
           const prevIsMe = i > 0 && mensagens[i - 1].autor_id === userId;
           const showDate = i === 0 || new Date(m.created_at).toDateString() !== new Date(mensagens[i - 1].created_at).toDateString();
+          if (m.sistema) {
+            return /* @__PURE__ */ jsxs(React.Fragment, { children: [
+              showDate && /* @__PURE__ */ jsx("div", { className: "vt-msg-date", children: new Date(m.created_at).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" }) }),
+              /* @__PURE__ */ jsx("div", { className: "vt-msg-sistema", children: m.conteudo })
+            ] }, m.id);
+          }
           return /* @__PURE__ */ jsxs(React.Fragment, { children: [
             showDate && /* @__PURE__ */ jsx("div", { className: "vt-msg-date", children: new Date(m.created_at).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" }) }),
             /* @__PURE__ */ jsxs("div", { className: `vt-msg-row${isMe ? " me" : " other"}`, style: { marginTop: !isMe && prevIsMe || isMe && !prevIsMe ? 8 : 0 }, children: [
@@ -2340,7 +2426,20 @@ function Mensagens() {
         }),
         /* @__PURE__ */ jsx("div", { ref: messagesEndRef })
       ] }),
-      /* @__PURE__ */ jsxs("div", { className: "vt-chat-input-bar", children: [
+      estaArquivada(selected) ? /* @__PURE__ */ jsxs("div", { className: "vt-chat-arquivada", children: [
+        /* @__PURE__ */ jsxs("div", { className: "vt-chat-arquivada-txt", children: [
+          /* @__PURE__ */ jsx("strong", { children: MOTIVO_LABEL[selected.motivo_arquivo ?? ""] ?? "Conversa arquivada" }),
+          /* @__PURE__ */ jsx("span", { children: "Esta conversa virou histórico. Para falar de outro veículo, abra o anúncio dele." })
+        ] }),
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            className: "vt-btn vt-btn-primary",
+            onClick: () => navigate(selected.loja_slug ? `/loja/${selected.loja_slug}` : "/"),
+            children: "Ver estoque da loja"
+          }
+        )
+      ] }) : /* @__PURE__ */ jsxs("div", { className: "vt-chat-input-bar", children: [
         /* @__PURE__ */ jsx("div", { className: "vt-chat-input-wrap", children: /* @__PURE__ */ jsx(
           "textarea",
           {
@@ -3098,11 +3197,6 @@ function Termos() {
       titulo: "Termos de Uso",
       subtitulo: "Última atualização: julho de 2026",
       children: [
-        /* @__PURE__ */ jsxs("div", { className: "vt-inst-nota", children: [
-          "⚠️ Rascunho inicial. ",
-          /* @__PURE__ */ jsx("strong", { children: "[REVISAR COM ADVOGADO]" }),
-          " antes de considerar juridicamente definitivo. O texto descreve o funcionamento real da plataforma na data acima."
-        ] }),
         /* @__PURE__ */ jsx("h2", { children: "1. Aceitação" }),
         /* @__PURE__ */ jsx("p", { children: 'Ao criar uma conta ou utilizar a Social Veículos (a "Plataforma"), você concorda com estes Termos de Uso. Se não concordar, não utilize a Plataforma.' }),
         /* @__PURE__ */ jsx("h2", { children: "2. O que a Plataforma é" }),
@@ -3127,10 +3221,7 @@ function Termos() {
         /* @__PURE__ */ jsx("h2", { children: "5. Conteúdo dos anúncios" }),
         /* @__PURE__ */ jsx("p", { children: "Os anúncios (fotos, descrições, preços, disponibilidade) são de responsabilidade das lojas. A Social Veículos pode remover conteúdo que viole estes Termos ou a lei, a qualquer momento." }),
         /* @__PURE__ */ jsx("h2", { children: "6. Limitação de responsabilidade" }),
-        /* @__PURE__ */ jsxs("p", { children: [
-          'A Plataforma é fornecida "no estado em que se encontra". Na máxima extensão permitida em lei, a Social Veículos não se responsabiliza por prejuízos decorrentes de negociações entre usuários e lojas. ',
-          /* @__PURE__ */ jsx("strong", { children: "[REVISAR COM ADVOGADO]" })
-        ] }),
+        /* @__PURE__ */ jsx("p", { children: 'A Plataforma é fornecida "no estado em que se encontra". Na máxima extensão permitida em lei, a Social Veículos não se responsabiliza por prejuízos decorrentes de negociações entre usuários e lojas.' }),
         /* @__PURE__ */ jsx("h2", { children: "7. Alterações" }),
         /* @__PURE__ */ jsx("p", { children: "Podemos atualizar estes Termos. Mudanças relevantes serão comunicadas na Plataforma. O uso continuado após a atualização significa concordância com a nova versão." }),
         /* @__PURE__ */ jsx("h2", { children: "8. Contato" }),
@@ -3150,18 +3241,12 @@ function Privacidade() {
       titulo: "Política de Privacidade",
       subtitulo: "Última atualização: julho de 2026 · Em conformidade com a LGPD (Lei 13.709/2018)",
       children: [
-        /* @__PURE__ */ jsxs("div", { className: "vt-inst-nota", children: [
-          "⚠️ Rascunho inicial fiel ao que a Plataforma coleta hoje.",
-          " ",
-          /* @__PURE__ */ jsx("strong", { children: "[REVISAR COM ADVOGADO]" }),
-          " antes de considerar juridicamente definitivo."
-        ] }),
         /* @__PURE__ */ jsx("h2", { children: "1. Quem trata seus dados" }),
         /* @__PURE__ */ jsxs("p", { children: [
-          "A Social Veículos é a controladora dos dados coletados na vitrine pública. Para exercer seus direitos ou tirar dúvidas, use o canal em ",
+          "A Social Veículos é a controladora dos dados coletados na vitrine pública. Para exercer seus direitos, falar com o encarregado pelo tratamento de dados ou tirar dúvidas, use o canal em",
+          " ",
           /* @__PURE__ */ jsx("a", { href: `mailto:${CONTATO_EMAIL}`, children: CONTATO_EMAIL }),
-          ".",
-          /* @__PURE__ */ jsx("strong", { children: " [REVISAR COM ADVOGADO — razão social, CNPJ e encarregado/DPO]" })
+          "."
         ] }),
         /* @__PURE__ */ jsx("h2", { children: "2. Quais dados coletamos" }),
         /* @__PURE__ */ jsxs("ul", { children: [
@@ -3202,10 +3287,7 @@ function Privacidade() {
           "."
         ] }),
         /* @__PURE__ */ jsx("h2", { children: "6. Retenção e exclusão" }),
-        /* @__PURE__ */ jsxs("p", { children: [
-          "Mantemos seus dados enquanto sua conta existir e pelo prazo necessário ao cumprimento de obrigações legais. Você pode pedir a exclusão da conta pelo canal acima.",
-          /* @__PURE__ */ jsx("strong", { children: " [REVISAR COM ADVOGADO — prazos legais de retenção]" })
-        ] }),
+        /* @__PURE__ */ jsx("p", { children: "Mantemos seus dados enquanto sua conta existir e pelo prazo necessário ao cumprimento de obrigações legais. Após o pedido de exclusão, os dados são eliminados, salvo os registros que a lei exige manter (como logs de acesso, pelo prazo do Marco Civil da Internet). Você pode pedir a exclusão da conta pelo canal acima." }),
         /* @__PURE__ */ jsx("h2", { children: "7. Segurança" }),
         /* @__PURE__ */ jsx("p", { children: "Adotamos medidas técnicas para proteger seus dados, incluindo senhas armazenadas com hash e controle de acesso. Nenhum sistema é 100% imune, mas trabalhamos para reduzir riscos." }),
         /* @__PURE__ */ jsx("h2", { children: "8. Alterações" }),

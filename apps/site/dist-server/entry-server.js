@@ -171,6 +171,21 @@ function Estoque({ dados }) {
     /* @__PURE__ */ jsx(SiteFooter, { dados })
   ] });
 }
+function mascararTelefone(val) {
+  const limpo = val.replace(/\D/g, "");
+  if (limpo.length <= 10) {
+    return limpo.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{4})(\d{1,4})$/, "$1-$2").substring(0, 14);
+  }
+  return limpo.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d{4})$/, "$1-$2").substring(0, 15);
+}
+function validarTelefone(val) {
+  const limpo = (val || "").replace(/\D/g, "");
+  return limpo.length === 10 || limpo.length === 11;
+}
+function validarEmail(val) {
+  if (!val) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
+}
 function Contato({ dados }) {
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -179,8 +194,18 @@ function Contato({ dados }) {
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [erro, setErro] = useState(false);
+  const [erroValidacao, setErroValidacao] = useState("");
   const submit = async (e) => {
     e.preventDefault();
+    setErroValidacao("");
+    if (!validarTelefone(telefone)) {
+      setErroValidacao("Informe um telefone válido com DDD (ex.: (11) 98765-4321).");
+      return;
+    }
+    if (email && !validarEmail(email)) {
+      setErroValidacao("Informe um e-mail válido.");
+      return;
+    }
     setEnviando(true);
     setErro(false);
     const host = typeof window !== "undefined" ? window.location.hostname : "";
@@ -202,13 +227,24 @@ function Contato({ dados }) {
       /* @__PURE__ */ jsx("h2", { className: "site-section-titulo", children: "Fale conosco" }),
       enviado ? /* @__PURE__ */ jsx("p", { children: "Recebemos sua mensagem! Em breve entraremos em contato." }) : /* @__PURE__ */ jsxs("form", { onSubmit: submit, children: [
         erro && /* @__PURE__ */ jsx("p", { style: { color: "var(--site-error, #ef4444)", marginBottom: 12 }, children: "Não foi possível enviar. Tente novamente." }),
+        erroValidacao && /* @__PURE__ */ jsx("p", { style: { color: "var(--site-error, #ef4444)", marginBottom: 12 }, children: erroValidacao }),
         /* @__PURE__ */ jsxs("div", { className: "site-form-group", children: [
           /* @__PURE__ */ jsx("label", { children: "Nome" }),
           /* @__PURE__ */ jsx("input", { value: nome, onChange: (e) => setNome(e.target.value), required: true, minLength: 2 })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "site-form-group", children: [
           /* @__PURE__ */ jsx("label", { children: "Telefone / WhatsApp" }),
-          /* @__PURE__ */ jsx("input", { value: telefone, onChange: (e) => setTelefone(e.target.value), required: true, minLength: 8 })
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              value: telefone,
+              onChange: (e) => setTelefone(mascararTelefone(e.target.value)),
+              required: true,
+              inputMode: "tel",
+              placeholder: "(11) 98765-4321",
+              maxLength: 15
+            }
+          )
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "site-form-group", children: [
           /* @__PURE__ */ jsx("label", { children: "E-mail (opcional)" }),
@@ -261,8 +297,14 @@ function Financiamento({ dados }) {
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [erro, setErro] = useState(false);
+  const [erroValidacao, setErroValidacao] = useState("");
   const submit = async (e) => {
     e.preventDefault();
+    setErroValidacao("");
+    if (!validarTelefone(telefone)) {
+      setErroValidacao("Informe um telefone válido com DDD (ex.: (11) 98765-4321).");
+      return;
+    }
     setEnviando(true);
     setErro(false);
     const host = typeof window !== "undefined" ? window.location.hostname : "";
@@ -292,13 +334,24 @@ function Financiamento({ dados }) {
       ] }),
       enviado ? /* @__PURE__ */ jsx("p", { style: { marginTop: 16 }, children: "Recebemos seu interesse! Em breve entraremos em contato." }) : /* @__PURE__ */ jsxs("form", { onSubmit: submit, style: { marginTop: 16 }, children: [
         erro && /* @__PURE__ */ jsx("p", { style: { color: "var(--site-error, #ef4444)", marginBottom: 12 }, children: "Não foi possível enviar. Tente novamente." }),
+        erroValidacao && /* @__PURE__ */ jsx("p", { style: { color: "var(--site-error, #ef4444)", marginBottom: 12 }, children: erroValidacao }),
         /* @__PURE__ */ jsxs("div", { className: "site-form-group", children: [
           /* @__PURE__ */ jsx("label", { children: "Nome" }),
           /* @__PURE__ */ jsx("input", { value: nome, onChange: (e) => setNome(e.target.value), required: true, minLength: 2 })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "site-form-group", children: [
           /* @__PURE__ */ jsx("label", { children: "Telefone / WhatsApp" }),
-          /* @__PURE__ */ jsx("input", { value: telefone, onChange: (e) => setTelefone(e.target.value), required: true, minLength: 8 })
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              value: telefone,
+              onChange: (e) => setTelefone(mascararTelefone(e.target.value)),
+              required: true,
+              inputMode: "tel",
+              placeholder: "(11) 98765-4321",
+              maxLength: 15
+            }
+          )
         ] }),
         /* @__PURE__ */ jsx("button", { type: "submit", className: "site-form-submit", disabled: enviando, children: enviando ? "Enviando…" : "Quero saber mais" })
       ] })
@@ -359,6 +412,8 @@ function App() {
   const titulo = dados.site.seo_title || dados.loja.nome;
   const descricao = dados.site.seo_description || void 0;
   const imagem = dados.site.og_image_url || dados.site.logo_url || void 0;
+  const ga4Id = /^(G|GT|AW|UA|GTM)-[A-Z0-9-]{4,20}$/.test(dados.site.ga4_id || "") ? dados.site.ga4_id : null;
+  const metaPixelId = /^\d{5,20}$/.test(dados.site.meta_pixel_id || "") ? dados.site.meta_pixel_id : null;
   return /* @__PURE__ */ jsxs(Fragment, { children: [
     /* @__PURE__ */ jsxs(Helmet, { children: [
       /* @__PURE__ */ jsx("title", { children: titulo }),
@@ -369,21 +424,21 @@ function App() {
       descricao && /* @__PURE__ */ jsx("meta", { property: "og:description", content: descricao }),
       imagem && /* @__PURE__ */ jsx("meta", { property: "og:image", content: imagem }),
       /* @__PURE__ */ jsx("meta", { name: "twitter:card", content: "summary_large_image" }),
-      dados.site.ga4_id && /* @__PURE__ */ jsx(
+      ga4Id && /* @__PURE__ */ jsx(
         "script",
         {
           type: "text/javascript",
           dangerouslySetInnerHTML: {
-            __html: `(function(){var s=document.createElement('script');s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id=${dados.site.ga4_id}';document.head.appendChild(s);})();window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${dados.site.ga4_id}');`
+            __html: `(function(){var s=document.createElement('script');s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id=${ga4Id}';document.head.appendChild(s);})();window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${ga4Id}');`
           }
         }
       ),
-      dados.site.meta_pixel_id && /* @__PURE__ */ jsx(
+      metaPixelId && /* @__PURE__ */ jsx(
         "script",
         {
           type: "text/javascript",
           dangerouslySetInnerHTML: {
-            __html: `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${dados.site.meta_pixel_id}');fbq('track','PageView');`
+            __html: `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${metaPixelId}');fbq('track','PageView');`
           }
         }
       ),
