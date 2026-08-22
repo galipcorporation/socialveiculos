@@ -19,7 +19,10 @@ primary_region = "gru"  # São Paulo
   # com allow_credentials=True, qualquer coisa rodando nessas portas na
   # máquina de um usuário logado herdaria as credenciais dele contra a API
   # de produção (B132) — dev usa o .env local, não este arquivo.
-  CORS_ORIGINS = "https://socialveiculos-gestor.vercel.app,https://socialveiculos-vitrine.vercel.app,https://socialveiculos-admin.vercel.app,https://socialveiculos-site.vercel.app"
+  # URLs conferidas contra o que está REALMENTE no ar (ARMADILHAS-PRODUCAO.md);
+  # as antigas ficam listadas junto com as do domínio próprio até a migração
+  # terminar — não desligar nenhuma antes da hora (B136).
+  CORS_ORIGINS = "https://gestor-sigma-cyan.vercel.app,https://vitrine-cyan.vercel.app,https://admin-three-bay-23.vercel.app,https://site-one-nu-70.vercel.app,https://app.socialveiculos.com.br,https://socialveiculos.com.br,https://www.socialveiculos.com.br,https://admin.socialveiculos.com.br,https://sites.socialveiculos.com.br"
 
 [http_service]
   internal_port = 8000

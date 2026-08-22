@@ -3,8 +3,8 @@
   "buildCommand": "pnpm --filter @sv/gestor build",
   "outputDirectory": "apps/gestor/dist",
   "routes": [
-    { "src": "/v1/(.*)", "dest": "https://socialveiculos-api.fly.dev/v1/$1" },
-    { "src": "/static/(.*)", "dest": "https://socialveiculos-api.fly.dev/static/$1" },
+    { "src": "/v1/(.*)", "dest": "https://api.socialveiculos.com.br/v1/$1" },
+    { "src": "/static/(.*)", "dest": "https://api.socialveiculos.com.br/static/$1" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
