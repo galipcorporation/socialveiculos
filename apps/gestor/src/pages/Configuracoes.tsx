@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useUIStore } from '../stores/uiStore'
+import { useAuthStore } from '../stores/authStore'
 import { mascararCNPJ, mascararCPF, mascararRG, mascararTelefone, mascararCEP, capitalizarNome } from '../lib/mascaras'
 import { buscarCEP } from '../lib/cep'
 import { RichEditor } from '../components/RichEditor'
 import { PasswordInput } from '../components/PasswordInput'
 import { CATALOGO_VARIAVEIS, labelsDe } from '../lib/variaveisContrato'
-import { Link2, Unlink, Gem, FileText, ShieldCheck, Upload, AlertTriangle } from 'lucide-react'
+import { Link2, Unlink, Gem, FileText, ShieldCheck, Upload, AlertTriangle, Camera, Trash2, User as UserIcon, Lock } from 'lucide-react'
 
 interface Loja {
   id: string
@@ -100,9 +101,30 @@ export function Configuracoes() {
 
   const location = useLocation()
   const abaInicial = (location.state as { aba?: string } | null)?.aba
-  const [abaAtual, setAbaAtual] = useState<'perfil' | 'credenciais' | 'ia' | 'redes' | 'detran' | 'fiscal' | 'contratos'>(
-    escolherNonce ? 'redes' : (['redes', 'fiscal'] as const).includes(abaInicial as any) ? (abaInicial as 'redes' | 'fiscal') : 'perfil'
+  const [abaAtual, setAbaAtual] = useState<'meu_perfil' | 'perfil' | 'credenciais' | 'ia' | 'redes' | 'detran' | 'fiscal' | 'contratos'>(
+    escolherNonce ? 'redes' : abaInicial && (['meu_perfil', 'perfil', 'credenciais', 'ia', 'redes', 'detran', 'fiscal', 'contratos'] as const).includes(abaInicial as any) ? (abaInicial as any) : 'meu_perfil'
   )
+
+  const user = useAuthStore((state) => state.user)
+  const updateUser = useAuthStore((state) => state.updateUser)
+
+  const [userNome, setUserNome] = useState(user?.nome || '')
+  const [userTelefone, setUserTelefone] = useState(user?.telefone || '')
+  const [salvandoUser, setSalvandoUser] = useState(false)
+  const [enviandoAvatar, setEnviandoAvatar] = useState(false)
+
+  // Troca de senha
+  const [senhaAtual, setSenhaAtual] = useState('')
+  const [novaSenha, setNovaSenha] = useState('')
+  const [confirmarNovaSenha, setConfirmarNovaSenha] = useState('')
+  const [salvandoSenha, setSalvandoSenha] = useState(false)
+
+  useEffect(() => {
+    if (user) {
+      setUserNome(user.nome || '')
+      setUserTelefone(user.telefone || '')
+    }
+  }, [user])
 
   const [loja, setLoja] = useState<Loja | null>(null)
   const [form, setForm] = useState<Partial<Editaveis>>({})
@@ -390,6 +412,109 @@ export function Configuracoes() {
     setResultadoTeste(null)
   }, [bancoSelecionado, credEscopo, credenciais])
 
+  const getInitials = (name?: string) => {
+    if (!name) return 'U'
+    const parts = name.trim().split(/\s+/)
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    }
+    return parts[0].slice(0, 2).toUpperCase()
+  }
+
+  const handleUploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setEnviandoAvatar(true)
+    setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await api.post<{ avatar_url: string }>('/auth/me/avatar', fd)
+      updateUser({ avatar_url: res.avatar_url })
+      useUIStore.getState().showToast('Foto de perfil atualizada com sucesso!', 'success')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao enviar foto de perfil.')
+    } finally {
+      setEnviandoAvatar(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleRemoverAvatar = async () => {
+    const ok = await useUIStore.getState().confirm({
+      title: 'Remover Foto de Perfil',
+      message: 'Deseja realmente remover sua foto de perfil?',
+      confirmText: 'Remover',
+      cancelText: 'Cancelar',
+    })
+    if (!ok) return
+    setEnviandoAvatar(true)
+    setError(null)
+    try {
+      await api.delete('/auth/me/avatar')
+      updateUser({ avatar_url: null })
+      useUIStore.getState().showToast('Foto de perfil removida com sucesso.', 'success')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao remover foto de perfil.')
+    } finally {
+      setEnviandoAvatar(false)
+    }
+  }
+
+  const handleSalvarMeuPerfil = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!userNome.trim()) {
+      setError('Nome é obrigatório.')
+      return
+    }
+    setSalvandoUser(true)
+    setError(null)
+    try {
+      const res = await api.patch<{ nome: string; telefone: string | null }>('/auth/me', {
+        nome: userNome.trim(),
+        telefone: userTelefone.trim() || undefined,
+      })
+      updateUser({ nome: res.nome, telefone: res.telefone })
+      useUIStore.getState().showToast('Seus dados foram atualizados com sucesso!', 'success')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao atualizar dados.')
+    } finally {
+      setSalvandoUser(false)
+    }
+  }
+
+  const handleAlterarSenha = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!senhaAtual) {
+      setError('Informe sua senha atual.')
+      return
+    }
+    if (novaSenha.length < 6) {
+      setError('A nova senha deve ter pelo menos 6 caracteres.')
+      return
+    }
+    if (novaSenha !== confirmarNovaSenha) {
+      setError('A confirmação da nova senha não confere.')
+      return
+    }
+    setSalvandoSenha(true)
+    setError(null)
+    try {
+      await api.post('/auth/me/senha', {
+        senha_atual: senhaAtual,
+        nova_senha: novaSenha,
+      })
+      setSenhaAtual('')
+      setNovaSenha('')
+      setConfirmarNovaSenha('')
+      useUIStore.getState().showToast('Senha alterada com sucesso!', 'success')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao alterar senha.')
+    } finally {
+      setSalvandoSenha(false)
+    }
+  }
+
   const handleUploadMarcaDagua = async (file: File) => {
     setEnviandoMarca(true)
     setError(null)
@@ -619,6 +744,22 @@ export function Configuracoes() {
         WebkitOverflowScrolling: 'touch',
       }}>
         <button
+          onClick={() => setAbaAtual('meu_perfil')}
+          style={{
+            background: abaAtual === 'meu_perfil' ? 'var(--sv-primary)' : 'transparent',
+            color: abaAtual === 'meu_perfil' ? '#fff' : 'var(--sv-text-dim)',
+            border: 'none',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+          👤 Meu Perfil & Foto
+        </button>
+        <button
           onClick={() => setAbaAtual('perfil')}
           style={{
             background: abaAtual === 'perfil' ? 'var(--sv-primary)' : 'transparent',
@@ -728,6 +869,163 @@ export function Configuracoes() {
         </div>
       ) : (
         <>
+          {abaAtual === 'meu_perfil' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              {/* Card de Foto de Perfil */}
+              <div className="glass-card">
+                <h3 style={{ fontSize: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Camera size={18} /> Foto de Perfil (Avatar)
+                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+                  <div style={{
+                    width: 96,
+                    height: 96,
+                    borderRadius: '50%',
+                    background: 'var(--sv-surface-dim)',
+                    border: '2px solid var(--sv-border)',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 32,
+                    fontWeight: 700,
+                    color: 'var(--sv-primary)',
+                    flexShrink: 0
+                  }}>
+                    {user?.avatar_url ? (
+                      <img src={user.avatar_url} alt={user?.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      getInitials(user?.nome)
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 240 }}>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--sv-text-dim)' }}>
+                      Envie uma foto profissional para identificação no sistema, no cabeçalho e nos atendimentos.
+                    </p>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <label className="btn btn-primary btn-sm" style={{ cursor: enviandoAvatar ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Upload size={14} />
+                        {enviandoAvatar ? 'Enviando...' : 'Carregar Nova Foto'}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={handleUploadAvatar}
+                          disabled={enviandoAvatar}
+                          style={{ display: 'none' }}
+                        />
+                      </label>
+                      {user?.avatar_url && (
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          onClick={handleRemoverAvatar}
+                          disabled={enviandoAvatar}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--sv-danger)' }}
+                        >
+                          <Trash2 size={14} /> Remover Foto
+                        </button>
+                      )}
+                    </div>
+                    <small style={{ fontSize: 11, color: 'var(--sv-text-muted)' }}>Formatos aceitos: JPG, PNG ou WebP (máx. 15MB).</small>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card de Dados Pessoais */}
+              <form className="glass-card" onSubmit={handleSalvarMeuPerfil}>
+                <h3 style={{ fontSize: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <UserIcon size={18} /> Dados da Minha Conta
+                </h3>
+                <div className="form-grid-12">
+                  <div className="form-group" style={{ gridColumn: 'span 6' }}>
+                    <label>Nome Completo *</label>
+                    <input
+                      type="text"
+                      required
+                      value={userNome}
+                      onChange={(e) => setUserNome(capitalizarNome(e.target.value))}
+                      placeholder="Ex: João da Silva"
+                    />
+                  </div>
+                  <div className="form-group" style={{ gridColumn: 'span 6' }}>
+                    <label>E-mail de Acesso (Login)</label>
+                    <input
+                      type="email"
+                      value={user?.email ?? ''}
+                      disabled
+                      style={{ opacity: 0.7, cursor: 'not-allowed', background: 'rgba(255,255,255,0.03)' }}
+                    />
+                    <small style={{ fontSize: 11, color: 'var(--sv-text-muted)' }}>O e-mail é utilizado para login e segurança.</small>
+                  </div>
+                  <div className="form-group" style={{ gridColumn: 'span 6' }}>
+                    <label>Telefone / WhatsApp</label>
+                    <input
+                      type="text"
+                      value={userTelefone}
+                      onChange={(e) => setUserTelefone(mascararTelefone(e.target.value))}
+                      placeholder="(11) 99999-9999"
+                    />
+                  </div>
+                  <div className="form-group" style={{ gridColumn: 'span 6' }}>
+                    <label>Papel / Cargo na Loja</label>
+                    <input
+                      type="text"
+                      value={user?.papel ? (user.papel === 'gestor' ? '👑 Gestor / Proprietário' : user.papel === 'admin_plataforma' ? '🛡️ Administrador' : '💼 Vendedor') : '—'}
+                      disabled
+                      style={{ opacity: 0.7, cursor: 'not-allowed', background: 'rgba(255,255,255,0.03)' }}
+                    />
+                  </div>
+                </div>
+                <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="submit" className="btn btn-primary" disabled={salvandoUser}>
+                    {salvandoUser ? 'Salvando...' : 'Salvar Dados Pessoais'}
+                  </button>
+                </div>
+              </form>
+
+              {/* Card de Alteração de Senha */}
+              <form className="glass-card" onSubmit={handleAlterarSenha}>
+                <h3 style={{ fontSize: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Lock size={18} /> Alterar Minha Senha
+                </h3>
+                <div className="form-grid-12">
+                  <div className="form-group" style={{ gridColumn: 'span 4' }}>
+                    <label>Senha Atual *</label>
+                    <PasswordInput
+                      value={senhaAtual}
+                      onChange={(e) => setSenhaAtual(e.target.value)}
+                      placeholder="Sua senha atual"
+                      required
+                    />
+                  </div>
+                  <div className="form-group" style={{ gridColumn: 'span 4' }}>
+                    <label>Nova Senha * (mín. 6 dígitos)</label>
+                    <PasswordInput
+                      value={novaSenha}
+                      onChange={(e) => setNovaSenha(e.target.value)}
+                      placeholder="Nova senha"
+                      required
+                    />
+                  </div>
+                  <div className="form-group" style={{ gridColumn: 'span 4' }}>
+                    <label>Confirmar Nova Senha *</label>
+                    <PasswordInput
+                      value={confirmarNovaSenha}
+                      onChange={(e) => setConfirmarNovaSenha(e.target.value)}
+                      placeholder="Repita a nova senha"
+                      required
+                    />
+                  </div>
+                </div>
+                <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="submit" className="btn btn-secondary" disabled={salvandoSenha}>
+                    {salvandoSenha ? 'Alterando...' : 'Atualizar Senha'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
           {abaAtual === 'perfil' && (
             <form className="glass-card" onSubmit={handleSalvarPerfil}>
               {loja && (

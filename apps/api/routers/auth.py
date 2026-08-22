@@ -85,6 +85,11 @@ class UpdateMeRequest(BaseModel):
     telefone: Optional[str] = Field(None, max_length=20)
 
 
+class ChangePasswordMeRequest(BaseModel):
+    senha_atual: str
+    nova_senha: str = Field(..., min_length=6, max_length=100)
+
+
 class PreferenciasMeRequest(BaseModel):
     """
     Preferências de interface do próprio usuário. Campo omitido = não mexe.
@@ -1097,6 +1102,66 @@ async def upload_avatar(
     await db.commit()
     await db.refresh(current_user)
     return await montar_user_response(current_user, db)
+
+
+@router.delete("/me/avatar", response_model=UserResponse, dependencies=[Depends(rate_limit(10, 60))])
+async def remover_avatar(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Remove a foto de perfil (avatar) do usuário autenticado.
+    """
+    current_user.avatar_url = None
+    client_ip = request.client.host if request.client else None
+    await registrar_auditoria(
+        db=db,
+        loja_id=None,
+        ator_id=current_user.id,
+        ator_nome=current_user.nome,
+        acao="auth.remove_avatar",
+        entidade="usuario",
+        entidade_id=current_user.id,
+        detalhes="Foto de perfil (avatar) removida.",
+        ip=client_ip,
+    )
+    await db.commit()
+    await db.refresh(current_user)
+    return await montar_user_response(current_user, db)
+
+
+@router.post("/me/senha", status_code=status.HTTP_200_OK, dependencies=[Depends(rate_limit(5, 60))])
+async def alterar_senha_me(
+    data: ChangePasswordMeRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Permite ao usuário autenticado alterar sua própria senha mediante confirmação da senha atual.
+    """
+    if not verify_password(data.senha_atual, current_user.senha_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A senha atual informada está incorreta."
+        )
+
+    current_user.senha_hash = hash_password(data.nova_senha)
+    client_ip = request.client.host if request.client else None
+    await registrar_auditoria(
+        db=db,
+        loja_id=None,
+        ator_id=current_user.id,
+        ator_nome=current_user.nome,
+        acao="auth.change_password",
+        entidade="usuario",
+        entidade_id=current_user.id,
+        detalhes="Senha do usuário alterada com sucesso.",
+        ip=client_ip,
+    )
+    await db.commit()
+    return {"message": "Senha alterada com sucesso."}
 
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK, dependencies=[Depends(rate_limit(5, 60))])

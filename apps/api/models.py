@@ -517,6 +517,81 @@ class Midia(Base):
 
 
 # ═══════════════════════════════════════════════════════════════
+# 2.5b — PUBLICAÇÃO EM MARKETPLACES EXTERNOS (OLX, Mercado Livre, ...)
+# ═══════════════════════════════════════════════════════════════
+
+class CanalPublicacao(str, enum.Enum):
+    OLX = "olx"
+    MERCADO_LIVRE = "mercado_livre"
+    WEBMOTORS = "webmotors"
+    ICARROS = "icarros"
+
+
+class StatusPublicacaoCanal(str, enum.Enum):
+    PENDENTE = "pendente"
+    PUBLICADO = "publicado"
+    ERRO = "erro"
+    RETIRADO = "retirado"
+
+
+class CredencialCanal(Base):
+    """Token OAuth de uma loja para um canal externo. Nunca logar access_token/refresh_token em claro."""
+    __tablename__ = "credencial_canal"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
+    canal = Column(Enum(CanalPublicacao), nullable=False)
+
+    access_token = Column(Text, nullable=True)  # criptografado em repouso
+    refresh_token = Column(Text, nullable=True)  # criptografado em repouso
+    expira_em = Column(DateTime, nullable=True)
+    conta_externa_id = Column(String(200), nullable=True)  # id/nome da conta no canal, para exibir na UI
+
+    conectado_em = Column(DateTime, default=_now)
+    desconectado_em = Column(DateTime, nullable=True)
+
+    loja = relationship("Loja")
+
+    __table_args__ = (
+        UniqueConstraint("loja_id", "canal", name="uq_credencial_loja_canal"),
+        Index("ix_credencial_canal_loja", "loja_id"),
+    )
+
+
+class VeiculoCanalPublicacao(Base):
+    """Estado de publicação de um veículo em um canal externo (OLX, Mercado Livre, ...)."""
+    __tablename__ = "veiculo_canal_publicacao"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    veiculo_id = Column(String(36), ForeignKey("veiculo.id", ondelete="CASCADE"), nullable=False)
+    loja_id = Column(String(36), ForeignKey("loja.id", ondelete="CASCADE"), nullable=False)
+    canal = Column(Enum(CanalPublicacao), nullable=False)
+
+    external_id = Column(String(200), nullable=True)  # id do anúncio no canal externo
+    external_url = Column(String(500), nullable=True)
+    status = Column(Enum(StatusPublicacaoCanal), default=StatusPublicacaoCanal.PENDENTE, nullable=False)
+
+    last_payload_hash = Column(String(64), nullable=True)  # evita reenvio quando nada mudou
+    last_success_at = Column(DateTime, nullable=True)
+    last_error_code = Column(String(50), nullable=True)
+    last_error_message = Column(Text, nullable=True)
+    tentativas = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+    veiculo = relationship("Veiculo")
+    loja = relationship("Loja")
+
+    __table_args__ = (
+        UniqueConstraint("veiculo_id", "canal", name="uq_veiculo_canal"),
+        Index("ix_vcp_loja", "loja_id"),
+        Index("ix_vcp_veiculo", "veiculo_id"),
+        Index("ix_vcp_status", "status"),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
 # 2.6 — CLIENTES E CRM
 # ═══════════════════════════════════════════════════════════════
 
