@@ -246,6 +246,11 @@ async def cadastrar_lead_vitrine(data: LeadVitrineRequest, db: AsyncSession = De
     loja = res_loja.scalar_one_or_none()
 
     # Reaproveita ClientePF pelo telefone na loja, ou cria (sem exigir login).
+    # NUNCA sobrescreve nome/e-mail de um cadastro existente aqui: quem chama
+    # não provou ser dono do telefone informado, e este é endpoint público
+    # sem autenticação — permitir a sobrescrita deixava qualquer um que
+    # soubesse o telefone de um cliente real trocar o e-mail cadastrado dele
+    # (B131). Fusão/atualização de dados fica só no CRM, com usuário logado.
     res_cliente = await db.execute(
         select(ClientePF).where(ClientePF.loja_id == veiculo.loja_id, ClientePF.telefone == data.telefone)
     )
@@ -253,11 +258,6 @@ async def cadastrar_lead_vitrine(data: LeadVitrineRequest, db: AsyncSession = De
     if not cliente:
         cliente = ClientePF(loja_id=veiculo.loja_id, nome=data.nome, telefone=data.telefone, email=data.email)
         db.add(cliente)
-        await db.flush()
-    elif data.nome and cliente.nome != data.nome:
-        cliente.nome = data.nome
-        if data.email:
-            cliente.email = data.email
         await db.flush()
 
     obs = f"Lead vindo da Vitrine/Showcase. Mensagem inicial: {data.mensagem}" if data.mensagem else "Lead vindo da Vitrine/Showcase."

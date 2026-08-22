@@ -81,34 +81,20 @@ function RouteFallback() {
 }
 
 function PrivateRoute() {
-  const { isAuthenticated, user, token, logout } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
   // 'checking' até o backend confirmar a sessão; segura a renderização do painel
   // para que uma conta desativada NÃO chegue a ver a tela por um instante.
   const [status, setStatus] = useState<'checking' | 'ok'>('checking')
 
-  useEffect(() => {
-    if (token) {
-      try {
-        const parts = token.split('.')
-        if (parts.length === 3) {
-          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
-          if (payload.exp && payload.exp < Date.now() / 1000) {
-            logout('Sua sessão expirou. Faça login novamente.')
-          }
-        }
-      } catch {
-        logout()
-      }
-    }
-  }, [token, logout])
-
-  // Revalida contra o backend a cada carga (F5) ANTES de liberar o painel: o JWT
-  // pode continuar válido localmente, mas a conta / vínculo de loja pode ter sido
-  // desativado. /auth/me devolve 401 nesse caso — o interceptor de api.ts então
-  // expulsa para o login. Enquanto verifica, mostramos um loader (não o painel).
+  // Revalida contra o backend a cada carga (F5) ANTES de liberar o painel: o
+  // cookie httpOnly pode continuar existindo, mas a conta / vínculo de loja
+  // pode ter sido desativado — ou o cookie pode ter expirado (M6: não dá mais
+  // pra checar a expiração no JS, o cookie não é legível). /auth/me devolve
+  // 401 nesse caso — o interceptor de api.ts então expulsa para o login.
+  // Enquanto verifica, mostramos um loader (não o painel).
   useEffect(() => {
     let ativo = true
-    if (token) {
+    if (user) {
       api.get('/auth/me')
         .then(() => { if (ativo) setStatus('ok') })
         .catch(() => { /* 401/403 já expulsa via interceptor; não liberamos o painel */ })
@@ -116,9 +102,9 @@ function PrivateRoute() {
       setStatus('ok')
     }
     return () => { ativo = false }
-    // Só na montagem/troca de token — não a cada render.
+    // Só na montagem — não a cada render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token])
+  }, [])
 
   // Aguarda hidratação síncrona do persist antes de redirecionar
   if (user === null && !isAuthenticated) return <Navigate to="/login" replace />

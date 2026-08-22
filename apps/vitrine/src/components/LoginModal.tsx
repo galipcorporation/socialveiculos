@@ -36,7 +36,7 @@ export function LoginModal() {
         setMfaChallengeToken(data.mfa_challenge_token)
         return
       }
-      loginStore(data.access_token, data.refresh_token, data.user)
+      loginStore(data.user)
       close()
     } catch (err: any) {
       setErro(err.message || 'E-mail ou senha incorretos.')
@@ -56,7 +56,7 @@ export function LoginModal() {
         mfa_challenge_token: mfaChallengeToken,
         codigo: mfaCodigo,
       })
-      loginStore(data.access_token, data.refresh_token, data.user)
+      loginStore(data.user)
       close()
     } catch (err: any) {
       setErro(err.message || 'Código inválido.')
@@ -77,7 +77,7 @@ export function LoginModal() {
       
       // 2. Faz login imediatamente após o cadastro
       const data: any = await api.post('/auth/login', { email, senha })
-      loginStore(data.access_token, data.refresh_token, data.user)
+      loginStore(data.user)
       close()
     } catch (err: any) {
       setErro(err.message || 'Falha ao realizar cadastro. Tente outro e-mail.')

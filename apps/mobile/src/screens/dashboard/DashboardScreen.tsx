@@ -176,6 +176,7 @@ export default function DashboardScreen() {
                 tone="success"
                 loading={kpisQ.isLoading}
                 onPress={() => navigation.navigate('PosVenda')}
+                dark
               />
               {escopo === 'loja' ? (
                 <KpiCard

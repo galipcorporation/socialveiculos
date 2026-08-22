@@ -74,7 +74,7 @@ async def cenario():
         await db.commit()
 
     token = create_access_token(data={
-        "sub": ids["admin"], "email": email_admin, "papel": PapelUsuario.ADMIN_PLATAFORMA.value,
+        "sub": ids["admin"], "email": email_admin, "papel": PapelUsuario.ADMIN_PLATAFORMA.value, "typ": "access",
     })
     yield {"ids": ids, "headers": {"Authorization": f"Bearer {token}"}}
 
@@ -227,6 +227,7 @@ async def test_endpoints_exigem_admin_plataforma(client, cenario):
         "sub": cenario["ids"]["gestor"],
         "email": "gestor@x.com",
         "papel": PapelUsuario.GESTOR.value,
+        "typ": "access",
     })
     headers = {"Authorization": f"Bearer {token_gestor}"}
 

@@ -10,11 +10,12 @@ from typing import Optional, Union
 
 import pyotp
 import qrcode
-from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, UploadFile, File
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import update
 from sqlalchemy.orm import selectinload
 
 from auth import (
@@ -22,13 +23,16 @@ from auth import (
     verify_password,
     create_access_token,
     decode_access_token,
+    set_auth_cookies,
+    clear_auth_cookies,
+    COOKIE_REFRESH,
 )
 from database import get_db
 from deps import get_current_user, registrar_auditoria
 from models import Usuario, Loja, MembroLoja, Sessao, PapelUsuario, utcnow
 from modulos import modulos_padrao_json
 from config import settings
-from limiter import rate_limit
+from limiter import rate_limit, conta_bloqueada_por_falhas, registrar_falha_login, limpar_falhas_login
 from storage import storage_provider
 from email_service import enviar_email, render_reset_senha
 import oauth_google
@@ -163,7 +167,10 @@ class RegisterB2CRequest(_EmailNormalizadoMixin):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    # Opcional: o front web (cookie httpOnly) não manda isto no body — o
+    # endpoint lê do cookie sv_refresh quando ausente. Mobile continua
+    # mandando sempre, porque não tem cookie jar de browser.
+    refresh_token: Optional[str] = None
 
 
 class RefreshResponse(BaseModel):
@@ -173,7 +180,7 @@ class RefreshResponse(BaseModel):
 
 
 class LogoutRequest(BaseModel):
-    refresh_token: str
+    refresh_token: Optional[str] = None  # ausente no front web (cookie httpOnly)
 
 
 class ForgotPasswordRequest(_EmailNormalizadoMixin):
@@ -198,17 +205,48 @@ def slugify(text: str) -> str:
     return text
 
 
+# Cookies httpOnly (M6, 2026-08-21): mecanismo ADICIONAL ao token no body,
+# não substituição — o mobile (Expo/React Native) não é origem HTTP com
+# cookie jar de browser e continua lendo access_token/refresh_token do body,
+# via AsyncStorage próprio. Os fronts web (gestor/vitrine/admin/site) devem
+# migrar para consumir só o cookie: um XSS que rouba o body da resposta de
+# /login também rouba o token de um localStorage, mas não lê um cookie
+# httpOnly — daí a defesa real.
+#
+# samesite="lax", não "none": os 4 vercel.json já reescrevem /v1/* para a API
+# do Fly (`{ "src": "/v1/(.*)", "dest": "https://socialveiculos-api.fly.dev/v1/$1" }`),
+# então do ponto de vista do browser a API É a mesma origem do front em
+# produção — não existe cenário cross-site real aqui. "lax" é estritamente
+# mais seguro (mitiga CSRF em navegação cross-site) e evita as
+# inconsistências de "none" em navegadores com bloqueio agressivo de
+# third-party cookies (Safari ITP) — que aqui nem se aplicariam, mas não há
+# motivo para pagar o risco de "none" sem precisar dele.
+# `secure=True` sempre: os 4 fronts e a API rodam em HTTPS (Vercel + Fly), não
+# há cenário de dev-sobre-HTTP em produção; localhost em dev http não
+# seta/envia o cookie (aceitável — dev local continua no fluxo de Bearer
+# token puro, sem proxy do Vercel).
+#
+# Implementação em auth.py (módulo raiz, não este router): routers/admin.py
+# também precisa setar o cookie no fluxo de impersonação de admin, e
+# importar de um router pro outro criaria ciclo.
+_set_auth_cookies = set_auth_cookies
+_clear_auth_cookies = clear_auth_cookies
+_COOKIE_REFRESH = COOKIE_REFRESH
+
+
 async def _emitir_sessao_login(
     db: AsyncSession,
     user: Usuario,
     request: Request,
+    response: Optional[Response] = None,
     acao_auditoria: str = "auth.login",
 ) -> LoginResponse:
     """Cria Sessao + JWT para um usuário já autenticado (senha, Google ou pós-MFA)."""
+    await limpar_falhas_login(user.email)
     client_ip = request.client.host if request.client else None
 
     access_token = create_access_token(
-        data={"sub": user.id, "email": user.email, "papel": user.papel.value}
+        data={"sub": user.id, "email": user.email, "papel": user.papel.value, "typ": "access"}
     )
     refresh_token = secrets.token_hex(32)
     user_agent = request.headers.get("user-agent")
@@ -255,6 +293,9 @@ async def _emitir_sessao_login(
     user_resp = UserResponse.model_validate(user)
     user_resp.modulos = modulos_membro
     user_resp.loja_id = loja_id
+
+    if response is not None:
+        _set_auth_cookies(response, access_token, refresh_token)
 
     return LoginResponse(
         access_token=access_token,
@@ -352,17 +393,40 @@ async def register_b2b(data: RegisterB2BRequest, request: Request, db: AsyncSess
 async def login(
     data: LoginRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Autentica usuário B2B/B2C, cria sessão no banco e retorna Tokens.
     """
+    client_ip = request.client.host if request.client else None
+
+    # Trava por CONTA (independente de IP): o rate_limit(10, 60) da rota é por
+    # IP e não barra credential stuffing distribuído (um IP por tentativa,
+    # mesmo e-mail alvo). Checar antes de tocar no banco.
+    if await conta_bloqueada_por_falhas(data.email):
+        await registrar_auditoria(
+            db=db,
+            loja_id=None,
+            ator_id=None,
+            ator_nome=data.email,
+            acao="auth.login_failed",
+            entidade="usuario",
+            entidade_id=None,
+            detalhes="Tentativa de login bloqueada: muitas falhas recentes para esta conta",
+            ip=client_ip,
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Muitas tentativas para esta conta. Tente novamente em alguns minutos.",
+        )
+
     res = await db.execute(select(Usuario).where(Usuario.email == data.email))
     user = res.scalar_one_or_none()
 
-    client_ip = request.client.host if request.client else None
-
     if not user or not verify_password(data.senha, user.senha_hash):
+        await registrar_falha_login(data.email)
         await registrar_auditoria(
             db=db,
             loja_id=None,
@@ -425,7 +489,7 @@ async def login(
         )
         return MfaChallengeResponse(mfa_challenge_token=challenge_token)
 
-    return await _emitir_sessao_login(db, user, request)
+    return await _emitir_sessao_login(db, user, request, response)
 
 
 # ── Login social (Google) ───────────────────────────────────────
@@ -504,9 +568,11 @@ async def google_callback(
         return RedirectResponse(f"{callback_base}#mfa_challenge_token={challenge_token}")
 
     sessao = await _emitir_sessao_login(db, user, request, acao_auditoria="auth.login_google")
-    return RedirectResponse(
+    redirect = RedirectResponse(
         f"{callback_base}#access_token={sessao.access_token}&refresh_token={sessao.refresh_token}"
     )
+    _set_auth_cookies(redirect, sessao.access_token, sessao.refresh_token)
+    return redirect
 
 
 # ── MFA (TOTP) ───────────────────────────────────────────────────
@@ -584,6 +650,7 @@ async def mfa_disable(
 async def mfa_verify_login(
     data: MfaVerifyLoginRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Segunda etapa do login quando MFA está ativo: troca o challenge + código TOTP pelos tokens finais."""
@@ -600,23 +667,28 @@ async def mfa_verify_login(
     if not totp.verify(data.codigo, valid_window=1):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Código inválido.")
 
-    return await _emitir_sessao_login(db, user, request)
+    return await _emitir_sessao_login(db, user, request, response)
 
 
 @router.post("/refresh", response_model=RefreshResponse)
 async def refresh(
     data: RefreshRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Renova o access_token utilizando um refresh_token válido (rotação).
     """
+    refresh_token_recebido = data.refresh_token or request.cookies.get(_COOKIE_REFRESH)
+    if not refresh_token_recebido:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token ausente.")
+
     # 1. Buscar a sessão correspondente
     stmt = (
         select(Sessao)
         .options(selectinload(Sessao.usuario))
-        .where(Sessao.refresh_token == data.refresh_token)
+        .where(Sessao.refresh_token == refresh_token_recebido)
     )
     res = await db.execute(stmt)
     sessao = res.scalar_one_or_none()
@@ -639,7 +711,7 @@ async def refresh(
     sessao.revogada = True
 
     new_access_token = create_access_token(
-        data={"sub": user.id, "email": user.email, "papel": user.papel.value}
+        data={"sub": user.id, "email": user.email, "papel": user.papel.value, "typ": "access"}
     )
     new_refresh_token = secrets.token_hex(32)
 
@@ -657,6 +729,8 @@ async def refresh(
     )
     db.add(nova_sessao)
 
+    _set_auth_cookies(response, new_access_token, new_refresh_token)
+
     return RefreshResponse(
         access_token=new_access_token,
         refresh_token=new_refresh_token
@@ -667,23 +741,25 @@ async def refresh(
 async def logout(
     data: LogoutRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
     """
     Revoga o refresh token informado, invalidando a sessão.
     """
+    refresh_token_recebido = data.refresh_token or request.cookies.get(_COOKIE_REFRESH)
     res = await db.execute(
         select(Sessao).where(
-            Sessao.refresh_token == data.refresh_token,
+            Sessao.refresh_token == refresh_token_recebido,
             Sessao.usuario_id == current_user.id
         )
     )
     sessao = res.scalar_one_or_none()
-    
+
     if sessao:
         sessao.revogada = True
-        
+
     client_ip = request.client.host if request.client else None
     await registrar_auditoria(
         db=db,
@@ -696,9 +772,123 @@ async def logout(
         detalhes="Sessão finalizada (logout).",
         ip=client_ip
     )
-    
+
     await db.commit()
+    _clear_auth_cookies(response)
     return {"message": "Sessão revogada com sucesso."}
+
+
+class AdotarCookieRequest(BaseModel):
+    access_token: str
+    refresh_token: str
+
+
+class WsTokenResponse(BaseModel):
+    ws_token: str
+
+
+@router.post("/ws-token", response_model=WsTokenResponse, dependencies=[Depends(rate_limit(30, 60))])
+async def gerar_ws_token(current_user: Usuario = Depends(get_current_user)):
+    """
+    Token de vida curta (60s) só para abrir o handshake do WebSocket.
+
+    O WS conecta DIRETO no host do Fly em produção (VITE_WS_URL), não pelo
+    proxy do Vercel como as chamadas HTTP normais — é cross-origin de
+    verdade, e o cookie httpOnly (SameSite=Lax) não vai nesse handshake. Sem
+    isso o front precisaria voltar a guardar o access_token de sessão
+    inteira em algum lugar acessível ao JS só para o WS: este token dura
+    60s e não serve para mais nada (`typ=ws`, get_current_user o rejeita).
+    """
+    token = create_access_token(
+        {"sub": current_user.id, "typ": "ws"},
+        expires_delta=timedelta(seconds=60),
+    )
+    return WsTokenResponse(ws_token=token)
+
+
+@router.post("/adotar-cookie", status_code=status.HTTP_200_OK)
+async def adotar_cookie(data: AdotarCookieRequest, response: Response, db: AsyncSession = Depends(get_db)):
+    """
+    Transforma um par access_token/refresh_token recebido via fragmento de
+    URL (nunca vai a log — ver GoogleCallback do front) em cookie httpOnly
+    NESTA origem. Usado pelas telas de callback (Google OAuth, SSO
+    Gestor→Vitrine): a API só redireciona com tokens no fragmento, quem
+    "adota" como cookie é sempre o front que efetivamente recebeu a URL —
+    cookie é por origem, então só o domínio de destino pode setar o seu.
+    Não cria sessão nova: só valida que o access_token é um `typ=access`
+    genuíno (assinado por nós) e que a Sessao do refresh_token existe e não
+    está revogada, e ecoa os dois como cookie.
+    """
+    payload = decode_access_token(data.access_token)
+    if not payload or payload.get("typ") != "access":
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Token inválido.")
+
+    res = await db.execute(select(Sessao).where(Sessao.refresh_token == data.refresh_token))
+    sessao = res.scalar_one_or_none()
+    if not sessao or sessao.revogada:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Sessão inválida.")
+
+    _set_auth_cookies(response, data.access_token, data.refresh_token)
+    return {"message": "Cookie definido."}
+
+
+# ── SSO Gestor → Vitrine (M6) ───────────────────────────────────
+# O botão "Ver na Vitrine" do gestor abre a vitrine (outro domínio) já
+# logada. Antes do M6 isso pegava access_token/refresh_token direto do
+# JS e colava na URL; com cookie httpOnly o JS não tem mais esse valor —
+# e mesmo que tivesse, não deveria: o token de sessão do gestor não tem
+# porque vazar para a URL de outra origem. Em vez disso, o gestor pede um
+# token de troca de 60s (mesmo padrão de create_sso_exchange_token, mas
+# com `typ` próprio — não é módulo B2B) e a vitrine o resgata uma vez.
+
+class SSOVitrineResponse(BaseModel):
+    exchange_token: str
+
+
+@router.post("/sso/vitrine", response_model=SSOVitrineResponse, dependencies=[Depends(rate_limit(10, 60))])
+async def gerar_sso_vitrine(current_user: Usuario = Depends(get_current_user)):
+    """Gera um token de troca de 60s para abrir a Vitrine já logada como este usuário."""
+    token = create_access_token(
+        {"sub": current_user.id, "typ": "sso_vitrine"},
+        expires_delta=timedelta(seconds=60),
+    )
+    return SSOVitrineResponse(exchange_token=token)
+
+
+@router.get("/sso/vitrine/resgatar")
+async def resgatar_sso_vitrine(token: str, db: AsyncSession = Depends(get_db)):
+    """
+    Resgata o token de troca (uso único, 60s) e redireciona para a Vitrine já
+    autenticada — reaproveita a mesma tela `GoogleCallback` que a Vitrine já
+    tem para receber tokens via fragmento de URL (nunca vai a log de acesso).
+    """
+    callback_base = f"{settings.vitrine_base_url}/auth/google/callback"
+    payload = decode_access_token(token)
+    if not payload or payload.get("typ") != "sso_vitrine":
+        return RedirectResponse(f"{callback_base}#erro=sso_invalido")
+
+    user_id = payload.get("sub")
+    res = await db.execute(select(Usuario).where(Usuario.id == user_id))
+    user = res.scalar_one_or_none()
+    if not user or not user.ativo:
+        return RedirectResponse(f"{callback_base}#erro=sso_invalido")
+
+    new_access_token = create_access_token(
+        data={"sub": user.id, "email": user.email, "papel": user.papel.value, "typ": "access"}
+    )
+    new_refresh_token = secrets.token_hex(32)
+    nova_sessao = Sessao(
+        usuario_id=user.id,
+        refresh_token=new_refresh_token,
+        expira_em=utcnow() + timedelta(days=7),
+        revogada=False,
+    )
+    db.add(nova_sessao)
+    await db.commit()
+
+    return RedirectResponse(
+        f"{callback_base}#access_token={new_access_token}&refresh_token={new_refresh_token}"
+    )
 
 
 @router.post("/register-b2c", response_model=UserResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(rate_limit(10, 60))])
@@ -981,6 +1171,15 @@ async def reset_password(data: ResetPasswordRequest, request: Request, db: Async
     # Atualizar senha
     user.senha_hash = hash_password(data.nova_senha)
 
+    # Revoga todas as sessões ativas: sem isso, quem já estava logado (o
+    # possível invasor que motivou o reset) continua com acesso válido pelos
+    # até 7 dias restantes do refresh token, mesmo com a senha trocada.
+    await db.execute(
+        update(Sessao)
+        .where(Sessao.usuario_id == user.id, Sessao.revogada == False)
+        .values(revogada=True)
+    )
+
     client_ip = request.client.host if request.client else None
     await registrar_auditoria(
         db=db,
@@ -990,7 +1189,7 @@ async def reset_password(data: ResetPasswordRequest, request: Request, db: Async
         acao="auth.reset_password",
         entidade="usuario",
         entidade_id=user.id,
-        detalhes="Senha redefinida com sucesso via token de recuperação.",
+        detalhes="Senha redefinida com sucesso via token de recuperação. Sessões ativas revogadas.",
         ip=client_ip
     )
 

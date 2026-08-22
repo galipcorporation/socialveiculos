@@ -32,7 +32,7 @@ async def _cenario(nome_loja: str, conteudo_html: str, campos_extras: str | None
         ))
         await db.commit()
 
-    token = create_access_token(data={"sub": gestor_id, "email": email, "papel": PapelUsuario.GESTOR.value})
+    token = create_access_token(data={"sub": gestor_id, "email": email, "papel": PapelUsuario.GESTOR.value, "typ": "access"})
     return (loja_id, gestor_id, membro_id, template_id), {"Authorization": f"Bearer {token}"}
 
 

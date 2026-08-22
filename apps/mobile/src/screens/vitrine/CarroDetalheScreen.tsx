@@ -1,11 +1,12 @@
-import React from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import React, { useRef } from 'react'
+import { Animated, Pressable, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import * as Haptics from 'expo-haptics'
 import { useNavigation } from '@react-navigation/native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing } from '../../theme/tokens'
+import { darkColors, fonts, radius, spacing } from '../../theme/tokens'
 import {
   AppHeader, Avatar, Badge, Button, Card, EmptyState, Screen, SkeletonCard, Txt, useToast,
 } from '../../components/ui'
@@ -28,9 +29,20 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
   const toast = useToast()
   const comLogin = useGateLogin()
   const favoritar = useToggleFavorito()
+  const favScale = useRef(new Animated.Value(1)).current
 
   const q = useQuery({ queryKey: ['vitrine', 'detalhe', id], queryFn: () => vitrineService.detalhe(id) })
   const a = q.data
+
+  const favoritarComAnimacao = () => {
+    if (!a) return
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+    Animated.sequence([
+      Animated.spring(favScale, { toValue: 1.3, useNativeDriver: true, speed: 50, bounciness: 12 }),
+      Animated.spring(favScale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }),
+    ]).start()
+    favoritar(id, a.favoritado_por_mim)
+  }
 
   const opcionais: string[] = (() => {
     try {
@@ -79,8 +91,10 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
                 <Pressable onPress={compartilhar} hitSlop={10} style={[styles.actionBtn, { backgroundColor: colors.backdrop }]}>
                   <Ionicons name="share-outline" size={20} color="#fff" />
                 </Pressable>
-                <Pressable onPress={() => favoritar(id, a.favoritado_por_mim)} hitSlop={10} style={[styles.actionBtn, { backgroundColor: colors.backdrop }]}>
-                  <Ionicons name={a.favoritado_por_mim ? 'heart' : 'heart-outline'} size={20} color={a.favoritado_por_mim ? colors.error : '#fff'} />
+                <Pressable onPress={favoritarComAnimacao} hitSlop={10} style={[styles.actionBtn, { backgroundColor: colors.backdrop }]}>
+                  <Animated.View style={{ transform: [{ scale: favScale }] }}>
+                    <Ionicons name={a.favoritado_por_mim ? 'heart' : 'heart-outline'} size={20} color={a.favoritado_por_mim ? colors.error : '#fff'} />
+                  </Animated.View>
                 </Pressable>
               </View>
               <View style={styles.badges}>
@@ -95,7 +109,16 @@ export default function CarroDetalheScreen({ route }: VitrineScreenProps<'CarroD
                   <Txt style={{ fontFamily: fonts.displayBold, fontSize: 22, color: colors.text, flex: 1 }}>{a.marca} {a.modelo}</Txt>
                 </View>
                 {a.versao ? <Txt variant="body" color="textDim">{a.versao}</Txt> : null}
-                <Txt style={{ fontFamily: fonts.displayExtraBold, fontSize: 26, color: colors.primaryText, marginTop: 6 }}>
+              </View>
+
+              {/* Preço — bloco grafite fixo (independe do tema): a dúvida real do comprador
+                  é o valor à vista, em destaque. Sem dado de simulação/parcela nesta tela
+                  (AnuncioVitrine não traz parcela), o bloco mostra só o preço à vista. */}
+              <View style={[styles.precoBloco, { backgroundColor: darkColors.surface }]}>
+                <Txt style={{ fontFamily: fonts.monoMedium, fontSize: 9.5, letterSpacing: 0.6, color: darkColors.textMuted }}>
+                  À VISTA
+                </Txt>
+                <Txt style={{ fontFamily: fonts.displayExtraBold, fontSize: 28, color: darkColors.text, marginTop: 2 }}>
                   {a.preco_venda != null ? formatBRL(a.preco_venda) : 'Sob consulta'}
                 </Txt>
               </View>
@@ -176,4 +199,5 @@ const styles = StyleSheet.create({
   actionBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   badges: { position: 'absolute', top: spacing.sm, left: spacing.sm, flexDirection: 'row', gap: 4 },
   acoes: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1 },
+  precoBloco: { borderRadius: radius.xl, padding: spacing.md },
 })

@@ -43,8 +43,6 @@ interface TopbarProps {
 export function Topbar({ onMenuToggle }: TopbarProps) {
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
-  const token = useAuthStore((state) => state.token)
-  const refreshToken = useAuthStore((state) => state.refreshToken)
   const navigate = useNavigate()
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
   const [menuAberto, setMenuAberto] = useState(false)
@@ -98,21 +96,23 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
   const [searchFocused, setSearchFocused] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  const abrirVitrineLogado = () => {
+  const abrirVitrineLogado = async () => {
     const base = import.meta.env.VITE_VITRINE_URL || 'https://vitrine-cyan.vercel.app'
-    if (!token || !refreshToken) {
+    try {
+      // M6: sem token no JS — pede um exchange token de 60s (autenticado
+      // pelo cookie httpOnly deste app) e a vitrine o resgata sozinha.
+      const data: any = await api.post('/auth/sso/vitrine')
+      // Caminho relativo: o vercel.json deste app reescreve /v1/* para a API
+      // real, então a URL final resolve certo mesmo sem base absoluta.
+      window.open(`/v1/auth/sso/vitrine/resgatar?token=${encodeURIComponent(data.exchange_token)}`, '_blank', 'noopener')
+    } catch {
       window.open(base, '_blank', 'noopener')
-      return
     }
-    const params = new URLSearchParams({ access_token: token, refresh_token: refreshToken })
-    window.open(`${base}/auth/google/callback#${params.toString()}`, '_blank', 'noopener')
   }
 
   const handleLogout = async () => {
     try {
-      if (refreshToken) {
-        await api.post('/auth/logout', { refresh_token: refreshToken })
-      }
+      await api.post('/auth/logout')
     } catch (e) {
       console.error('Falha ao deslogar no servidor:', e)
     } finally {

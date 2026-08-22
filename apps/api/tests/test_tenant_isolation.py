@@ -82,7 +82,7 @@ async def test_veiculo_isolamento_tenant(client):
         await db.commit()
 
     token = create_access_token(
-        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value}
+        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value, "typ": "access"}
     )
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -169,7 +169,7 @@ async def test_chat_b2b_isolamento_tenant(client):
         await db.commit()
 
     token = create_access_token(
-        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value}
+        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value, "typ": "access"}
     )
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -245,7 +245,7 @@ async def test_credencial_banco_isolamento_tenant(client):
         await db.commit()
 
     token = create_access_token(
-        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value}
+        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value, "typ": "access"}
     )
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -308,7 +308,7 @@ async def test_credencial_detran_isolamento_tenant(client):
         await db.commit()
 
     token = create_access_token(
-        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value}
+        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value, "typ": "access"}
     )
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -367,7 +367,7 @@ async def test_configuracao_fiscal_isolamento_tenant(client):
         await db.commit()
 
     token = create_access_token(
-        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value}
+        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value, "typ": "access"}
     )
     headers = {"Authorization": f"Bearer {token}"}
 

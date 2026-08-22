@@ -38,7 +38,9 @@ def test_montar_payload_venda_pj():
     assert payload.get("cnpj_destinatario") == "98.765.432/0001-99"
 
 @pytest.mark.asyncio
-async def test_query_parameter_auth(client):
+async def test_query_parameter_auth_e_rejeitado(client):
+    """B133: token só é aceito via header Authorization, nunca via ?token= —
+    query string vaza em log de acesso/proxy, histórico do navegador e Referer."""
     from database import async_session
     from models import Loja, Usuario, MembroLoja, PapelUsuario
     from auth import create_access_token
@@ -65,15 +67,18 @@ async def test_query_parameter_auth(client):
         await db.commit()
 
     token = create_access_token(
-        data={"sub": gestor_id, "email": f"gestor_q_{gestor_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value}
+        data={"sub": gestor_id, "email": f"gestor_q_{gestor_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value, "typ": "access"}
     )
 
     try:
-        # Request without header but with query token parameter
+        # Sem header, só query token: deve ser rejeitado (401), não aceito.
         resp = await client.get(f"/v1/fiscal/config?token={token}")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["configurada"] is False
+        assert resp.status_code == 401
+
+        # Com header Authorization: continua funcionando normalmente.
+        resp2 = await client.get("/v1/fiscal/config", headers={"Authorization": f"Bearer {token}"})
+        assert resp2.status_code == 200
+        assert resp2.json()["configurada"] is False
     finally:
         async with async_session() as db:
             from sqlalchemy import delete

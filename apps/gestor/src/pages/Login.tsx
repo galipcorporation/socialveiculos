@@ -48,9 +48,10 @@ export function Login() {
 
     try {
       const data: any = await api.post('/auth/login', { email, senha })
-      
-      // Armazena no Zustand (que persiste no localStorage)
-      loginStore(data.access_token, data.refresh_token, data.user)
+
+      // Cookie httpOnly já foi setado pela API na resposta (M6). O Zustand
+      // guarda só o `user` — nunca mais o token.
+      loginStore(data.user)
 
       // Admin da plataforma vai para o painel admin
       if (data.user?.papel === 'admin_plataforma') {

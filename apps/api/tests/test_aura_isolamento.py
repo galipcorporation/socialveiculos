@@ -248,7 +248,7 @@ async def test_sem_modulo_assistente_ia_responde_402(client):
     async with async_session() as db:
         loja_id, usuario_id, email = await _montar_loja_com_aura(db, com_modulo=False)
 
-    token = create_access_token(data={"sub": usuario_id, "email": email, "papel": PapelUsuario.GESTOR.value})
+    token = create_access_token(data={"sub": usuario_id, "email": email, "papel": PapelUsuario.GESTOR.value, "typ": "access"})
     try:
         resp = await client.get("/v1/aura/conversa", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 402, (
@@ -276,7 +276,7 @@ async def test_conversa_da_aura_e_privada_por_pessoa(client):
                             autor=AURA_AUTOR_AURA, conteudo="Resposta ao vendedor."))
         await db.commit()
 
-    token = create_access_token(data={"sub": gestor_id, "email": email_gestor, "papel": PapelUsuario.GESTOR.value})
+    token = create_access_token(data={"sub": gestor_id, "email": email_gestor, "papel": PapelUsuario.GESTOR.value, "typ": "access"})
     headers = {"Authorization": f"Bearer {token}"}
     try:
         listagem = await client.get("/v1/aura/mensagens", headers=headers)
@@ -313,7 +313,7 @@ async def test_cota_esgotada_bloqueia_antes_de_gastar_token(client):
                             created_at=utcnow()))
         await db.commit()
 
-    token = create_access_token(data={"sub": usuario_id, "email": email, "papel": PapelUsuario.GESTOR.value})
+    token = create_access_token(data={"sub": usuario_id, "email": email, "papel": PapelUsuario.GESTOR.value, "typ": "access"})
     try:
         resp = await client.post(
             "/v1/aura/perguntar",

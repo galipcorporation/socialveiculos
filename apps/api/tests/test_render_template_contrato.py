@@ -26,7 +26,7 @@ async def test_contrato_sem_template_usa_gerador_legado(client):
         db.add(MembroLoja(id=membro_id, usuario_id=gestor_id, loja_id=loja_id, papel=PapelUsuario.GESTOR, ativo=True))
         await db.commit()
 
-    token = create_access_token(data={"sub": gestor_id, "email": email, "papel": PapelUsuario.GESTOR.value})
+    token = create_access_token(data={"sub": gestor_id, "email": email, "papel": PapelUsuario.GESTOR.value, "typ": "access"})
     headers = {"Authorization": f"Bearer {token}"}
 
     try:
@@ -70,7 +70,7 @@ async def test_contrato_com_template_usa_jinja2(client):
         ))
         await db.commit()
 
-    token = create_access_token(data={"sub": gestor_id, "email": email, "papel": PapelUsuario.GESTOR.value})
+    token = create_access_token(data={"sub": gestor_id, "email": email, "papel": PapelUsuario.GESTOR.value, "typ": "access"})
     headers = {"Authorization": f"Bearer {token}"}
 
     try:

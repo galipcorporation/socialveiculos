@@ -68,7 +68,7 @@ async def _criar_loja_com_marketing(nome: str) -> dict:
         await db.commit()
 
     token = create_access_token(data={
-        "sub": ids["gestor"], "email": email, "papel": PapelUsuario.GESTOR.value,
+        "sub": ids["gestor"], "email": email, "papel": PapelUsuario.GESTOR.value, "typ": "access",
     })
     ids["headers"] = {"Authorization": f"Bearer {token}"}
     return ids

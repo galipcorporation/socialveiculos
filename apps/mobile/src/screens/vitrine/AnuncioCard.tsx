@@ -1,6 +1,7 @@
-import React from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import React, { useRef } from 'react'
+import { Animated, Pressable, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import * as Haptics from 'expo-haptics'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, spacing } from '../../theme/tokens'
 import { Avatar, Badge, Button, Card, Txt } from '../../components/ui'
@@ -24,6 +25,16 @@ interface Props {
 export const AnuncioCard = React.memo(function AnuncioCard({ anuncio: a, onPress, onLojaPress, onFavorito, onSeguirLoja, seguindoLoja, onWhatsapp, onConversar }: Props) {
   const { colors } = useTheme()
   const aceitaTroca = !!a.descricao && semAcento(a.descricao).includes('troca')
+  const favScale = useRef(new Animated.Value(1)).current
+
+  const favoritarComAnimacao = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+    Animated.sequence([
+      Animated.spring(favScale, { toValue: 1.3, useNativeDriver: true, speed: 50, bounciness: 12 }),
+      Animated.spring(favScale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }),
+    ]).start()
+    onFavorito()
+  }
 
   return (
     <Card onPress={onPress} padded={false} style={{ overflow: 'hidden' }}>
@@ -55,12 +66,14 @@ export const AnuncioCard = React.memo(function AnuncioCard({ anuncio: a, onPress
       {/* Mídia */}
       <View>
         <MediaCarousel veiculo={a} height={200} borderRadius={0} />
-        <Pressable onPress={onFavorito} hitSlop={10} style={[styles.fav, { backgroundColor: colors.backdrop }]}>
-          <Ionicons
-            name={a.favoritado_por_mim ? 'heart' : 'heart-outline'}
-            size={20}
-            color={a.favoritado_por_mim ? colors.error : '#fff'}
-          />
+        <Pressable onPress={favoritarComAnimacao} hitSlop={10} style={[styles.fav, { backgroundColor: colors.backdrop }]}>
+          <Animated.View style={{ transform: [{ scale: favScale }] }}>
+            <Ionicons
+              name={a.favoritado_por_mim ? 'heart' : 'heart-outline'}
+              size={20}
+              color={a.favoritado_por_mim ? colors.error : '#fff'}
+            />
+          </Animated.View>
         </Pressable>
         <View style={styles.badges}>
           {a.novidade && <Badge label="Novo" tone="success" size="sm" />}

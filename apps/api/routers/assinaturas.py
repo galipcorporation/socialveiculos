@@ -4,6 +4,7 @@ Planos públicos, assinatura da loja, gate de módulos, paywall, SSO entre
 módulos e webhook idempotente de pagamento.
 """
 
+import hmac
 import json
 from typing import List, Optional
 
@@ -197,7 +198,7 @@ async def webhook_pagamento(
     Idempotente: `referencia` é a chave única do evento — reprocessar
     o mesmo evento não duplica pagamento nem reaplica efeitos.
     """
-    if x_webhook_secret != settings.webhook_secret:
+    if not x_webhook_secret or not hmac.compare_digest(x_webhook_secret, settings.webhook_secret):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Assinatura de webhook inválida.")
 
     # Idempotência: se já registramos esta referência, devolve o estado atual

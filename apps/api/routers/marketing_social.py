@@ -13,30 +13,29 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from cryptography.fernet import Fernet
 
+from config import settings
 from database import get_db
 from deps import get_current_b2b_user, B2BContext
 from models import CredencialRedeSocial, PostAgendado, Veiculo, utcnow
 from modulos import exige_modulo, Modulo
+from simulador.crypt import encrypt_credentials, decrypt_credentials
+
+
+def _state_signing_key() -> str:
+    if not settings.fernet_key:
+        raise HTTPException(503, "Chave de criptografia não configurada (FERNET_KEY).")
+    return settings.fernet_key
 
 router = APIRouter(prefix="/v1", tags=["Marketing Social"])
 
-# ── Fernet (reutiliza a mesma chave das credenciais bancárias) ──
-_FERNET_KEY = os.getenv("FERNET_KEY", "")
-_fernet: Optional[Fernet] = Fernet(_FERNET_KEY.encode()) if _FERNET_KEY else None
-
 
 def _cifrar(texto: str) -> str:
-    if not _fernet:
-        raise HTTPException(503, "Chave de criptografia não configurada (FERNET_KEY).")
-    return _fernet.encrypt(texto.encode()).decode()
+    return encrypt_credentials(texto)
 
 
 def _decifrar(cifrado: str) -> str:
-    if not _fernet:
-        raise HTTPException(503, "Chave de criptografia não configurada (FERNET_KEY).")
-    return _fernet.decrypt(cifrado.encode()).decode()
+    return decrypt_credentials(cifrado)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -123,7 +122,7 @@ def _gerar_state_assinado(loja_id: str, origem: str = "web") -> tuple[str, str]:
     nonce = str(uuid.uuid4())
     ts = int(time.time())
     payload = json.dumps({"loja_id": loja_id, "nonce": nonce, "ts": ts, "origem": origem}, separators=(',', ':'))
-    sig = hmac.new(_FERNET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    sig = hmac.new(_state_signing_key().encode(), payload.encode(), hashlib.sha256).hexdigest()
     raw_state = f"{payload}.{sig}"
     state = base64.urlsafe_b64encode(raw_state.encode()).decode().rstrip("=")
     return state, nonce
@@ -143,7 +142,7 @@ def _verificar_state_assinado(state: str) -> tuple[str, str, str]:
         if len(parts) != 2:
             raise HTTPException(400, "State inválido.")
         payload_json, sig = parts
-        expected_sig = hmac.new(_FERNET_KEY.encode(), payload_json.encode(), hashlib.sha256).hexdigest()
+        expected_sig = hmac.new(_state_signing_key().encode(), payload_json.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig, expected_sig):
             raise HTTPException(400, "State inválido.")
         payload = json.loads(payload_json)

@@ -16,7 +16,6 @@ function ImpersonarBanner() {
   if (!loja) return null
 
   const encerrar = () => {
-    sessionStorage.removeItem('sv_impersonar_token')
     sessionStorage.removeItem('sv_impersonar_loja')
     logout()
     navigate('/login', { replace: true })

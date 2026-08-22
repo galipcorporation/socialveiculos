@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256")
     jwt_expire_minutes: int = Field(default=60)
 
+    # Cifra de credenciais em repouso (Fernet) — chave PRÓPRIA, nunca derivada
+    # do JWT_SECRET: são domínios diferentes (sessão vs. dado em repouso).
+    # Sem isso, rotacionar o JWT_SECRET (resposta padrão a vazamento) torna
+    # toda credencial cifrada (bancária, fiscal, OAuth) permanentemente
+    # ilegível. Gerar com: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    fernet_key: Optional[str] = Field(default=None)
+
     # Pagamentos — segredo compartilhado para validar webhooks do gateway
     webhook_secret: str = Field(default="troque-webhook-secret-em-producao")
 
@@ -109,6 +116,11 @@ class Settings(BaseSettings):
             raise ValueError("JWT_SECRET deve ter no mínimo 32 bytes em produção (quando api_debug=False).")
         if not self.api_debug and (not self.webhook_secret or self.webhook_secret == "troque-webhook-secret-em-producao"):
             raise ValueError("WEBHOOK_SECRET é obrigatório e deve ser alterado em produção (quando api_debug=False).")
+        if not self.api_debug and not self.fernet_key:
+            raise ValueError(
+                "FERNET_KEY é obrigatório em produção (quando api_debug=False). "
+                "Gerar com: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            )
         return self
 
     @property

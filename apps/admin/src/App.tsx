@@ -10,23 +10,16 @@ import { PasswordInput } from './components/PasswordInput'
 // ── Guard ────────────────────────────────────────────────────────
 
 function RequireAdmin({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, user, token, logout } = useAuthStore()
+  const { isAuthenticated, user, logout } = useAuthStore()
 
+  // M6: o cookie httpOnly não é legível pelo JS, então não dá mais pra
+  // decodificar o JWT localmente pra checar expiração. Revalida contra o
+  // backend — que também pega conta desativada, não só token expirado.
   useEffect(() => {
-    if (token) {
-      try {
-        const parts = token.split('.')
-        if (parts.length === 3) {
-          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
-          if (payload.exp && payload.exp < Date.now() / 1000) {
-            logout()
-          }
-        }
-      } catch {
-        logout()
-      }
-    }
-  }, [token, logout])
+    if (!user) return
+    api.get('/auth/me').catch(() => logout())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (!isAuthenticated) return <Navigate to="/login" replace />
   if (user?.papel !== 'admin_plataforma') return <Navigate to="/login" replace />
@@ -57,7 +50,7 @@ function LoginAdmin() {
         setErro('Acesso negado. Apenas administradores da plataforma.')
         return
       }
-      login(data.access_token, data.refresh_token, data.user)
+      login(data.user)
       navigate('/', { replace: true })
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Credenciais inválidas.')
@@ -128,7 +121,10 @@ function AdminLayout() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
 
-  const sair = () => {
+  const sair = async () => {
+    try {
+      await api.post('/auth/logout')
+    } catch { /* segue o logout local mesmo se a API falhar */ }
     logout()
     navigate('/login', { replace: true })
   }

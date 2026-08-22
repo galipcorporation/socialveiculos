@@ -1411,12 +1411,19 @@ async def enviar_mensagem_b2b(
 
 @router.websocket("/chat/ws")
 async def chat_websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
+    # Cookie httpOnly (M6) é a fonte preferida quando o WS trafega pelo mesmo
+    # host do front (proxy). Quando o front conecta direto no host da API
+    # (cross-origin de verdade — VITE_WS_URL), o cookie não vai no handshake,
+    # daí o `?token=` com um token curto de /auth/ws-token (`typ=ws`).
+    # Mobile também usa `?token=`, mas com o access_token normal (sem cookie
+    # jar de browser, não tem o problema de vazamento em log/Referer do M1).
+    token = token or websocket.cookies.get("sv_access")
     if not token:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
     payload = decode_access_token(token)
-    if not payload:
+    if not payload or payload.get("typ") not in ("access", "ws"):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 

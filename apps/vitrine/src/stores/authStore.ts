@@ -13,14 +13,15 @@ export interface User {
 
 interface AuthState {
   user: User | null
-  token: string | null
-  refreshToken: string | null
   isAuthenticated: boolean
   isLoginModalOpen: boolean
   loginModalTab: 'login' | 'register'
   openLoginModal: (tab?: 'login' | 'register') => void
   closeLoginModal: () => void
-  login: (token: string, refreshToken: string, user: User) => void
+  // M6: a API não devolve mais o token pro JS guardar — /auth/login já seta
+  // cookie httpOnly (sv_access/sv_refresh) na mesma resposta. `login()` só
+  // recebe o `user` porque é o único dado não sensível que a UI precisa.
+  login: (user: User) => void
   logout: () => void
   updateUser: (patch: Partial<User>) => void
 }
@@ -29,26 +30,20 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
-      token: null,
-      refreshToken: null,
       isAuthenticated: false,
       isLoginModalOpen: false,
       loginModalTab: 'login',
       openLoginModal: (tab = 'login') =>
         set({ isLoginModalOpen: true, loginModalTab: tab }),
       closeLoginModal: () => set({ isLoginModalOpen: false }),
-      login: (token, refreshToken, user) =>
+      login: (user) =>
         set({
-          token,
-          refreshToken,
           user,
           isAuthenticated: true,
           isLoginModalOpen: false,
         }),
       logout: () =>
         set({
-          token: null,
-          refreshToken: null,
           user: null,
           isAuthenticated: false,
         }),
@@ -62,8 +57,6 @@ export const useAuthStore = create<AuthState>()(
       // Só persistir os campos de autenticação, excluindo o estado de abertura do modal
       partialize: (state) => ({
         user: state.user,
-        token: state.token,
-        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
     }

@@ -70,7 +70,7 @@ const SendIcon = () => (
 )
 
 export function Mensagens() {
-  const { isAuthenticated, token, openLoginModal } = useAuthStore()
+  const { isAuthenticated, openLoginModal } = useAuthStore()
   const userId = useAuthStore.getState().user?.id
   const location = useLocation()
   const navigate = useNavigate()
@@ -126,29 +126,37 @@ export function Mensagens() {
 
   // WebSocket
   useEffect(() => {
-    if (!isAuthenticated || !token || !selected) {
+    if (!isAuthenticated || !selected) {
       socketRef.current?.close(); socketRef.current = null; return
     }
-    const sock = createReconnectingSocket(`/v1/vitrine/chat/ws?token=${token}`, {
-      onMessage: (e) => {
-        try {
-          const msg = JSON.parse(e.data)
-          // O servidor recusa envio em conversa arquivada pelo próprio socket.
-          if (msg.erro) {
-            useUIStore.getState().showError(msg.erro)
+    let cancelado = false
+
+    // M6: sem access_token no JS — pede um token curto (60s, só para o
+    // handshake do WS) autenticado pelo cookie httpOnly da sessão.
+    api.post<{ ws_token: string }>('/auth/ws-token').then((data) => {
+      if (cancelado) return
+      const sock = createReconnectingSocket(`/v1/vitrine/chat/ws?token=${data.ws_token}`, {
+        onMessage: (e) => {
+          try {
+            const msg = JSON.parse(e.data)
+            // O servidor recusa envio em conversa arquivada pelo próprio socket.
+            if (msg.erro) {
+              useUIStore.getState().showError(msg.erro)
+              fetchConversas()
+              return
+            }
+            if (msg.conversa_id === selected.id) {
+              setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+            }
             fetchConversas()
-            return
-          }
-          if (msg.conversa_id === selected.id) {
-            setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          }
-          fetchConversas()
-        } catch { /* ignora */ }
-      },
-    })
-    socketRef.current = sock
-    return () => { sock.close(); socketRef.current = null }
-  }, [isAuthenticated, token, selected])
+          } catch { /* ignora */ }
+        },
+      })
+      socketRef.current = sock
+    }).catch(() => { /* sem WS, o polling de fetchConversas segue cobrindo */ })
+
+    return () => { cancelado = true; socketRef.current?.close(); socketRef.current = null }
+  }, [isAuthenticated, selected])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })

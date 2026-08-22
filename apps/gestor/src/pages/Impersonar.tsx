@@ -5,17 +5,19 @@ import { api } from '../lib/api'
 
 /**
  * Rota /impersonar?code=...
- * Recebe um CÓDIGO de uso único (60s) do painel admin e o troca pelo token num
- * POST. O token nunca trafega na URL: query string vai parar no histórico do
- * navegador, no header Referer e nos logs de acesso do servidor — e este token
- * é sessão de gestor completa.
- * Salva o token em sessionStorage e redireciona para o dashboard normal.
- * Um banner fixo no AppLayout exibe o aviso de impersonação.
+ * Recebe um CÓDIGO de uso único (60s) do painel admin e o troca por uma
+ * sessão num POST. O token nunca trafega na URL: query string vai parar no
+ * histórico do navegador, no header Referer e nos logs de acesso do servidor
+ * — e este token é sessão de gestor completa.
+ *
+ * M6: a troca (POST /admin/impersonar/trocar) já sobrescreve o cookie
+ * httpOnly `sv_access` desta aba com o token de observação (15 min) — nada
+ * pra guardar no JS além do nome da loja, que só serve pro banner de aviso.
  */
 export function ImpersonarPage() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const setToken = useAuthStore((state) => state.setToken)
+  const login = useAuthStore((state) => state.login)
 
   useEffect(() => {
     const codigo = params.get('code')
@@ -30,38 +32,14 @@ export function ImpersonarPage() {
       // único, não há motivo para ele ficar visível ou ser copiado/colado.
       window.history.replaceState({}, '', '/impersonar')
 
-      let token: string
-      let loja: string
       try {
-        const res = await api.post<{ access_token: string; loja_nome: string }>(
-          '/admin/impersonar/trocar',
-          { codigo },
-        )
-        token = res.access_token
-        loja = res.loja_nome
-      } catch (err) {
-        console.error('Erro ao trocar o código de observação:', err)
-        navigate('/', { replace: true })
-        return
-      }
+        const res = await api.post<{ loja_nome: string }>('/admin/impersonar/trocar', { codigo })
+        sessionStorage.setItem('sv_impersonar_loja', res.loja_nome)
 
-      // Salvar em sessionStorage para que o banner de impersonação persista só nesta aba
-      sessionStorage.setItem('sv_impersonar_token', token)
-      sessionStorage.setItem('sv_impersonar_loja', loja)
-
-      // Substituir o token temporariamente para fazer a chamada
-      setToken(token)
-
-      try {
         const user = await api.get<any>('/me')
-        useAuthStore.setState({
-          token,
-          user,
-          isAuthenticated: true,
-          refreshToken: null,
-        })
+        login(user)
       } catch (err) {
-        console.error('Erro ao obter perfil impersonado:', err)
+        console.error('Erro ao iniciar observação:', err)
       } finally {
         navigate('/', { replace: true })
       }

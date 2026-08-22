@@ -13,23 +13,17 @@ const useAuthStore = create()(
   persist(
     (set) => ({
       user: null,
-      token: null,
-      refreshToken: null,
       isAuthenticated: false,
       isLoginModalOpen: false,
       loginModalTab: "login",
       openLoginModal: (tab = "login") => set({ isLoginModalOpen: true, loginModalTab: tab }),
       closeLoginModal: () => set({ isLoginModalOpen: false }),
-      login: (token, refreshToken, user) => set({
-        token,
-        refreshToken,
+      login: (user) => set({
         user,
         isAuthenticated: true,
         isLoginModalOpen: false
       }),
       logout: () => set({
-        token: null,
-        refreshToken: null,
         user: null,
         isAuthenticated: false
       }),
@@ -42,8 +36,6 @@ const useAuthStore = create()(
       // Só persistir os campos de autenticação, excluindo o estado de abertura do modal
       partialize: (state) => ({
         user: state.user,
-        token: state.token,
-        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated
       })
     }
@@ -226,36 +218,32 @@ class ApiClient {
       const searchParams = new URLSearchParams(params);
       url += `?${searchParams.toString()}`;
     }
-    const { token } = useAuthStore.getState();
     const headers = {
       "Content-Type": "application/json",
       ...fetchOptions.headers || {}
     };
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
     const response = await fetch(url, {
       ...fetchOptions,
-      headers
+      headers,
+      credentials: "include"
     });
     if (response.status === 401 && !isRefreshing && path !== "/auth/login" && path !== "/auth/refresh") {
-      const { refreshToken, user, login, logout } = useAuthStore.getState();
-      if (refreshToken && user) {
+      const { user, logout } = useAuthStore.getState();
+      if (user) {
         isRefreshing = true;
         try {
           const refreshRes = await fetch(`${this.baseUrl}/auth/refresh`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refresh_token: refreshToken })
+            credentials: "include",
+            body: JSON.stringify({})
           });
           if (refreshRes.ok) {
-            const data = await refreshRes.json();
-            login(data.access_token, data.refresh_token, user);
             isRefreshing = false;
-            headers["Authorization"] = `Bearer ${data.access_token}`;
             const retryRes = await fetch(url, {
               ...fetchOptions,
-              headers
+              headers,
+              credentials: "include"
             });
             if (!retryRes.ok) {
               const error = await retryRes.json().catch(() => ({}));
@@ -378,7 +366,7 @@ function LoginModal() {
         setMfaChallengeToken(data.mfa_challenge_token);
         return;
       }
-      loginStore(data.access_token, data.refresh_token, data.user);
+      loginStore(data.user);
       close();
     } catch (err) {
       setErro(err.message || "E-mail ou senha incorretos.");
@@ -396,7 +384,7 @@ function LoginModal() {
         mfa_challenge_token: mfaChallengeToken,
         codigo: mfaCodigo
       });
-      loginStore(data.access_token, data.refresh_token, data.user);
+      loginStore(data.user);
       close();
     } catch (err) {
       setErro(err.message || "Código inválido.");
@@ -412,7 +400,7 @@ function LoginModal() {
     try {
       await api.post("/auth/register-b2c", { nome, email, senha, telefone: telefone || void 0 });
       const data = await api.post("/auth/login", { email, senha });
-      loginStore(data.access_token, data.refresh_token, data.user);
+      loginStore(data.user);
       close();
     } catch (err) {
       setErro(err.message || "Falha ao realizar cadastro. Tente outro e-mail.");
@@ -1582,12 +1570,11 @@ function Feed() {
     setAvatarUploading(true);
     setAvatarError(null);
     try {
-      const token = useAuthStore.getState().token;
       const formData = new FormData();
       formData.append("file", avatarFile);
       const res = await fetch("/v1/auth/me/avatar", {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : void 0,
+        credentials: "include",
         body: formData
       });
       if (!res.ok) {
@@ -2179,7 +2166,7 @@ const SendIcon = () => /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 24 24", fill:
 ] });
 function Mensagens() {
   var _a, _b;
-  const { isAuthenticated, token, openLoginModal } = useAuthStore();
+  const { isAuthenticated, openLoginModal } = useAuthStore();
   const userId = (_a = useAuthStore.getState().user) == null ? void 0 : _a.id;
   const location = useLocation();
   const navigate = useNavigate();
@@ -2234,34 +2221,41 @@ function Mensagens() {
   }, [isAuthenticated]);
   useEffect(() => {
     var _a2;
-    if (!isAuthenticated || !token || !selected) {
+    if (!isAuthenticated || !selected) {
       (_a2 = socketRef.current) == null ? void 0 : _a2.close();
       socketRef.current = null;
       return;
     }
-    const sock = createReconnectingSocket(`/v1/vitrine/chat/ws?token=${token}`, {
-      onMessage: (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.erro) {
-            useUIStore.getState().showError(msg.erro);
+    let cancelado = false;
+    api.post("/auth/ws-token").then((data) => {
+      if (cancelado) return;
+      const sock = createReconnectingSocket(`/v1/vitrine/chat/ws?token=${data.ws_token}`, {
+        onMessage: (e) => {
+          try {
+            const msg = JSON.parse(e.data);
+            if (msg.erro) {
+              useUIStore.getState().showError(msg.erro);
+              fetchConversas();
+              return;
+            }
+            if (msg.conversa_id === selected.id) {
+              setMensagens((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
+            }
             fetchConversas();
-            return;
+          } catch {
           }
-          if (msg.conversa_id === selected.id) {
-            setMensagens((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
-          }
-          fetchConversas();
-        } catch {
         }
-      }
+      });
+      socketRef.current = sock;
+    }).catch(() => {
     });
-    socketRef.current = sock;
     return () => {
-      sock.close();
+      var _a3;
+      cancelado = true;
+      (_a3 = socketRef.current) == null ? void 0 : _a3.close();
       socketRef.current = null;
     };
-  }, [isAuthenticated, token, selected]);
+  }, [isAuthenticated, selected]);
   useEffect(() => {
     var _a2;
     (_a2 = messagesEndRef.current) == null ? void 0 : _a2.scrollIntoView({ behavior: "smooth" });
@@ -3355,9 +3349,9 @@ function GoogleCallback() {
   }, []);
   async function finalizarComToken(accessToken, refreshToken) {
     try {
-      loginStore(accessToken, refreshToken, { id: "", nome: "", email: "", papel: "cliente", ativo: true });
+      await api.post("/auth/adotar-cookie", { access_token: accessToken, refresh_token: refreshToken });
       const me = await api.get("/auth/me");
-      loginStore(accessToken, refreshToken, me);
+      loginStore(me);
       navigate("/", { replace: true });
     } catch {
       setErro("Não foi possível concluir o login com o Google.");
@@ -3373,7 +3367,7 @@ function GoogleCallback() {
         mfa_challenge_token: mfaChallengeToken,
         codigo: mfaCodigo
       });
-      loginStore(data.access_token, data.refresh_token, data.user);
+      loginStore(data.user);
       navigate("/", { replace: true });
     } catch (err) {
       setErro(err.message || "Código inválido.");

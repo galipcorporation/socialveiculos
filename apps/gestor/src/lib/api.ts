@@ -66,16 +66,11 @@ class ApiClient {
       url += `?${searchParams.toString()}`
     }
 
-    const { token } = useAuthStore.getState()
     const headers: Record<string, string> = {}
     if (!(fetchOptions.body instanceof FormData)) {
       headers['Content-Type'] = 'application/json'
     }
     Object.assign(headers, (fetchOptions.headers as Record<string, string>) || {})
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
 
     // Admin de plataforma (suporte): envia a loja escolhida. O backend ignora
     // este header para gestor/vendedor, então é seguro sempre anexá-lo.
@@ -84,17 +79,22 @@ class ApiClient {
       headers['X-Loja-Id'] = lojaId
     }
 
+    // M6: sessão vai por cookie httpOnly (sv_access/sv_refresh), não mais
+    // por header Authorization montado a partir do Zustand. `credentials:
+    // 'include'` manda o cookie mesmo com o proxy do vercel.json reescrevendo
+    // /v1 para outro host — do ponto de vista do browser ainda é same-origin.
     const response = await fetch(url, {
       ...fetchOptions,
       headers,
+      credentials: 'include',
     })
 
     // Se 401, tentar dar refresh transparente
     if (response.status === 401 && !isRefreshing && path !== '/auth/login' && path !== '/auth/refresh') {
-      const { refreshToken, user, login } = useAuthStore.getState()
+      const { user } = useAuthStore.getState()
 
-      // Sem refresh token (ou sem usuário): sessão inválida. Expulsa para o login.
-      if (!refreshToken || !user) {
+      // Sem usuário no store: nunca esteve autenticado nesta aba. Expulsa para o login.
+      if (!user) {
         forcarLogin('Sua sessão terminou. Faça login novamente.')
         throw new ApiError('Sessão expirada. Faça login novamente.', {
           status: 401,
@@ -105,22 +105,23 @@ class ApiClient {
 
       isRefreshing = true
       try {
+        // Sem body: o refresh token vem do cookie sv_refresh.
         const refreshRes = await fetch(`${this.baseUrl}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: refreshToken }),
+          credentials: 'include',
+          body: JSON.stringify({}),
         })
 
         if (refreshRes.ok) {
-          const data = await refreshRes.json()
-          login(data.access_token, data.refresh_token, user)
+          // A resposta já rotacionou o cookie sv_access/sv_refresh — nada a
+          // guardar no JS, só refazer a requisição original.
           isRefreshing = false
 
-          // Refazer requisição com novo token
-          headers['Authorization'] = `Bearer ${data.access_token}`
           const retryRes = await fetch(url, {
             ...fetchOptions,
             headers,
+            credentials: 'include',
           })
 
           if (!retryRes.ok) {

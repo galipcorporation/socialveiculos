@@ -227,7 +227,7 @@ function formatDate(dateStr?: string | null) {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
 }
 
-function UnifiedChatTab({ token, user, addToast, initialConversaId }: { token: string | null, user: any, addToast: (t: ToastType, m: string, details?: any) => void, initialConversaId?: string }) {
+function UnifiedChatTab({ user, addToast, initialConversaId }: { user: any, addToast: (t: ToastType, m: string, details?: any) => void, initialConversaId?: string }) {
   const [subTab, setSubTab] = useState<'parceiros' | 'clientes'>(initialConversaId ? 'parceiros' : 'parceiros')
 
   useEffect(() => {
@@ -240,9 +240,9 @@ function UnifiedChatTab({ token, user, addToast, initialConversaId }: { token: s
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, minHeight: 0 }}>
         {subTab === 'parceiros' ? (
-          <ChatTab token={token} user={user} addToast={addToast} initialConversaId={initialConversaId} subTab={subTab} setSubTab={setSubTab} />
+          <ChatTab user={user} addToast={addToast} initialConversaId={initialConversaId} subTab={subTab} setSubTab={setSubTab} />
         ) : (
-          <ChatClientesTab token={token} user={user} addToast={addToast} subTab={subTab} setSubTab={setSubTab} />
+          <ChatClientesTab user={user} addToast={addToast} subTab={subTab} setSubTab={setSubTab} />
         )}
       </div>
     </div>
@@ -254,7 +254,6 @@ export function RedeSocial() {
   const [initialConversaId, setInitialConversaId] = useState<string | undefined>(undefined)
   const [toasts, setToasts] = useState<Toast[]>([])
   
-  const token = useAuthStore((state) => state.token)
   const user = useAuthStore((state) => state.user)
   const { unreadB2B, unreadB2C, fetchUnreadCounts } = useChatStore()
 
@@ -319,7 +318,7 @@ export function RedeSocial() {
         {activeTab === 'feed' && <FeedTab addToast={addToast} onStartChat={(id) => { setInitialConversaId(id); setActiveTab('chat') }} />}
         {activeTab === 'propostas' && <PropostasTab addToast={addToast} onStartChat={(id) => { setInitialConversaId(id); setActiveTab('chat') }} />}
         {activeTab === 'parceiros' && <ParceirosTab addToast={addToast} onStartChat={(id) => { setInitialConversaId(id); setActiveTab('chat') }} />}
-        {activeTab === 'chat' && <UnifiedChatTab token={token} user={user} addToast={addToast} initialConversaId={initialConversaId} />}
+        {activeTab === 'chat' && <UnifiedChatTab user={user} addToast={addToast} initialConversaId={initialConversaId} />}
       </div>
     </div>
   )
@@ -981,7 +980,7 @@ function ParceirosTab({ addToast, onStartChat }: { addToast: (t: ToastType, m: s
    TAB 4: CHAT B2B (REALTIME WEBSOCKET)
    ─────────────────────────────────────────────────────────────── */
 
-function ChatTab({ token, user, addToast, initialConversaId, subTab, setSubTab }: { token: string | null, user: any, addToast: (t: ToastType, m: string, details?: any) => void, initialConversaId?: string, subTab: 'parceiros' | 'clientes', setSubTab: (t: 'parceiros' | 'clientes') => void }) {
+function ChatTab({ user, addToast, initialConversaId, subTab, setSubTab }: { user: any, addToast: (t: ToastType, m: string, details?: any) => void, initialConversaId?: string, subTab: 'parceiros' | 'clientes', setSubTab: (t: 'parceiros' | 'clientes') => void }) {
   const { unreadB2B, unreadB2C } = useChatStore()
   const [conversas, setConversas] = useState<Conversa[]>([])
   const [filtered, setFiltered] = useState<Conversa[]>([])
@@ -1038,37 +1037,46 @@ function ChatTab({ token, user, addToast, initialConversaId, subTab, setSubTab }
   }, [fetchConversas])
 
   useEffect(() => {
-    if (!token) return
-    const sock = createReconnectingSocket(`/v1/b2b/chat/ws?token=${token}`, {
-      onMessage: (event) => {
-        try {
-          const msg = JSON.parse(event.data) as Mensagem
-          const currentActive = activeConversaRef.current
-          const isFromActive = currentActive && msg.conversa_id === currentActive.id
-          if (isFromActive) {
-            setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          }
-          setConversas(prev => prev.map(conv => {
-            if (conv.id === msg.conversa_id) {
-              const currentUnread = conv.mensagens_nao_lidas || 0
-              return { 
-                ...conv, 
-                ultima_mensagem: msg.conteudo, 
-                ultima_mensagem_data: msg.created_at,
-                mensagens_nao_lidas: isFromActive ? 0 : currentUnread + 1
-              }
+    if (!user) return
+    let cancelado = false
+    let sock: ReconnectingSocket | null = null
+
+    // M6: sem access_token no JS — pede um token curto (60s, só para o
+    // handshake do WS) autenticado pelo cookie httpOnly da sessão.
+    api.post<{ ws_token: string }>('/auth/ws-token').then((data) => {
+      if (cancelado) return
+      sock = createReconnectingSocket(`/v1/b2b/chat/ws?token=${data.ws_token}`, {
+        onMessage: (event) => {
+          try {
+            const msg = JSON.parse(event.data) as Mensagem
+            const currentActive = activeConversaRef.current
+            const isFromActive = currentActive && msg.conversa_id === currentActive.id
+            if (isFromActive) {
+              setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
             }
-            return conv
-          }))
-          if (!isFromActive) {
-            useChatStore.getState().fetchUnreadCounts()
-          }
-        } catch { /* ignora */ }
-      },
-    })
-    wsRef.current = sock
-    return () => { sock.close(); wsRef.current = null }
-  }, [token])
+            setConversas(prev => prev.map(conv => {
+              if (conv.id === msg.conversa_id) {
+                const currentUnread = conv.mensagens_nao_lidas || 0
+                return {
+                  ...conv,
+                  ultima_mensagem: msg.conteudo,
+                  ultima_mensagem_data: msg.created_at,
+                  mensagens_nao_lidas: isFromActive ? 0 : currentUnread + 1
+                }
+              }
+              return conv
+            }))
+            if (!isFromActive) {
+              useChatStore.getState().fetchUnreadCounts()
+            }
+          } catch { /* ignora */ }
+        },
+      })
+      wsRef.current = sock
+    }).catch(() => { /* sem WS, o polling de fetchConversas segue cobrindo */ })
+
+    return () => { cancelado = true; sock?.close(); wsRef.current = null }
+  }, [user])
 
   useEffect(() => { messageEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensagens])
 
@@ -1361,7 +1369,7 @@ function conversaArquivada(c?: ConversaCliente | null): boolean {
   return !!c && (!!c.arquivada_em || c.ativa === false)
 }
 
-function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: string | null, user: any, addToast: (t: ToastType, m: string, details?: any) => void, subTab: 'parceiros' | 'clientes', setSubTab: (t: 'parceiros' | 'clientes') => void }) {
+function ChatClientesTab({ user, addToast, subTab, setSubTab }: { user: any, addToast: (t: ToastType, m: string, details?: any) => void, subTab: 'parceiros' | 'clientes', setSubTab: (t: 'parceiros' | 'clientes') => void }) {
   const { unreadB2B, unreadB2C } = useChatStore()
   const navigate = useNavigate()
   const [conversas, setConversas] = useState<ConversaCliente[]>([])
@@ -1421,37 +1429,44 @@ function ChatClientesTab({ token, user, addToast, subTab, setSubTab }: { token: 
   }, [activeConversa])
 
   useEffect(() => {
-    if (!token) return
-    const sock = createReconnectingSocket(`/v1/vitrine/chat/ws?token=${token}`, {
-      onMessage: (event) => {
-        try {
-          const msg = JSON.parse(event.data) as Mensagem
-          const currentActive = activeConversaRef.current
-          const isFromActive = currentActive && msg.conversa_id === currentActive.id
-          if (isFromActive) {
-            setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          }
-          setConversas(prev => prev.map(conv => {
-            if (conv.id === msg.conversa_id) {
-              const currentUnread = conv.mensagens_nao_lidas || 0
-              return { 
-                ...conv, 
-                ultima_mensagem: msg.conteudo, 
-                ultima_mensagem_data: msg.created_at,
-                mensagens_nao_lidas: isFromActive ? 0 : currentUnread + 1
-              }
+    if (!user) return
+    let cancelado = false
+    let sock: ReconnectingSocket | null = null
+
+    api.post<{ ws_token: string }>('/auth/ws-token').then((data) => {
+      if (cancelado) return
+      sock = createReconnectingSocket(`/v1/vitrine/chat/ws?token=${data.ws_token}`, {
+        onMessage: (event) => {
+          try {
+            const msg = JSON.parse(event.data) as Mensagem
+            const currentActive = activeConversaRef.current
+            const isFromActive = currentActive && msg.conversa_id === currentActive.id
+            if (isFromActive) {
+              setMensagens(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
             }
-            return conv
-          }))
-          if (!isFromActive) {
-            useChatStore.getState().fetchUnreadCounts()
-          }
-        } catch { /* ignora */ }
-      },
-    })
-    wsRef.current = sock
-    return () => { sock.close(); wsRef.current = null }
-  }, [token])
+            setConversas(prev => prev.map(conv => {
+              if (conv.id === msg.conversa_id) {
+                const currentUnread = conv.mensagens_nao_lidas || 0
+                return {
+                  ...conv,
+                  ultima_mensagem: msg.conteudo,
+                  ultima_mensagem_data: msg.created_at,
+                  mensagens_nao_lidas: isFromActive ? 0 : currentUnread + 1
+                }
+              }
+              return conv
+            }))
+            if (!isFromActive) {
+              useChatStore.getState().fetchUnreadCounts()
+            }
+          } catch { /* ignora */ }
+        },
+      })
+      wsRef.current = sock
+    }).catch(() => { /* sem WS, o polling segue cobrindo */ })
+
+    return () => { cancelado = true; sock?.close(); wsRef.current = null }
+  }, [user])
 
   const applyFilter = (list: ConversaCliente[], ruido: boolean, q: string) => {
     let r = ruido ? list.filter(c => triagens[c.id]?.classificacao === 'ruido') : list

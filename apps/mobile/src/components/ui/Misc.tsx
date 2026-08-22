@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing } from '../../theme/tokens'
+import { darkColors, fonts, radius, spacing } from '../../theme/tokens'
 import { Txt } from './Txt'
 import { iniciais } from '../../lib/format'
 
@@ -103,10 +103,13 @@ interface KpiCardProps {
   loading?: boolean
   style?: StyleProp<ViewStyle>
   onPress?: () => void
+  /** Fundo grafite fixo (independe do tema claro/escuro do usuário) com texto claro —
+   *  usado para ancorar um único KPI de destaque numa grade, em vez de N cards idênticos. */
+  dark?: boolean
 }
 
-/** Cartão de indicador (KPI) — usado no Dashboard e Financeiro. */
-export function KpiCard({ label, value, hint, icon, tone = 'primary', loading, style, onPress }: KpiCardProps) {
+/** Cartão de indicador (KPI) — usado no Dashboard, Estoque e Financeiro. */
+export function KpiCard({ label, value, hint, icon, tone = 'primary', loading, style, onPress, dark: grafite }: KpiCardProps) {
   const { colors, dark } = useTheme()
   const toneMap = {
     primary: colors.primary,
@@ -115,36 +118,43 @@ export function KpiCard({ label, value, hint, icon, tone = 'primary', loading, s
     error: colors.error,
     neutral: colors.textDim,
   }
-  const cor = toneMap[tone]
+  const cor = grafite ? darkColors.primaryText : toneMap[tone]
+  const bg = grafite ? darkColors.surface : colors.surface
+  const bgPressed = grafite ? darkColors.surfaceElevated : colors.surfaceElevated
+  const border = grafite ? darkColors.border : colors.border
+  const textoLabel = grafite ? darkColors.textDim : colors.textDim
+  const textoValor = grafite ? darkColors.text : colors.text
+  const textoHint = grafite ? darkColors.textMuted : colors.textMuted
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
       style={({ pressed }) => [
         styles.kpi,
-        {
-          backgroundColor: pressed ? colors.surfaceElevated : colors.surface,
-          borderColor: colors.border,
-        },
-        !dark && styles.kpiShadow,
+        { backgroundColor: pressed ? bgPressed : bg, borderColor: border },
+        !dark && !grafite && styles.kpiShadow,
         style,
       ]}
     >
       <View style={[styles.kpiIcon, { backgroundColor: cor + '1c' }]}>
         <Ionicons name={icon} size={17} color={cor} />
       </View>
-      <Txt variant="label" color="textDim" style={{ textTransform: 'uppercase' }} numberOfLines={1}>
+      <Txt
+        variant="label"
+        style={{ textTransform: 'uppercase', color: textoLabel }}
+        numberOfLines={1}
+      >
         {label}
       </Txt>
       <Txt
-        style={{ fontFamily: fonts.displayBold, fontSize: 21, lineHeight: 26, color: colors.text }}
+        style={{ fontFamily: fonts.displayBold, fontSize: 21, lineHeight: 26, color: textoValor }}
         numberOfLines={1}
         adjustsFontSizeToFit
       >
         {loading ? '—' : value}
       </Txt>
       {hint ? (
-        <Txt variant="caption" color="textMuted" numberOfLines={1}>
+        <Txt variant="caption" style={{ color: textoHint }} numberOfLines={1}>
           {hint}
         </Txt>
       ) : null}

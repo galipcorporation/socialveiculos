@@ -54,13 +54,15 @@ class ApiClient {
   constructor(baseUrl: string) { this.baseUrl = baseUrl }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const { token } = useAuthStore.getState()
     const headers: Record<string, string> = {}
     // FormData: deixa o browser definir o Content-Type (com boundary).
     if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json'
-    if (token) headers['Authorization'] = `Bearer ${token}`
 
-    const response = await fetch(`${this.baseUrl}${path}`, { ...options, headers })
+    // M6: sessão vai por cookie httpOnly (sv_access/sv_refresh), não mais
+    // por header Authorization. `credentials: 'include'` manda o cookie
+    // mesmo com o proxy do vercel.json reescrevendo /v1 para outro host —
+    // do ponto de vista do browser ainda é same-origin.
+    const response = await fetch(`${this.baseUrl}${path}`, { ...options, headers, credentials: 'include' })
 
     if (response.status === 401) {
       useAuthStore.getState().logout()
@@ -98,11 +100,10 @@ class ApiClient {
 
   /** Baixa um arquivo autenticado (CSV, PDF…) e dispara o "salvar como" do browser. */
   async download(path: string, params?: Record<string, string>, nomePadrao = 'download'): Promise<void> {
-    const { token } = useAuthStore.getState()
     const url = params ? `${path}?${new URLSearchParams(params)}` : path
     const response = await fetch(`${this.baseUrl}${url}`, {
       method: 'GET',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
     })
 
     if (response.status === 401) {
@@ -131,11 +132,10 @@ class ApiClient {
   /** Busca um arquivo autenticado e devolve a URL de blob — para abrir numa
    *  aba/iframe (ex.: impressão) em vez de baixar. Quem chama deve revogar. */
   async blobUrl(path: string, params?: Record<string, string>): Promise<string> {
-    const { token } = useAuthStore.getState()
     const url = params ? `${path}?${new URLSearchParams(params)}` : path
     const response = await fetch(`${this.baseUrl}${url}`, {
       method: 'GET',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
     })
 
     if (response.status === 401) {

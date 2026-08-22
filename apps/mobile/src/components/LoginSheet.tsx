@@ -83,7 +83,7 @@ export function LoginSheet() {
     <>
       <Sheet visible={visivel && !perguntaLojista} onClose={fechar} title="Entre para continuar">
         <View style={{ gap: spacing.sm, paddingBottom: spacing.md }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, backgroundColor: colors.primary + '14', borderRadius: 10, padding: spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, backgroundColor: colors.primary + '14', borderRadius: radius.md, padding: spacing.sm }}>
             <Ionicons name="lock-open-outline" size={18} color={colors.primaryText} />
             <Txt variant="caption" color="primaryText" style={{ flex: 1 }}>{motivo}</Txt>
           </View>

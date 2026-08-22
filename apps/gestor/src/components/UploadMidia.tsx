@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react'
 import { useUIStore } from '../stores/uiStore'
-import { useAuthStore } from '../stores/authStore'
 import { isVideo, type Midia } from '../lib/veiculo'
 
 export type { Midia }
@@ -40,8 +39,6 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
     setProgress(10)
 
     try {
-      const token = useAuthStore.getState().token
-
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         const formData = new FormData()
@@ -55,9 +52,7 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
         // 1. Upload unificado
         const response = await fetch('/v1/midias/upload', {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
+          credentials: 'include',
           body: formData
         })
 
@@ -71,9 +66,9 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
         // 2. Associar ao veículo
         const assocResponse = await fetch(`/v1/veiculos/${efectiveId}/midias`, {
           method: 'POST',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             url: uploadResult.url,
@@ -139,12 +134,9 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
     if (!ok) return
 
     try {
-      const token = localStorage.getItem('token')
       const response = await fetch(`/v1/midias/${midiaId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include',
       })
 
       if (response.ok) {
@@ -174,12 +166,11 @@ export function UploadMidia({ veiculoId, midias, onChange, sidebar, onRequestUpl
 
     // Chamar API para persistir nova ordem
     try {
-      const token = localStorage.getItem('token')
       const response = await fetch(`/v1/veiculos/${veiculoId}/midias/ordem`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(newMidias.map(m => m.id))
       })

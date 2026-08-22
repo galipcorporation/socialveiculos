@@ -1,10 +1,11 @@
+import hmac
 import os
 import logging
 import re
 import uuid
 from typing import List, Optional
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Header
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -13,6 +14,7 @@ import httpx
 
 from database import get_db
 from deps import get_current_b2b_user, B2BContext, registrar_auditoria
+from limiter import rate_limit
 from models import (
     utcnow,
     AssistentePermissao,
@@ -668,15 +670,24 @@ async def atualizar_autonomia_conversa(
 
 # ── WEBHOOK PÚBLICO DO WORKER ─────────────────────────────────
 
-@router.post("/webhook")
+@router.post("/webhook", dependencies=[Depends(rate_limit(60, 60))])
 async def webhook_recebido(
     payload: WebhookPayload,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    authorization: Optional[str] = Header(default=None),
 ):
     """
-    Webhook público acionado pelo WhatsApp worker persistente.
+    Webhook acionado pelo WhatsApp worker persistente.
     Recebe mensagens novas (enviadas/recebidas) e status de conexões.
+
+    Autenticado pelo mesmo WHATSAPP_WORKER_TOKEN que a API usa para chamar o
+    worker (fail-closed): sem isso, qualquer requisição com um usuario_id
+    válido injetava mensagem/status falso no CRM de qualquer loja (B130).
     """
+    esperado = f"Bearer {WHATSAPP_WORKER_TOKEN}"
+    if not authorization or not hmac.compare_digest(authorization, esperado):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Token de webhook inválido.")
+
     logger.info(f"[WEBHOOK] Evento recebido: '{payload.event}' para o usuario {payload.usuario_id}")
 
     # 1. Obter a Loja associada ao usuario vendedor (para multitenancy)

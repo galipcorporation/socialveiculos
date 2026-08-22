@@ -2,7 +2,7 @@
 Social Veículos — Dependências de Autenticação e Autorização (FastAPI)
 """
 
-from fastapi import Depends, HTTPException, status, Header, Query
+from fastapi import Depends, HTTPException, Request, status, Header, Query
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -10,7 +10,7 @@ from typing import Optional
 
 from database import get_db
 from models import Usuario, MembroLoja, PapelUsuario, Loja
-from auth import decode_access_token
+from auth import decode_access_token, COOKIE_ACCESS
 
 # Esquema de token padrão para extração do header Authorization: Bearer
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login", auto_error=False)
@@ -38,23 +38,41 @@ conta_cliente_exception = HTTPException(
 
 
 async def get_current_user(
+    request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
-    token_query: Optional[str] = Query(None, alias="token"),
     db: AsyncSession = Depends(get_db)
 ) -> Usuario:
-    """Valida o token JWT e retorna o Usuário autenticado."""
-    actual_token = token or token_query
+    """
+    Valida o token JWT e retorna o Usuário autenticado.
+
+    Aceita o token de duas fontes: header Authorization (mobile — sem cookie
+    jar de browser — ou a sessão de observação do admin, ver abaixo) ou
+    cookie httpOnly `sv_access` (fronts web, M6). Nunca via query string
+    (?token=): query string vaza em log de acesso, log de proxy, histórico do
+    navegador e header Referer (B133) — quem precisa de token na URL
+    (WebSocket, que o browser não deixa mandar header customizado no
+    handshake) decodifica com `decode_access_token` direto no próprio
+    endpoint, não por aqui.
+
+    `typ` aceitos: `access` (sessão normal) e `impersonar` (B128 rejeitava
+    tudo que não fosse `access` por padrão — allowlist correta contra o token
+    de MFA/reset valendo como sessão, mas isso também travava o token de
+    "observação" do admin, que é curto/de propósito único e é intencional
+    que sirva de sessão real por 15 min; nenhum teste cobria esse fluxo, por
+    isso passou despercebido até aparecer aqui no M6).
+    """
+    actual_token = token or request.cookies.get(COOKIE_ACCESS)
     if not actual_token:
         raise credentials_exception
-        
+
     payload = decode_access_token(actual_token)
-    if not payload:
+    if not payload or payload.get("typ") not in ("access", "impersonar"):
         raise credentials_exception
-        
+
     user_id: Optional[str] = payload.get("sub")
     if not user_id:
         raise credentials_exception
-        
+
     # Buscar usuário no banco
     result = await db.execute(select(Usuario).where(Usuario.id == user_id))
     user = result.scalar_one_or_none()
@@ -205,15 +223,17 @@ async def registrar_auditoria(
 
 
 async def get_optional_user(
+    request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> Optional[Usuario]:
     """Retorna o usuário se autenticado, caso contrário None (sem levantar exceção)."""
-    if not token:
+    actual_token = token or request.cookies.get(COOKIE_ACCESS)
+    if not actual_token:
         return None
     try:
-        payload = decode_access_token(token)
-        if not payload:
+        payload = decode_access_token(actual_token)
+        if not payload or payload.get("typ") != "access":
             return None
         user_id = payload.get("sub")
         if not user_id:

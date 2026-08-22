@@ -119,6 +119,7 @@ export default function CrmScreen() {
           maxToRenderPerBatch={6}
           windowSize={5}
           removeClippedSubviews={true}
+          ListHeaderComponent={ativos.length > 0 ? <FunilBar leads={ativos} /> : null}
           ListEmptyComponent={
             <EmptyState
               icon="people-outline"
@@ -147,6 +148,57 @@ export default function CrmScreen() {
     </View>
   )
 }
+
+// Etapas do funil de vendas (exclui "perdido", que não é progresso, é saída do funil).
+const ETAPAS_FUNIL = ETAPAS_LEAD.filter((e) => e.value !== 'perdido')
+
+/** Barra horizontal segmentada: distribuição de leads ativos por etapa do funil,
+ *  proporcional à contagem — etapa e volume na mesma leitura. */
+const FunilBar = React.memo(function FunilBar({ leads }: { leads: Lead[] }) {
+  const { colors } = useTheme()
+  const toneCor: Record<string, string> = {
+    primary: colors.primary,
+    success: colors.success,
+    warning: colors.warning,
+    error: colors.error,
+    info: colors.info,
+    neutral: colors.textMuted,
+  }
+  const contagens = ETAPAS_FUNIL.map((e) => ({
+    ...e,
+    count: leads.filter((l) => l.etapa === e.value).length,
+    cor: toneCor[TONE_ETAPA_LEAD[e.value]],
+  }))
+
+  return (
+    <Card style={{ marginBottom: spacing.sm }}>
+      <Txt variant="captionMedium" color="textDim" style={{ marginBottom: spacing.sm }}>
+        Funil de vendas
+      </Txt>
+      <View style={styles.funilBarra}>
+        {contagens.map((e) =>
+          e.count > 0 ? (
+            <View
+              key={e.value}
+              style={{ flex: e.count, backgroundColor: e.cor, height: '100%' }}
+            />
+          ) : null
+        )}
+      </View>
+      <View style={styles.funilLegenda}>
+        {contagens.map((e) => (
+          <View key={e.value} style={styles.funilItem}>
+            <View style={[styles.funilDot, { backgroundColor: e.cor }]} />
+            <Txt variant="caption" color="textDim" numberOfLines={1}>{e.label}</Txt>
+            <Txt style={{ fontFamily: fonts.monoMedium, fontSize: 11, color: colors.text }}>
+              {e.count}
+            </Txt>
+          </View>
+        ))}
+      </View>
+    </Card>
+  )
+})
 
 const keyExtractorLead = (l: Lead) => l.id
 
@@ -187,6 +239,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, height: 34, borderRadius: radius.full, borderWidth: 1,
   },
+  funilBarra: {
+    flexDirection: 'row',
+    height: 10,
+    borderRadius: radius.full,
+    overflow: 'hidden',
+  },
+  funilLegenda: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  funilItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  funilDot: { width: 7, height: 7, borderRadius: 4 },
   topo: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rodape: {
     flexDirection: 'row',

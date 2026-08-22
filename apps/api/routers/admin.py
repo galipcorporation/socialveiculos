@@ -533,13 +533,18 @@ async def impersonar_loja(
     response_model=ImpersonarTokenResponse,
     dependencies=[Depends(rate_limit(limit=10, period=60))],
 )
-async def trocar_codigo_impersonar(data: ImpersonarTrocaRequest):
+async def trocar_codigo_impersonar(data: ImpersonarTrocaRequest, response: Response):
     """
     Troca o código de uso único pelo token de impersonação.
 
     Sem autenticação de propósito: quem chama é o app do gestor, que ainda não
     tem sessão. A segurança está no código — 256 bits, vida de 60s, consumido na
     primeira troca — e ele só existe porque um admin autenticado o pediu.
+
+    M6: além de devolver o token no body (mobile), sobrescreve o cookie
+    `sv_access` desta aba com o token de observação (15 min) — é exatamente o
+    "virar o gestor temporariamente" que a feature pede. Não mexe em
+    `sv_refresh`: este token não tem renovação, é curto e de propósito único.
     """
     async with _LOCK_IMPERSONAR:
         _limpar_codigos_expirados()
@@ -552,6 +557,10 @@ async def trocar_codigo_impersonar(data: ImpersonarTrocaRequest):
         )
 
     token, loja_nome, _exp = registro
+    response.set_cookie(
+        "sv_access", token, httponly=True, secure=True, samesite="lax",
+        max_age=15 * 60, path="/",
+    )
     return ImpersonarTokenResponse(access_token=token, loja_nome=loja_nome)
 
 

@@ -7,7 +7,33 @@ import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from fastapi import Response
+
 from config import settings
+
+# ── Cookies httpOnly de sessão (M6) ──────────────────────────────
+# Público (não prefixado com `_`) porque mais de um router precisa setar
+# esses cookies: routers/auth.py (login/refresh/logout/SSO) e
+# routers/admin.py (troca do token de impersonação). Centralizado aqui —
+# módulo raiz, não router — para não criar import circular entre routers.
+COOKIE_ACCESS = "sv_access"
+COOKIE_REFRESH = "sv_refresh"
+
+
+def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    response.set_cookie(
+        COOKIE_ACCESS, access_token, httponly=True, secure=True, samesite="lax",
+        max_age=settings.jwt_expire_minutes * 60, path="/",
+    )
+    response.set_cookie(
+        COOKIE_REFRESH, refresh_token, httponly=True, secure=True, samesite="lax",
+        max_age=7 * 24 * 60 * 60, path="/",
+    )
+
+
+def clear_auth_cookies(response: Response) -> None:
+    response.delete_cookie(COOKIE_ACCESS, path="/")
+    response.delete_cookie(COOKIE_REFRESH, path="/")
 
 # ── Senhas (Bcrypt) ─────────────────────────────────────────────
 

@@ -158,12 +158,11 @@ export function Feed() {
     setAvatarUploading(true)
     setAvatarError(null)
     try {
-      const token = useAuthStore.getState().token
       const formData = new FormData()
       formData.append('file', avatarFile)
       const res = await fetch('/v1/auth/me/avatar', {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: 'include',
         body: formData,
       })
       if (!res.ok) {

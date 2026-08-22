@@ -81,42 +81,43 @@ class ApiClient {
       url += `?${searchParams.toString()}`
     }
 
-    const { token } = useAuthStore.getState()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...((fetchOptions.headers as Record<string, string>) || {}),
     }
 
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-
+    // M6: sessão vai por cookie httpOnly (sv_access/sv_refresh), não mais
+    // por header Authorization. `credentials: 'include'` manda o cookie
+    // mesmo com o proxy do vercel.json reescrevendo /v1 para outro host —
+    // do ponto de vista do browser ainda é same-origin.
     const response = await fetch(url, {
       ...fetchOptions,
       headers,
+      credentials: 'include',
     })
 
     if (response.status === 401 && !isRefreshing && path !== '/auth/login' && path !== '/auth/refresh') {
-      const { refreshToken, user, login, logout } = useAuthStore.getState()
+      const { user, logout } = useAuthStore.getState()
 
-      if (refreshToken && user) {
+      if (user) {
         isRefreshing = true
         try {
+          // Sem body: o refresh token vem do cookie sv_refresh.
           const refreshRes = await fetch(`${this.baseUrl}/auth/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: refreshToken }),
+            credentials: 'include',
+            body: JSON.stringify({}),
           })
 
           if (refreshRes.ok) {
-            const data = await refreshRes.json()
-            login(data.access_token, data.refresh_token, user)
+            // A resposta já rotacionou o cookie — nada a guardar no JS.
             isRefreshing = false
 
-            headers['Authorization'] = `Bearer ${data.access_token}`
             const retryRes = await fetch(url, {
               ...fetchOptions,
               headers,
+              credentials: 'include',
             })
 
             if (!retryRes.ok) {

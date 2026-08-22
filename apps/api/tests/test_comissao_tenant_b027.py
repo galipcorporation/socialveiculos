@@ -80,7 +80,7 @@ async def test_criar_comissao_cross_tenant_404(client):
 
     token = create_access_token(
         data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com",
-              "papel": PapelUsuario.GESTOR.value}
+              "papel": PapelUsuario.GESTOR.value, "typ": "access"}
     )
     headers = {"Authorization": f"Bearer {token}"}
 

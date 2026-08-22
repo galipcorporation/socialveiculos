@@ -60,6 +60,39 @@ class InMemoryLimiter:
 
 limiter_instance = InMemoryLimiter()
 
+
+# Trava de login por CONTA, além da trava por rota+IP acima. O rate_limit()
+# comum usa IP na chave — credential stuffing distribuído (um IP por
+# tentativa, mesmo e-mail alvo) passa direto por ele. Aqui a chave é só o
+# e-mail: 5 falhas em 5 minutos bloqueiam a CONTA por 5 minutos, não o IP.
+_LOGIN_FALHAS_LIMITE = 5
+_LOGIN_FALHAS_JANELA = 300  # segundos
+
+
+async def conta_bloqueada_por_falhas(email: str) -> bool:
+    """True se o e-mail já bateu no limite de falhas na janela atual (não conta uma nova)."""
+    key = f"login_falhas:{email.lower().strip()}"
+    async with limiter_instance.lock:
+        now = time.time()
+        cutoff = now - _LOGIN_FALHAS_JANELA
+        limiter_instance.requests[key] = [t for t in limiter_instance.requests[key] if t > cutoff]
+        return len(limiter_instance.requests[key]) >= _LOGIN_FALHAS_LIMITE
+
+
+async def registrar_falha_login(email: str) -> None:
+    """Registra mais uma tentativa falha para o e-mail (chamar só após falha real)."""
+    key = f"login_falhas:{email.lower().strip()}"
+    async with limiter_instance.lock:
+        limiter_instance.requests[key].append(time.time())
+
+
+async def limpar_falhas_login(email: str) -> None:
+    """Zera o contador da conta (chamar após login bem-sucedido)."""
+    key = f"login_falhas:{email.lower().strip()}"
+    async with limiter_instance.lock:
+        limiter_instance.requests.pop(key, None)
+
+
 def rate_limit(limit: int, period: int = 60):
     """
     Dependência do FastAPI para controle de taxa (rate limiting).

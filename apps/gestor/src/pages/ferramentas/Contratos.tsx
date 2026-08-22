@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
+import DOMPurify from 'dompurify'
 import { api, extractErrorDetails } from '../../lib/api'
 import { useUIStore } from '../../stores/uiStore'
-import { useAuthStore } from '../../stores/authStore'
 import { useLojaAtivaStore } from '../../stores/lojaAtivaStore'
 import { mascararMoeda, parseMoeda, mascararCPF } from '../../lib/mascaras'
 import { useSearchParams, useNavigate } from 'react-router-dom'
@@ -245,13 +245,11 @@ export function ContratosPage() {
   // ── Actions ──
   const handleDownloadPdf = async (contrato: ContratoItem) => {
     try {
-      const { token } = useAuthStore.getState()
       const { lojaId } = useLojaAtivaStore.getState()
       const headers: Record<string, string> = {}
-      if (token) headers['Authorization'] = `Bearer ${token}`
       if (lojaId) headers['X-Loja-Id'] = lojaId
 
-      const res = await fetch(`/v1/contratos/${contrato.id}/pdf`, { headers })
+      const res = await fetch(`/v1/contratos/${contrato.id}/pdf`, { headers, credentials: 'include' })
       const html = await res.text()
       const win = window.open('', '_blank')
       if (win) {
@@ -857,7 +855,7 @@ function EditorTemplateContent({ template, onClose, onSaved }: {
             {loja.contrato_cabecalho && (
               <div
                 style={{ padding: '10px 14px', fontSize: 12, textAlign: 'center', borderBottom: '1px dashed var(--sv-border)', position: 'relative' }}
-                dangerouslySetInnerHTML={{ __html: loja.contrato_cabecalho }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(loja.contrato_cabecalho) }}
               />
             )}
             <div style={{ padding: '18px 14px', fontSize: 11, color: 'var(--sv-text-muted)', textAlign: 'center', position: 'relative' }}>
@@ -866,7 +864,7 @@ function EditorTemplateContent({ template, onClose, onSaved }: {
             {loja.contrato_rodape && (
               <div
                 style={{ padding: '10px 14px', fontSize: 11, color: 'var(--sv-text-muted)', textAlign: 'center', borderTop: '1px dashed var(--sv-border)', position: 'relative' }}
-                dangerouslySetInnerHTML={{ __html: loja.contrato_rodape }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(loja.contrato_rodape) }}
               />
             )}
           </div>

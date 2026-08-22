@@ -4,9 +4,15 @@ import { useAuthStore } from '../stores/authStore'
 import { api } from '../lib/api'
 
 /**
- * Destino do redirect feito por `GET /v1/auth/google/callback` no backend.
- * Os tokens (ou o challenge de MFA) vêm no fragmento da URL (#...), que nunca
- * é enviado ao servidor — evita vazar o token em logs de acesso.
+ * Destino do redirect feito por `GET /v1/auth/google/callback` (login social)
+ * e por `GET /v1/auth/sso/vitrine/resgatar` (SSO Gestor→Vitrine, M6). Os
+ * tokens (ou o challenge de MFA) vêm no fragmento da URL (#...), que nunca é
+ * enviado ao servidor — evita vazar o token em logs de acesso.
+ *
+ * M6: cookie é por origem, então só esta página (rodando na origem da
+ * Vitrine) pode "adotar" os tokens do fragmento como cookie httpOnly aqui —
+ * a API só redireciona com tokens no fragmento, nunca seta cookie de um
+ * domínio no redirect para outro.
  */
 export function GoogleCallback() {
   const navigate = useNavigate()
@@ -47,10 +53,12 @@ export function GoogleCallback() {
 
   async function finalizarComToken(accessToken: string, refreshToken: string) {
     try {
-      // Login provisório só para autenticar a chamada; `me` traz os dados reais do usuário.
-      loginStore(accessToken, refreshToken, { id: '', nome: '', email: '', papel: 'cliente', ativo: true })
+      // Adota os tokens do fragmento como cookie httpOnly nesta origem antes
+      // de qualquer chamada autenticada — depois disso o front nunca mais
+      // vê o token em si, só o resultado de /auth/me.
+      await api.post('/auth/adotar-cookie', { access_token: accessToken, refresh_token: refreshToken })
       const me: any = await api.get('/auth/me')
-      loginStore(accessToken, refreshToken, me)
+      loginStore(me)
       navigate('/', { replace: true })
     } catch {
       setErro('Não foi possível concluir o login com o Google.')
@@ -67,7 +75,9 @@ export function GoogleCallback() {
         mfa_challenge_token: mfaChallengeToken,
         codigo: mfaCodigo,
       })
-      loginStore(data.access_token, data.refresh_token, data.user)
+      // /auth/mfa/verify-login já seta o cookie na resposta (chamado via
+      // api.post, mesma origem) — só falta guardar o `user` no store.
+      loginStore(data.user)
       navigate('/', { replace: true })
     } catch (err: any) {
       setErro(err.message || 'Código inválido.')

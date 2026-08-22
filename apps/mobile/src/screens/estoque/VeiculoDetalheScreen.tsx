@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing } from '../../theme/tokens'
+import { darkColors, fonts, radius, spacing } from '../../theme/tokens'
 import {
   Badge, Button, Card, ErrorState, Input, OptionSheet, SelectField, Sheet, Skeleton,
   TONE_STATUS_VEICULO, Txt, useToast,
@@ -158,20 +158,30 @@ export default function VeiculoDetalheScreen({ route }: RootScreenProps<'Veiculo
             </Card>
           )}
 
-          {/* Financeiro (só gestor) */}
+          {/* Financeiro (só gestor) — bloco em grafite fixo (independe do tema claro/escuro):
+              sinaliza dado restrito sem depender de rótulo */}
           {v && gestor && v.preco_custo != null && (
-            <Card>
-              <Txt variant="title" style={{ marginBottom: spacing.xs }}>Financeiro</Txt>
-              <Linha label="Preço de custo" valor={formatBRL(v.preco_custo)} />
-              <Linha label="Preço de venda" valor={formatBRL(v.preco_venda)} />
-              {margem != null && (
-                <Linha
-                  label="Margem bruta"
-                  valor={formatBRL(margem)}
-                  cor={margem >= 0 ? colors.success : colors.error}
-                />
-              )}
-            </Card>
+            <View style={[styles.financeiro, { backgroundColor: darkColors.surface }]}>
+              <View style={styles.financeiroHeader}>
+                <Txt style={{ fontFamily: fonts.semibold, fontSize: 12.5, color: darkColors.text }}>Financeiro</Txt>
+                <Txt style={{ fontFamily: fonts.monoMedium, fontSize: 9.5, letterSpacing: 0.6, color: darkColors.textMuted }}>
+                  SÓ GESTOR
+                </Txt>
+              </View>
+              <View style={styles.financeiroCols}>
+                <FinanceiroCol label="CUSTO" valor={formatBRL(v.preco_custo)} fg={darkColors.text} fgLabel={darkColors.textMuted} />
+                <FinanceiroCol label="VENDA" valor={formatBRL(v.preco_venda)} fg={darkColors.text} fgLabel={darkColors.textMuted} />
+                {margem != null && (
+                  <FinanceiroCol
+                    label="MARGEM"
+                    valor={formatBRL(margem)}
+                    fg={darkColors.text}
+                    fgLabel={darkColors.textMuted}
+                    destaque={margem >= 0 ? darkColors.success : darkColors.error}
+                  />
+                )}
+              </View>
+            </View>
           )}
 
           {/* FIPE / precificação (só gestor) */}
@@ -305,6 +315,17 @@ function Linha({ label, valor, cor }: { label: string; valor: string; cor?: stri
     <View style={styles.linha}>
       <Txt variant="caption" color="textDim">{label}</Txt>
       <Txt variant="bodySemibold" style={cor ? { color: cor } : undefined}>{valor}</Txt>
+    </View>
+  )
+}
+
+function FinanceiroCol({ label, valor, fg, fgLabel, destaque }: { label: string; valor: string; fg: string; fgLabel: string; destaque?: string }) {
+  return (
+    <View style={{ flex: 1 }}>
+      <Txt style={{ fontFamily: fonts.monoMedium, fontSize: 9, letterSpacing: 0.5, color: fgLabel }}>{label}</Txt>
+      <Txt style={{ fontFamily: fonts.displayBold, fontSize: 15, marginTop: 3, color: destaque ?? fg }}>
+        {valor}
+      </Txt>
     </View>
   )
 }
@@ -630,6 +651,21 @@ function AcoesGestaoCard({ veiculo, gestor }: { veiculo: Veiculo; gestor: boolea
 }
 
 const styles = StyleSheet.create({
+  financeiro: {
+    borderRadius: radius.xl,
+    padding: spacing.md,
+  },
+  financeiroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  financeiroCols: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
   heroBar: {
     position: 'absolute',
     left: spacing.md,
