@@ -50,6 +50,36 @@ async def _build_solicitacao_response(db: AsyncSession, s: SolicitacaoAprovacao)
 
 
 @router.get(
+    "",
+    response_model=List[SolicitacaoAprovacaoResponse],
+    dependencies=[Depends(exige_permissao(Acao.VER, Recurso.APROVACOES))]
+)
+@router.get(
+    "/todas",
+    response_model=List[SolicitacaoAprovacaoResponse],
+    dependencies=[Depends(exige_permissao(Acao.VER, Recurso.APROVACOES))]
+)
+async def get_todas_solicitacoes(
+    db: AsyncSession = Depends(get_db),
+    context: B2BContext = Depends(get_current_b2b_user)
+):
+    """
+    Lista todas as solicitações (pendentes, aprovadas e rejeitadas) no tenant da loja.
+    """
+    stmt = (
+        select(SolicitacaoAprovacao)
+        .options(selectinload(SolicitacaoAprovacao.requisitante))
+        .where(
+            SolicitacaoAprovacao.loja_id == context.loja_id
+        )
+        .order_by(SolicitacaoAprovacao.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    solicitacoes = result.scalars().all()
+    return [await _build_solicitacao_response(db, s) for s in solicitacoes]
+
+
+@router.get(
     "/pendentes",
     response_model=List[SolicitacaoAprovacaoResponse],
     dependencies=[Depends(exige_permissao(Acao.VER, Recurso.APROVACOES))]

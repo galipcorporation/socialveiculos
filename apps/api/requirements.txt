@@ -1,4 +1,4 @@
-# Versões travadas com "==" (B138, 2026-08-22): antes eram ranges (">=x,<y"
+# Versões travadas com "==" (B137, 2026-08-22): antes eram ranges (">=x,<y"
 # ou só ">=x"), então o Dockerfile (`pip install -r requirements.txt`)
 # resolvia versões diferentes a cada build — dois deploys do mesmo commit
 # podiam rodar código de dependência diferente, sem ninguém decidir isso.

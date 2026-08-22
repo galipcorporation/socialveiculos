@@ -29,7 +29,7 @@ const FERRAMENTAS_CHILDREN = [
 
 const ADMIN_NAV_ITEMS = [
   {
-    path: `/${import.meta.env.VITE_ADMIN_PATH || 'painel-sv'}`,
+    path: `/${import.meta.env.VITE_ADMIN_PATH || 'painel-gestor-sv'}`,
     label: 'Administração',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

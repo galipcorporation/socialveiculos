@@ -47,7 +47,7 @@ function LoginAdmin() {
     try {
       const data: any = await api.post('/auth/login', { email, senha })
       if (data.user?.papel !== 'admin_plataforma') {
-        setErro('Acesso negado. Apenas administradores da plataforma.')
+        setErro('Credenciais inválidas ou acesso não autorizado.')
         return
       }
       login(data.user)
@@ -65,11 +65,11 @@ function LoginAdmin() {
       <div className="bg-glow bg-glow-secondary" />
       <div className="login-card">
         <div className="login-brand">
-          <div className="login-logo">
-            <Shield size={26} />
+          <div className="login-logo" style={{ fontWeight: 800, fontSize: 18, color: 'var(--sv-primary)' }}>
+            SV
           </div>
-          <h2>Admin</h2>
-          <p>Social Veículos — Plataforma</p>
+          <h2>Painel Gestor</h2>
+          <p>Social Veículos — Acesso Interno</p>
         </div>
 
         {erro && (
@@ -88,7 +88,7 @@ function LoginAdmin() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoFocus
-              placeholder="admin@socialveiculos.com.br"
+              placeholder="acesso@socialveiculos.com.br"
             />
           </div>
           <div className="form-group">
@@ -139,7 +139,7 @@ function AdminLayout() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Shield size={18} color="var(--sv-primary)" />
           <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--sv-text)' }}>
-            Social Veículos — Admin
+            Social Veículos — Painel Interno
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>

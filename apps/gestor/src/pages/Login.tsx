@@ -16,7 +16,7 @@ export function Login() {
   React.useEffect(() => {
     if (isAuthenticated) {
       if (user?.papel === 'admin_plataforma') {
-        navigate(`/${import.meta.env.VITE_ADMIN_PATH || 'painel-sv'}`, { replace: true })
+        navigate(`/${import.meta.env.VITE_ADMIN_PATH || 'painel-gestor-sv'}`, { replace: true })
       } else {
         navigate('/', { replace: true })
       }
@@ -55,7 +55,7 @@ export function Login() {
 
       // Admin da plataforma vai para o painel admin
       if (data.user?.papel === 'admin_plataforma') {
-        navigate(`/${import.meta.env.VITE_ADMIN_PATH || 'painel-sv'}`, { replace: true })
+        navigate(`/${import.meta.env.VITE_ADMIN_PATH || 'painel-gestor-sv'}`, { replace: true })
       } else {
         navigate('/', { replace: true })
       }

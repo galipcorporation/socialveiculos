@@ -37,7 +37,7 @@ export function Aprovacoes() {
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoAprovacao[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filtroStatus, setFiltroStatus] = useState<'pendente' | 'aprovado' | 'rejeitado' | 'todos'>('pendente')
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'pendente' | 'aprovado' | 'rejeitado'>('todos')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   
   // Controle de rejeição individual
@@ -52,7 +52,11 @@ export function Aprovacoes() {
     setLoading(true)
     setError(null)
     try {
-      const endpoint = filtroStatus === 'pendente' ? '/aprovacoes/pendentes' : '/aprovacoes/historico'
+      const endpoint = filtroStatus === 'pendente'
+        ? '/aprovacoes/pendentes'
+        : (filtroStatus === 'aprovado' || filtroStatus === 'rejeitado')
+        ? '/aprovacoes/historico'
+        : '/aprovacoes'
       const data = await api.get<SolicitacaoAprovacao[]>(endpoint)
       setSolicitacoes(data)
     } catch (err: unknown) {
@@ -139,7 +143,11 @@ export function Aprovacoes() {
     setProcessandoId(id)
     try {
       await api.post(`/aprovacoes/${id}/processar`, { status: 'aprovado' })
-      setSolicitacoes((prev) => prev.filter((item) => item.id !== id))
+      if (filtroStatus === 'todos') {
+        setSolicitacoes((prev) => prev.map((item) => item.id === id ? { ...item, status: 'aprovado' } : item))
+      } else {
+        setSolicitacoes((prev) => prev.filter((item) => item.id !== id))
+      }
       showToast('Solicitação aprovada com sucesso!', 'success')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao aprovar solicitação.'
@@ -160,7 +168,11 @@ export function Aprovacoes() {
         status: 'rejeitado',
         justificativa_rejeicao: justificativa,
       })
-      setSolicitacoes((prev) => prev.filter((item) => item.id !== id))
+      if (filtroStatus === 'todos') {
+        setSolicitacoes((prev) => prev.map((item) => item.id === id ? { ...item, status: 'rejeitado', justificativa_rejeicao: justificativa } : item))
+      } else {
+        setSolicitacoes((prev) => prev.filter((item) => item.id !== id))
+      }
       setRejeitandoId(null)
       setJustificativa('')
       showToast('Solicitação rejeitada com sucesso.', 'success')
@@ -206,10 +218,10 @@ export function Aprovacoes() {
         {/* Status Filter Tabs */}
         <div style={{ display: 'flex', gap: 6, background: 'var(--sv-surface-dim)', padding: 4, borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
           {[
+            { id: 'todos', label: 'Todos' },
             { id: 'pendente', label: 'Pendentes' },
             { id: 'aprovado', label: 'Aprovados' },
             { id: 'rejeitado', label: 'Rejeitados' },
-            { id: 'todos', label: 'Todos' },
           ].map(tab => (
             <button
               key={tab.id}

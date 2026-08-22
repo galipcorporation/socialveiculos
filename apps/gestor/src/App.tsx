@@ -122,10 +122,6 @@ function PrivateRoute() {
 import { useUIStore } from './stores/uiStore'
 
 function AdminRedirect() {
-  const showError = useUIStore((state) => state.showError)
-  useEffect(() => {
-    showError("Acesso restrito a administradores.")
-  }, [showError])
   return <Navigate to="/" replace />
 }
 
@@ -133,7 +129,7 @@ function AdminGuard() {
   const user = useAuthStore((state) => state.user)
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   // Aguarda hidratação do persist — store começa com user=null antes de ler o localStorage
-  if (!isAuthenticated || user === null) return null
+  if (!isAuthenticated || user === null) return <Navigate to="/" replace />
   if (user.papel !== 'admin_plataforma') return <AdminRedirect />
   return <Outlet />
 }
@@ -148,7 +144,7 @@ function ModuleGuard({ modulo, children }: { modulo: ModuloKey; children: ReactN
   return <>{children}</>
 }
 
-const ADMIN_PATH = import.meta.env.VITE_ADMIN_PATH || 'painel-sv'
+const ADMIN_PATH = import.meta.env.VITE_ADMIN_PATH || 'painel-gestor-sv'
 
 export default function App() {
   return (
@@ -166,15 +162,8 @@ export default function App() {
       {/* Rotas protegidas — um único PrivateRoute */}
       <Route element={<PrivateRoute />}>
 
-        {/* Painel admin — rota secreta, layout isolado */}
+        {/* Painel interno restrito — rota secreta configurável */}
         <Route path={ADMIN_PATH} element={<AdminGuard />}>
-          <Route element={<AdminLayout />}>
-            <Route index element={<AdminPage />} />
-          </Route>
-        </Route>
-
-        {/* Alias alternativo para /admin */}
-        <Route path="admin" element={<AdminGuard />}>
           <Route element={<AdminLayout />}>
             <Route index element={<AdminPage />} />
           </Route>

@@ -225,15 +225,6 @@ export function Equipe() {
           <p>Gerencie os gestores e vendedores da sua loja.</p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {selectedIds.length > 0 && (
-            <button
-              className="btn btn-secondary"
-              onClick={() => setModalEdicaoLote(true)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              ⚙️ Opções em Lote ({selectedIds.length})
-            </button>
-          )}
           <button className="btn btn-primary" onClick={() => setMostrarForm((v) => !v)}>
             {mostrarForm ? 'Fechar' : '+ Convidar Membro'}
           </button>
@@ -368,7 +359,6 @@ export function Equipe() {
                   <th style={{ padding: '12px 16px' }}>Papel</th>
                   <th style={{ padding: '12px 16px' }}>Comissão</th>
                   <th style={{ padding: '12px 16px' }}>Status</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -409,46 +399,6 @@ export function Equipe() {
                           {m.ativo ? 'Ativo' : 'Inativo'}
                         </span>
                       </td>
-                      <td className="cell-actions" style={{ padding: '12px 16px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            style={{ padding: '5px 12px', fontSize: '12px' }}
-                            title="Editar permissões e dados"
-                            onClick={(e) => { e.stopPropagation(); setMembroAcessos(m); }}
-                          >
-                            ✏️ Editar
-                          </button>
-                          {m.papel === 'vendedor' && (
-                            <button
-                              className="btn btn-outline btn-sm"
-                              style={{ padding: '5px 10px', fontSize: '12px' }}
-                              title="Configurar IA"
-                              onClick={(e) => { e.stopPropagation(); setMembroPermissaoIa(m); }}
-                            >
-                              🤖 IA
-                            </button>
-                          )}
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            style={{ padding: '5px 10px', fontSize: '12px' }}
-                            title={m.ativo ? 'Desativar' : 'Ativar'}
-                            onClick={(e) => { e.stopPropagation(); handleToggleAtivo(m); }}
-                          >
-                            {m.ativo ? '🚫 Desativar' : '✅ Ativar'}
-                          </button>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            style={{ padding: '5px 8px', color: 'var(--sv-danger)' }}
-                            title="Remover"
-                            onClick={(e) => { e.stopPropagation(); handleRemover(m); }}
-                          >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
                     </tr>
                   )
                 })}
@@ -479,14 +429,14 @@ export function Equipe() {
                 {selectedIds.length} membro(s) selecionado(s)
               </span>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button className="btn btn-primary btn-sm" onClick={() => setModalEdicaoLote(true)}>
-                  ⚙️ Configurar em Lote
+                <button className="btn btn-secondary btn-sm" onClick={() => setModalEdicaoLote(true)}>
+                  ✏️ Editar Selecionados
                 </button>
                 <button className="btn btn-secondary btn-sm" onClick={handleBulkDesativar}>
-                  🚫 Desativar
+                  🚫 Desativar Selecionados
                 </button>
                 <button className="btn btn-danger btn-sm" onClick={handleBulkRemover}>
-                  🗑️ Remover
+                  🗑️ Remover Selecionados
                 </button>
                 <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds([])}>
                   Limpar Seleção
@@ -518,9 +468,10 @@ export function Equipe() {
         <EditarAcessosModal
           membro={membroAcessos}
           disponiveis={disponiveis}
+          selectedIds={selectedIds}
           onClose={() => setMembroAcessos(null)}
-          onSaved={(novos) => {
-            setMembros((prev) => prev.map((x) => (x.id === membroAcessos.id ? { ...x, modulos: novos } : x)))
+          onSaved={(novos, affectedIds) => {
+            setMembros((prev) => prev.map((x) => (affectedIds.includes(x.id) ? { ...x, modulos: novos } : x)))
             setMembroAcessos(null)
           }}
           onToggleAtivo={(m) => {
@@ -530,6 +481,10 @@ export function Equipe() {
           onRemover={(m) => {
             handleRemover(m)
             setMembroAcessos(null)
+          }}
+          onConfigIa={(m) => {
+            setMembroAcessos(null)
+            setMembroPermissaoIa(m)
           }}
         />
       )}
@@ -669,23 +624,28 @@ function ModulosChecklist({
 function EditarAcessosModal({
   membro,
   disponiveis,
+  selectedIds,
   onClose,
   onSaved,
   onToggleAtivo,
   onRemover,
+  onConfigIa,
 }: {
   membro: Membro
   disponiveis: ModuloKey[]
+  selectedIds: string[]
   onClose: () => void
-  onSaved: (modulos: string) => void
+  onSaved: (modulos: string, affectedIds: string[]) => void
   onToggleAtivo: (m: Membro) => void
   onRemover: (m: Membro) => void
+  onConfigIa: (m: Membro) => void
 }) {
   const [modulos, setModulos] = useState<ModuloKey[]>(
     parseModulos(membro.modulos).filter((k) => disponiveis.includes(k)),
   )
   const [salvando, setSalvando] = useState(false)
   const showToast = useUIStore((state) => state.showToast)
+  const confirm = useUIStore((state) => state.confirm)
 
   const toggle = (key: ModuloKey) =>
     setModulos((prev) => (prev.includes(key) ? prev.filter((m) => m !== key) : [...prev, key]))
@@ -694,9 +654,27 @@ function EditarAcessosModal({
     setSalvando(true)
     try {
       const serializado = JSON.stringify(modulos)
+
+      // Se há múltiplos membros selecionados (ou se este membro faz parte de uma seleção maior)
+      if (selectedIds.length > 1) {
+        const confirmarReplicar = await confirm({
+          title: 'Replicar Permissões?',
+          message: `Você possui ${selectedIds.length} membros selecionados na equipe. Deseja replicar estes mesmos acessos para todos os ${selectedIds.length} membros selecionados ou salvar apenas para ${membro.nome}?`,
+          confirmText: `Replicar para os ${selectedIds.length}`,
+          cancelText: 'Salvar apenas para este',
+        })
+
+        if (confirmarReplicar) {
+          await Promise.all(selectedIds.map(id => api.patch(`/equipe/${id}`, { modulos: serializado })))
+          showToast(`Acessos replicados com sucesso para ${selectedIds.length} membros!`, 'success')
+          onSaved(serializado, selectedIds)
+          return
+        }
+      }
+
       await api.patch(`/equipe/${membro.id}`, { modulos: serializado })
       showToast('Acessos atualizados com sucesso!', 'success')
-      onSaved(serializado)
+      onSaved(serializado, [membro.id])
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Erro ao salvar acessos.', 'error')
     } finally {
@@ -723,12 +701,23 @@ function EditarAcessosModal({
           background: 'var(--sv-surface-dim)',
           borderBottom: '1px solid var(--sv-border)',
           alignItems: 'center',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
+          flexWrap: 'wrap'
         }}>
           <span style={{ fontSize: 12, color: 'var(--sv-text-dim)', fontWeight: 600 }}>
             Status: <strong style={{ color: membro.ativo ? 'var(--sv-success)' : 'var(--sv-text-muted)' }}>{membro.ativo ? 'ATIVO' : 'INATIVO'}</strong>
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {membro.papel === 'vendedor' && (
+              <button
+                type="button"
+                className="btn btn-glass btn-sm"
+                onClick={() => onConfigIa(membro)}
+                title="Configurações de IA deste vendedor"
+              >
+                🤖 Config. IA
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-glass btn-sm"
@@ -886,28 +875,27 @@ function ModalEdicaoLoteEquipe({
   const showToast = useUIStore((state) => state.showToast)
   const [salvando, setSalvando] = useState(false)
 
-  // Opções para aplicar em lote
+  // Módulos de acesso (em foco como padrão)
+  const [modulosSelecionados, setModulosSelecionados] = useState<ModuloKey[]>([])
+  const [aplicarModulos, setAplicarModulos] = useState(true)
+
+  // Opções extras opcionais
+  const [mostrarOutrasOpcoes, setMostrarOutrasOpcoes] = useState(false)
   const [aplicarComissao, setAplicarComissao] = useState(false)
   const [comissaoValor, setComissaoValor] = useState('5')
-
   const [aplicarPapel, setAplicarPapel] = useState(false)
   const [papelValor, setPapelValor] = useState<Papel>('vendedor')
-
   const [aplicarStatus, setAplicarStatus] = useState(false)
   const [statusValor, setStatusValor] = useState(true)
-
   const [aplicarIA, setAplicarIA] = useState(false)
   const [iaPermitida, setIaPermitida] = useState(true)
-
-  const [aplicarModulos, setAplicarModulos] = useState(false)
-  const [modulosSelecionados, setModulosSelecionados] = useState<ModuloKey[]>([])
 
   const toggleModulo = (key: ModuloKey) => {
     setModulosSelecionados(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   }
 
   const handleSalvar = async () => {
-    if (!aplicarComissao && !aplicarPapel && !aplicarStatus && !aplicarIA && !aplicarModulos) {
+    if (!aplicarModulos && !aplicarComissao && !aplicarPapel && !aplicarStatus && !aplicarIA) {
       showToast('Selecione pelo menos uma configuração para aplicar em lote.', 'warning')
       return
     }
@@ -915,6 +903,9 @@ function ModalEdicaoLoteEquipe({
     setSalvando(true)
     try {
       const payload: Record<string, any> = {}
+      if (aplicarModulos) {
+        payload.modulos = JSON.stringify(modulosSelecionados)
+      }
       if (aplicarComissao) {
         const num = comissaoValor.trim() === '' ? null : Math.min(100, Math.max(0, parseFloat(comissaoValor.replace(',', '.')) || 0))
         payload.percentual_comissao = num
@@ -924,9 +915,6 @@ function ModalEdicaoLoteEquipe({
       }
       if (aplicarStatus) {
         payload.ativo = statusValor
-      }
-      if (aplicarModulos) {
-        payload.modulos = JSON.stringify(modulosSelecionados)
       }
 
       await Promise.all(selectedIds.map(id => api.patch(`/equipe/${id}`, payload)))
@@ -942,7 +930,7 @@ function ModalEdicaoLoteEquipe({
         )
       }
 
-      showToast(`Configurações aplicadas com sucesso a ${selectedIds.length} membros!`, 'success')
+      showToast(`Permissões e configurações aplicadas com sucesso a ${selectedIds.length} membros!`, 'success')
       onSaved()
       onClose()
     } catch (err) {
@@ -957,140 +945,156 @@ function ModalEdicaoLoteEquipe({
       <div className="modal-glass" style={{ maxWidth: 620, width: '100%' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <h3>Configurações em Lote da Equipe</h3>
+            <h3>Editar Permissões em Lote</h3>
             <div style={{ fontSize: 13, color: 'var(--sv-text-muted)', marginTop: 2 }}>
-              Aplicando alterações a <strong>{selectedIds.length} membro(s)</strong> selecionado(s).
+              Definindo permissões para <strong>{selectedIds.length} membro(s)</strong> selecionado(s).
             </div>
           </div>
           <button className="modal-close" onClick={onClose} aria-label="Fechar">×</button>
         </div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '70vh', overflowY: 'auto' }}>
-          {/* 1. Comissão */}
+          {/* Módulos de Acesso — Destaque principal */}
           <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
-              <input
-                type="checkbox"
-                checked={aplicarComissao}
-                onChange={e => setAplicarComissao(e.target.checked)}
-                style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
-              />
-              Definir % de Comissão dos Vendedores
-            </label>
-            {aplicarComissao && (
-              <div style={{ marginTop: 10, paddingLeft: 28, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <input
-                  type="text"
-                  value={comissaoValor}
-                  onChange={e => setComissaoValor(e.target.value.replace(/[^\d.,]/g, ''))}
-                  placeholder="Ex: 5"
-                  style={{ ...inputStyle, width: 80, textAlign: 'center' }}
-                />
-                <span style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>% de comissão por venda</span>
-              </div>
-            )}
-          </div>
-
-          {/* 2. Papel */}
-          <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
-              <input
-                type="checkbox"
-                checked={aplicarPapel}
-                onChange={e => setAplicarPapel(e.target.checked)}
-                style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
-              />
-              Alterar Papel / Cargo
-            </label>
-            {aplicarPapel && (
-              <div style={{ marginTop: 10, paddingLeft: 28 }}>
-                <select
-                  value={papelValor}
-                  onChange={e => setPapelValor(e.target.value as Papel)}
-                  style={inputStyle}
-                >
-                  <option value="vendedor">Vendedor</option>
-                  <option value="gestor">Gestor</option>
-                </select>
-              </div>
-            )}
-          </div>
-
-          {/* 3. Permissão de IA */}
-          <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
-              <input
-                type="checkbox"
-                checked={aplicarIA}
-                onChange={e => setAplicarIA(e.target.checked)}
-                style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
-              />
-              Permissão de Assistente IA
-            </label>
-            {aplicarIA && (
-              <div style={{ marginTop: 10, paddingLeft: 28 }}>
-                <select
-                  value={iaPermitida ? 'sim' : 'nao'}
-                  onChange={e => setIaPermitida(e.target.value === 'sim')}
-                  style={inputStyle}
-                >
-                  <option value="sim">Habilitar IA para todos os selecionados</option>
-                  <option value="nao">Desabilitar IA para todos os selecionados</option>
-                </select>
-              </div>
-            )}
-          </div>
-
-          {/* 4. Status */}
-          <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
-              <input
-                type="checkbox"
-                checked={aplicarStatus}
-                onChange={e => setAplicarStatus(e.target.checked)}
-                style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
-              />
-              Status do Usuário
-            </label>
-            {aplicarStatus && (
-              <div style={{ marginTop: 10, paddingLeft: 28 }}>
-                <select
-                  value={statusValor ? 'ativo' : 'inativo'}
-                  onChange={e => setStatusValor(e.target.value === 'ativo')}
-                  style={inputStyle}
-                >
-                  <option value="ativo">Marcar como Ativos</option>
-                  <option value="inativo">Marcar como Inativos / Desativados</option>
-                </select>
-              </div>
-            )}
-          </div>
-
-          {/* 5. Módulos de Acesso */}
-          <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14, marginBottom: 12 }}>
               <input
                 type="checkbox"
                 checked={aplicarModulos}
                 onChange={e => setAplicarModulos(e.target.checked)}
                 style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
               />
-              Definir Módulos de Acesso Liberados
+              Módulos de Acesso dos Membros Selecionados
             </label>
             {aplicarModulos && (
-              <div style={{ marginTop: 10, paddingLeft: 28 }}>
+              <div style={{ paddingLeft: 8 }}>
                 <ModulosChecklist
                   modulos={modulosSelecionados}
                   disponiveis={disponiveis}
                   onToggle={toggleModulo}
-                  hint="Os módulos marcados serão liberados para todos os membros selecionados."
+                  hint="Marque os módulos que ficarão liberados para todos os selecionados."
                 />
               </div>
             )}
           </div>
+
+          {/* Opções adicionais recolhíveis */}
+          <div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setMostrarOutrasOpcoes(!mostrarOutrasOpcoes)}
+              style={{ fontSize: 12, color: 'var(--sv-text-dim)', padding: 0 }}
+            >
+              {mostrarOutrasOpcoes ? '▲ Ocultar outras opções em lote' : '▼ Mais opções em lote (Comissão, Cargo, Status, IA)'}
+            </button>
+          </div>
+
+          {mostrarOutrasOpcoes && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* 1. Comissão */}
+              <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
+                  <input
+                    type="checkbox"
+                    checked={aplicarComissao}
+                    onChange={e => setAplicarComissao(e.target.checked)}
+                    style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
+                  />
+                  Definir % de Comissão dos Vendedores
+                </label>
+                {aplicarComissao && (
+                  <div style={{ marginTop: 10, paddingLeft: 28, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <input
+                      type="text"
+                      value={comissaoValor}
+                      onChange={e => setComissaoValor(e.target.value.replace(/[^\d.,]/g, ''))}
+                      placeholder="Ex: 5"
+                      style={{ ...inputStyle, width: 80, textAlign: 'center' }}
+                    />
+                    <span style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>% de comissão por venda</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Papel */}
+              <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
+                  <input
+                    type="checkbox"
+                    checked={aplicarPapel}
+                    onChange={e => setAplicarPapel(e.target.checked)}
+                    style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
+                  />
+                  Alterar Papel / Cargo
+                </label>
+                {aplicarPapel && (
+                  <div style={{ marginTop: 10, paddingLeft: 28 }}>
+                    <select
+                      value={papelValor}
+                      onChange={e => setPapelValor(e.target.value as Papel)}
+                      style={inputStyle}
+                    >
+                      <option value="vendedor">Vendedor</option>
+                      <option value="gestor">Gestor</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Permissão de IA */}
+              <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
+                  <input
+                    type="checkbox"
+                    checked={aplicarIA}
+                    onChange={e => setAplicarIA(e.target.checked)}
+                    style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
+                  />
+                  Permissão de Assistente IA
+                </label>
+                {aplicarIA && (
+                  <div style={{ marginTop: 10, paddingLeft: 28 }}>
+                    <select
+                      value={iaPermitida ? 'sim' : 'nao'}
+                      onChange={e => setIaPermitida(e.target.value === 'sim')}
+                      style={inputStyle}
+                    >
+                      <option value="sim">Habilitar IA para todos os selecionados</option>
+                      <option value="nao">Desabilitar IA para todos os selecionados</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Status */}
+              <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
+                  <input
+                    type="checkbox"
+                    checked={aplicarStatus}
+                    onChange={e => setAplicarStatus(e.target.checked)}
+                    style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
+                  />
+                  Status do Usuário
+                </label>
+                {aplicarStatus && (
+                  <div style={{ marginTop: 10, paddingLeft: 28 }}>
+                    <select
+                      value={statusValor ? 'ativo' : 'inativo'}
+                      onChange={e => setStatusValor(e.target.value === 'ativo')}
+                      style={inputStyle}
+                    >
+                      <option value="ativo">Marcar como Ativos</option>
+                      <option value="inativo">Marcar como Inativos / Desativados</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="modal-footer">
+        <div className="modal-footer" style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', padding: '16px 24px', borderTop: '1px solid var(--sv-border)' }}>
           <button className="btn btn-outline" onClick={onClose} disabled={salvando}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSalvar} disabled={salvando}>
             {salvando ? 'Salvando...' : `Aplicar a ${selectedIds.length} Membro(s)`}

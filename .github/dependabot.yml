@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # Backend (apps/api) — requirements.txt travado com "==" (B137); PRs
+  # semanais em vez de daily pra não virar ruído constante.
+  - package-ecosystem: "pip"
+    directory: "/apps/api"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "python"
+
+  # Frontend + monorepo (pnpm workspace) — um único manifest na raiz cobre
+  # todos os apps/packages.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "javascript"
+
+  # Actions do próprio CI (actions/checkout, setup-node, etc.)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"

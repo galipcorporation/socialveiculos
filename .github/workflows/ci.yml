@@ -41,6 +41,17 @@ jobs:
       - name: Install Node Dependencies
         run: pnpm install --frozen-lockfile
 
+      # B137: scan de vulnerabilidade automático — nada rodava antes.
+      # --audit-level=critical, não high: os 2 "high" residuais hoje são
+      # image-size (DoS via loop infinito, GHSA-w3rx-r6r6-pgpr/GHSA-5p2g-fcmc-qvqq)
+      # sem fix disponível do upstream ("patched: <0.0.0"), só na cadeia de
+      # build do Expo/Metro (dev tooling, nunca roda em produção/servidor) —
+      # travar CI nisso é alarme falso permanente até o Expo atualizar.
+      # Reavaliar para "high" quando o fix existir — conferir com
+      # `pnpm audit --audit-level=high` de vez em quando.
+      - name: Audit Node Dependencies
+        run: pnpm audit --audit-level=critical
+
       - name: Frontend Build, Lint & Typecheck
         run: |
           pnpm --filter @sv/gestor run build --emptyOutDir
@@ -59,6 +70,16 @@ jobs:
         run: |
           cd apps/api
           pip install -r requirements.txt
+
+      # B138: scan de vulnerabilidade automático — nada rodava antes.
+      # requirements.txt trocou de ranges (">=") pra "==" travado justamente
+      # pra isto ter sentido: sem versão travada, o mesmo pip-audit passa
+      # hoje e falha amanhã sem nenhum commit ter mudado nada.
+      - name: Audit Python Dependencies
+        run: |
+          pip install pip-audit
+          cd apps/api
+          pip-audit -r requirements.txt
 
       - name: Check Python Compilation
         run: |
