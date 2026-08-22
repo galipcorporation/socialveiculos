@@ -548,7 +548,7 @@ async def iniciar_conversa_b2c(
             origem=OrigemLead.VITRINE,
             etapa=EtapaLead.LEAD,
             valor_proposta=veiculo.preco_venda or 0.0,
-            observacoes=f"Lead gerado via Chat Vitrine B2C. Mensagem inicial: {msg_texto}"
+            observacoes=f"Lead gerado via Chat da Vitrine. Mensagem inicial: {msg_texto}"
         )
         db.add(lead)
         await db.flush()

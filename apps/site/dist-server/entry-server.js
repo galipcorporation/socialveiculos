@@ -1,8 +1,8 @@
-import { jsxs, jsx, Fragment } from "react/jsx-runtime";
+import { jsx, jsxs, Fragment } from "react/jsx-runtime";
 import { renderToString } from "react-dom/server";
 import { Link, Routes, Route, StaticRouter } from "react-router-dom";
 import { Helmet, HelmetProvider } from "react-helmet-async";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 const API_BASE = "/v1/public/site";
 async function fetchSitePublico(host) {
   try {
@@ -40,7 +40,7 @@ function getSSGData() {
   return g.__SSG_DATA__ ?? null;
 }
 function SiteHeader({ dados }) {
-  return /* @__PURE__ */ jsxs("header", { className: "site-header", children: [
+  return /* @__PURE__ */ jsx("header", { className: "site-header", children: /* @__PURE__ */ jsxs("div", { className: "site-header-inner", children: [
     /* @__PURE__ */ jsx(Link, { to: "/", style: { display: "flex", alignItems: "center", gap: 10 }, children: dados.site.logo_url ? /* @__PURE__ */ jsx("img", { src: dados.site.logo_url, alt: dados.loja.nome, className: "site-header-logo" }) : /* @__PURE__ */ jsx("span", { className: "site-header-nome", children: dados.loja.nome }) }),
     /* @__PURE__ */ jsxs("nav", { className: "site-header-nav", children: [
       /* @__PURE__ */ jsx(Link, { to: "/", children: "Início" }),
@@ -49,21 +49,35 @@ function SiteHeader({ dados }) {
       /* @__PURE__ */ jsx(Link, { to: "/financiamento", children: "Financiamento" }),
       /* @__PURE__ */ jsx(Link, { to: "/contato", children: "Contato" })
     ] })
-  ] });
+  ] }) });
 }
 function SiteFooter({ dados }) {
-  return /* @__PURE__ */ jsxs("footer", { className: "site-footer", children: [
-    "© ",
-    (/* @__PURE__ */ new Date()).getFullYear(),
-    " ",
-    dados.loja.nome,
-    ". Todos os direitos reservados."
-  ] });
+  return /* @__PURE__ */ jsx("footer", { className: "site-footer", children: /* @__PURE__ */ jsxs("div", { className: "site-container", style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }, children: [
+    /* @__PURE__ */ jsxs("div", { children: [
+      /* @__PURE__ */ jsx("div", { style: { fontWeight: 700, fontSize: 16, color: "#fff" }, children: dados.loja.nome }),
+      dados.loja.cidade && /* @__PURE__ */ jsxs("div", { style: { fontSize: 12, opacity: 0.75, marginTop: 3 }, children: [
+        dados.loja.cidade,
+        dados.loja.estado ? ` - ${dados.loja.estado}` : "",
+        dados.loja.whatsapp && ` · WhatsApp: ${dados.loja.whatsapp}`
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { style: { fontSize: 13, opacity: 0.85, textAlign: "right" }, children: [
+      "© ",
+      (/* @__PURE__ */ new Date()).getFullYear(),
+      " ",
+      dados.loja.nome,
+      ". Todos os direitos reservados."
+    ] })
+  ] }) });
+}
+function formatBRL$1(v) {
+  if (v == null) return null;
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 function Hero({ dados }) {
   const { site } = dados;
   const titulo = site.hero_titulo || dados.loja.nome;
-  const subtitulo = site.hero_subtitulo || "Confira nosso estoque de veículos.";
+  const subtitulo = site.hero_subtitulo || "Confira nosso estoque de veículos selecionados com garantia e procedência.";
   const cta = site.hero_cta || "Ver estoque";
   if (site.template === "premium") {
     return /* @__PURE__ */ jsxs(
@@ -86,20 +100,90 @@ function Hero({ dados }) {
       /* @__PURE__ */ jsx(Link, { to: "/estoque", className: "site-hero-cta", style: { marginTop: 16, display: "inline-block" }, children: cta })
     ] }) });
   }
-  return /* @__PURE__ */ jsxs("section", { className: "site-hero", children: [
+  return /* @__PURE__ */ jsx("section", { className: "site-hero", children: /* @__PURE__ */ jsxs("div", { className: "site-container", children: [
     /* @__PURE__ */ jsx("h1", { className: "site-hero-titulo", children: titulo }),
     /* @__PURE__ */ jsx("p", { className: "site-hero-subtitulo", children: subtitulo }),
     /* @__PURE__ */ jsx(Link, { to: "/estoque", className: "site-hero-cta", children: cta })
-  ] });
+  ] }) });
 }
 function Home({ dados }) {
+  const [veiculos, setVeiculos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetchEstoqueLoja(dados.loja.slug).then((v) => {
+      setVeiculos(v || []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [dados.loja.slug]);
+  const destaques = veiculos.slice(0, 6);
+  const telLimpo = (dados.loja.whatsapp || "").replace(/\D/g, "");
   return /* @__PURE__ */ jsxs(Fragment, { children: [
     /* @__PURE__ */ jsx(SiteHeader, { dados }),
     /* @__PURE__ */ jsx(Hero, { dados }),
-    dados.site.sobre_texto && /* @__PURE__ */ jsx("div", { className: "site-container", children: /* @__PURE__ */ jsxs("section", { className: "site-section", children: [
-      /* @__PURE__ */ jsx("h2", { className: "site-section-titulo", children: "Sobre nós" }),
-      /* @__PURE__ */ jsx("p", { children: dados.site.sobre_texto })
-    ] }) }),
+    /* @__PURE__ */ jsxs("div", { className: "site-container", children: [
+      /* @__PURE__ */ jsxs("section", { className: "site-section", children: [
+        /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24, flexWrap: "wrap", gap: 12 }, children: [
+          /* @__PURE__ */ jsxs("div", { children: [
+            /* @__PURE__ */ jsx("h2", { className: "site-section-titulo", style: { margin: 0 }, children: "Nosso Estoque" }),
+            /* @__PURE__ */ jsx("p", { style: { color: "var(--site-text-dim)", fontSize: 14, margin: "4px 0 0" }, children: "Veículos inspecionados, revisados e prontos para entrega." })
+          ] }),
+          veiculos.length > 0 && /* @__PURE__ */ jsxs(Link, { to: "/estoque", style: { color: "var(--site-primary)", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", gap: 4 }, children: [
+            "Ver todos (",
+            veiculos.length,
+            ") →"
+          ] })
+        ] }),
+        loading ? /* @__PURE__ */ jsx("p", { className: "site-empty", children: "Carregando catálogo de veículos…" }) : veiculos.length === 0 ? /* @__PURE__ */ jsxs("div", { className: "site-empty", style: { background: "var(--site-surface)", borderRadius: "var(--site-radius)", border: "1px solid var(--site-border)", padding: 40 }, children: [
+          /* @__PURE__ */ jsx("p", { style: { fontWeight: 600, fontSize: 16, marginBottom: 4 }, children: "Nenhum veículo publicado no momento." }),
+          /* @__PURE__ */ jsx("p", { style: { fontSize: 13, color: "var(--site-text-dim)", margin: 0 }, children: "Novas opções estão sendo preparadas e estarão disponíveis em breve." })
+        ] }) : /* @__PURE__ */ jsx("div", { className: "site-estoque-grid", children: destaques.map((v) => {
+          var _a, _b;
+          const foto = (_b = (_a = v.midias) == null ? void 0 : _a[0]) == null ? void 0 : _b.url;
+          const msgWhats = encodeURIComponent(`Olá! Vi o anúncio do ${v.marca} ${v.modelo} ${v.ano_modelo || ""} no site e gostaria de mais informações.`);
+          const linkWhats = telLimpo ? `https://wa.me/55${telLimpo}?text=${msgWhats}` : null;
+          return /* @__PURE__ */ jsxs("div", { className: "site-card", children: [
+            foto ? /* @__PURE__ */ jsx("img", { src: foto, alt: `${v.marca} ${v.modelo}`, className: "site-card-img" }) : /* @__PURE__ */ jsx("div", { className: "site-card-img", style: { display: "flex", alignItems: "center", justifyContent: "center", color: "var(--site-text-dim)", fontSize: 13 }, children: "Foto do Veículo" }),
+            /* @__PURE__ */ jsxs("div", { className: "site-card-body", children: [
+              /* @__PURE__ */ jsxs("div", { className: "site-card-titulo", children: [
+                v.marca,
+                " ",
+                v.modelo
+              ] }),
+              /* @__PURE__ */ jsxs("div", { className: "site-card-info", children: [
+                v.ano_fabricacao,
+                "/",
+                v.ano_modelo,
+                v.km != null && ` · ${v.km.toLocaleString("pt-BR")} km`,
+                v.cor && ` · ${v.cor}`
+              ] }),
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }, children: [
+                /* @__PURE__ */ jsx("div", { className: "site-card-preco", children: formatBRL$1(v.preco_venda) || "Consulte" }),
+                linkWhats && /* @__PURE__ */ jsx(
+                  "a",
+                  {
+                    href: linkWhats,
+                    target: "_blank",
+                    rel: "noopener noreferrer",
+                    className: "site-card-btn-whats",
+                    title: "Conversar no WhatsApp",
+                    children: "Proposta"
+                  }
+                )
+              ] })
+            ] })
+          ] }, v.id);
+        }) }),
+        veiculos.length > 6 && /* @__PURE__ */ jsx("div", { style: { textAlign: "center", marginTop: 16 }, children: /* @__PURE__ */ jsxs(Link, { to: "/estoque", className: "site-hero-cta", children: [
+          "Ver todo o estoque (",
+          veiculos.length,
+          " veículos)"
+        ] }) })
+      ] }),
+      dados.site.sobre_texto && /* @__PURE__ */ jsxs("section", { className: "site-section", children: [
+        /* @__PURE__ */ jsx("h2", { className: "site-section-titulo", children: "Sobre nós" }),
+        /* @__PURE__ */ jsx("p", { style: { color: "var(--site-text-dim)", lineHeight: 1.7, fontSize: 15 }, children: dados.site.sobre_texto })
+      ] })
+    ] }),
     /* @__PURE__ */ jsx(SiteFooter, { dados })
   ] });
 }
@@ -135,21 +219,138 @@ function estoqueJsonLd(veiculos) {
 function Estoque({ dados }) {
   const [veiculos, setVeiculos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState("");
+  const [marca, setMarca] = useState("");
+  const [faixaPreco, setFaixaPreco] = useState("");
+  const [anoMin, setAnoMin] = useState("");
+  const [ordenacao, setOrdenacao] = useState("recentes");
   useEffect(() => {
     fetchEstoqueLoja(dados.loja.slug).then((v) => {
-      setVeiculos(v);
+      setVeiculos(v || []);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [dados.loja.slug]);
+  const marcasDisponiveis = useMemo(() => {
+    const set = /* @__PURE__ */ new Set();
+    veiculos.forEach((v) => {
+      if (v.marca) set.add(v.marca);
+    });
+    return Array.from(set).sort();
+  }, [veiculos]);
+  const veiculosFiltrados = useMemo(() => {
+    return veiculos.filter((v) => {
+      if (busca.trim()) {
+        const t = busca.toLowerCase();
+        const match = v.marca && v.marca.toLowerCase().includes(t) || v.modelo && v.modelo.toLowerCase().includes(t) || v.versao && v.versao.toLowerCase().includes(t) || v.cor && v.cor.toLowerCase().includes(t);
+        if (!match) return false;
+      }
+      if (marca && v.marca !== marca) return false;
+      if (anoMin && (v.ano_modelo || v.ano_fabricacao || 0) < Number(anoMin)) return false;
+      if (faixaPreco) {
+        const p = v.preco_venda || 0;
+        if (faixaPreco === "ate_50k" && p > 5e4) return false;
+        if (faixaPreco === "50k_100k" && (p < 5e4 || p > 1e5)) return false;
+        if (faixaPreco === "100k_150k" && (p < 1e5 || p > 15e4)) return false;
+        if (faixaPreco === "acima_150k" && p < 15e4) return false;
+      }
+      return true;
+    }).sort((a, b) => {
+      if (ordenacao === "menor_preco") return (a.preco_venda || 0) - (b.preco_venda || 0);
+      if (ordenacao === "maior_preco") return (b.preco_venda || 0) - (a.preco_venda || 0);
+      if (ordenacao === "menor_km") return (a.km || 0) - (b.km || 0);
+      return (b.ano_modelo || 0) - (a.ano_modelo || 0);
+    });
+  }, [veiculos, busca, marca, faixaPreco, anoMin, ordenacao]);
+  const limparFiltros = () => {
+    setBusca("");
+    setMarca("");
+    setFaixaPreco("");
+    setAnoMin("");
+    setOrdenacao("recentes");
+  };
+  const temFiltroAtivo = !!busca || !!marca || !!faixaPreco || !!anoMin || ordenacao !== "recentes";
+  const telLimpo = (dados.loja.whatsapp || "").replace(/\D/g, "");
   return /* @__PURE__ */ jsxs(Fragment, { children: [
     veiculos.length > 0 && /* @__PURE__ */ jsx(Helmet, { children: /* @__PURE__ */ jsx("script", { type: "application/ld+json", children: JSON.stringify(estoqueJsonLd(veiculos)) }) }),
     /* @__PURE__ */ jsx(SiteHeader, { dados }),
-    /* @__PURE__ */ jsx("div", { className: "site-container", children: /* @__PURE__ */ jsxs("section", { className: "site-section", style: { borderTop: "none" }, children: [
-      /* @__PURE__ */ jsx("h2", { className: "site-section-titulo", children: "Nosso Estoque" }),
-      loading ? /* @__PURE__ */ jsx("p", { className: "site-empty", children: "Carregando veículos…" }) : veiculos.length === 0 ? /* @__PURE__ */ jsx("p", { className: "site-empty", children: "Nenhum veículo disponível no momento." }) : /* @__PURE__ */ jsx("div", { className: "site-estoque-grid", children: veiculos.map((v) => {
+    /* @__PURE__ */ jsx("div", { className: "site-container", children: /* @__PURE__ */ jsxs("section", { className: "site-section", style: { borderTop: "none", paddingTop: 32 }, children: [
+      /* @__PURE__ */ jsxs("div", { style: { marginBottom: 24 }, children: [
+        /* @__PURE__ */ jsx("h1", { className: "site-section-titulo", style: { fontSize: 28, marginBottom: 6 }, children: "Estoque de Veículos" }),
+        /* @__PURE__ */ jsxs("p", { style: { color: "var(--site-text-dim)", fontSize: 15, margin: 0 }, children: [
+          "Confira todos os veículos disponíveis na ",
+          dados.loja.nome,
+          "."
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { className: "site-filtros-bar", children: [
+        /* @__PURE__ */ jsxs("div", { className: "site-filtro-item", style: { flex: "2 1 220px" }, children: [
+          /* @__PURE__ */ jsx("label", { children: "Buscar" }),
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              type: "text",
+              placeholder: "Ex: Onix, Compass, automático...",
+              value: busca,
+              onChange: (e) => setBusca(e.target.value),
+              className: "site-filtro-input"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "site-filtro-item", children: [
+          /* @__PURE__ */ jsx("label", { children: "Marca" }),
+          /* @__PURE__ */ jsxs("select", { value: marca, onChange: (e) => setMarca(e.target.value), className: "site-filtro-select", children: [
+            /* @__PURE__ */ jsx("option", { value: "", children: "Todas as marcas" }),
+            marcasDisponiveis.map((m) => /* @__PURE__ */ jsx("option", { value: m, children: m }, m))
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "site-filtro-item", children: [
+          /* @__PURE__ */ jsx("label", { children: "Faixa de Preço" }),
+          /* @__PURE__ */ jsxs("select", { value: faixaPreco, onChange: (e) => setFaixaPreco(e.target.value), className: "site-filtro-select", children: [
+            /* @__PURE__ */ jsx("option", { value: "", children: "Qualquer valor" }),
+            /* @__PURE__ */ jsx("option", { value: "ate_50k", children: "Até R$ 50.000" }),
+            /* @__PURE__ */ jsx("option", { value: "50k_100k", children: "R$ 50.000 a R$ 100.000" }),
+            /* @__PURE__ */ jsx("option", { value: "100k_150k", children: "R$ 100.000 a R$ 150.000" }),
+            /* @__PURE__ */ jsx("option", { value: "acima_150k", children: "Acima de R$ 150.000" })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "site-filtro-item", children: [
+          /* @__PURE__ */ jsx("label", { children: "Ano Mínimo" }),
+          /* @__PURE__ */ jsxs("select", { value: anoMin, onChange: (e) => setAnoMin(e.target.value), className: "site-filtro-select", children: [
+            /* @__PURE__ */ jsx("option", { value: "", children: "Qualquer ano" }),
+            /* @__PURE__ */ jsx("option", { value: "2024", children: "2024 ou mais novo" }),
+            /* @__PURE__ */ jsx("option", { value: "2022", children: "2022 ou mais novo" }),
+            /* @__PURE__ */ jsx("option", { value: "2020", children: "2020 ou mais novo" }),
+            /* @__PURE__ */ jsx("option", { value: "2018", children: "2018 ou mais novo" }),
+            /* @__PURE__ */ jsx("option", { value: "2015", children: "2015 ou mais novo" })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "site-filtro-item", children: [
+          /* @__PURE__ */ jsx("label", { children: "Ordenar por" }),
+          /* @__PURE__ */ jsxs("select", { value: ordenacao, onChange: (e) => setOrdenacao(e.target.value), className: "site-filtro-select", children: [
+            /* @__PURE__ */ jsx("option", { value: "recentes", children: "Mais recentes" }),
+            /* @__PURE__ */ jsx("option", { value: "menor_preco", children: "Menor preço" }),
+            /* @__PURE__ */ jsx("option", { value: "maior_preco", children: "Maior preço" }),
+            /* @__PURE__ */ jsx("option", { value: "menor_km", children: "Menor quilometragem" })
+          ] })
+        ] }),
+        temFiltroAtivo && /* @__PURE__ */ jsx("div", { style: { display: "flex", alignItems: "flex-end" }, children: /* @__PURE__ */ jsx("button", { type: "button", onClick: limparFiltros, className: "site-filtro-btn-limpar", children: "Limpar" }) })
+      ] }),
+      /* @__PURE__ */ jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, fontSize: 14, color: "var(--site-text-dim)" }, children: /* @__PURE__ */ jsxs("span", { children: [
+        "Mostrando ",
+        /* @__PURE__ */ jsx("strong", { children: veiculosFiltrados.length }),
+        " ",
+        veiculosFiltrados.length === 1 ? "veículo" : "veículos"
+      ] }) }),
+      loading ? /* @__PURE__ */ jsx("p", { className: "site-empty", children: "Carregando catálogo de veículos…" }) : veiculosFiltrados.length === 0 ? /* @__PURE__ */ jsxs("div", { className: "site-empty", style: { background: "var(--site-surface)", borderRadius: "var(--site-radius)", border: "1px solid var(--site-border)", padding: 48 }, children: [
+        /* @__PURE__ */ jsx("p", { style: { fontWeight: 600, fontSize: 16, marginBottom: 6 }, children: "Nenhum veículo encontrado com os filtros selecionados." }),
+        temFiltroAtivo && /* @__PURE__ */ jsx("button", { type: "button", onClick: limparFiltros, className: "site-hero-cta", style: { marginTop: 12, padding: "8px 18px", fontSize: 13 }, children: "Limpar Filtros" })
+      ] }) : /* @__PURE__ */ jsx("div", { className: "site-estoque-grid", children: veiculosFiltrados.map((v) => {
         var _a, _b;
+        const foto = (_b = (_a = v.midias) == null ? void 0 : _a[0]) == null ? void 0 : _b.url;
+        const msgWhats = encodeURIComponent(`Olá! Vi o anúncio do ${v.marca} ${v.modelo} ${v.ano_modelo || ""} no site e gostaria de mais informações.`);
+        const linkWhats = telLimpo ? `https://wa.me/55${telLimpo}?text=${msgWhats}` : null;
         return /* @__PURE__ */ jsxs("div", { className: "site-card", children: [
-          ((_b = (_a = v.midias) == null ? void 0 : _a[0]) == null ? void 0 : _b.url) ? /* @__PURE__ */ jsx("img", { src: v.midias[0].url, alt: `${v.marca} ${v.modelo}`, className: "site-card-img" }) : /* @__PURE__ */ jsx("div", { className: "site-card-img" }),
+          foto ? /* @__PURE__ */ jsx("img", { src: foto, alt: `${v.marca} ${v.modelo}`, className: "site-card-img" }) : /* @__PURE__ */ jsx("div", { className: "site-card-img", style: { display: "flex", alignItems: "center", justifyContent: "center", color: "var(--site-text-dim)", fontSize: 13 }, children: "Foto do Veículo" }),
           /* @__PURE__ */ jsxs("div", { className: "site-card-body", children: [
             /* @__PURE__ */ jsxs("div", { className: "site-card-titulo", children: [
               v.marca,
@@ -163,7 +364,20 @@ function Estoque({ dados }) {
               v.km != null && ` · ${v.km.toLocaleString("pt-BR")} km`,
               v.cor && ` · ${v.cor}`
             ] }),
-            formatBRL(v.preco_venda) && /* @__PURE__ */ jsx("div", { className: "site-card-preco", children: formatBRL(v.preco_venda) })
+            /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }, children: [
+              /* @__PURE__ */ jsx("div", { className: "site-card-preco", children: formatBRL(v.preco_venda) || "Consulte" }),
+              linkWhats && /* @__PURE__ */ jsx(
+                "a",
+                {
+                  href: linkWhats,
+                  target: "_blank",
+                  rel: "noopener noreferrer",
+                  className: "site-card-btn-whats",
+                  title: "Conversar no WhatsApp",
+                  children: "Proposta"
+                }
+              )
+            ] })
           ] })
         ] }, v.id);
       }) })

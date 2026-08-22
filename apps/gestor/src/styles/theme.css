@@ -2462,7 +2462,7 @@ a:hover {
 }
 
 .modal-veiculo .modal-gallery-col {
-  width: 320px;
+  width: 350px;
   flex-shrink: 0;
   border-left: 1px solid var(--sv-border);
   background: var(--sv-surface-dim);
@@ -3079,10 +3079,30 @@ a:hover {
   color: var(--sv-text);
 }
 
-/* ── Autocomplete Dropdown ──────────────────────────────────── */
+/* ── Autocomplete Dropdown & Stacking Fix ────────────────────── */
+
+.glass-card:focus-within,
+.glass-card:has(.autocomplete-dropdown) {
+  position: relative;
+  z-index: 40;
+}
+
+.modal-container .form-group:focus-within,
+.modal-container .form-group:has(.autocomplete-dropdown),
+.form-group:focus-within,
+.form-group:has(.autocomplete-dropdown) {
+  position: relative;
+  z-index: 50;
+}
 
 .autocomplete-wrapper {
   position: relative;
+}
+
+.autocomplete-wrapper:focus-within,
+.autocomplete-wrapper:has(.autocomplete-dropdown) {
+  position: relative;
+  z-index: 100;
 }
 
 .autocomplete-dropdown {
@@ -3090,14 +3110,14 @@ a:hover {
   top: 100%;
   left: 0;
   right: 0;
-  z-index: 10050;
-  background: var(--sv-surface-solid);
-  border: 1px solid var(--sv-border);
+  z-index: 99999;
+  background: var(--sv-surface-solid, #1e293b);
+  border: 1px solid var(--sv-border-hover, #334155);
   border-radius: var(--sv-radius);
   margin-top: 4px;
-  max-height: 200px;
+  max-height: 250px;
   overflow-y: auto;
-  box-shadow: var(--sv-shadow);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45), 0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
 .autocomplete-item {
@@ -3109,11 +3129,11 @@ a:hover {
 }
 
 .autocomplete-item:hover {
-  background: rgba(37, 99, 235, 0.1);
+  background: rgba(37, 99, 235, 0.15);
 }
 
 .autocomplete-item.selected {
-  background: rgba(37, 99, 235, 0.15);
+  background: rgba(37, 99, 235, 0.2);
   color: var(--sv-primary-text);
 }
 

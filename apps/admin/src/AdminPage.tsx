@@ -252,6 +252,7 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [enviandoLogo, setEnviandoLogo] = useState(false)
   const [assinaturaEmDia, setAssinaturaEmDia] = useState(true)
+  const [abrirFinanceiro, setAbrirFinanceiro] = useState(false)
 
   useEffect(() => {
     api.get<any>(`/admin/lojas/${lojaId}`)
@@ -426,19 +427,82 @@ function ModalEditarLoja({ lojaId, onClose, onSaved }: ModalEditarLojaProps) {
               ))}
             </div>
             {!assinaturaEmDia && form.modulos_ativos.length > 0 && (
-              <p style={{ fontSize: 12, color: 'var(--sv-warning)', margin: '9px 0 0' }}>
-                Assinatura fora de dia — contratados, porém indisponíveis para o gestor até regularizar.
-              </p>
+              <div style={{
+                marginTop: 12,
+                padding: '10px 14px',
+                borderRadius: 'var(--sv-radius)',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+                flexWrap: 'wrap'
+              }}>
+                <span style={{ fontSize: 12, color: 'var(--sv-warning)', fontWeight: 500 }}>
+                  Assinatura fora de dia — contratados, porém indisponíveis para o gestor até regularizar.
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  style={{ padding: '5px 12px', fontSize: 12 }}
+                  onClick={() => setAbrirFinanceiro(true)}
+                >
+                  ⚡ Regularizar Assinatura Agora
+                </button>
+              </div>
+            )}
+            {assinaturaEmDia && (
+              <div style={{ marginTop: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ padding: '4px 10px', fontSize: 12 }}
+                  onClick={() => setAbrirFinanceiro(true)}
+                >
+                  ⚙️ Gerenciar Plano & Assinatura
+                </button>
+              </div>
             )}
           </div>
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? <span className="spinner" /> : 'Salvar Alterações'}
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+              onClick={async () => {
+                try {
+                  const res = await api.post<{ codigo: string }>(`/admin/lojas/${lojaId}/impersonar`, {})
+                  window.location.href = `/impersonar?code=${encodeURIComponent(res.codigo)}`
+                } catch (err: any) {
+                  setErro(err?.message || 'Erro ao entrar na loja.')
+                }
+              }}
+            >
+              🔑 Entrar como Gestor nesta Loja
             </button>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? <span className="spinner" /> : 'Salvar Alterações'}
+              </button>
+            </div>
           </div>
         </form>
+
+        {abrirFinanceiro && (
+          <ModalFinanceiro
+            lojaId={lojaId}
+            lojaNome={form.nome}
+            onClose={() => setAbrirFinanceiro(false)}
+            onSaved={() => {
+              setAssinaturaEmDia(true)
+              onSaved()
+            }}
+          />
+        )}
       </div>
     </div>
   )
@@ -2130,76 +2194,225 @@ function SubPrestacaoContas() {
 // ── Cobranças: assinaturas vencendo (revisão semanal do Pix) ──────
 
 function SubCobrancas() {
+  const [aba, setAba] = useState<'vencendo' | 'todas'>('vencendo')
   const [itens, setItens] = useState<VencimentoItem[]>([])
+  const [lojas, setLojas] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [janela, setJanela] = useState(30)
   const [lojaSelecionada, setLojaSelecionada] = useState<{ id: string; nome: string } | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [busca, setBusca] = useState('')
 
   const carregar = useCallback(() => {
     setLoading(true)
     setErro(null)
-    api.get<VencimentoItem[]>('/admin/assinaturas/vencendo', { dias: String(janela) })
-      .then(setItens)
-      .catch((err: any) => setErro(err?.message || 'Erro ao carregar as assinaturas.'))
+    Promise.all([
+      api.get<VencimentoItem[]>('/admin/assinaturas/vencendo', { dias: String(janela) }),
+      api.get<any[]>('/admin/lojas'),
+    ])
+      .then(([venc, lj]) => {
+        setItens(venc || [])
+        setLojas(lj || [])
+      })
+      .catch((err: any) => setErro(err?.message || 'Erro ao carregar dados financeiros.'))
       .finally(() => setLoading(false))
   }, [janela])
 
   useEffect(() => { carregar() }, [carregar])
 
+  const lojasFiltradas = lojas.filter((l) =>
+    !busca || (l.nome || '').toLowerCase().includes(busca.toLowerCase()) || (l.cnpj || '').includes(busca)
+  )
+
   return (
     <div style={{ marginTop: '24px' }}>
       {erro && <ErroAlerta msg={erro} onFechar={() => setErro(null)} />}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
-        <p style={{ color: 'var(--sv-text-dim)', fontSize: 14, margin: 0 }}>Janela:</p>
-        {[7, 30, 90].map((d) => (
+
+      {/* Header com Abas e Ações Rápidas */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
           <button
-            key={d}
-            className={`btn ${janela === d ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ padding: '4px 12px', fontSize: '12px' }}
-            onClick={() => setJanela(d)}
+            className={`btn ${aba === 'vencendo' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ fontSize: 13, padding: '6px 14px' }}
+            onClick={() => setAba('vencendo')}
           >
-            {d} dias
+            ⏰ Vencendo / Vencidas ({itens.length})
           </button>
-        ))}
+          <button
+            className={`btn ${aba === 'todas' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ fontSize: 13, padding: '6px 14px' }}
+            onClick={() => setAba('todas')}
+          >
+            🏢 Todas as Lojas & Regularização ({lojas.length})
+          </button>
+        </div>
+
+        {aba === 'vencendo' && (
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span style={{ color: 'var(--sv-text-dim)', fontSize: 13 }}>Janela:</span>
+            {[7, 30, 90].map((d) => (
+              <button
+                key={d}
+                className={`btn ${janela === d ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: '4px 10px', fontSize: '12px' }}
+                onClick={() => setJanela(d)}
+              >
+                {d} dias
+              </button>
+            ))}
+          </div>
+        )}
+
+        {aba === 'todas' && (
+          <input
+            type="text"
+            placeholder="Buscar loja por nome ou CNPJ..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 'var(--sv-radius)',
+              background: 'var(--sv-surface-dim)',
+              border: '1px solid var(--sv-border)',
+              color: 'var(--sv-text)',
+              fontSize: 13,
+              width: 260
+            }}
+          />
+        )}
       </div>
 
       {loading ? (
         <LoadingState />
-      ) : itens.length === 0 ? (
-        <EmptyState msg="Nenhuma assinatura vencendo ou vencida nessa janela." />
+      ) : aba === 'vencendo' ? (
+        itens.length === 0 ? (
+          <div className="glass-card" style={{ padding: 32, textAlign: 'center' }}>
+            <p style={{ color: 'var(--sv-text-dim)', fontSize: 14, margin: '0 0 16px' }}>
+              Nenhuma assinatura vencendo ou vencida nos próximos {janela} dias.
+            </p>
+            <button
+              className="btn btn-primary"
+              onClick={() => setAba('todas')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '0 auto' }}
+            >
+              🏢 Ver Todas as Lojas para Ativar ou Regularizar Assinatura
+            </button>
+          </div>
+        ) : (
+          <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
+            <table className="stock-table">
+              <thead>
+                <tr>
+                  {['Loja', 'Plano', 'Valor', 'Vencimento', 'Situação', 'Ações'].map((h) => (
+                    <th key={h}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {itens.map((it) => (
+                  <tr key={it.assinatura_id}>
+                    <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{it.loja_nome}</td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>{it.plano_nome}</td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>{fmtMoeda(it.valor_mensal)}</td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>{fmtDataHora(it.proximo_vencimento)}</td>
+                    <td>
+                      {it.dias_para_vencer != null && it.dias_para_vencer < 0 ? (
+                        <span style={{ color: 'var(--sv-error)', fontWeight: 600, fontSize: 12 }}>Vencida há {Math.abs(it.dias_para_vencer)}d</span>
+                      ) : (
+                        <span style={{ color: 'var(--sv-warning)', fontWeight: 600, fontSize: 12 }}>Vence em {it.dias_para_vencer}d</span>
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                          onClick={() => setLojaSelecionada({ id: it.loja_id, nome: it.loja_nome })}
+                        >
+                          ⚡ Regularizar / Renovar
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '4px 8px', fontSize: '12px' }}
+                          title="Entrar na loja como Gestor"
+                          onClick={async () => {
+                            try {
+                              const res = await api.post<{ codigo: string }>(`/admin/lojas/${it.loja_id}/impersonar`, {})
+                              window.location.href = `/impersonar?code=${encodeURIComponent(res.codigo)}`
+                            } catch (err: any) {
+                              setErro(err?.message || 'Erro ao entrar na loja.')
+                            }
+                          }}
+                        >
+                          🔑 Entrar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       ) : (
+        /* Lista de Todas as Lojas */
         <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
           <table className="stock-table">
             <thead>
               <tr>
-                {['Loja', 'Plano', 'Valor', 'Vencimento', 'Situação', 'Ações'].map((h) => (
+                {['Loja', 'Localização', 'Status da Loja', 'Ações'].map((h) => (
                   <th key={h}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {itens.map((it) => (
-                <tr key={it.assinatura_id}>
-                  <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{it.loja_nome}</td>
-                  <td style={{ color: 'var(--sv-text-dim)' }}>{it.plano_nome}</td>
-                  <td style={{ color: 'var(--sv-text-dim)' }}>{fmtMoeda(it.valor_mensal)}</td>
-                  <td style={{ color: 'var(--sv-text-dim)' }}>{fmtDataHora(it.proximo_vencimento)}</td>
+              {lojasFiltradas.map((l) => (
+                <tr key={l.id}>
                   <td>
-                    {it.dias_para_vencer != null && it.dias_para_vencer < 0 ? (
-                      <span style={{ color: 'var(--sv-error)', fontWeight: 600, fontSize: 12 }}>Vencida há {Math.abs(it.dias_para_vencer)}d</span>
-                    ) : (
-                      <span style={{ color: 'var(--sv-warning)', fontWeight: 600, fontSize: 12 }}>Vence em {it.dias_para_vencer}d</span>
-                    )}
+                    <div style={{ fontWeight: 600, color: 'var(--sv-text)' }}>{l.nome}</div>
+                    <div style={{ fontSize: 11, color: 'var(--sv-text-muted)', fontFamily: 'monospace' }}>ID: {l.id}</div>
+                  </td>
+                  <td style={{ color: 'var(--sv-text-dim)', fontSize: 13 }}>
+                    {l.cidade ? `${l.cidade}/${l.estado || ''}` : '—'}
                   </td>
                   <td>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
-                      onClick={() => setLojaSelecionada({ id: it.loja_id, nome: it.loja_nome })}
-                    >
-                      <CreditCard size={14} /> Gerenciar
-                    </button>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      background: l.ativa ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                      color: l.ativa ? 'var(--sv-success)' : 'var(--sv-danger)'
+                    }}>
+                      {l.ativa ? 'Ativa' : 'Inativa'}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        style={{ padding: '4px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => setLojaSelecionada({ id: l.id, nome: l.nome })}
+                      >
+                        ⚡ Regularizar / Plano
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '4px 8px', fontSize: '12px' }}
+                        title="Entrar na loja como Gestor"
+                        onClick={async () => {
+                          try {
+                            const res = await api.post<{ codigo: string }>(`/admin/lojas/${l.id}/impersonar`, {})
+                            window.location.href = `/impersonar?code=${encodeURIComponent(res.codigo)}`
+                          } catch (err: any) {
+                            setErro(err?.message || 'Erro ao entrar na loja.')
+                          }
+                        }}
+                      >
+                        🔑 Entrar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -2856,18 +3069,18 @@ function AbaLojas() {
                           className="btn btn-secondary"
                           style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
                           onClick={() => setLojaFinanceiro({ id: loja.id, nome: loja.nome })}
-                          title="Ativar, renovar ou suspender a cobrança (Pix manual)"
+                          title="Gerenciar plano contratado, pagamentos e regularizar assinatura desta loja"
                         >
-                          <CreditCard size={14} /> Financeiro
+                          <CreditCard size={14} /> Plano &amp; Assinatura
                         </button>
                         <button
                           className="btn btn-secondary"
                           style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
                           onClick={() => impersonar(loja)}
                           disabled={impersonarLoading === loja.id}
-                          title="Observar como gestor desta loja"
+                          title="Acessar painel como gestor desta loja"
                         >
-                          <Eye size={14} /> {impersonarLoading === loja.id ? 'Abrindo…' : 'Observar'}
+                          <Eye size={14} /> {impersonarLoading === loja.id ? 'Entrando…' : 'Entrar na Loja'}
                         </button>
                       </div>
                     </td>
@@ -3370,10 +3583,15 @@ function AbaAuditoria() {
 
 function fmtDetalhes(detalhes: string | null | undefined): {
   path?: string
+  method?: string
   status?: number
   user_name?: string
   user_email?: string
   mensagem?: string
+  tipo_excecao?: string
+  detalhe_tecnico?: string
+  traceback?: string
+  stack?: string
   timestamp?: string
 } {
   if (!detalhes) return {}
@@ -3393,12 +3611,17 @@ Data: ${dataFormatada}
 Origem: ${log.entidade || '—'}
 Rota: ${det.path || '—'}
 Status HTTP: ${det.status ?? '5xx'}
+Tipo Exceção: ${det.tipo_excecao || '—'}
 Usuário: ${user_name} (${user_email})
 Request ID: ${log.entidade_id || '—'}
 Status IA: ${log.ajusteia ? 'Resolvido (IA)' : 'Pendente'}`
 
-  if (det.mensagem) {
-    txt += `\nMensagem do Erro: ${det.mensagem}`
+  if (det.detalhe_tecnico || det.mensagem) {
+    txt += `\nMensagem: ${det.detalhe_tecnico || det.mensagem}`
+  }
+
+  if (det.traceback || det.stack) {
+    txt += `\n\n[Traceback / Pilha Técnica]:\n${det.traceback || det.stack}`
   }
 
   txt += `\n\n[Detalhes JSON]:\n${log.detalhes || '{}'}`
@@ -3427,9 +3650,12 @@ function ModalDetalhesErro({
 }) {
   const [copiado, setCopiado] = useState(false)
   const [copiadoJson, setCopiadoJson] = useState(false)
+  const [copiadoTb, setCopiadoTb] = useState(false)
+  const [mostrarTraceback, setMostrarTraceback] = useState(true)
   const det = fmtDetalhes(log.detalhes)
   const user_name = det.user_name || log.ator_nome || 'Anônimo'
   const user_email = det.user_email
+  const pilhaTecnica = det.traceback || det.stack
 
   const handleCopiarTexto = () => {
     navigator.clipboard.writeText(formatarErroTexto(log))
@@ -3449,6 +3675,13 @@ function ModalDetalhesErro({
     navigator.clipboard.writeText(raw)
     setCopiadoJson(true)
     setTimeout(() => setCopiadoJson(false), 2000)
+  }
+
+  const handleCopiarTraceback = () => {
+    if (!pilhaTecnica) return
+    navigator.clipboard.writeText(pilhaTecnica)
+    setCopiadoTb(true)
+    setTimeout(() => setCopiadoTb(false), 2000)
   }
 
   return (
@@ -3488,6 +3721,22 @@ function ModalDetalhesErro({
             </div>
 
             <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>TIPO DA EXCEÇÃO</span>
+              <span style={{
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                fontWeight: 600,
+                color: det.tipo_excecao ? 'var(--sv-error)' : 'var(--sv-text-dim)',
+                background: det.tipo_excecao ? 'color-mix(in srgb, var(--sv-error) 12%, transparent)' : 'transparent',
+                padding: det.tipo_excecao ? '2px 6px' : '0',
+                borderRadius: '4px',
+                display: 'inline-block'
+              }}>
+                {det.tipo_excecao || '—'}
+              </span>
+            </div>
+
+            <div>
               <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>DATA E HORA</span>
               <span style={{ fontSize: '13px', color: 'var(--sv-text-dim)' }}>{fmtDataHoraCompleta(log.created_at)}</span>
             </div>
@@ -3504,7 +3753,7 @@ function ModalDetalhesErro({
             </div>
           </div>
 
-          {det.mensagem && (
+          {(det.detalhe_tecnico || det.mensagem) && (
             <div className="span-2" style={{
               background: 'color-mix(in srgb, var(--sv-error) 8%, transparent)',
               border: '1px solid color-mix(in srgb, var(--sv-error) 25%, transparent)',
@@ -3522,8 +3771,61 @@ function ModalDetalhesErro({
                 wordBreak: 'break-word',
                 fontFamily: 'monospace'
               }}>
-                {det.mensagem}
+                {det.detalhe_tecnico || det.mensagem}
               </pre>
+            </div>
+          )}
+
+          {pilhaTecnica && (
+            <div className="span-2" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setMostrarTraceback(v => !v)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                    color: 'var(--sv-error)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <span>{mostrarTraceback ? '▼' : '▶'}</span>
+                  <span>TRACEBACK / PILHA TÉCNICA</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleCopiarTraceback}
+                  style={{ padding: '3px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  {copiadoTb ? <Check size={12} style={{ color: 'var(--sv-success)' }} /> : <Copy size={12} />}
+                  {copiadoTb ? 'Traceback Copiado!' : 'Copiar Traceback'}
+                </button>
+              </div>
+              {mostrarTraceback && (
+                <pre style={{
+                  background: '#0d1117',
+                  border: '1px solid color-mix(in srgb, var(--sv-error) 30%, transparent)',
+                  padding: '12px',
+                  borderRadius: 'var(--sv-radius)',
+                  fontSize: '11px',
+                  color: '#f87171',
+                  fontFamily: 'monospace',
+                  maxHeight: '260px',
+                  overflow: 'auto',
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all'
+                }}>
+                  {pilhaTecnica}
+                </pre>
+              )}
             </div>
           )}
 
@@ -5698,7 +6000,7 @@ const ABAS: { id: Aba; label: string; Icon: typeof Shield }[] = [
   { id: 'contrato', label: '2. Contrato', Icon: FileText },
   { id: 'lojas', label: '3. Lojas', Icon: Building2 },
   { id: 'usuarios', label: '4. Usuários', Icon: Users },
-  { id: 'financeiro', label: '5. Financeiro', Icon: CreditCard },
+  { id: 'financeiro', label: '5. Financeiro da Plataforma', Icon: CreditCard },
   { id: 'consumo-ia', label: 'Consumo IA', Icon: Sparkles },
   { id: 'auditoria', label: 'Auditoria', Icon: ClipboardList },
   { id: 'erros', label: 'Erros', Icon: AlertTriangle },

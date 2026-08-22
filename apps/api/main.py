@@ -166,12 +166,57 @@ async def add_security_headers(request: Request, call_next):
 # ── Error Handler Global ───────────────────────────────────────
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Retorna erro padronizado JSON { error, code }."""
+    """Retorna erro padronizado JSON { error, code, detail, tipo_excecao, ... } e persiste log de erro."""
+    import logging
+    import traceback
+    from uuid import uuid4
+    from database import async_session
+    from models import LogAuditoria, utcnow
+    import json
+
+    logger = logging.getLogger("api")
+    logger.exception("Erro interno do servidor em %s %s: %s", request.method, request.url.path, exc)
+
+    req_id = request.headers.get("x-request-id") or str(uuid4())
+    exc_type = type(exc).__name__
+    exc_msg = str(exc)
+    exc_tb = traceback.format_exc()
+
+    # Salva log de auditoria / erro diretamente no banco
+    try:
+        async with async_session() as session:
+            log = LogAuditoria(
+                id=str(uuid4()),
+                acao="erro.servidor",
+                entidade="backend",
+                entidade_id=req_id,
+                detalhes=json.dumps({
+                    "path": request.url.path,
+                    "method": request.method,
+                    "status": 500,
+                    "tipo_excecao": exc_type,
+                    "mensagem": exc_msg,
+                    "detalhe_tecnico": f"{exc_type}: {exc_msg}",
+                    "traceback": exc_tb,
+                    "timestamp": utcnow().isoformat(),
+                }),
+                ator_nome=None,
+            )
+            session.add(log)
+            await session.commit()
+    except Exception as db_err:
+        logger.error("Falha ao gravar LogAuditoria de erro: %s", db_err)
+
     return JSONResponse(
         status_code=500,
         content={
-            "error": str(exc) if settings.api_debug else "Erro interno do servidor",
+            "error": "Erro interno do servidor",
             "code": "INTERNAL_ERROR",
+            "request_id": req_id,
+            "tipo_excecao": exc_type,
+            "mensagem": exc_msg,
+            "detail": f"{exc_type}: {exc_msg}",
+            "traceback": exc_tb if settings.api_debug else None,
         },
     )
 

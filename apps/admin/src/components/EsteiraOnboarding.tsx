@@ -41,8 +41,8 @@ export function EsteiraOnboardingGuide({ onNavegarAba, onAbrirModalNovaLoja }: E
     },
     {
       numero: 5,
-      titulo: '5. Financeiro & Cobrança',
-      subtitulo: 'Ative mensalidades, Pix e lançamentos',
+      titulo: '5. Financeiro da Plataforma',
+      subtitulo: 'Acompanhe faturamento global, MRR, cobranças e caixa',
       aba: 'financeiro',
       icon: CreditCard,
     },

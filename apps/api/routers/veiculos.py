@@ -695,7 +695,7 @@ async def atualizar_veiculo(
             requisitante_id=context.usuario.id,
             tipo_acao=TipoAcaoAprovacao.ALTERAR_PRECO,
             entidade_id=veiculo.id,
-            dados_novos=json.dumps({"preco_venda": preco_proposto}),
+            dados_novos=json.dumps({"preco_venda": preco_proposto, "preco_atual": veiculo.preco_venda}),
             status=StatusAprovacao.PENDENTE,
             motivo=data.motivo
         )

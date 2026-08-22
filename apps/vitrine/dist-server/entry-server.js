@@ -273,10 +273,20 @@ class ApiClient {
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       const ts = (/* @__PURE__ */ new Date()).toISOString();
-      const requestId = response.headers.get("x-request-id") ?? void 0;
+      const requestId = response.headers.get("x-request-id") ?? body.request_id ?? void 0;
       if (response.status >= 500) {
-        const erroMsg = typeof body.detail === "string" ? body.detail : body.error ?? (body.detail ? JSON.stringify(body.detail) : void 0);
-        void reportarErroServidor({ path, status: response.status, timestamp: ts, requestId, origem: "vitrine", mensagem: erroMsg });
+        const erroMsg = typeof body.detail === "string" ? body.detail : body.mensagem ?? (body.error ?? (body.detail ? JSON.stringify(body.detail) : void 0));
+        void reportarErroServidor({
+          path,
+          status: response.status,
+          timestamp: ts,
+          requestId,
+          origem: "vitrine",
+          mensagem: erroMsg,
+          tipo_excecao: body.tipo_excecao,
+          detalhe_tecnico: typeof body.detail === "string" ? body.detail : body.mensagem,
+          traceback: body.traceback
+        });
       }
       throw new ApiError(friendlyHttpMessage(response.status, body.error), {
         status: response.status,

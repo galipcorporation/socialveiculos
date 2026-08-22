@@ -14,7 +14,7 @@ import unicodedata
 import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Response
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Response, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -168,6 +168,18 @@ class ResultadoTestesResponse(BaseModel):
     duracao_s: float
     resumo: str          # linha final do pytest (ex.: "10 passed in 5.44s")
     saida: str           # saída completa (para inspeção quando algo falha)
+
+
+class ItemTesteInfo(BaseModel):
+    id: str
+    arquivo: str
+    nome: str
+    categoria: str
+    descricao: str
+
+
+class ExecutarItemTesteRequest(BaseModel):
+    arquivo: str
 
 
 # ── Endpoints ───────────────────────────────────────────────────
@@ -1173,6 +1185,10 @@ class ReportarErroRequest(BaseModel):
     user_name: Optional[str] = None
     user_email: Optional[str] = None
     mensagem: Optional[str] = None
+    tipo_excecao: Optional[str] = None
+    detalhe_tecnico: Optional[str] = None
+    traceback: Optional[str] = None
+    stack: Optional[str] = None
 
 
 @router.post(
@@ -1201,6 +1217,14 @@ async def reportar_erro_servidor(
         detalhes_dict["user_email"] = data.user_email
     if data.mensagem:
         detalhes_dict["mensagem"] = data.mensagem
+    if data.tipo_excecao:
+        detalhes_dict["tipo_excecao"] = data.tipo_excecao
+    if data.detalhe_tecnico:
+        detalhes_dict["detalhe_tecnico"] = data.detalhe_tecnico
+    if data.traceback:
+        detalhes_dict["traceback"] = data.traceback
+    if data.stack:
+        detalhes_dict["stack"] = data.stack
 
     log = LogAuditoria(
         id=str(uuid4()),
@@ -1450,13 +1474,14 @@ async def atualizar_ajusteia_erro(
     response_model=ResultadoTestesResponse,
     dependencies=[Depends(exige_admin_plataforma)],
 )
-async def rodar_testes():
+async def rodar_testes(
+    alvo: str = Query(default="smoke", description="smoke (padrão rápido), auth, isolamento ou todos")
+):
     """
-    Executa a suíte pytest da API e devolve o resultado.
+    Executa testes automatizados pytest e devolve o resultado.
 
-    Roda em subprocess (isolado do event loop do servidor) com timeout, para o
-    suporte poder validar ao vivo, pelo painel admin, que os fluxos críticos
-    (auth multi-loja, boot, credenciais) continuam passando.
+    Por padrão roda o pacote 'smoke' (rotas essenciais, boot e auth) para responder
+    em poucos segundos e evitar estouro de timeout (502) de proxies como Vercel/Fly.
     """
     import asyncio
     import os
@@ -1466,21 +1491,31 @@ async def rodar_testes():
 
     api_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     inicio = time.monotonic()
+
+    # Mapeamento de alvos para evitar rodar 145 testes pesados de uma só vez na nuvem
+    alvos_map = {
+        "smoke": ["tests/test_smoke.py", "tests/test_auth_multiloja.py"],
+        "auth": ["tests/test_auth_multiloja.py", "tests/test_mfa.py", "tests/test_impersonar_admin.py"],
+        "isolamento": ["tests/test_tenant_isolation.py", "tests/test_aura_isolamento.py"],
+        "todos": ["tests/"],
+    }
+    arquivos_alvo = alvos_map.get(alvo.lower(), alvos_map["smoke"])
+
     try:
         proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+            sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *arquivos_alvo,
             cwd=api_dir,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=180)
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=35)
         returncode = proc.returncode
     except asyncio.TimeoutError:
         try:
             proc.kill()
         except ProcessLookupError:
             pass
-        raise HTTPException(status_code=504, detail="A execução dos testes excedeu o tempo limite (180s).")
+        raise HTTPException(status_code=504, detail="A execução dos testes excedeu o tempo limite.")
     except FileNotFoundError:
         raise HTTPException(status_code=500, detail="pytest não está disponível no ambiente da API.")
 
@@ -1508,6 +1543,142 @@ async def rodar_testes():
         duracao_s=duracao,
         resumo=resumo,
         saida=saida[-8000:],  # limita para não estourar a resposta
+    )
+
+
+METADADOS_TESTES = {
+    "test_smoke.py": ("Smoke Tests (Boot e Rotas)", "Núcleo", "Valida boot da API, OpenAPI e rotas essenciais"),
+    "test_auth_multiloja.py": ("Autenticação Multi-loja", "Segurança", "Valida JWT, isolamento de login e roles"),
+    "test_tenant_isolation.py": ("Isolamento Tenant Multi-loja", "Segurança", "Garante que nenhuma concessionária acesse dados de outra"),
+    "test_mfa.py": ("Autenticação em Duas Etapas (MFA)", "Segurança", "Validação de 2FA TOTP e backup codes"),
+    "test_impersonar_admin.py": ("Impersonação Admin", "Admin", "Acesso temporário auditado de suporte por admin"),
+    "test_admin_usuarios_vinculos.py": ("Vínculos e Usuários Admin", "Admin", "Gerenciamento de usuários e vínculos com lojas"),
+    "test_aura_isolamento.py": ("Isolamento de IA e Prompts", "Inteligência Artificial", "Proteção de contexto e consumo de IA por loja"),
+    "test_ia_tenant_consumo.py": ("Controle de Consumo de IA", "Inteligência Artificial", "Contabilidade e limites de tokens por loja"),
+    "test_assistente_push_sugestao.py": ("Sugestões do Assistente IA", "Inteligência Artificial", "Geração e entrega de sugestões proativas"),
+    "test_leads_kanban.py": ("CRM & Funil Kanban", "CRM", "Movimentação de leads nas 5 etapas do funil"),
+    "test_comissao_escopo_vendedor.py": ("Escopo de Comissões", "Financeiro", "Valida isolamento de comissões por vendedor"),
+    "test_comissao_tenant_b027.py": ("Cálculo de Comissões por Loja", "Financeiro", "Regras de porcentagem e liquidação de comissões"),
+    "test_plataforma_financeiro.py": ("Financeiro da Plataforma", "Financeiro", "Cobranças, assinaturas e faturamento geral"),
+    "test_rbac_modulo_financeiro.py": ("RBAC Módulo Financeiro", "Financeiro", "Permissões de gestor vs vendedor no financeiro"),
+    "test_venda_composta.py": ("Venda Composta & Estoque", "Vendas", "Valida baixa de estoque e geração de esteira de pós-venda"),
+    "test_venda_vendedor_atribuido.py": ("Atribuição de Vendedor", "Vendas", "Vinculação correta de vendedor na venda e comissão"),
+    "test_contrato_assinatura_variaveis.py": ("Variáveis de Contrato", "Contratos", "Preenchimento de tags de contrato e assinatura"),
+    "test_contrato_edicao_modelo.py": ("Edição de Modelos de Contrato", "Contratos", "Customização de templates de contrato por loja"),
+    "test_contrato_numero_por_loja.py": ("Numeração de Contratos", "Contratos", "Geração sequencial de números por concessionária"),
+    "test_modelos_contrato_padrao.py": ("Modelos de Contrato Padrão", "Contratos", "Templates padrão da plataforma"),
+    "test_render_template_contrato.py": ("Renderização de Templates", "Contratos", "Validação HTML e sanitização de minutas"),
+    "test_templates_contrato.py": ("Estrutura de Templates", "Contratos", "Valida variáveis obrigatórias em contratos"),
+    "test_conversa_arquiva_por_veiculo.py": ("Arquivamento de Conversas", "Comunicação", "Agrupamento de mensagens por veículo vendido"),
+    "test_conversa_b2c_reabertura.py": ("Reabertura de Conversas", "Comunicação", "Fluxo de reabertura de chats com clientes"),
+    "test_mensagem_permissao_negada.py": ("Permissões de Mensagens", "Comunicação", "Bloqueio de acesso a conversas não autorizadas"),
+    "test_fiscal_notas.py": ("Módulo Fiscal e NF-e", "Fiscal", "Emissão e registro de notas fiscais"),
+    "test_anuncios_portais.py": ("Integração de Anúncios", "Marketing", "Sincronização de anúncios para portais e vitrine"),
+    "test_normalizacao_campos_chave.py": ("Normalização de Dados", "Dados", "Formatação de placas, telefones, CPFs e CEPs"),
+    "test_oauth_state.py": ("Segurança OAuth", "Segurança", "Validação de estados criptográficos OAuth"),
+    "test_preferencia_botao_flutuante.py": ("Preferências de Interface", "Interface", "Configurações de exibição de widgets"),
+    "test_thumbnails.py": ("Processamento de Mídias", "Mídias", "Geração e redimensionamento de miniaturas de fotos"),
+    "test_triagem_tenant.py": ("Triagem Multi-tenant", "Núcleo", "Roteamento correto por subdomínio/slug de loja"),
+}
+
+
+@router.get(
+    "/testes/lista",
+    response_model=List[ItemTesteInfo],
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def listar_testes():
+    """
+    Retorna a lista completa dos módulos de teste para execução em checklist interativo no painel admin.
+    """
+    import os
+    tests_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "tests"))
+    items = []
+    
+    if os.path.exists(tests_dir):
+        for fname in sorted(os.listdir(tests_dir)):
+            if fname.startswith("test_") and fname.endswith(".py"):
+                meta = METADADOS_TESTES.get(fname, (fname.replace("test_", "").replace(".py", "").replace("_", " ").title(), "Geral", f"Módulo {fname}"))
+                items.append(ItemTesteInfo(
+                    id=fname,
+                    arquivo=fname,
+                    nome=meta[0],
+                    categoria=meta[1],
+                    descricao=meta[2]
+                ))
+    return items
+
+
+@router.post(
+    "/testes/executar_item",
+    response_model=ResultadoTestesResponse,
+    dependencies=[Depends(exige_admin_plataforma)],
+)
+async def executar_item_teste(data: ExecutarItemTesteRequest):
+    """
+    Executa um único arquivo de teste específico em poucos segundos.
+    """
+    import asyncio
+    import os
+    import re
+    import sys
+    import time
+
+    # Sanitizar nome do arquivo para segurança
+    nome_arquivo = os.path.basename(data.arquivo.strip())
+    if not (nome_arquivo.startswith("test_") and nome_arquivo.endswith(".py")):
+        raise HTTPException(status_code=400, detail="Arquivo de teste inválido.")
+
+    api_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    caminho_teste = os.path.join("tests", nome_arquivo)
+    caminho_completo = os.path.join(api_dir, caminho_teste)
+    
+    if not os.path.exists(caminho_completo):
+        raise HTTPException(status_code=404, detail=f"Arquivo de teste '{nome_arquivo}' não encontrado.")
+
+    inicio = time.monotonic()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", caminho_teste,
+            cwd=api_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=20)
+        returncode = proc.returncode
+    except asyncio.TimeoutError:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        raise HTTPException(status_code=504, detail="O teste excedeu o tempo limite (20s).")
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="pytest não está disponível no ambiente da API.")
+
+    duracao = round(time.monotonic() - inicio, 2)
+    saida = stdout.decode("utf-8", errors="replace") if stdout else ""
+
+    def _n(pat: str) -> int:
+        m = re.search(pat, saida)
+        return int(m.group(1)) if m else 0
+
+    passou = _n(r"(\d+) passed")
+    falhou = _n(r"(\d+) failed")
+    erros = _n(r"(\d+) error")
+
+    resumo_match = re.findall(
+        r"^=*\s*\d+\s+(?:passed|failed|error).*$", saida, re.MULTILINE
+    )
+    resumo = resumo_match[-1].strip("= ").strip() if resumo_match else (f"{passou} passou" if passou > 0 else "sem resumo")
+
+    return ResultadoTestesResponse(
+        ok=(returncode == 0),
+        passou=passou,
+        falhou=falhou,
+        erros=erros,
+        duracao_s=duracao,
+        resumo=resumo,
+        saida=saida[-4000:],
     )
 
 

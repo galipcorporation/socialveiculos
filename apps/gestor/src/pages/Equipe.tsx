@@ -165,6 +165,7 @@ export function Equipe() {
   }
 
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [modalEdicaoLote, setModalEdicaoLote] = useState(false)
 
   const toggleSelectAll = () => {
     if (selectedIds.length === membros.length) {
@@ -218,14 +219,25 @@ export function Equipe() {
 
   return (
     <div className="page-content">
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2>Equipe</h2>
           <p>Gerencie os gestores e vendedores da sua loja.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setMostrarForm((v) => !v)}>
-          {mostrarForm ? 'Fechar' : '+ Convidar Membro'}
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {selectedIds.length > 0 && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => setModalEdicaoLote(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              ⚙️ Opções em Lote ({selectedIds.length})
+            </button>
+          )}
+          <button className="btn btn-primary" onClick={() => setMostrarForm((v) => !v)}>
+            {mostrarForm ? 'Fechar' : '+ Convidar Membro'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -248,23 +260,24 @@ export function Equipe() {
                   <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <label style={{ fontSize: 12, fontWeight: 600 }}>Nome Completo *</label>
                     <input
+                      type="text"
+                      required
                       value={form.nome}
                       onChange={(e) => setForm({ ...form, nome: capitalizarNome(e.target.value) })}
                       placeholder="Ex: João Silva"
                       style={inputStyle}
-                      required
                     />
                   </div>
                   <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <label style={{ fontSize: 12, fontWeight: 600 }}>E-mail *</label>
                     <input
+                      type="email"
+                      required
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value.replace(/\s+/g, '') })}
                       onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
                       placeholder="Ex: joao@loja.com"
-                      type="email"
                       style={inputStyle}
-                      required
                     />
                   </div>
                   <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -397,20 +410,42 @@ export function Equipe() {
                         </span>
                       </td>
                       <td className="cell-actions" style={{ padding: '12px 16px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                          <button className="btn btn-outline btn-sm" onClick={(e) => { e.stopPropagation(); setMembroAcessos(m); }}>
-                            Editar Acessos
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '5px 12px', fontSize: '12px' }}
+                            title="Editar permissões e dados"
+                            onClick={(e) => { e.stopPropagation(); setMembroAcessos(m); }}
+                          >
+                            ✏️ Editar
                           </button>
                           {m.papel === 'vendedor' && (
-                            <button className="btn btn-outline btn-sm" onClick={(e) => { e.stopPropagation(); setMembroPermissaoIa(m); }}>
-                              Config. IA
+                            <button
+                              className="btn btn-outline btn-sm"
+                              style={{ padding: '5px 10px', fontSize: '12px' }}
+                              title="Configurar IA"
+                              onClick={(e) => { e.stopPropagation(); setMembroPermissaoIa(m); }}
+                            >
+                              🤖 IA
                             </button>
                           )}
-                          <button className="btn btn-glass btn-sm" onClick={(e) => { e.stopPropagation(); handleToggleAtivo(m); }}>
-                            {m.ativo ? 'Desativar' : 'Ativar'}
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ padding: '5px 10px', fontSize: '12px' }}
+                            title={m.ativo ? 'Desativar' : 'Ativar'}
+                            onClick={(e) => { e.stopPropagation(); handleToggleAtivo(m); }}
+                          >
+                            {m.ativo ? '🚫 Desativar' : '✅ Ativar'}
                           </button>
-                          <button className="btn btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); handleRemover(m); }}>
-                            Remover
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ padding: '5px 8px', color: 'var(--sv-danger)' }}
+                            title="Remover"
+                            onClick={(e) => { e.stopPropagation(); handleRemover(m); }}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
                           </button>
                         </div>
                       </td>
@@ -436,17 +471,22 @@ export function Equipe() {
               alignItems: 'center',
               justifyContent: 'space-between',
               zIndex: 20,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
+              boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+              flexWrap: 'wrap',
+              gap: 12
             }}>
               <span style={{ fontWeight: 600, fontSize: 14 }}>
                 {selectedIds.length} membro(s) selecionado(s)
               </span>
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button className="btn btn-primary btn-sm" onClick={() => setModalEdicaoLote(true)}>
+                  ⚙️ Configurar em Lote
+                </button>
                 <button className="btn btn-secondary btn-sm" onClick={handleBulkDesativar}>
-                  🚫 Desativar Selecionados
+                  🚫 Desativar
                 </button>
                 <button className="btn btn-danger btn-sm" onClick={handleBulkRemover}>
-                  🗑️ Remover Selecionados
+                  🗑️ Remover
                 </button>
                 <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds([])}>
                   Limpar Seleção
@@ -455,6 +495,19 @@ export function Equipe() {
             </div>
           )}
         </>
+      )}
+
+      {modalEdicaoLote && (
+        <ModalEdicaoLoteEquipe
+          selectedIds={selectedIds}
+          membros={membros}
+          disponiveis={disponiveis}
+          onClose={() => setModalEdicaoLote(false)}
+          onSaved={() => {
+            setSelectedIds([])
+            carregar()
+          }}
+        />
       )}
 
       {membroPermissaoIa && (
@@ -815,4 +868,235 @@ const inputStyle: React.CSSProperties = {
   border: '1px solid var(--sv-border)',
   color: 'var(--sv-text)',
   outline: 'none',
+}
+
+function ModalEdicaoLoteEquipe({
+  selectedIds,
+  membros,
+  disponiveis,
+  onClose,
+  onSaved,
+}: {
+  selectedIds: string[]
+  membros: Membro[]
+  disponiveis: ModuloKey[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const showToast = useUIStore((state) => state.showToast)
+  const [salvando, setSalvando] = useState(false)
+
+  // Opções para aplicar em lote
+  const [aplicarComissao, setAplicarComissao] = useState(false)
+  const [comissaoValor, setComissaoValor] = useState('5')
+
+  const [aplicarPapel, setAplicarPapel] = useState(false)
+  const [papelValor, setPapelValor] = useState<Papel>('vendedor')
+
+  const [aplicarStatus, setAplicarStatus] = useState(false)
+  const [statusValor, setStatusValor] = useState(true)
+
+  const [aplicarIA, setAplicarIA] = useState(false)
+  const [iaPermitida, setIaPermitida] = useState(true)
+
+  const [aplicarModulos, setAplicarModulos] = useState(false)
+  const [modulosSelecionados, setModulosSelecionados] = useState<ModuloKey[]>([])
+
+  const toggleModulo = (key: ModuloKey) => {
+    setModulosSelecionados(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
+  }
+
+  const handleSalvar = async () => {
+    if (!aplicarComissao && !aplicarPapel && !aplicarStatus && !aplicarIA && !aplicarModulos) {
+      showToast('Selecione pelo menos uma configuração para aplicar em lote.', 'warning')
+      return
+    }
+
+    setSalvando(true)
+    try {
+      const payload: Record<string, any> = {}
+      if (aplicarComissao) {
+        const num = comissaoValor.trim() === '' ? null : Math.min(100, Math.max(0, parseFloat(comissaoValor.replace(',', '.')) || 0))
+        payload.percentual_comissao = num
+      }
+      if (aplicarPapel) {
+        payload.papel = papelValor
+      }
+      if (aplicarStatus) {
+        payload.ativo = statusValor
+      }
+      if (aplicarModulos) {
+        payload.modulos = JSON.stringify(modulosSelecionados)
+      }
+
+      await Promise.all(selectedIds.map(id => api.patch(`/equipe/${id}`, payload)))
+
+      if (aplicarIA) {
+        await Promise.all(
+          selectedIds.map(id =>
+            api.put(`/vendedores/${id}/permissao-ia`, {
+              permitido: iaPermitida,
+              autonomia: 'copiloto',
+            }).catch(() => {})
+          )
+        )
+      }
+
+      showToast(`Configurações aplicadas com sucesso a ${selectedIds.length} membros!`, 'success')
+      onSaved()
+      onClose()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Erro ao atualizar membros em lote.', 'error')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-glass" style={{ maxWidth: 620, width: '100%' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h3>Configurações em Lote da Equipe</h3>
+            <div style={{ fontSize: 13, color: 'var(--sv-text-muted)', marginTop: 2 }}>
+              Aplicando alterações a <strong>{selectedIds.length} membro(s)</strong> selecionado(s).
+            </div>
+          </div>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar">×</button>
+        </div>
+
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '70vh', overflowY: 'auto' }}>
+          {/* 1. Comissão */}
+          <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
+              <input
+                type="checkbox"
+                checked={aplicarComissao}
+                onChange={e => setAplicarComissao(e.target.checked)}
+                style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
+              />
+              Definir % de Comissão dos Vendedores
+            </label>
+            {aplicarComissao && (
+              <div style={{ marginTop: 10, paddingLeft: 28, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <input
+                  type="text"
+                  value={comissaoValor}
+                  onChange={e => setComissaoValor(e.target.value.replace(/[^\d.,]/g, ''))}
+                  placeholder="Ex: 5"
+                  style={{ ...inputStyle, width: 80, textAlign: 'center' }}
+                />
+                <span style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>% de comissão por venda</span>
+              </div>
+            )}
+          </div>
+
+          {/* 2. Papel */}
+          <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
+              <input
+                type="checkbox"
+                checked={aplicarPapel}
+                onChange={e => setAplicarPapel(e.target.checked)}
+                style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
+              />
+              Alterar Papel / Cargo
+            </label>
+            {aplicarPapel && (
+              <div style={{ marginTop: 10, paddingLeft: 28 }}>
+                <select
+                  value={papelValor}
+                  onChange={e => setPapelValor(e.target.value as Papel)}
+                  style={inputStyle}
+                >
+                  <option value="vendedor">Vendedor</option>
+                  <option value="gestor">Gestor</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* 3. Permissão de IA */}
+          <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
+              <input
+                type="checkbox"
+                checked={aplicarIA}
+                onChange={e => setAplicarIA(e.target.checked)}
+                style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
+              />
+              Permissão de Assistente IA
+            </label>
+            {aplicarIA && (
+              <div style={{ marginTop: 10, paddingLeft: 28 }}>
+                <select
+                  value={iaPermitida ? 'sim' : 'nao'}
+                  onChange={e => setIaPermitida(e.target.value === 'sim')}
+                  style={inputStyle}
+                >
+                  <option value="sim">Habilitar IA para todos os selecionados</option>
+                  <option value="nao">Desabilitar IA para todos os selecionados</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* 4. Status */}
+          <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
+              <input
+                type="checkbox"
+                checked={aplicarStatus}
+                onChange={e => setAplicarStatus(e.target.checked)}
+                style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
+              />
+              Status do Usuário
+            </label>
+            {aplicarStatus && (
+              <div style={{ marginTop: 10, paddingLeft: 28 }}>
+                <select
+                  value={statusValor ? 'ativo' : 'inativo'}
+                  onChange={e => setStatusValor(e.target.value === 'ativo')}
+                  style={inputStyle}
+                >
+                  <option value="ativo">Marcar como Ativos</option>
+                  <option value="inativo">Marcar como Inativos / Desativados</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* 5. Módulos de Acesso */}
+          <div style={{ padding: 14, borderRadius: 'var(--sv-radius)', background: 'var(--sv-surface-dim)', border: '1px solid var(--sv-border)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={aplicarModulos}
+                onChange={e => setAplicarModulos(e.target.checked)}
+                style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)' }}
+              />
+              Definir Módulos de Acesso Liberados
+            </label>
+            {aplicarModulos && (
+              <div style={{ marginTop: 10, paddingLeft: 28 }}>
+                <ModulosChecklist
+                  modulos={modulosSelecionados}
+                  disponiveis={disponiveis}
+                  onToggle={toggleModulo}
+                  hint="Os módulos marcados serão liberados para todos os membros selecionados."
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={onClose} disabled={salvando}>Cancelar</button>
+          <button className="btn btn-primary" onClick={handleSalvar} disabled={salvando}>
+            {salvando ? 'Salvando...' : `Aplicar a ${selectedIds.length} Membro(s)`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }

@@ -4,6 +4,7 @@ import { useUIStore } from '../stores/uiStore'
 import { mascararCPF, mascararTelefone, mascararMoeda, parseMoeda, mascararCNPJ, mascararCEP, mascararRG, sanitizarTexto, validarCPF, validarCNPJ, UFS_VALIDAS, capitalizarNome } from '../lib/mascaras'
 import { VeiculoModal } from './estoque/VeiculoModal'
 import { buscarCEP } from '../lib/cep'
+import { Pagination } from '../components/Pagination'
 
 /* ── Types ───────────────────────────────────────────────────── */
 
@@ -993,6 +994,7 @@ function LeadDetailModal({
   // Edição do cadastro do cliente sem sair do lead
   const [editandoCliente, setEditandoCliente] = useState(false)
   const [clienteCompleto, setClienteCompleto] = useState<Cliente | null>(null)
+  const [editandoLeadInfo, setEditandoLeadInfo] = useState(false)
 
   const fetchLeadDetails = useCallback(async () => {
     setLoading(true)
@@ -1109,16 +1111,43 @@ function LeadDetailModal({
     }
   }
 
-  // O lead traz o cliente resumido; o modal de edição precisa do registro completo.
+  // O lead traz o cliente resumido; abre edição com registro completo ou fallback seguro
   const abrirEdicaoCliente = async () => {
-    if (!lead?.cliente_id) return
-    try {
-      const c = await api.get<Cliente>(`/clientes/${lead.cliente_id}`)
-      setClienteCompleto(c)
+    if (lead?.cliente_id) {
+      try {
+        const c = await api.get<Cliente>(`/clientes/${lead.cliente_id}`)
+        setClienteCompleto(c)
+        setEditandoCliente(true)
+        return
+      } catch (err) {
+        console.warn('Falha ao buscar cliente por ID, usando dados do lead:', err)
+      }
+    }
+    // Fallback: se não tiver cliente_id ou houver falha, usa os dados do lead
+    if (lead?.cliente) {
+      setClienteCompleto({
+        id: lead.cliente.id || lead.cliente_id || '',
+        loja_id: lead.loja_id || '',
+        nome: lead.cliente.nome || '',
+        telefone: lead.cliente.telefone,
+        email: lead.cliente.email,
+        cpf: lead.cliente.cpf,
+        rg: lead.cliente.rg,
+        data_nascimento: lead.cliente.data_nascimento,
+        renda_mensal: lead.cliente.renda_mensal,
+        cep: lead.cliente.cep,
+        endereco: lead.cliente.endereco,
+        numero: lead.cliente.numero,
+        bairro: lead.cliente.bairro,
+        cidade: lead.cliente.cidade,
+        estado: lead.cliente.estado,
+        observacoes: lead.cliente.observacoes,
+        created_at: lead.created_at || '',
+        updated_at: lead.updated_at || '',
+      })
       setEditandoCliente(true)
-    } catch (err) {
-      const { message, details } = extractErrorDetails(err)
-      addToast('error', message || 'Erro ao carregar dados do cliente', details)
+    } else {
+      addToast('error', 'Dados cadastrais do cliente não disponíveis.')
     }
   }
 
@@ -1212,16 +1241,23 @@ function LeadDetailModal({
               {/* Informações Básicas */}
               <div className="form-grid">
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                     <h4 style={{ fontSize: 16, fontWeight: 700, color: 'var(--sv-primary-text)' }}>
                       {lead.cliente?.nome}
                     </h4>
                     <button
                       className="btn btn-ghost btn-sm"
                       onClick={abrirEdicaoCliente}
-                      title="Editar dados do cliente"
+                      title="Editar dados cadastrais do cliente"
                     >
-                      Editar dados
+                      ✏️ Editar dados
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setEditandoLeadInfo(true)}
+                      title="Editar informações do lead (veículo, responsável, origem, notas)"
+                    >
+                      🚗 Editar Lead
                     </button>
                   </div>
                   <p style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>
@@ -1235,7 +1271,17 @@ function LeadDetailModal({
                   )}
                 </div>
                 <div>
-                  <h4 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Veículo de Interesse</h4>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Veículo de Interesse</h4>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setEditandoLeadInfo(true)}
+                      title="Trocar veículo de interesse"
+                      style={{ fontSize: 12, padding: '2px 8px' }}
+                    >
+                      Trocar
+                    </button>
+                  </div>
                   {veiculo ? (
                     <div>
                       <p style={{ fontSize: 14, color: 'var(--sv-text)' }}>
@@ -1506,10 +1552,26 @@ function LeadDetailModal({
         </div>
       </div>
 
+      {/* Edição de dados do lead (veículo, responsável, origem, data contato, observações) */}
+      {editandoLeadInfo && lead && (
+        <EditarLeadModal
+          lead={lead}
+          onClose={() => setEditandoLeadInfo(false)}
+          onSaved={() => {
+            setEditandoLeadInfo(false)
+            addToast('success', 'Informações do lead atualizadas!')
+            fetchLeadDetails()
+            onUpdated()
+          }}
+          onError={msg => addToast('error', msg)}
+        />
+      )}
+
       {/* Edição do cadastro do cliente sem sair do lead */}
       {editandoCliente && (
         <ClienteModal
           cliente={clienteCompleto}
+          leadId={leadId}
           onClose={() => { setEditandoCliente(false); setClienteCompleto(null) }}
           onSaved={() => {
             setEditandoCliente(false)
@@ -1545,6 +1607,8 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [pagina, setPagina] = useState(1)
+  const porPagina = 20
 
   // Modals
   const [showModal, setShowModal] = useState(false)
@@ -1575,6 +1639,7 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
     searchTimeout.current = setTimeout(() => {
       setSearch(value)
+      setPagina(1)
     }, 400)
   }
 
@@ -1663,6 +1728,10 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
     }
   }
 
+  const totalItens = clientes.length
+  const totalPaginas = Math.max(1, Math.ceil(totalItens / porPagina))
+  const sliceClientes = clientes.slice((pagina - 1) * porPagina, pagina * porPagina)
+
   return (
     <div>
       <div className="filter-bar" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -1671,7 +1740,7 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
           <input
             className="search-input"
             type="text"
-            placeholder="Buscar por nome, CPF ou telefone..."
+            placeholder="Buscar por nome, CPF ou telefone no banco..."
             style={{ width: '100%' }}
             onChange={e => handleSearchChange(e.target.value)}
           />
@@ -1699,6 +1768,16 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
         </div>
       ) : (
         <>
+          <Pagination
+            pagina={pagina}
+            totalItens={totalItens}
+            itensPorPagina={porPagina}
+            totalPaginas={totalPaginas}
+            onPaginaChange={setPagina}
+            nomeEntidade="clientes"
+            compacto
+          />
+
           <div className="table-scroll">
             <table className="stock-table responsive-table">
               <thead>
@@ -1719,7 +1798,7 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
                 </tr>
               </thead>
               <tbody>
-                {clientes.map(c => {
+                {sliceClientes.map(c => {
                   const isSelected = selectedIds.includes(c.id)
                   return (
                     <tr
@@ -1767,6 +1846,15 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
               </tbody>
             </table>
           </div>
+
+          <Pagination
+            pagina={pagina}
+            totalItens={totalItens}
+            itensPorPagina={porPagina}
+            totalPaginas={totalPaginas}
+            onPaginaChange={setPagina}
+            nomeEntidade="clientes"
+          />
 
           {selectedIds.length > 0 && (
             <div className="sv-selection-bar" style={{
@@ -1822,16 +1910,139 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
 }
 
 /* ══════════════════════════════════════════════════════════════
+   LEAD EDIÇÃO MODAL (Veículo, Responsável, Origem, Notas)
+   ══════════════════════════════════════════════════════════════ */
+
+function EditarLeadModal({
+  lead,
+  onClose,
+  onSaved,
+  onError,
+}: {
+  lead: Lead
+  onClose: () => void
+  onSaved: () => void
+  onError: (msg: string) => void
+}) {
+  const [origem, setOrigem] = useState<Lead['origem']>(lead.origem || 'manual')
+  const [veiculoId, setVeiculoId] = useState(lead.veiculo_id || '')
+  const [responsavelId, setResponsavelId] = useState(lead.responsavel_id || '')
+  const [proximoContato, setProximoContato] = useState(lead.proximo_contato ? lead.proximo_contato.substring(0, 10) : '')
+  const [observacoes, setObservacoes] = useState(lead.observacoes || '')
+  const [saving, setSaving] = useState(false)
+
+  const [veiculos, setVeiculos] = useState<Veiculo[]>([])
+  const [equipe, setEquipe] = useState<{ id: string; nome: string }[]>([])
+
+  useEffect(() => {
+    api.get<{ items: Veiculo[] }>('/veiculos?per_page=100').then(res => setVeiculos(res.items || [])).catch(() => {})
+    api.get<{ id: string; nome: string }[]>('/equipe').then(setEquipe).catch(() => {})
+  }, [])
+
+  const handleSubmit = async () => {
+    setSaving(true)
+    try {
+      await api.patch(`/leads/${lead.id}`, {
+        origem,
+        veiculo_id: veiculoId || null,
+        responsavel_id: responsavelId || null,
+        proximo_contato: proximoContato ? new Date(proximoContato + 'T12:00:00Z').toISOString() : null,
+        observacoes: observacoes ? sanitizarTexto(observacoes, 500) : null,
+      })
+      onSaved()
+    } catch (err) {
+      onError(extractErrorDetails(err).message || 'Erro ao atualizar dados do lead')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-glass" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Editar Informações do Lead</h3>
+          <button className="modal-close" onClick={onClose} aria-label="Fechar"><XIcon /></button>
+        </div>
+
+        <div className="modal-body">
+          <div className="form-grid">
+            <div className="form-group full-width">
+              <label>Veículo de Interesse</label>
+              <select value={veiculoId} onChange={e => setVeiculoId(e.target.value)}>
+                <option value="">Nenhum veículo selecionado</option>
+                {veiculos.map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.marca} {v.modelo} {v.versao || ''} ({v.ano_modelo}) — {formatCurrency(v.preco_venda)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Origem do Lead</label>
+              <select value={origem} onChange={e => setOrigem(e.target.value as any)}>
+                {Object.entries(ORIGEM_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Responsável</label>
+              <select value={responsavelId} onChange={e => setResponsavelId(e.target.value)}>
+                <option value="">Sem responsável definido</option>
+                {equipe.map(m => (
+                  <option key={m.id} value={m.id}>{m.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group full-width">
+              <label>Próximo Contato</label>
+              <input
+                type="date"
+                value={proximoContato}
+                onChange={e => setProximoContato(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group full-width">
+              <label>Observações do Lead</label>
+              <textarea
+                rows={3}
+                value={observacoes}
+                onChange={e => setObservacoes(e.target.value)}
+                placeholder="Observações, preferências ou histórico do lead..."
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar Alterações'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
    CLIENTE CADASTRO/EDIÇÃO MODAL
    ══════════════════════════════════════════════════════════════ */
 
 function ClienteModal({
   cliente,
+  leadId,
   onClose,
   onSaved,
   onError,
 }: {
   cliente: Cliente | null
+  leadId?: string
   onClose: () => void
   onSaved: () => void
   onError: (msg: string) => void
@@ -1951,8 +2162,10 @@ function ClienteModal({
         observacoes: observacoes ? sanitizarTexto(observacoes, 255) : null,
       }
 
-      if (isEditing) {
-        await api.patch(`/clientes/${cliente!.id}`, body)
+      if (isEditing && cliente?.id) {
+        await api.patch(`/clientes/${cliente.id}`, body)
+      } else if (leadId) {
+        await api.patch(`/leads/${leadId}/cliente`, body)
       } else {
         await api.post('/clientes', body)
       }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import DOMPurify from 'dompurify'
 import { Shield, Building2, ClipboardList, AlertTriangle, Plus, ToggleLeft, ToggleRight, Eye, Search, X, FlaskConical, Play, CheckCircle2, XCircle, Pencil, CreditCard, FileText, Check, Star, StarOff, Copy } from 'lucide-react'
 import { api } from '../lib/api'
@@ -6,6 +6,7 @@ import { useUIStore } from '../stores/uiStore'
 import { mascararTelefone, mascararMoeda, parseMoeda } from '../lib/mascaras'
 import { RichEditor } from '../components/RichEditor'
 import { PasswordInput } from '../components/PasswordInput'
+import { Pagination } from '../components/Pagination'
 
 // ── Tipos ────────────────────────────────────────────────────────
 
@@ -1339,6 +1340,15 @@ function AbaAuditoria() {
         <EmptyState msg="Nenhum log de auditoria registrado." />
       ) : (
         <>
+          <Pagination
+            pagina={pagina}
+            totalItens={logs.length}
+            itensPorPagina={POR_PAG}
+            totalPaginas={paginas}
+            onPaginaChange={setPagina}
+            nomeEntidade="logs"
+            compacto
+          />
           <div className="glass-card admin-table-card">
             <table className="responsive-table" style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
               <thead>
@@ -1360,13 +1370,14 @@ function AbaAuditoria() {
               </tbody>
             </table>
           </div>
-          {paginas > 1 && (
-            <div style={{ display: 'flex', gap: 'var(--sv-space-2)', marginTop: 'var(--sv-space-4)', alignItems: 'center' }}>
-              <button className="btn btn-secondary" disabled={pagina === 1} onClick={() => setPagina((p) => p - 1)}>Anterior</button>
-              <span style={{ color: 'var(--sv-text-muted)', fontSize: 'var(--sv-text-sm)' }}>{pagina} / {paginas}</span>
-              <button className="btn btn-secondary" disabled={pagina === paginas} onClick={() => setPagina((p) => p + 1)}>Próxima</button>
-            </div>
-          )}
+          <Pagination
+            pagina={pagina}
+            totalItens={logs.length}
+            itensPorPagina={POR_PAG}
+            totalPaginas={paginas}
+            onPaginaChange={setPagina}
+            nomeEntidade="logs"
+          />
         </>
       )}
     </div>
@@ -1377,10 +1388,15 @@ function AbaAuditoria() {
 
 function fmtDetalhes(detalhes: string | null | undefined): {
   path?: string
+  method?: string
   status?: number
   user_name?: string
   user_email?: string
   mensagem?: string
+  tipo_excecao?: string
+  detalhe_tecnico?: string
+  traceback?: string
+  stack?: string
   timestamp?: string
 } {
   if (!detalhes) return {}
@@ -1399,12 +1415,17 @@ Data: ${new Date(log.created_at).toLocaleString('pt-BR')}
 Origem: ${log.entidade || '—'}
 Rota: ${det.path || '—'}
 Status HTTP: ${det.status ?? '5xx'}
+Tipo Exceção: ${det.tipo_excecao || '—'}
 Usuário: ${user_name} (${user_email})
 Request ID: ${log.entidade_id || '—'}
 Status IA: ${log.ajusteia ? 'Resolvido (IA)' : 'Pendente'}`
 
-  if (det.mensagem) {
-    txt += `\nMensagem do Erro: ${det.mensagem}`
+  if (det.detalhe_tecnico || det.mensagem) {
+    txt += `\nMensagem: ${det.detalhe_tecnico || det.mensagem}`
+  }
+
+  if (det.traceback || det.stack) {
+    txt += `\n\n[Traceback / Pilha Técnica]:\n${det.traceback || det.stack}`
   }
 
   txt += `\n\n[Detalhes JSON]:\n${log.detalhes || '{}'}`
@@ -1421,6 +1442,265 @@ Gerado em: ${new Date().toLocaleString('pt-BR')}
     txt += `--- Erro #${index + 1} ---\n${formatarErroTexto(log)}\n\n`
   })
   return txt
+}
+
+function ModalDetalhesErro({
+  log,
+  onClose,
+  onToggleAjusteIA,
+}: {
+  log: LogItem
+  onClose: () => void
+  onToggleAjusteIA?: () => void
+}) {
+  const [copiado, setCopiado] = useState(false)
+  const [copiadoJson, setCopiadoJson] = useState(false)
+  const [copiadoTb, setCopiadoTb] = useState(false)
+  const [mostrarTraceback, setMostrarTraceback] = useState(true)
+  const det = fmtDetalhes(log.detalhes)
+  const user_name = det.user_name || log.ator_nome || 'Anônimo'
+  const user_email = det.user_email
+  const pilhaTecnica = det.traceback || det.stack
+
+  const handleCopiarTexto = () => {
+    navigator.clipboard.writeText(formatarErroTexto(log))
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
+  }
+
+  const handleCopiarJson = () => {
+    const raw = JSON.stringify({
+      id: log.id,
+      acao: log.acao,
+      entidade: log.entidade,
+      request_id: log.entidade_id,
+      detalhes: det,
+      created_at: log.created_at,
+    }, null, 2)
+    navigator.clipboard.writeText(raw)
+    setCopiadoJson(true)
+    setTimeout(() => setCopiadoJson(false), 2000)
+  }
+
+  const handleCopiarTraceback = () => {
+    if (!pilhaTecnica) return
+    navigator.clipboard.writeText(pilhaTecnica)
+    setCopiadoTb(true)
+    setTimeout(() => setCopiadoTb(false), 2000)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container glass-card modal-lg" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '750px' }}>
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertTriangle size={20} style={{ color: 'var(--sv-danger, #ef4444)' }} />
+            <h3 className="modal-title">Detalhes do Erro</h3>
+          </div>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+
+        <div className="modal-body modal-form-grid" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.03)',
+            padding: '16px',
+            borderRadius: 'var(--sv-radius)',
+            border: '1px solid var(--sv-border)',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: '12px'
+          }}>
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>ORIGEM</span>
+              <span style={{ fontWeight: 600, color: 'var(--sv-primary)' }}>{log.entidade || '—'}</span>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>ROTA</span>
+              <code style={{ fontSize: '12px', color: 'var(--sv-text-primary)', wordBreak: 'break-all' }}>{det.path || '—'}</code>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>STATUS</span>
+              <span style={{ fontWeight: 700, color: 'var(--sv-danger, #ef4444)' }}>HTTP {det.status ?? 500}</span>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>TIPO DA EXCEÇÃO</span>
+              <span style={{
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                fontWeight: 600,
+                color: det.tipo_excecao ? 'var(--sv-danger, #ef4444)' : 'var(--sv-text-muted)',
+                background: det.tipo_excecao ? 'color-mix(in srgb, var(--sv-danger) 12%, transparent)' : 'transparent',
+                padding: det.tipo_excecao ? '2px 6px' : '0',
+                borderRadius: '4px',
+                display: 'inline-block'
+              }}>
+                {det.tipo_excecao || '—'}
+              </span>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>DATA E HORA</span>
+              <span style={{ fontSize: '13px', color: 'var(--sv-text-muted)' }}>{new Date(log.created_at).toLocaleString('pt-BR')}</span>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>USUÁRIO</span>
+              <span style={{ fontWeight: 600, color: 'var(--sv-text-primary)', fontSize: '13px' }}>{user_name}</span>
+              {user_email && <div style={{ fontSize: '12px', color: 'var(--sv-text-muted)' }}>{user_email}</div>}
+            </div>
+
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)', display: 'block' }}>REQUEST ID</span>
+              <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--sv-text-muted)' }}>{log.entidade_id || '—'}</span>
+            </div>
+          </div>
+
+          {(det.detalhe_tecnico || det.mensagem) && (
+            <div style={{
+              background: 'color-mix(in srgb, var(--sv-danger, #ef4444) 8%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--sv-danger, #ef4444) 25%, transparent)',
+              padding: '14px',
+              borderRadius: 'var(--sv-radius)',
+            }}>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sv-danger, #ef4444)', display: 'block', marginBottom: '4px' }}>
+                MENSAGEM DE EXCEÇÃO
+              </span>
+              <pre style={{
+                margin: 0,
+                fontSize: '13px',
+                color: 'var(--sv-text-primary)',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                fontFamily: 'monospace'
+              }}>
+                {det.detalhe_tecnico || det.mensagem}
+              </pre>
+            </div>
+          )}
+
+          {pilhaTecnica && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setMostrarTraceback(v => !v)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                    color: 'var(--sv-danger, #ef4444)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <span>{mostrarTraceback ? '▼' : '▶'}</span>
+                  <span>TRACEBACK / PILHA TÉCNICA</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleCopiarTraceback}
+                  style={{ padding: '3px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  {copiadoTb ? <Check size={12} style={{ color: 'var(--sv-success, #10b981)' }} /> : <Copy size={12} />}
+                  {copiadoTb ? 'Traceback Copiado!' : 'Copiar Traceback'}
+                </button>
+              </div>
+              {mostrarTraceback && (
+                <pre style={{
+                  background: '#0d1117',
+                  border: '1px solid color-mix(in srgb, var(--sv-danger, #ef4444) 30%, transparent)',
+                  padding: '12px',
+                  borderRadius: 'var(--sv-radius)',
+                  fontSize: '11px',
+                  color: '#f87171',
+                  fontFamily: 'monospace',
+                  maxHeight: '240px',
+                  overflow: 'auto',
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all'
+                }}>
+                  {pilhaTecnica}
+                </pre>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sv-text-muted)' }}>
+                DADOS DO LOG (JSON)
+              </label>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleCopiarJson}
+                style={{ padding: '3px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                {copiadoJson ? <Check size={12} style={{ color: 'var(--sv-success, #10b981)' }} /> : <Copy size={12} />}
+                {copiadoJson ? 'JSON Copiado!' : 'Copiar JSON'}
+              </button>
+            </div>
+            <pre style={{
+              background: 'rgba(0, 0, 0, 0.4)',
+              border: '1px solid var(--sv-border)',
+              padding: '12px',
+              borderRadius: 'var(--sv-radius)',
+              fontSize: '12px',
+              color: '#34d399',
+              fontFamily: 'monospace',
+              maxHeight: '180px',
+              overflow: 'auto',
+              margin: 0,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all'
+            }}>
+              {JSON.stringify(det, null, 2)}
+            </pre>
+          </div>
+        </div>
+
+        <div className="modal-footer" style={{ justifyContent: 'space-between', display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '16px' }}>
+          <div>
+            {onToggleAjusteIA && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={onToggleAjusteIA}
+                style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                {log.ajusteia ? <CheckCircle2 size={14} style={{ color: 'var(--sv-success, #10b981)' }} /> : <AlertTriangle size={14} />}
+                {log.ajusteia ? 'Resolvido (IA)' : 'Marcar Resolvido'}
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleCopiarTexto}
+              style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              {copiado ? <Check size={14} /> : <Copy size={14} />}
+              {copiado ? 'Copiado!' : 'Copiar Resumo'}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={onClose} style={{ fontSize: '12px' }}>
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function AbaErros() {
@@ -1496,6 +1776,15 @@ function AbaErros() {
         <EmptyState msg="Nenhum erro de servidor registrado." />
       ) : (
         <>
+          <Pagination
+            pagina={pagina}
+            totalItens={logs.length}
+            itensPorPagina={POR_PAG}
+            totalPaginas={paginas}
+            onPaginaChange={setPagina}
+            nomeEntidade="erros"
+            compacto
+          />
           <div className="glass-card admin-table-card">
             <table className="responsive-table" style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: 'var(--sv-text-sm)' }}>
               <thead>
@@ -1573,19 +1862,35 @@ function AbaErros() {
               </tbody>
             </table>
           </div>
-          {paginas > 1 && (
-            <div style={{ display: 'flex', gap: 'var(--sv-space-2)', marginTop: 'var(--sv-space-4)', alignItems: 'center' }}>
-              <button className="btn btn-secondary" disabled={pagina === 1} onClick={() => setPagina((p) => p - 1)}>Anterior</button>
-              <span style={{ color: 'var(--sv-text-muted)', fontSize: 'var(--sv-text-sm)' }}>{pagina} / {paginas}</span>
-              <button className="btn btn-secondary" disabled={pagina === paginas} onClick={() => setPagina((p) => p + 1)}>Próxima</button>
-            </div>
-          )}
+          <Pagination
+            pagina={pagina}
+            totalItens={logs.length}
+            itensPorPagina={POR_PAG}
+            totalPaginas={paginas}
+            onPaginaChange={setPagina}
+            nomeEntidade="erros"
+          />
           <div style={{ marginTop: 'var(--sv-space-3)', textAlign: 'right' }}>
             <button className="btn btn-secondary" style={{ fontSize: 'var(--sv-text-xs)' }} onClick={carregar}>
               Atualizar
             </button>
           </div>
         </>
+      )}
+
+      {logDetalhes && (
+        <ModalDetalhesErro
+          log={logDetalhes}
+          onClose={() => setLogDetalhes(null)}
+          onToggleAjusteIA={() => {
+            api.patch(`/admin/erros/${logDetalhes.id}/ajusteia`, { ajusteia: !logDetalhes.ajusteia })
+              .then(() => {
+                setLogDetalhes({ ...logDetalhes, ajusteia: !logDetalhes.ajusteia })
+                carregar()
+              })
+              .catch(() => {})
+          }}
+        />
       )}
     </div>
   )
@@ -1654,77 +1959,393 @@ interface ResultadoTestes {
   saida: string
 }
 
-function AbaTestes() {
-  const [rodando, setRodando] = useState(false)
-  const [resultado, setResultado] = useState<ResultadoTestes | null>(null)
-  const [erro, setErro] = useState<string | null>(null)
+interface ItemTeste {
+  id: string
+  arquivo: string
+  nome: string
+  categoria: string
+  descricao: string
+}
 
-  const rodar = async () => {
-    setRodando(true)
-    setErro(null)
-    setResultado(null)
+type TestStatus = 'idle' | 'running' | 'passed' | 'failed'
+
+function AbaTestes() {
+  const [itens, setItens] = useState<ItemTeste[]>([])
+  const [loadingLista, setLoadingLista] = useState(true)
+  const [statusMap, setStatusMap] = useState<Record<string, { status: TestStatus; resultado?: ResultadoTestes; erro?: string }>>({})
+  const [executandoGeral, setExecutandoGeral] = useState(false)
+  const [filtroCategoria, setFiltroCategoria] = useState<string>('todos')
+  const [busca, setBusca] = useState('')
+  const [itemInspecao, setItemInspecao] = useState<{ item: ItemTeste; resultado?: ResultadoTestes; erro?: string } | null>(null)
+  const cancelarRef = useRef(false)
+
+  // Carrega a lista de testes disponíveis no backend
+  const carregarLista = useCallback(async () => {
+    setLoadingLista(true)
     try {
-      const r = await api.post<ResultadoTestes>('/admin/testes/rodar')
-      setResultado(r)
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Falha ao executar os testes.')
+      const data = await api.get<ItemTeste[]>('/admin/testes/lista')
+      setItens(data)
+    } catch {
+      // Fallback estático caso endpoint não responda
+      setItens([
+        { id: 'test_smoke.py', arquivo: 'test_smoke.py', nome: 'Smoke Tests (Boot e Rotas)', categoria: 'Núcleo', descricao: 'Valida boot da API, OpenAPI e rotas essenciais' },
+        { id: 'test_auth_multiloja.py', arquivo: 'test_auth_multiloja.py', nome: 'Autenticação Multi-loja', categoria: 'Segurança', descricao: 'Valida JWT, isolamento de login e roles' },
+        { id: 'test_tenant_isolation.py', arquivo: 'test_tenant_isolation.py', nome: 'Isolamento Tenant Multi-loja', categoria: 'Segurança', descricao: 'Garante que nenhuma concessionária acesse dados de outra' },
+        { id: 'test_mfa.py', arquivo: 'test_mfa.py', nome: 'Autenticação em Duas Etapas (MFA)', categoria: 'Segurança', descricao: 'Validação de 2FA TOTP e backup codes' },
+      ])
     } finally {
-      setRodando(false)
+      setLoadingLista(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    carregarLista()
+  }, [carregarLista])
+
+  // Executa um teste individual
+  const executarItem = async (item: ItemTeste) => {
+    setStatusMap(prev => ({
+      ...prev,
+      [item.id]: { status: 'running' }
+    }))
+
+    try {
+      const r = await api.post<ResultadoTestes>('/admin/testes/executar_item', { arquivo: item.arquivo })
+      setStatusMap(prev => ({
+        ...prev,
+        [item.id]: {
+          status: r.ok ? 'passed' : 'failed',
+          resultado: r
+        }
+      }))
+      return r
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Falha na execução.'
+      setStatusMap(prev => ({
+        ...prev,
+        [item.id]: {
+          status: 'failed',
+          erro: msg
+        }
+      }))
+      return null
     }
   }
 
-  const cor = resultado?.ok ? '#34d399' : '#ef4444'
+  // Executa todos os testes sequencialmente em checklist
+  const executarTodosSequencial = async (listaAlvo?: ItemTeste[]) => {
+    const lista = listaAlvo || itens
+    if (lista.length === 0) return
+
+    setExecutandoGeral(true)
+    cancelarRef.current = false
+
+    for (const item of lista) {
+      if (cancelarRef.current) break
+      await executarItem(item)
+    }
+
+    setExecutandoGeral(false)
+  }
+
+  const cancelarExecucao = () => {
+    cancelarRef.current = true
+    setExecutandoGeral(false)
+  }
+
+  // Estatísticas do checklist
+  const categorias = ['todos', ...Array.from(new Set(itens.map(i => i.categoria)))]
+  const totalItens = itens.length
+  const concluidos = Object.values(statusMap).filter(s => s.status === 'passed' || s.status === 'failed').length
+  const totalPassou = Object.values(statusMap).reduce((acc, s) => acc + (s.resultado?.passou || 0), 0)
+  const totalFalhou = Object.values(statusMap).reduce((acc, s) => acc + (s.resultado?.falhou || 0) + (s.resultado?.erros || 0), 0)
+  const percentual = totalItens > 0 ? Math.round((concluidos / totalItens) * 100) : 0
+
+  const itensFiltrados = itens.filter(i => {
+    const matchCat = filtroCategoria === 'todos' || i.categoria === filtroCategoria
+    const matchBusca = !busca || i.nome.toLowerCase().includes(busca.toLowerCase()) || i.arquivo.toLowerCase().includes(busca.toLowerCase())
+    return matchCat && matchBusca
+  })
 
   return (
     <div style={{ marginTop: 'var(--sv-space-5)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+      {/* Header com resumo e ações */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: 'var(--sv-text-lg)' }}>Suíte de testes da API</h3>
+          <h3 style={{ margin: 0, fontSize: 'var(--sv-text-lg)', display: 'flex', alignItems: 'center', gap: 10 }}>
+            Checklist de Testes Automatizados
+            <span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 999, background: 'rgba(59,130,246,0.15)', color: 'var(--sv-primary)' }}>
+              {totalItens} módulos
+            </span>
+          </h3>
           <p style={{ color: 'var(--sv-text-muted)', fontSize: 'var(--sv-text-sm)', marginTop: 4 }}>
-            Roda o pytest do backend (auth multi-loja, boot, credenciais) e mostra o resultado.
+            Execução individualizada teste por teste para validação contínua sem tempo de espera ou timeout.
           </p>
         </div>
-        <button
-          onClick={rodar}
-          disabled={rodando}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '10px 18px', borderRadius: 'var(--sv-radius)', border: 'none',
-            background: 'var(--sv-primary)', color: '#fff', fontWeight: 600, fontSize: 'var(--sv-text-sm)',
-            cursor: rodando ? 'wait' : 'pointer', opacity: rodando ? 0.7 : 1,
-          }}
-        >
-          <Play size={16} />
-          {rodando ? 'Rodando…' : 'Rodar testes'}
-        </button>
+
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          {executandoGeral ? (
+            <button
+              onClick={cancelarExecucao}
+              className="btn btn-danger"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+            >
+              <X size={16} /> Pausar Execução
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => executarTodosSequencial(itens.filter(i => i.arquivo === 'test_smoke.py' || i.arquivo === 'test_auth_multiloja.py'))}
+                className="btn btn-secondary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+                title="Executar apenas smoke tests essenciais"
+              >
+                ⚡ Smoke Tests (Rápido)
+              </button>
+              <button
+                onClick={() => executarTodosSequencial()}
+                className="btn btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+              >
+                <Play size={16} /> Iniciar Checklist Completo
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      {erro && (
-        <div style={{ marginTop: 20, padding: 16, borderRadius: 'var(--sv-radius)', background: 'color-mix(in srgb, #ef4444 12%, transparent)', color: '#ef4444', fontSize: 'var(--sv-text-sm)' }}>
-          {erro}
+      {/* Barra de Progresso e Métricas */}
+      <div className="glass-card" style={{ padding: '16px 20px', marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 13 }}>
+            <span style={{ fontWeight: 600, color: 'var(--sv-text)' }}>
+              Progresso: {concluidos} de {totalItens} ({percentual}%)
+            </span>
+            <span style={{ color: 'var(--sv-success)', fontWeight: 600 }}>
+              ✅ {totalPassou} asserções passaram
+            </span>
+            {totalFalhou > 0 && (
+              <span style={{ color: 'var(--sv-danger)', fontWeight: 600 }}>
+                ❌ {totalFalhou} falha(s)
+              </span>
+            )}
+          </div>
+          {executandoGeral && (
+            <span style={{ fontSize: 12, color: 'var(--sv-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="spinner" style={{ width: 14, height: 14 }} /> Executando checklist item a item...
+            </span>
+          )}
+        </div>
+
+        {/* Linha de progresso */}
+        <div style={{ width: '100%', height: 8, background: 'var(--sv-border)', borderRadius: 999, overflow: 'hidden' }}>
+          <div
+            style={{
+              width: `${percentual}%`,
+              height: '100%',
+              background: totalFalhou > 0 ? 'var(--sv-danger)' : 'var(--sv-primary)',
+              transition: 'width 0.3s ease'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {categorias.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setFiltroCategoria(cat)}
+              className={`btn btn-sm ${filtroCategoria === cat ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ fontSize: 12, padding: '4px 10px', textTransform: 'capitalize' }}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        <div className="search-wrapper" style={{ width: 260 }}>
+          <Search size={14} />
+          <input
+            className="search-input"
+            type="text"
+            placeholder="Filtrar por nome ou arquivo..."
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            style={{ padding: '6px 10px 6px 32px', fontSize: 12 }}
+          />
+        </div>
+      </div>
+
+      {/* Lista / Checklist */}
+      {loadingLista ? (
+        <div className="empty-state">
+          <div className="spinner" />
+          <p style={{ marginTop: 12 }}>Carregando catálogo de testes...</p>
+        </div>
+      ) : (
+        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {itensFiltrados.map((item, idx) => {
+              const info = statusMap[item.id]
+              const st = info?.status || 'idle'
+              const res = info?.resultado
+
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 18px',
+                    borderTop: idx > 0 ? '1px solid var(--sv-border)' : 'none',
+                    background: st === 'running' ? 'rgba(59,130,246,0.06)' : st === 'failed' ? 'rgba(239,68,68,0.06)' : 'transparent',
+                    gap: 16,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                    {/* Status Icon */}
+                    <div style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {st === 'idle' && (
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--sv-text-muted)', opacity: 0.5 }} />
+                      )}
+                      {st === 'running' && (
+                        <div className="spinner" style={{ width: 16, height: 16 }} />
+                      )}
+                      {st === 'passed' && (
+                        <CheckCircle2 size={18} color="var(--sv-success)" />
+                      )}
+                      {st === 'failed' && (
+                        <XCircle size={18} color="var(--sv-danger)" />
+                      )}
+                    </div>
+
+                    {/* Test Info */}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--sv-text)' }}>
+                          {item.nome}
+                        </span>
+                        <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--sv-surface)', border: '1px solid var(--sv-border)', color: 'var(--sv-text-dim)' }}>
+                          {item.categoria}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'var(--sv-text-muted)', fontFamily: 'monospace' }}>
+                          {item.arquivo}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--sv-text-dim)', marginTop: 2 }}>
+                        {item.descricao}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right actions and stats */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                    {res && (
+                      <span style={{ fontSize: 12, color: res.ok ? 'var(--sv-success)' : 'var(--sv-danger)', fontWeight: 500 }}>
+                        {res.resumo} ({res.duracao_s}s)
+                      </span>
+                    )}
+
+                    {info?.erro && (
+                      <span style={{ fontSize: 12, color: 'var(--sv-danger)' }}>
+                        {info.erro}
+                      </span>
+                    )}
+
+                    {res?.saida && (
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setItemInspecao({ item, resultado: res })}
+                        style={{ fontSize: 11, padding: '3px 8px' }}
+                        title="Ver log de execução"
+                      >
+                        <FileText size={13} /> Log
+                      </button>
+                    )}
+
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => executarItem(item)}
+                      disabled={st === 'running' || executandoGeral}
+                      style={{ fontSize: 12, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                    >
+                      <Play size={12} /> {st === 'passed' ? 'Reexecutar' : 'Testar'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
-      {rodando && !resultado && (
-        <p style={{ marginTop: 20, color: 'var(--sv-text-muted)', fontSize: 'var(--sv-text-sm)' }}>
-          Executando a suíte (pode levar alguns segundos)…
-        </p>
-      )}
-
-      {resultado && (
-        <div style={{ marginTop: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 16, borderRadius: 'var(--sv-radius)', border: `1px solid ${cor}`, background: `color-mix(in srgb, ${cor} 10%, transparent)` }}>
-            {resultado.ok ? <CheckCircle2 size={24} color={cor} /> : <XCircle size={24} color={cor} />}
-            <div>
-              <div style={{ fontWeight: 700, color: cor }}>{resultado.ok ? 'Todos os testes passaram' : 'Há testes falhando'}</div>
-              <div style={{ fontSize: 'var(--sv-text-sm)', color: 'var(--sv-text-dim)', marginTop: 2 }}>
-                {resultado.passou} passou · {resultado.falhou} falhou · {resultado.erros} erro · {resultado.duracao_s}s
+      {/* Modal de Detalhes / Log do Teste */}
+      {itemInspecao && (
+        <div className="modal-overlay" onClick={() => setItemInspecao(null)}>
+          <div className="modal-glass" style={{ maxWidth: 700, width: '100%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>{itemInspecao.item.nome}</h3>
+                <span style={{ fontSize: 12, color: 'var(--sv-text-dim)', fontFamily: 'monospace' }}>
+                  {itemInspecao.item.arquivo}
+                </span>
               </div>
+              <button className="modal-close" onClick={() => setItemInspecao(null)} aria-label="Fechar"><X /></button>
+            </div>
+
+            <div className="modal-body">
+              {itemInspecao.resultado && (
+                <div style={{ marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <span style={{
+                    padding: '4px 10px',
+                    borderRadius: 999,
+                    fontWeight: 600,
+                    fontSize: 12,
+                    background: itemInspecao.resultado.ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                    color: itemInspecao.resultado.ok ? 'var(--sv-success)' : 'var(--sv-danger)',
+                  }}>
+                    {itemInspecao.resultado.ok ? 'PASSED' : 'FAILED'}
+                  </span>
+                  <span style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>
+                    {itemInspecao.resultado.resumo} · Duração: {itemInspecao.resultado.duracao_s}s
+                  </span>
+                </div>
+              )}
+
+              <pre style={{
+                margin: 0,
+                padding: 14,
+                borderRadius: 'var(--sv-radius)',
+                background: 'var(--sv-bg)',
+                border: '1px solid var(--sv-border)',
+                color: 'var(--sv-text-dim)',
+                fontSize: 12,
+                lineHeight: 1.5,
+                maxHeight: 400,
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+              }}>
+                {itemInspecao.resultado?.saida || itemInspecao.erro || 'Sem saída registrada.'}
+              </pre>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setItemInspecao(null)}>Fechar</button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  executarItem(itemInspecao.item).then(res => {
+                    if (res) setItemInspecao({ item: itemInspecao.item, resultado: res })
+                  })
+                }}
+              >
+                Reexecutar Teste
+              </button>
             </div>
           </div>
-          <pre style={{ marginTop: 16, padding: 16, borderRadius: 'var(--sv-radius)', background: 'var(--sv-bg)', border: '1px solid var(--sv-border)', color: 'var(--sv-text-dim)', fontSize: 12, lineHeight: 1.5, maxHeight: 380, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
-            {resultado.saida}
-          </pre>
         </div>
       )}
     </div>

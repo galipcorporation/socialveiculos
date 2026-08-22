@@ -15,6 +15,11 @@ function ImpersonarBanner() {
   const loja = sessionStorage.getItem('sv_impersonar_loja')
   if (!loja) return null
 
+  const voltarAoAdmin = () => {
+    sessionStorage.removeItem('sv_impersonar_loja')
+    navigate('/admin', { replace: true })
+  }
+
   const encerrar = () => {
     sessionStorage.removeItem('sv_impersonar_loja')
     logout()
@@ -27,24 +32,37 @@ function ImpersonarBanner() {
       top: 0,
       left: 0,
       right: 0,
-      zIndex: 9999,
-      background: 'var(--sv-warning, #f59e0b)',
+      zIndex: 99999,
+      background: 'linear-gradient(90deg, #f59e0b, #d97706)',
       color: '#000',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent: 'space-between',
       gap: 16,
-      padding: '6px 16px',
-      fontSize: '0.8rem',
+      padding: '7px 20px',
+      fontSize: '0.85rem',
       fontWeight: 600,
+      boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+      flexWrap: 'wrap'
     }}>
-      <span>⚠ Observando como <strong>{loja}</strong> — sessão temporária (15 min)</span>
-      <button
-        onClick={encerrar}
-        style={{ background: 'var(--sv-surface-hover)', border: 'none', borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontWeight: 700 }}
-      >
-        Encerrar
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 16 }}>🛡️</span>
+        <span>Acessando como Gestor de: <strong>{loja}</strong> (Modo Suporte / Observação)</span>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={voltarAoAdmin}
+          style={{ background: '#1e293b', color: '#fff', border: 'none', borderRadius: 5, padding: '4px 12px', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}
+        >
+          🔙 Voltar ao Painel Admin
+        </button>
+        <button
+          onClick={encerrar}
+          style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(0,0,0,0.25)', color: '#000', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}
+        >
+          Sair
+        </button>
+      </div>
     </div>
   )
 }

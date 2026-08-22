@@ -175,8 +175,18 @@ export function Aprovacoes() {
   const parsePrecoProposto = (dadosNovos?: string): number | null => {
     if (!dadosNovos) return null
     try {
-      const parsed = JSON.parse(dadosNovos)
-      return parsed.preco_venda ?? null
+      const parsed = typeof dadosNovos === 'string' ? JSON.parse(dadosNovos) : dadosNovos
+      return parsed.preco_venda ?? parsed.preco_proposto ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const parsePrecoAtual = (dadosNovos?: string): number | null => {
+    if (!dadosNovos) return null
+    try {
+      const parsed = typeof dadosNovos === 'string' ? JSON.parse(dadosNovos) : dadosNovos
+      return parsed.preco_atual ?? parsed.preco_antigo ?? null
     } catch {
       return null
     }
@@ -371,7 +381,7 @@ export function Aprovacoes() {
                         <span>
                           Preço Atual:{' '}
                           <strong style={{ color: 'var(--sv-text)', fontSize: '14px' }}>
-                            {formatBRL(item.veiculo_preco_venda)}
+                            {formatBRL(item.veiculo_preco_venda || parsePrecoAtual(item.dados_novos))}
                           </strong>
                           {' → '}
                           Preço Proposto:{' '}

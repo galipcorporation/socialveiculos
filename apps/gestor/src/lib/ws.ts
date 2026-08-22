@@ -13,8 +13,17 @@ export function wsUrl(path: string): string {
   const base = (import.meta.env.VITE_WS_URL as string | undefined)?.trim()
   const p = path.startsWith('/') ? path : `/${path}`
   if (base) return `${base.replace(/\/$/, '')}${p}`
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}${p}`
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.')
+    if (!isLocal) {
+      // Em produção (Vercel não proxeia WebSocket), conectar direto ao backend no Fly
+      return `wss://socialveiculos-api.fly.dev${p}`
+    }
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.host}${p}`
+  }
+  return `ws://localhost:8000${p}`
 }
 
 /**

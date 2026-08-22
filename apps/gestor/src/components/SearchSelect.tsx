@@ -45,10 +45,10 @@ export function SearchSelect({
     : {}
 
   return (
-    <div className="form-group" style={{ gridColumn: '1 / -1' }} ref={ref}>
+    <div className="form-group" style={{ gridColumn: '1 / -1', position: 'relative', zIndex: open ? 1000 : undefined }} ref={ref}>
       <label>{label}{required && ' *'}</label>
       <div style={{ display: 'flex', gap: 8 }}>
-        <div className="autocomplete-wrapper" style={{ flex: 1, position: 'relative' }}>
+        <div className="autocomplete-wrapper" style={{ flex: 1, position: 'relative', zIndex: open ? 1000 : undefined }}>
           <Search style={{ width: 14, height: 14, position: 'absolute', left: 10, top: 13, color: 'var(--sv-text-dim)', pointerEvents: 'none' }} />
           <input
             type="text"

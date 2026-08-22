@@ -731,106 +731,7 @@ export function VeiculoModal({
               </div>
             </div>
 
-            {/* ── Linha 7: Canais de Divulgação (Vitrine vs Repasse B2B) ── */}
-            <div className="veic-section" style={{ marginTop: 24, fontSize: 14, fontWeight: 700 }}>
-              Canais de Divulgação & Redes Sociais
-            </div>
 
-            <div className="form-group veic-c12" style={{ marginTop: 8 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                
-                {/* Card 1: Vitrine Pública / Site da Loja (B2C) */}
-                <div style={{
-                  background: 'var(--sv-surface-dim)',
-                  border: '1px solid var(--sv-border)',
-                  borderRadius: 'var(--sv-radius-lg)',
-                  padding: 16,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 14, color: 'var(--sv-text)' }}>
-                      <span style={{ fontSize: 18 }}>📱</span> Vitrine Pública & Site (B2C)
-                    </div>
-                  </div>
-                  <p style={{ margin: 0, fontSize: 12, color: 'var(--sv-text-muted)', lineHeight: 1.4 }}>
-                    Exibe este veículo no seu site próprio e na vitrine pública para <strong>clientes finais (compradores)</strong>.
-                  </p>
-                  <span style={{ fontSize: 11, color: 'var(--sv-success)', fontWeight: 600 }}>
-                    ✓ Visível na Vitrine Pública de Clientes
-                  </span>
-                </div>
-
-                {/* Card 2: Feed de Repasses & Rede Social B2B (Lojistas) */}
-                <div style={{
-                  background: publicarRedeSocial ? 'color-mix(in srgb, var(--sv-primary) 10%, var(--sv-surface-dim))' : 'var(--sv-surface-dim)',
-                  border: publicarRedeSocial ? '1px solid var(--sv-primary)' : '1px solid var(--sv-border)',
-                  borderRadius: 'var(--sv-radius-lg)',
-                  padding: 16,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 14, color: 'var(--sv-text)' }}>
-                      <span style={{ fontSize: 18 }}>🤝</span> Rede Social & Repasse B2B
-                    </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: midias.length === 0 ? 'not-allowed' : 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={publicarRedeSocial}
-                        onChange={e => setPublicarRedeSocial(e.target.checked)}
-                        disabled={midias.length === 0}
-                        style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)', cursor: 'pointer' }}
-                      />
-                    </label>
-                  </div>
-                  <p style={{ margin: 0, fontSize: 12, color: 'var(--sv-text-muted)', lineHeight: 1.4 }}>
-                    Publica no Feed de Repasses para <strong>negociar diretamente com lojistas parceiros</strong> do SocialVeículos.
-                  </p>
-                  {midias.length === 0 ? (
-                    <span style={{ fontSize: 11, color: 'var(--sv-warning)', fontWeight: 500 }}>
-                      ⚠️ Adicione ao menos 1 foto para publicar aos lojistas.
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 11, color: publicarRedeSocial ? 'var(--sv-primary)' : 'var(--sv-text-dim)', fontWeight: 600 }}>
-                      {publicarRedeSocial ? '🚀 Publicado no Feed de Lojistas' : '✕ Não publicado no Repasse'}
-                    </span>
-                  )}
-                </div>
-
-              </div>
-            </div>
-
-            {publicarRedeSocial && (
-              <>
-                <div className="form-group veic-c6" style={{ marginTop: 12 }}>
-                  <label>Legenda do story (Parceiros)</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Chegou! BMW 320i impecável..."
-                    value={legendaStory}
-                    onChange={e => setLendaStory(e.target.value)}
-                    maxLength={200}
-                  />
-                </div>
-                <div className="form-group veic-c6" style={{ marginTop: 12 }}>
-                  <label>Valor de repasse (Parceiros R$)</label>
-                  <input
-                    type="text"
-                    placeholder="R$ 0,00"
-                    value={valorRepasseStr}
-                    onChange={e => {
-                      const masked = mascararMoeda(e.target.value)
-                      setValorRepasseStr(masked)
-                      setValorRepasse(parseMoeda(masked))
-                    }}
-                    onBlur={() => setValorRepasseStr(mascararMoeda(valorRepasse))}
-                  />
-                </div>
-              </>
-            )}
 
             {/* Card FIPE (M016) — exibido ao editar quando há dado */}
             {isEditing && fipeData?.fipe_disponivel && (
@@ -1209,24 +1110,122 @@ export function VeiculoModal({
                 </span>
               )}
             </div>
-            <div className="modal-gallery-col-body">
-              {(isEditing && veiculo) || rascunhoId ? (
-                <UploadMidia
-                  veiculoId={(isEditing ? veiculo!.id : rascunhoId)!}
-                  midias={midias}
-                  onChange={(updated) => setMidias(updated)}
-                  sidebar
-                />
-              ) : (
-                <UploadMidia
-                  veiculoId=""
-                  midias={midias}
-                  onChange={(updated) => setMidias(updated)}
-                  sidebar
-                  onRequestUpload={salvarRascunho}
-                  salvandoRascunho={salvandoRascunho}
-                />
-              )}
+            <div className="modal-gallery-col-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Seção com Scroll para Imagens */}
+              <div style={{ maxHeight: 340, overflowY: 'auto', paddingRight: 4 }}>
+                {(isEditing && veiculo) || rascunhoId ? (
+                  <UploadMidia
+                    veiculoId={(isEditing ? veiculo!.id : rascunhoId)!}
+                    midias={midias}
+                    onChange={(updated) => setMidias(updated)}
+                    sidebar
+                  />
+                ) : (
+                  <UploadMidia
+                    veiculoId=""
+                    midias={midias}
+                    onChange={(updated) => setMidias(updated)}
+                    sidebar
+                    onRequestUpload={salvarRascunho}
+                    salvandoRascunho={salvandoRascunho}
+                  />
+                )}
+              </div>
+
+              {/* ── Divisor e Canais de Divulgação Resumidos ── */}
+              <div style={{ borderTop: '1px solid var(--sv-border)', paddingTop: 14, marginTop: 4 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--sv-text-muted)', marginBottom: 10 }}>
+                  Canais de Divulgação
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {/* Card 1: Vitrine Pública & Site */}
+                  <div style={{
+                    background: 'var(--sv-surface)',
+                    border: '1px solid var(--sv-border)',
+                    borderRadius: 'var(--sv-radius)',
+                    padding: '10px 12px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 13, color: 'var(--sv-text)' }}>
+                        <span>📱</span> Vitrine Pública & Site
+                      </div>
+                      <span style={{ fontSize: 11, color: 'var(--sv-success)', fontWeight: 600 }}>
+                        ✓ Visível
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 11, color: 'var(--sv-text-muted)', lineHeight: 1.3 }}>
+                      Exibido na vitrine e site próprio para compradores.
+                    </p>
+                  </div>
+
+                  {/* Card 2: Rede Social & Repasse */}
+                  <div style={{
+                    background: publicarRedeSocial ? 'color-mix(in srgb, var(--sv-primary) 8%, var(--sv-surface))' : 'var(--sv-surface)',
+                    border: publicarRedeSocial ? '1px solid var(--sv-primary)' : '1px solid var(--sv-border)',
+                    borderRadius: 'var(--sv-radius)',
+                    padding: '10px 12px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 13, color: 'var(--sv-text)' }}>
+                        <span>🤝</span> Rede Social & Repasse
+                      </div>
+                      <label style={{ display: 'flex', alignItems: 'center', cursor: midias.length === 0 ? 'not-allowed' : 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={publicarRedeSocial}
+                          onChange={e => setPublicarRedeSocial(e.target.checked)}
+                          disabled={midias.length === 0}
+                          style={{ width: 16, height: 16, accentColor: 'var(--sv-primary)', cursor: 'pointer' }}
+                        />
+                      </label>
+                    </div>
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--sv-text-muted)', lineHeight: 1.3 }}>
+                      Publica no Feed de Repasses para lojistas parceiros.
+                    </p>
+                    {midias.length === 0 ? (
+                      <span style={{ display: 'block', marginTop: 4, fontSize: 10, color: 'var(--sv-warning)', fontWeight: 500 }}>
+                        ⚠️ Adicione ao menos 1 foto.
+                      </span>
+                    ) : null}
+
+                    {publicarRedeSocial && (
+                      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div>
+                          <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--sv-text-dim)', marginBottom: 2, display: 'block', textTransform: 'uppercase' }}>
+                            Valor de Repasse (R$)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="R$ 0,00"
+                            value={valorRepasseStr}
+                            onChange={e => {
+                              const masked = mascararMoeda(e.target.value)
+                              setValorRepasseStr(masked)
+                              setValorRepasse(parseMoeda(masked))
+                            }}
+                            onBlur={() => setValorRepasseStr(mascararMoeda(valorRepasse))}
+                            style={{ fontSize: 12, padding: '6px 10px', width: '100%' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--sv-text-dim)', marginBottom: 2, display: 'block', textTransform: 'uppercase' }}>
+                            Legenda do Story
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Oportunidade repasse..."
+                            value={legendaStory}
+                            onChange={e => setLendaStory(e.target.value)}
+                            maxLength={200}
+                            style={{ fontSize: 12, padding: '6px 10px', width: '100%' }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

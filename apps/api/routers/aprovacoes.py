@@ -33,6 +33,19 @@ async def _build_solicitacao_response(db: AsyncSession, s: SolicitacaoAprovacao)
         resp.veiculo_ano = v.ano_modelo
         resp.veiculo_cor = v.cor
         resp.veiculo_preco_venda = v.preco_venda
+
+    # Fallback se o preco_venda não estiver no veículo ou se estiver em dados_novos
+    if (resp.veiculo_preco_venda is None or resp.veiculo_preco_venda == 0) and s.dados_novos:
+        try:
+            dn = json.loads(s.dados_novos) if isinstance(s.dados_novos, str) else s.dados_novos
+            if isinstance(dn, dict):
+                if "preco_atual" in dn and dn["preco_atual"] is not None:
+                    resp.veiculo_preco_venda = float(dn["preco_atual"])
+                elif "preco_antigo" in dn and dn["preco_antigo"] is not None:
+                    resp.veiculo_preco_venda = float(dn["preco_antigo"])
+        except Exception:
+            pass
+
     return resp
 
 

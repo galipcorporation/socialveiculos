@@ -11,6 +11,7 @@ import {
 } from './estoque/icons'
 import { VeiculoModal } from './estoque/VeiculoModal'
 import { VenderModal } from './estoque/VenderModal'
+import { Pagination } from '../components/Pagination'
 
 /* ── Types ───────────────────────────────────────────────────── */
 
@@ -360,6 +361,15 @@ export function Estoque() {
         </div>
       ) : (
         <>
+          <Pagination
+            pagina={page}
+            totalItens={total}
+            itensPorPagina={perPage}
+            totalPaginas={pages}
+            onPaginaChange={setPage}
+            nomeEntidade="veículos"
+            compacto
+          />
           <div className="table-scroll">
           <table className="stock-table">
             <thead>
@@ -660,54 +670,15 @@ export function Estoque() {
             ))}
           </div>
 
-          {/* ── Paginação ── */}
-          <div className="pagination">
-            <div className="pagination-info">
-              Mostrando {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} de {total} veículos
-            </div>
-            <div className="pagination-controls">
-              <button
-                className="pagination-btn"
-                disabled={page <= 1}
-                onClick={() => setPage(p => p - 1)}
-              >
-                <ChevLeft />
-              </button>
-              {(() => {
-                const maxButtons = 5
-                let start = Math.max(1, page - 2)
-                let end = Math.min(pages, page + 2)
-                
-                if (end - start + 1 < maxButtons) {
-                  if (start === 1) {
-                    end = Math.min(pages, start + maxButtons - 1)
-                  } else if (end === pages) {
-                    start = Math.max(1, end - maxButtons + 1)
-                  }
-                }
-
-                return Array.from({ length: Math.max(0, end - start + 1) }, (_, i) => {
-                  const p = start + i
-                  return (
-                    <button
-                      key={p}
-                      className={`pagination-btn ${page === p ? 'active' : ''}`}
-                      onClick={() => setPage(p)}
-                    >
-                      {p}
-                    </button>
-                  )
-                })
-              })()}
-              <button
-                className="pagination-btn"
-                disabled={page >= pages}
-                onClick={() => setPage(p => p + 1)}
-              >
-                <ChevRight />
-              </button>
-            </div>
-          </div>
+          {/* ── Paginação Rodapé ── */}
+          <Pagination
+            pagina={page}
+            totalItens={total}
+            itensPorPagina={perPage}
+            totalPaginas={pages}
+            onPaginaChange={setPage}
+            nomeEntidade="veículos"
+          />
         </>
       )}
 
