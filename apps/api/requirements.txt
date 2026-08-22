@@ -23,7 +23,7 @@ boto3==1.43.56
 Pillow==12.3.0
 sentry-sdk[fastapi]==2.66.1
 httpx==0.28.1
-beautifulsoup4==4.13.5
+beautifulsoup4==4.15.0
 cryptography==50.0.0
 selenium==4.46.0
 webdriver-manager==4.0.2
