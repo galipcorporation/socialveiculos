@@ -152,7 +152,12 @@ async def listar_conversas_cliente(
     """
     stmt = (
         select(Conversa)
-        .where(Conversa.cliente_id == current_user.id, Conversa.tipo == TipoConversa.B2C)
+        .where(
+            Conversa.cliente_id == current_user.id,
+            Conversa.tipo == TipoConversa.B2C,
+            Conversa.deletada_em == None,
+            Conversa.excluido == False,
+        )
         .order_by(Conversa.updated_at.desc())
     )
     res = await db.execute(stmt)
@@ -170,7 +175,7 @@ async def listar_conversas_cliente(
 
     veiculos_por_id: dict[str, Veiculo] = {}
     if veiculo_ids:
-        veiculos_res = await db.execute(select(Veiculo).where(Veiculo.id.in_(veiculo_ids)))
+        veiculos_res = await db.execute(select(Veiculo).options(selectinload(Veiculo.midias)).where(Veiculo.id.in_(veiculo_ids)))
         veiculos_por_id = {v.id: v for v in veiculos_res.scalars().all()}
 
     unread_res = await db.execute(
@@ -220,6 +225,7 @@ async def listar_conversas_cliente(
                 veiculo_id=c.veiculo_id,
                 veiculo_modelo=veiculo.modelo if veiculo else None,
                 veiculo_marca=veiculo.marca if veiculo else None,
+                veiculo_foto=veiculo.midias[0].url if veiculo and getattr(veiculo, "midias", None) and len(veiculo.midias) > 0 else None,
                 veiculo_status=veiculo.status.value if veiculo and veiculo.status else None,
                 ativa=c.ativa,
                 arquivada_em=c.arquivada_em,
@@ -248,7 +254,12 @@ async def listar_conversas_b2c_loja(
 
     stmt = (
         select(Conversa)
-        .where(Conversa.loja_id == ctx.loja_id, Conversa.tipo == TipoConversa.B2C)
+        .where(
+            Conversa.loja_id == ctx.loja_id,
+            Conversa.tipo == TipoConversa.B2C,
+            Conversa.deletada_em == None,
+            Conversa.excluido == False,
+        )
         .order_by(Conversa.updated_at.desc())
     )
     res = await db.execute(stmt)
@@ -267,7 +278,7 @@ async def listar_conversas_b2c_loja(
 
     veiculos_por_id: dict[str, Veiculo] = {}
     if veiculo_ids:
-        veiculos_res = await db.execute(select(Veiculo).where(Veiculo.id.in_(veiculo_ids)))
+        veiculos_res = await db.execute(select(Veiculo).options(selectinload(Veiculo.midias)).where(Veiculo.id.in_(veiculo_ids)))
         veiculos_por_id = {v.id: v for v in veiculos_res.scalars().all()}
 
     # Não-lidas = mensagens enviadas pelo cliente de cada conversa (perspectiva do lojista).
@@ -313,6 +324,7 @@ async def listar_conversas_b2c_loja(
             veiculo_id=c.veiculo_id,
             veiculo_marca=veiculo.marca if veiculo else None,
             veiculo_modelo=veiculo.modelo if veiculo else None,
+            veiculo_foto=veiculo.midias[0].url if veiculo and getattr(veiculo, "midias", None) and len(veiculo.midias) > 0 else None,
             veiculo_status=veiculo.status.value if veiculo and veiculo.status else None,
             ativa=c.ativa,
             arquivada_em=c.arquivada_em,
@@ -891,3 +903,46 @@ async def meus_veiculos(
             valor_fipe_atual=fipe_val,
         ))
     return out
+
+
+@router.post("/chat/conversas/{conversa_id}/arquivar")
+async def arquivar_conversa_b2c(
+    conversa_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Arquiva manualmente uma conversa."""
+    from models import utcnow
+    stmt = select(Conversa).where(Conversa.id == conversa_id)
+    res = await db.execute(stmt)
+    conv = res.scalar_one_or_none()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    conv.arquivada_em = utcnow()
+    conv.motivo_arquivo = "manual"
+    conv.ativa = False
+    await db.commit()
+    return {"sucesso": True, "id": conversa_id, "status": "arquivada"}
+
+
+@router.post("/chat/conversas/{conversa_id}/excluir")
+async def excluir_conversa_b2c(
+    conversa_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Aplica exclusão lógica (soft delete) em uma conversa."""
+    from models import utcnow
+    stmt = select(Conversa).where(Conversa.id == conversa_id)
+    res = await db.execute(stmt)
+    conv = res.scalar_one_or_none()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+
+    conv.deletada_em = utcnow()
+    conv.excluido = True
+    conv.ativa = False
+    await db.commit()
+    return {"sucesso": True, "id": conversa_id, "status": "excluida"}
+

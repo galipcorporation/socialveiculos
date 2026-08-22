@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
-  FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View,
+  FlatList, Image, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -36,8 +36,8 @@ const MOTIVO_ARQUIVO_LABEL: Record<string, string> = {
   indisponivel: 'Veículo fora do anúncio',
 }
 
-export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
-  const { id, nome, tipo, veiculoInteresse, temPropostaVinculada, arquivada, motivoArquivo } = route.params
+export default function ConversaScreen({ route, navigation }: RootScreenProps<'Conversa'>) {
+  const { id, nome, tipo, veiculoId, veiculoInteresse, veiculoFoto, temPropostaVinculada, arquivada, motivoArquivo } = route.params
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
   const queryClient = useQueryClient()
@@ -45,29 +45,32 @@ export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
   const [texto, setTexto] = useState('')
   const [statusNegociacao, setStatusNegociacao] = useState(route.params.statusNegociacao ?? null)
   const [seletorAberto, setSeletorAberto] = useState(false)
+  const [modalGerenciarVisivel, setModalGerenciarVisivel] = useState(false)
 
   const statusMut = useMutation({
     mutationFn: (novoStatus: string | null) => chatService.marcarStatusNegociacao(id, novoStatus),
-    onSuccess: (conv) => {
-      setStatusNegociacao(conv.status_negociacao ?? null)
+    onSuccess: (convAtualizada) => {
+      setStatusNegociacao(convAtualizada.status_negociacao ?? null)
       setSeletorAberto(false)
-      queryClient.invalidateQueries({ queryKey: ['chat', 'conversas'] })
+      queryClient.invalidateQueries({ queryKey: ['chat'] })
     },
   })
 
   const q = useQuery({
     queryKey: ['chat', 'mensagens', id],
     queryFn: () => chatService.mensagens(id),
+    refetchInterval: 6000,
   })
 
-  // Tempo real: a conversa com parceiro trafega no WS B2B; a de cliente, no B2C.
   useChatSocket({
-    canal: tipo === 'parceiro' ? 'b2b' : 'vitrine',
-    chaveMensagens: ['chat', 'mensagens', id],
     conversaId: id,
-    chavesInvalidar: [['chat', 'conversas'], ['chat', 'nao-lidas']],
-    autorProprio: 'loja',
-    autorRemoto: 'cliente',
+    onNovaMensagem: (msg) => {
+      queryClient.setQueryData<Mensagem[]>(['chat', 'mensagens', id], (old) => {
+        if (!old) return [msg]
+        if (old.some((m) => m.id === msg.id)) return old
+        return [...old, msg]
+      })
+    },
   })
 
   useEffect(() => {
@@ -79,27 +82,13 @@ export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
 
   const enviarMut = useMutation({
     mutationFn: (t: string) => chatService.enviar(id, t),
-    onMutate: async (t) => {
-      // Otimista: mostra a mensagem na hora
-      const chave = ['chat', 'mensagens', id]
-      await queryClient.cancelQueries({ queryKey: chave })
-      const anteriores = queryClient.getQueryData<Mensagem[]>(chave)
-      const otimista: Mensagem = {
-        id: `tmp-${Date.now()}`,
-        conversa_id: id,
-        autor: 'loja',
-        texto: t,
-        created_at: new Date().toISOString(),
-        lida: true,
-      }
-      queryClient.setQueryData<Mensagem[]>(chave, (velho) => [...(velho ?? []), otimista])
-      return { anteriores }
-    },
-    onError: (_e, _t, ctx) => {
-      if (ctx?.anteriores) queryClient.setQueryData(['chat', 'mensagens', id], ctx.anteriores)
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat'] })
+    onSuccess: (nova) => {
+      queryClient.setQueryData<Mensagem[]>(['chat', 'mensagens', id], (old) => {
+        if (!old) return [nova]
+        if (old.some((m) => m.id === nova.id)) return old
+        return [...old, nova]
+      })
+      queryClient.invalidateQueries({ queryKey: ['chat', 'conversas'] })
     },
   })
 
@@ -114,36 +103,61 @@ export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
 
   return (
     <Screen scroll={false} padded={false}>
-      <AppHeader title={nome ?? 'Conversa'} large={false} back />
-      {tipo === 'parceiro' ? (
+      <AppHeader
+        title={nome ?? 'Conversa'}
+        large={false}
+        back
+        right={
+          <Pressable
+            onPress={() => setModalGerenciarVisivel(true)}
+            hitSlop={12}
+            style={{ padding: 4 }}
+          >
+            <Ionicons name="trash-outline" size={20} color={colors.error} />
+          </Pressable>
+        }
+      />
+      {(veiculoInteresse || veiculoFoto) ? (
         <View style={[styles.contexto, { borderBottomColor: colors.border }]}>
-          {veiculoInteresse ? (
-            <Txt variant="caption" color="textDim" numberOfLines={1} style={{ flex: 1 }}>
-              🚗 {veiculoInteresse}
+          <Pressable
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}
+            onPress={() => {
+              if (veiculoId) {
+                navigation.navigate('CarroDetalhe', { id: veiculoId })
+              }
+            }}
+          >
+            {veiculoFoto ? (
+              <Image source={{ uri: veiculoFoto }} style={{ width: 32, height: 24, borderRadius: 4 }} />
+            ) : (
+              <Ionicons name="car-outline" size={18} color={colors.primary} />
+            )}
+            <Txt variant="caption" color="primary" numberOfLines={1} style={{ flex: 1, fontFamily: fonts.bold }}>
+              {veiculoInteresse ?? 'Ver veículo'}
             </Txt>
-          ) : (
-            <View style={{ flex: 1 }} />
-          )}
-          {temPropostaVinculada ? (
-            statusNegociacao ? (
-              <View style={[styles.statusBadge, { borderColor: corStatusNegociacao(statusNegociacao, colors) }]}>
-                <Txt style={{ fontSize: 11, fontFamily: fonts.bold, color: corStatusNegociacao(statusNegociacao, colors) }}>
-                  {STATUS_NEGOCIACAO_LABEL[statusNegociacao] ?? statusNegociacao}
-                </Txt>
-              </View>
-            ) : null
-          ) : (
-            <Pressable onPress={() => setSeletorAberto((v) => !v)}>
-              {statusNegociacao ? (
+          </Pressable>
+          {tipo === 'parceiro' && (
+            temPropostaVinculada ? (
+              statusNegociacao ? (
                 <View style={[styles.statusBadge, { borderColor: corStatusNegociacao(statusNegociacao, colors) }]}>
                   <Txt style={{ fontSize: 11, fontFamily: fonts.bold, color: corStatusNegociacao(statusNegociacao, colors) }}>
                     {STATUS_NEGOCIACAO_LABEL[statusNegociacao] ?? statusNegociacao}
                   </Txt>
                 </View>
-              ) : (
-                <Txt variant="caption" color="primary">Marcar status…</Txt>
-              )}
-            </Pressable>
+              ) : null
+            ) : (
+              <Pressable onPress={() => setSeletorAberto((v) => !v)}>
+                {statusNegociacao ? (
+                  <View style={[styles.statusBadge, { borderColor: corStatusNegociacao(statusNegociacao, colors) }]}>
+                    <Txt style={{ fontSize: 11, fontFamily: fonts.bold, color: corStatusNegociacao(statusNegociacao, colors) }}>
+                      {STATUS_NEGOCIACAO_LABEL[statusNegociacao] ?? statusNegociacao}
+                    </Txt>
+                  </View>
+                ) : (
+                  <Txt variant="caption" color="primary">Marcar status…</Txt>
+                )}
+              </Pressable>
+            )
           )}
         </View>
       ) : null}
@@ -189,64 +203,98 @@ export default function ConversaScreen({ route }: RootScreenProps<'Conversa'>) {
         {/* Conversa arquivada: o veículo saiu do estoque e o chat vira histórico.
             Oferecer outro carro é conversa nova, aberta pelo lead no CRM. */}
         {arquivada ? (
-          <View
-            style={[
-              styles.arquivada,
-              {
-                backgroundColor: colors.surface,
-                borderTopColor: colors.border,
-                paddingBottom: insets.bottom + spacing.sm,
-              },
-            ]}
-          >
-            <Ionicons name="archive-outline" size={18} color={colors.textMuted} />
-            <View style={{ flex: 1 }}>
-              <Txt variant="bodySemibold">
-                {MOTIVO_ARQUIVO_LABEL[motivoArquivo ?? ''] ?? 'Conversa arquivada'}
-              </Txt>
-              <Txt variant="caption" color="textDim">
-                Só leitura. Para oferecer outro veículo, retome o cliente pelo CRM.
-              </Txt>
-            </View>
+          <View style={[styles.arquivada, { borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, spacing.xs) }]}>
+            <Ionicons name="archive-outline" size={20} color={colors.textDim} />
+            <Txt variant="caption" color="textDim" style={{ flex: 1 }}>
+              {motivoArquivo ? (MOTIVO_ARQUIVO_LABEL[motivoArquivo] ?? motivoArquivo) : 'Conversa arquivada'}. Histórico mantido para consulta.
+            </Txt>
           </View>
         ) : (
-        <View
-          style={[
-            styles.composer,
-            {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
-              paddingBottom: insets.bottom + spacing.xs,
-            },
-          ]}
-        >
-          <TextInput
-            value={texto}
-            onChangeText={setTexto}
-            placeholder="Escreva uma mensagem…"
-            placeholderTextColor={colors.textMuted}
-            multiline
-            style={[
-              styles.input,
-              { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border },
-            ]}
-          />
-          <Pressable
-            onPress={enviar}
-            disabled={!texto.trim()}
-            style={({ pressed }) => [
-              styles.enviar,
-              {
-                backgroundColor: texto.trim() ? colors.primary : colors.overlay,
-                transform: [{ scale: pressed ? 0.92 : 1 }],
-              },
-            ]}
-          >
-            <Ionicons name="send" size={18} color={texto.trim() ? colors.onPrimary : colors.textMuted} />
-          </Pressable>
-        </View>
+          <View style={[styles.composer, { borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, spacing.xs) }]}>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+              value={texto}
+              onChangeText={setTexto}
+              placeholder="Digite sua mensagem…"
+              placeholderTextColor={colors.textMuted}
+              multiline
+            />
+            <Pressable
+              onPress={enviar}
+              disabled={!texto.trim() || enviarMut.isPending}
+              style={[
+                styles.enviar,
+                { backgroundColor: texto.trim() ? colors.primary : colors.overlay },
+              ]}
+            >
+              <Ionicons
+                name="send"
+                size={18}
+                color={texto.trim() ? colors.onPrimary : colors.textMuted}
+              />
+            </Pressable>
+          </View>
         )}
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={modalGerenciarVisivel}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalGerenciarVisivel(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setModalGerenciarVisivel(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <Txt variant="title" style={{ marginBottom: 4 }}>Gerenciar Conversa</Txt>
+            <Txt variant="body" color="textDim" style={{ marginBottom: 20 }}>
+              Escolha o que deseja fazer com a conversa de {nome ?? 'este contato'}:
+            </Txt>
+
+            <Pressable
+              style={[styles.modalOption, { borderColor: colors.border }]}
+              onPress={async () => {
+                setModalGerenciarVisivel(false)
+                try {
+                  await chatService.arquivar(id)
+                  queryClient.invalidateQueries({ queryKey: ['chat'] })
+                  navigation.goBack()
+                } catch {}
+              }}
+            >
+              <Ionicons name="archive-outline" size={22} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Txt variant="bodySemibold">Arquivar Conversa</Txt>
+                <Txt variant="caption" color="textDim">Move para a seção de conversas arquivadas.</Txt>
+              </View>
+            </Pressable>
+
+            <Pressable
+              style={[styles.modalOption, { borderColor: colors.error + '40' }]}
+              onPress={async () => {
+                setModalGerenciarVisivel(false)
+                try {
+                  await chatService.excluir(id)
+                  queryClient.invalidateQueries({ queryKey: ['chat'] })
+                  navigation.goBack()
+                } catch {}
+              }}
+            >
+              <Ionicons name="trash-outline" size={22} color={colors.error} />
+              <View style={{ flex: 1 }}>
+                <Txt variant="bodySemibold" color="error">Excluir Conversa</Txt>
+                <Txt variant="caption" color="textDim">Remove da sua listagem (soft delete no banco).</Txt>
+              </View>
+            </Pressable>
+
+            <Pressable
+              style={[styles.modalCancel, { backgroundColor: colors.overlay }]}
+              onPress={() => setModalGerenciarVisivel(false)}
+            >
+              <Txt variant="bodySemibold" color="textDim">Cancelar</Txt>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   )
 }
@@ -378,5 +426,32 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    gap: 12,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+  },
+  modalCancel: {
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    marginTop: spacing.xs,
   },
 })

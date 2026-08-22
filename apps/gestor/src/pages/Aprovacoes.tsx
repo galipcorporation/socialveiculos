@@ -37,7 +37,8 @@ export function Aprovacoes() {
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoAprovacao[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [mostrarHistorico, setMostrarHistorico] = useState(false)
+  const [filtroStatus, setFiltroStatus] = useState<'pendente' | 'aprovado' | 'rejeitado' | 'todos'>('pendente')
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   
   // Controle de rejeição individual
   const [rejeitandoId, setRejeitandoId] = useState<string | null>(null)
@@ -51,7 +52,7 @@ export function Aprovacoes() {
     setLoading(true)
     setError(null)
     try {
-      const endpoint = mostrarHistorico ? '/aprovacoes/historico' : '/aprovacoes/pendentes'
+      const endpoint = filtroStatus === 'pendente' ? '/aprovacoes/pendentes' : '/aprovacoes/historico'
       const data = await api.get<SolicitacaoAprovacao[]>(endpoint)
       setSolicitacoes(data)
     } catch (err: unknown) {
@@ -64,7 +65,68 @@ export function Aprovacoes() {
 
   useEffect(() => {
     carregarSolicitacoes()
-  }, [mostrarHistorico])
+    setSelectedIds([])
+  }, [filtroStatus])
+
+  const solicitacoesFiltradas = solicitacoes.filter(s => {
+    if (filtroStatus === 'todos') return true
+    return s.status === filtroStatus
+  })
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === solicitacoesFiltradas.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(solicitacoesFiltradas.map(s => s.id))
+    }
+  }
+
+  const toggleSelectCard = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
+  }
+
+  const handleBulkAprovar = async () => {
+    if (selectedIds.length === 0) return
+    const ok = await confirm({
+      title: 'Aprovar em Lote',
+      message: `Deseja realmente APROVAR as ${selectedIds.length} solicitação(ões) selecionada(s)?`,
+      confirmText: 'Aprovar Todas',
+      cancelText: 'Cancelar',
+    })
+    if (!ok) return
+    try {
+      await Promise.all(selectedIds.map(id => api.post(`/aprovacoes/${id}/processar`, { status: 'aprovado' })))
+      showToast(`${selectedIds.length} solicitação(ões) aprovada(s) com sucesso!`, 'success')
+      setSelectedIds([])
+      carregarSolicitacoes()
+    } catch (err) {
+      showToast('Erro ao processar aprovações em lote', 'error')
+    }
+  }
+
+  const handleBulkRejeitar = async () => {
+    if (selectedIds.length === 0) return
+    const justificativaLote = prompt('Informe a justificativa de rejeição para o lote:')
+    if (!justificativaLote || !justificativaLote.trim()) {
+      showToast('Justificativa é obrigatória para rejeição.', 'warning')
+      return
+    }
+    const ok = await confirm({
+      title: 'Rejeitar em Lote',
+      message: `Deseja realmente REJEITAR as ${selectedIds.length} solicitação(ões) selecionada(s)?`,
+      confirmText: 'Rejeitar Todas',
+      cancelText: 'Cancelar',
+    })
+    if (!ok) return
+    try {
+      await Promise.all(selectedIds.map(id => api.post(`/aprovacoes/${id}/processar`, { status: 'rejeitado', justificativa_rejeicao: justificativaLote.trim() })))
+      showToast(`${selectedIds.length} solicitação(ões) rejeitada(s).`, 'success')
+      setSelectedIds([])
+      carregarSolicitacoes()
+    } catch (err) {
+      showToast('Erro ao rejeitar solicitações em lote', 'error')
+    }
+  }
 
   const handleAprovar = async (id: string) => {
     const ok = await confirm({
@@ -77,7 +139,6 @@ export function Aprovacoes() {
     setProcessandoId(id)
     try {
       await api.post(`/aprovacoes/${id}/processar`, { status: 'aprovado' })
-      // Remover da lista local
       setSolicitacoes((prev) => prev.filter((item) => item.id !== id))
       showToast('Solicitação aprovada com sucesso!', 'success')
     } catch (err: unknown) {
@@ -99,9 +160,7 @@ export function Aprovacoes() {
         status: 'rejeitado',
         justificativa_rejeicao: justificativa,
       })
-      // Remover da lista local
       setSolicitacoes((prev) => prev.filter((item) => item.id !== id))
-      // Fechar painel de justificativa
       setRejeitandoId(null)
       setJustificativa('')
       showToast('Solicitação rejeitada com sucesso.', 'success')
@@ -128,20 +187,30 @@ export function Aprovacoes() {
       {/* Header */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h2>{mostrarHistorico ? 'Histórico de Aprovações' : 'Fila de Aprovações'}</h2>
+          <h2>Central de Aprovações</h2>
           <p>
-            {mostrarHistorico
-              ? 'Histórico de ações críticas aprovadas ou rejeitadas pelos gestores da loja.'
-              : 'Revisão de ações críticas e reajustes de preços solicitados pelos vendedores da loja.'}
+            Gerencie solicitações de crédito/financiamento, propostas, reajustes de preços e ações críticas da loja.
           </p>
         </div>
-        <button
-          className={mostrarHistorico ? 'btn btn-outline' : 'btn btn-primary'}
-          onClick={() => setMostrarHistorico(!mostrarHistorico)}
-          style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
-        >
-          {mostrarHistorico ? 'Ver pendentes' : 'Ver histórico'}
-        </button>
+
+        {/* Status Filter Tabs */}
+        <div style={{ display: 'flex', gap: 6, background: 'var(--sv-surface-dim)', padding: 4, borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
+          {[
+            { id: 'pendente', label: 'Pendentes' },
+            { id: 'aprovado', label: 'Aprovados' },
+            { id: 'rejeitado', label: 'Rejeitados' },
+            { id: 'todos', label: 'Todos' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              className={`btn btn-sm ${filtroStatus === tab.id ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: 12, padding: '6px 14px' }}
+              onClick={() => setFiltroStatus(tab.id as any)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && (
@@ -159,89 +228,117 @@ export function Aprovacoes() {
         <div style={{ display: 'flex', justifyContent: 'center', padding: '64px' }}>
           <div className="spinner"></div>
         </div>
-      ) : solicitacoes.length === 0 ? (
+      ) : solicitacoesFiltradas.length === 0 ? (
         <div className="empty-state glass-card">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <h3>{mostrarHistorico ? 'Histórico vazio' : 'Nenhuma solicitação pendente'}</h3>
-          <p>
-            {mostrarHistorico
-              ? 'Nenhuma solicitação foi aprovada ou rejeitada até o momento.'
-              : 'Tudo em ordem! Não há reajustes de preço ou exclusões aguardando aprovação.'}
-          </p>
+          <h3>Nenhuma solicitação encontrada</h3>
+          <p>Não há solicitações para o filtro de status selecionado.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '24px' }}>
-          {solicitacoes.map((item) => {
-            const precoProposto = parsePrecoProposto(item.dados_novos)
-            const isExcluir = item.tipo_acao === 'excluir_veiculo'
-            const isProcessando = processandoId === item.id
-            const isRejeitando = rejeitandoId === item.id
+        <>
+          {/* Top selection bar */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--sv-text-dim)' }}>
+              <input
+                type="checkbox"
+                checked={solicitacoesFiltradas.length > 0 && selectedIds.length === solicitacoesFiltradas.length}
+                onChange={toggleSelectAll}
+                style={{ width: 16, height: 16, accentColor: 'var(--sv-primary)', cursor: 'pointer' }}
+              />
+              Selecionar todos ({solicitacoesFiltradas.length})
+            </label>
+          </div>
 
-            const badgeBg = item.status === 'aprovado'
-              ? 'rgba(16, 185, 129, 0.15)'
-              : item.status === 'rejeitado'
-              ? 'rgba(244, 63, 94, 0.15)'
-              : 'rgba(245, 158, 11, 0.15)'
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '20px' }}>
+            {solicitacoesFiltradas.map((item) => {
+              const precoProposto = parsePrecoProposto(item.dados_novos)
+              const isExcluir = item.tipo_acao === 'excluir_veiculo'
+              const isProcessando = processandoId === item.id
+              const isRejeitando = rejeitandoId === item.id
+              const isSelected = selectedIds.includes(item.id)
 
-            const badgeColor = item.status === 'aprovado'
-              ? '#10b981'
-              : item.status === 'rejeitado'
-              ? 'var(--sv-error)'
-              : 'var(--sv-warning)'
+              const badgeBg = item.status === 'aprovado'
+                ? 'rgba(16, 185, 129, 0.15)'
+                : item.status === 'rejeitado'
+                ? 'rgba(244, 63, 94, 0.15)'
+                : 'rgba(245, 158, 11, 0.15)'
 
-            return (
-              <div key={item.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '8px',
-                      background: isExcluir ? 'rgba(244, 63, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: isExcluir ? 'var(--sv-error)' : 'var(--sv-warning)'
+              const badgeColor = item.status === 'aprovado'
+                ? '#10b981'
+                : item.status === 'rejeitado'
+                ? 'var(--sv-error)'
+                : 'var(--sv-warning)'
+
+              return (
+                <div
+                  key={item.id}
+                  className="glass-card"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                    border: isSelected ? '1px solid var(--sv-primary)' : '1px solid var(--sv-border)',
+                    background: isSelected ? 'color-mix(in srgb, var(--sv-primary) 6%, var(--sv-surface-dim))' : 'var(--sv-surface-dim)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelectCard(item.id)}
+                        style={{ width: 16, height: 16, accentColor: 'var(--sv-primary)', cursor: 'pointer' }}
+                      />
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '8px',
+                        background: isExcluir ? 'rgba(244, 63, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: isExcluir ? 'var(--sv-error)' : 'var(--sv-warning)'
+                      }}>
+                        {isExcluir ? (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                            <line x1="10" y1="11" x2="10" y2="17" />
+                            <line x1="14" y1="11" x2="14" y2="17" />
+                          </svg>
+                        ) : (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="12" y1="1" x2="12" y2="23" />
+                            <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+                          </svg>
+                        )}
+                      </div>
+                      <div>
+                        <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--sv-text)' }}>
+                          {isExcluir ? 'Solicitação de Exclusão' : 'Alteração de Preço'}
+                        </h4>
+                        {item.veiculo_marca ? (
+                          <div style={{ fontSize: '12px', color: 'var(--sv-primary-text)', fontWeight: 600, marginTop: '2px' }}>
+                            {item.veiculo_marca} {item.veiculo_modelo} {item.veiculo_ano ? `(${item.veiculo_ano})` : ''} {item.veiculo_placa ? `· Placa: ${item.veiculo_placa.toUpperCase()}` : ''}
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)' }}>
+                            ID do Veículo: {item.entidade_id.substring(0, 8)}...
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="alerts-badge" style={{
+                      background: badgeBg,
+                      color: badgeColor,
+                      fontSize: '11px'
                     }}>
-                      {isExcluir ? (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                          <line x1="10" y1="11" x2="10" y2="17" />
-                          <line x1="14" y1="11" x2="14" y2="17" />
-                        </svg>
-                      ) : (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <line x1="12" y1="1" x2="12" y2="23" />
-                          <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
-                        </svg>
-                      )}
-                    </div>
-                    <div>
-                      <h4 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--sv-text)' }}>
-                        {isExcluir ? 'Solicitação de Exclusão' : 'Alteração de Preço'}
-                      </h4>
-                      {item.veiculo_marca ? (
-                        <div style={{ fontSize: '12px', color: 'var(--sv-primary-text)', fontWeight: 600, marginTop: '2px' }}>
-                          {item.veiculo_marca} {item.veiculo_modelo} {item.veiculo_ano ? `(${item.veiculo_ano})` : ''} {item.veiculo_placa ? `· Placa: ${item.veiculo_placa.toUpperCase()}` : ''}
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: '11px', color: 'var(--sv-text-muted)' }}>
-                          ID do Veículo: {item.entidade_id.substring(0, 8)}...
-                        </span>
-                      )}
-                    </div>
+                      {item.status.toUpperCase()}
+                    </span>
                   </div>
-                  <span className="alerts-badge" style={{
-                    background: badgeBg,
-                    color: badgeColor,
-                    fontSize: '11px'
-                  }}>
-                    {item.status.toUpperCase()}
-                  </span>
-                </div>
 
                 <div style={{ borderTop: '1px solid var(--sv-border)', paddingTop: '12px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', color: 'var(--sv-text-dim)' }}>
@@ -375,7 +472,41 @@ export function Aprovacoes() {
             )
           })}
         </div>
-      )}
-    </div>
-  )
+
+        {selectedIds.length > 0 && (
+          <div className="sv-selection-bar" style={{
+            position: 'sticky',
+            bottom: 20,
+            marginTop: 20,
+            background: 'var(--sv-surface-dim)',
+            border: '1px solid var(--sv-border)',
+            backdropFilter: 'blur(var(--sv-blur))',
+            padding: '12px 20px',
+            borderRadius: 'var(--sv-radius-lg)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            zIndex: 20,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
+          }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>
+              {selectedIds.length} solicitação(ões) selecionada(s)
+            </span>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-primary btn-sm" onClick={handleBulkAprovar}>
+                ✓ Aprovar Selecionadas
+              </button>
+              <button className="btn btn-danger btn-sm" onClick={handleBulkRejeitar}>
+                ✕ Rejeitar Selecionadas
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds([])}>
+                Limpar Seleção
+              </button>
+            </div>
+          </div>
+        )}
+      </>
+    )}
+  </div>
+)
 }

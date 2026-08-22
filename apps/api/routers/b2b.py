@@ -819,7 +819,8 @@ async def _contexto_negociacao_conversas(db: AsyncSession, conversas: list) -> d
                 veiculo_resumo = VeiculoResumo(
                     id=v.id, marca=v.marca, modelo=v.modelo,
                     ano_modelo=v.ano_modelo, placa=v.placa,
-                    foto=v.midias[0].url if getattr(v, "midias", None) else None,
+                    foto=v.midias[0].url if getattr(v, "midias", None) and len(v.midias) > 0 else None,
+                    loja_id=v.loja_id,
                 )
             contexto[conv.id] = (veiculo_resumo, proposta.status.value)
         elif conv.status_manual:
@@ -879,7 +880,8 @@ async def listar_conversas_b2b(
         select(Conversa)
         .where(
             Conversa.tipo == TipoConversa.B2B,
-            Conversa.ativa == True,
+            Conversa.deletada_em == None,
+            Conversa.excluido == False,
             or_(
                 Conversa.loja_a_id == context.loja_id,
                 Conversa.loja_b_id == context.loja_id

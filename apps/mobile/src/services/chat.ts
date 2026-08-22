@@ -10,8 +10,10 @@ interface ConversaB2CDTO {
   id: string
   loja_id?: string | null
   cliente_nome?: string | null
+  veiculo_id?: string | null
   veiculo_marca?: string | null
   veiculo_modelo?: string | null
+  veiculo_foto?: string | null
   ultima_mensagem?: string | null
   ultima_mensagem_data?: string | null
   mensagens_nao_lidas?: number
@@ -28,7 +30,7 @@ interface ConversaB2BDTO {
   ultima_mensagem_data?: string | null
   mensagens_nao_lidas?: number
   proposta_id?: string | null
-  veiculo?: { marca?: string | null; modelo?: string | null; ano_modelo?: number | null } | null
+  veiculo?: { id?: string | null; marca?: string | null; modelo?: string | null; ano_modelo?: number | null; foto?: string | null; loja_id?: string | null } | null
   status_negociacao?: string | null
 }
 interface MensagemDTO {
@@ -76,7 +78,10 @@ function mapConversaB2C(c: ConversaB2CDTO): Conversa {
     id: c.id,
     tipo: 'cliente',
     cliente_nome: c.cliente_nome ?? 'Cliente',
+    veiculo_id: c.veiculo_id ?? undefined,
     veiculo_interesse: veiculo,
+    veiculo_foto: c.veiculo_foto ?? undefined,
+    veiculo_loja_id: c.loja_id ?? undefined,
     canal: 'chat',
     ultima_mensagem: c.ultima_mensagem ?? '',
     ultima_mensagem_em: c.ultima_mensagem_data ?? new Date(0).toISOString(),
@@ -99,7 +104,10 @@ function mapConversaB2B(c: ConversaB2BDTO, lojaPropriaNome?: string): Conversa {
     tipo: 'parceiro',
     cliente_nome: parceira ?? 'Parceiro',
     loja_parceira_nome: parceira ?? undefined,
+    veiculo_id: c.veiculo?.id ?? undefined,
     veiculo_interesse: veiculo || undefined,
+    veiculo_foto: c.veiculo?.foto ?? undefined,
+    veiculo_loja_id: c.veiculo?.loja_id ?? undefined,
     canal: 'chat',
     ultima_mensagem: c.ultima_mensagem ?? '',
     ultima_mensagem_em: c.ultima_mensagem_data ?? new Date(0).toISOString(),
@@ -175,5 +183,13 @@ export const chatService = {
       status_manual: status,
     })
     return mapConversaB2B(c)
+  },
+
+  async arquivar(conversaId: string): Promise<void> {
+    await api.post(`${basePath(conversaId)}/arquivar`, {})
+  },
+
+  async excluir(conversaId: string): Promise<void> {
+    await api.post(`${basePath(conversaId)}/excluir`, {})
   },
 }

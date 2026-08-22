@@ -365,7 +365,10 @@ export interface Conversa {
   tipo: TipoConversa
   cliente_nome: string
   cliente_telefone?: string
+  veiculo_id?: string
   veiculo_interesse?: string
+  veiculo_foto?: string
+  veiculo_loja_id?: string
   /** Para tipo 'parceiro': nome da loja parceira (B2B). */
   loja_parceira_nome?: string
   canal: 'chat' | 'whatsapp'

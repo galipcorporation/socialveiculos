@@ -4082,3 +4082,191 @@ input[type="date"] {
 .rich-var::before { content: "{"; opacity: .5; margin-right: 2px; }
 .rich-var::after { content: "}"; opacity: .5; margin-left: 2px; }
 
+/* ═══════════════════════════════════════════════════════════════
+   CAMPOS DE DATA / MÊS (Dark Mode & Usabilidade)
+   ═══════════════════════════════════════════════════════════════ */
+input[type="date"],
+input[type="month"],
+input[type="datetime-local"] {
+  color-scheme: dark;
+  background: var(--sv-input-bg);
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius);
+  color: var(--sv-text);
+  font-family: var(--sv-font);
+  font-size: 13.5px;
+  padding: 6px 12px;
+  outline: none;
+  transition: border-color var(--sv-transition), box-shadow var(--sv-transition);
+}
+
+[data-theme='light'] input[type="date"],
+[data-theme='light'] input[type="month"],
+[data-theme='light'] input[type="datetime-local"] {
+  color-scheme: light;
+}
+
+input[type="date"]:focus,
+input[type="month"]:focus,
+input[type="datetime-local"]:focus {
+  border-color: var(--sv-primary);
+  box-shadow: 0 0 0 3px var(--sv-primary-glow);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(0.85);
+  opacity: 0.75;
+  transition: opacity var(--sv-transition);
+  padding: 2px;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="month"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PAGINAÇÃO (Velocity Glass Design)
+   ═══════════════════════════════════════════════════════════════ */
+.sv-pagination-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: var(--sv-surface-solid);
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-lg);
+  font-size: 13px;
+  color: var(--sv-text-dim);
+}
+
+.sv-pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sv-pagination-limit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sv-pagination-select {
+  background: var(--sv-input-bg);
+  border: 1px solid var(--sv-border);
+  border-radius: var(--sv-radius-sm);
+  color: var(--sv-text);
+  font-family: var(--sv-font);
+  font-size: 12.5px;
+  padding: 3px 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+.sv-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sv-pagination-btn {
+  padding: 6px 10px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sv-pagination-numbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sv-pagination-num {
+  padding: 4px 10px;
+  min-width: 32px;
+  height: 32px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--sv-radius-sm);
+}
+
+.sv-pagination-num.active {
+  background: var(--sv-primary);
+  color: #fff;
+  border-color: var(--sv-primary);
+  box-shadow: 0 0 12px var(--sv-primary-glow);
+}
+
+.sv-pagination-ellipsis {
+  padding: 0 4px;
+  color: var(--sv-text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BARRA DE SELEÇÃO E EXPORTAÇÃO EM LOTE
+   ═══════════════════════════════════════════════════════════════ */
+.sv-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px;
+  margin-bottom: 16px;
+  background: color-mix(in srgb, var(--sv-primary) 12%, var(--sv-surface-elevated));
+  border: 1px solid color-mix(in srgb, var(--sv-primary) 30%, var(--sv-border));
+  border-radius: var(--sv-radius-md);
+  box-shadow: var(--sv-shadow);
+  animation: sv-fade-in 0.2s ease-out;
+  flex-wrap: wrap;
+}
+
+@keyframes sv-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sv-selection-count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--sv-primary-text);
+}
+
+.sv-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Checkbox estilizado */
+.sv-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--sv-primary);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+/* Esteira Operacional Cards */
+.sv-esteira-card:hover {
+  border-color: var(--sv-primary) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px var(--sv-primary-glow);
+}
+
+
+

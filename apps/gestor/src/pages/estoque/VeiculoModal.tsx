@@ -646,62 +646,167 @@ export function VeiculoModal({
             )}
 
             {/* ── Linha 6: Opcionais ── */}
-            <div className="veic-section">Opcionais</div>
+            <div className="veic-section">Opcionais do Veículo</div>
             <div className="form-group veic-c12">
-              <div className="opcionais">
-                {opcionais.map(o => (
-                  <span key={o} className="opc-tag">
-                    {o}
-                    <button type="button" className="opc-x" onClick={() => removerOpcional(o)} title="Remover">✕</button>
-                  </span>
-                ))}
-                <div style={{ display: 'flex', flex: 1, minWidth: 160, gap: 4 }}>
-                  <input
-                    className="opc-input"
-                    type="text"
-                    placeholder="+ Adicionar opcional"
-                    value={novoOpcional}
-                    style={{ flex: 1, minWidth: 0 }}
-                    onChange={e => setNovoOpcional(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); adicionarOpcional() } }}
-                  />
-                  {novoOpcional.trim() && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                {[
+                  'Ar condicionado', 'Direção hidráulica', 'Freios ABS', 'Airbag',
+                  'Vidros elétricos', 'Trava elétrica', 'Alarme', 'Bancos de couro',
+                  'Teto solar', 'Central multimídia', 'Câmera de ré', 'Sensor de ré',
+                  'Rodas de liga leve', 'Piloto automático', 'Farol de neblina',
+                  'Computador de bordo', 'Volante multifuncional', 'Retrovisores elétricos'
+                ].map(tag => {
+                  const selected = opcionais.includes(tag)
+                  return (
                     <button
+                      key={tag}
                       type="button"
-                      className="btn btn-glass btn-sm"
-                      style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
-                      onClick={adicionarOpcional}
+                      onClick={() => {
+                        if (selected) {
+                          setOpcionais(prev => prev.filter(o => o !== tag))
+                        } else {
+                          setOpcionais(prev => [...prev, tag])
+                        }
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 'var(--sv-radius-full)',
+                        border: selected ? '1px solid var(--sv-primary)' : '1px solid var(--sv-border)',
+                        background: selected ? 'color-mix(in srgb, var(--sv-primary) 15%, var(--sv-surface-dim))' : 'var(--sv-surface-dim)',
+                        color: selected ? 'var(--sv-primary)' : 'var(--sv-text-muted)',
+                        fontSize: 12,
+                        fontWeight: selected ? 600 : 400,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
                     >
-                      +
+                      {selected ? '✓ ' : '+ '}{tag}
                     </button>
-                  )}
+                  )
+                })}
+              </div>
+
+              {opcionais.filter(o => ![
+                'Ar condicionado', 'Direção hidráulica', 'Freios ABS', 'Airbag',
+                'Vidros elétricos', 'Trava elétrica', 'Alarme', 'Bancos de couro',
+                'Teto solar', 'Central multimídia', 'Câmera de ré', 'Sensor de ré',
+                'Rodas de liga leve', 'Piloto automático', 'Farol de neblina',
+                'Computador de bordo', 'Volante multifuncional', 'Retrovisores elétricos'
+              ].includes(o)).length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                  {opcionais.filter(o => ![
+                    'Ar condicionado', 'Direção hidráulica', 'Freios ABS', 'Airbag',
+                    'Vidros elétricos', 'Trava elétrica', 'Alarme', 'Bancos de couro',
+                    'Teto solar', 'Central multimídia', 'Câmera de ré', 'Sensor de ré',
+                    'Rodas de liga leve', 'Piloto automático', 'Farol de neblina',
+                    'Computador de bordo', 'Volante multifuncional', 'Retrovisores elétricos'
+                  ].includes(o)).map(o => (
+                    <span key={o} className="opc-tag">
+                      {o}
+                      <button type="button" className="opc-x" onClick={() => removerOpcional(o)} title="Remover">✕</button>
+                    </span>
+                  ))}
                 </div>
+              )}
+
+              <div style={{ display: 'flex', maxWidth: 360, gap: 8, marginTop: 4 }}>
+                <input
+                  className="opc-input"
+                  type="text"
+                  placeholder="+ Outro opcional personalizado..."
+                  value={novoOpcional}
+                  style={{ flex: 1 }}
+                  onChange={e => setNovoOpcional(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); adicionarOpcional() } }}
+                />
+                {novoOpcional.trim() && (
+                  <button
+                    type="button"
+                    className="btn btn-glass btn-sm"
+                    onClick={adicionarOpcional}
+                  >
+                    Adicionar
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* ── Linha 7: Rede Social ── */}
-            <div className="veic-section" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span>Rede Social</span>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500, textTransform: 'none', color: 'var(--sv-text-dim)' }}>
-                <input
-                  type="checkbox"
-                  checked={publicarRedeSocial}
-                  onChange={e => setPublicarRedeSocial(e.target.checked)}
-                  disabled={midias.length === 0}
-                />
-                Publicar no story + feed de repasses
-              </label>
-              {midias.length === 0 && (
-                <span style={{ fontSize: 11, color: 'var(--sv-warning, #f59e0b)', textTransform: 'none', fontWeight: 400 }}>
-                  (Adicione pelo menos 1 foto para publicar)
-                </span>
-              )}
+            {/* ── Linha 7: Canais de Divulgação (Vitrine vs Repasse B2B) ── */}
+            <div className="veic-section" style={{ marginTop: 24, fontSize: 14, fontWeight: 700 }}>
+              Canais de Divulgação & Redes Sociais
+            </div>
+
+            <div className="form-group veic-c12" style={{ marginTop: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                
+                {/* Card 1: Vitrine Pública / Site da Loja (B2C) */}
+                <div style={{
+                  background: 'var(--sv-surface-dim)',
+                  border: '1px solid var(--sv-border)',
+                  borderRadius: 'var(--sv-radius-lg)',
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 14, color: 'var(--sv-text)' }}>
+                      <span style={{ fontSize: 18 }}>📱</span> Vitrine Pública & Site (B2C)
+                    </div>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--sv-text-muted)', lineHeight: 1.4 }}>
+                    Exibe este veículo no seu site próprio e na vitrine pública para <strong>clientes finais (compradores)</strong>.
+                  </p>
+                  <span style={{ fontSize: 11, color: 'var(--sv-success)', fontWeight: 600 }}>
+                    ✓ Visível na Vitrine Pública de Clientes
+                  </span>
+                </div>
+
+                {/* Card 2: Feed de Repasses & Rede Social B2B (Lojistas) */}
+                <div style={{
+                  background: publicarRedeSocial ? 'color-mix(in srgb, var(--sv-primary) 10%, var(--sv-surface-dim))' : 'var(--sv-surface-dim)',
+                  border: publicarRedeSocial ? '1px solid var(--sv-primary)' : '1px solid var(--sv-border)',
+                  borderRadius: 'var(--sv-radius-lg)',
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 14, color: 'var(--sv-text)' }}>
+                      <span style={{ fontSize: 18 }}>🤝</span> Rede Social & Repasse B2B
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: midias.length === 0 ? 'not-allowed' : 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={publicarRedeSocial}
+                        onChange={e => setPublicarRedeSocial(e.target.checked)}
+                        disabled={midias.length === 0}
+                        style={{ width: 18, height: 18, accentColor: 'var(--sv-primary)', cursor: 'pointer' }}
+                      />
+                    </label>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--sv-text-muted)', lineHeight: 1.4 }}>
+                    Publica no Feed de Repasses para <strong>negociar diretamente com lojistas parceiros</strong> do SocialVeículos.
+                  </p>
+                  {midias.length === 0 ? (
+                    <span style={{ fontSize: 11, color: 'var(--sv-warning)', fontWeight: 500 }}>
+                      ⚠️ Adicione ao menos 1 foto para publicar aos lojistas.
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: publicarRedeSocial ? 'var(--sv-primary)' : 'var(--sv-text-dim)', fontWeight: 600 }}>
+                      {publicarRedeSocial ? '🚀 Publicado no Feed de Lojistas' : '✕ Não publicado no Repasse'}
+                    </span>
+                  )}
+                </div>
+
+              </div>
             </div>
 
             {publicarRedeSocial && (
               <>
-                <div className="form-group veic-c6">
-                  <label>Legenda do story</label>
+                <div className="form-group veic-c6" style={{ marginTop: 12 }}>
+                  <label>Legenda do story (Parceiros)</label>
                   <input
                     type="text"
                     placeholder="Ex: Chegou! BMW 320i impecável..."
@@ -710,8 +815,8 @@ export function VeiculoModal({
                     maxLength={200}
                   />
                 </div>
-                <div className="form-group veic-c6">
-                  <label>Valor de repasse (Parceiro)</label>
+                <div className="form-group veic-c6" style={{ marginTop: 12 }}>
+                  <label>Valor de repasse (Parceiros R$)</label>
                   <input
                     type="text"
                     placeholder="R$ 0,00"
@@ -995,13 +1100,26 @@ export function VeiculoModal({
               </div>
 
               {docForm && (
-                <div className="custo-add-form" style={{ marginBottom: 12, gridTemplateColumns: '160px 1fr auto' }}>
-                  <select value={novoDocTipo} onChange={e => setNovoDocTipo(e.target.value)}>
+                <div className="custo-add-form" style={{ marginBottom: 12, gridTemplateColumns: '180px 1fr' }}>
+                  <select
+                    value={novoDocTipo}
+                    onChange={e => setNovoDocTipo(e.target.value)}
+                    style={{
+                      background: 'var(--sv-input-bg)',
+                      color: 'var(--sv-text)',
+                      border: '1px solid var(--sv-border)',
+                      borderRadius: 'var(--sv-radius)',
+                      padding: '0 12px',
+                      height: 40,
+                      fontSize: 13,
+                      outline: 'none'
+                    }}
+                  >
                     <option value="contrato">Contrato</option>
                     <option value="nota_fiscal">Nota Fiscal</option>
                     <option value="garantia">Garantia</option>
-                    <option value="laudo">Laudo</option>
-                    <option value="outro">Outro</option>
+                    <option value="laudo">Laudo Cautelar</option>
+                    <option value="outro">Outro Documento</option>
                   </select>
                   <label className="doc-upload-area" data-active={!!novoDocFile}>
                     <input
@@ -1022,16 +1140,10 @@ export function VeiculoModal({
                       </span>
                     )}
                   </label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, justifyContent: 'center' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--sv-text-dim)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                      <input type="checkbox" id="doc-visivel" checked={novoDocVisivel} onChange={e => setNovoDocVisivel(e.target.checked)} />
-                      Visível na vitrine
-                    </label>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, gridColumn: '1 / -1' }}>
-                    <button className="btn btn-glass" onClick={() => { setDocForm(false); setNovoDocFile(null) }}>Cancelar</button>
+                  <div style={{ display: 'flex', gap: 8, gridColumn: '1 / -1', justifyContent: 'flex-end', marginTop: 4 }}>
+                    <button className="btn btn-glass btn-sm" onClick={() => { setDocForm(false); setNovoDocFile(null) }}>Cancelar</button>
                     <button
-                      className="btn btn-primary"
+                      className="btn btn-primary btn-sm"
                       disabled={vendaSaving || !novoDocFile}
                       onClick={async () => {
                         if (!veiculo || !novoDocFile) return
@@ -1040,14 +1152,14 @@ export function VeiculoModal({
                           const fd = new FormData()
                           fd.append('file', novoDocFile)
                           fd.append('tipo', novoDocTipo)
-                          fd.append('visivel_comprador', String(novoDocVisivel))
+                          fd.append('visivel_comprador', 'true')
                           const doc = await api.post<VeiculoDocumento>(`/veiculos/${veiculo.id}/documentos/upload`, fd)
                           setVendaData(v => v ? { ...v, documentos: [...v.documentos, doc] } : v)
                           setNovoDocFile(null); setDocForm(false)
                         } catch { /* ignore */ } finally { setVendaSaving(false) }
                       }}
                     >
-                      {vendaSaving ? <span className="spinner" /> : 'Enviar'}
+                      {vendaSaving ? <span className="spinner" /> : 'Enviar Documento'}
                     </button>
                   </div>
                 </div>

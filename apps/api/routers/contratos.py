@@ -150,10 +150,20 @@ async def listar_contratos(
 
     if q:
         like = f"%{q}%"
-        stmt = stmt.where(
-            or_(
-                Contrato.numero.ilike(like),
-                Contrato.observacoes.ilike(like),
+        stmt = (
+            stmt.outerjoin(Contrato.cliente)
+            .outerjoin(Contrato.veiculo)
+            .where(
+                or_(
+                    Contrato.numero.ilike(like),
+                    Contrato.observacoes.ilike(like),
+                    ClientePF.nome.ilike(like),
+                    ClientePF.cpf.ilike(like),
+                    ClientePF.cnpj.ilike(like),
+                    Veiculo.marca.ilike(like),
+                    Veiculo.modelo.ilike(like),
+                    Veiculo.placa.ilike(like),
+                )
             )
         )
 

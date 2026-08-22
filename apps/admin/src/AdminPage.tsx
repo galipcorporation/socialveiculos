@@ -5,6 +5,9 @@ import { capitalizarNome, mascararCNPJ, validarCNPJ, mascararMoeda, parseMoeda, 
 import { useUIStore } from './stores/uiStore'
 import { RichEditor } from './components/RichEditor'
 import { PasswordInput } from './components/PasswordInput'
+import { Pagination } from './components/Pagination'
+import { exportarParaCSV } from './lib/exportUtils'
+import { EsteiraOnboardingGuide } from './components/EsteiraOnboarding'
 import { CATALOGO_VARIAVEIS_ASSINATURA, LABELS_VARIAVEIS_ASSINATURA } from './lib/variaveisContratoAssinatura'
 
 // ── Tipos ────────────────────────────────────────────────────────
@@ -68,8 +71,16 @@ const EMPTY_FORM: NovaLojaForm = {
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-function fmtData(iso: string) {
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+function fmtData(iso?: string | null) {
+  if (!iso) return '—'
+  const clean = iso.trim().slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    const [y, m, d] = clean.split('-')
+    return `${d}/${m}/${y}`
+  }
+  const dt = new Date(iso)
+  if (isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 // ── Sub-componentes ──────────────────────────────────────────────
@@ -547,13 +558,22 @@ function fmtMoeda(v?: number | null) {
 
 function fmtDataHora(iso?: string | null) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const clean = iso.trim().slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    const [y, m, d] = clean.split('-')
+    return `${d}/${m}/${y}`
+  }
+  const dt = new Date(iso)
+  if (isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 // Logs precisam do horário, não só da data
 function fmtDataHoraCompleta(iso?: string | null) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('pt-BR', {
+  const dt = new Date(iso)
+  if (isNaN(dt.getTime())) return '—'
+  return dt.toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 }
@@ -1731,6 +1751,9 @@ function SubLancamentos() {
   const [erro, setErro] = useState<string | null>(null)
   const [filtroMes, setFiltroMes] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
+  const [pagina, setPagina] = useState(1)
+  const [itensPorPagina, setItensPorPagina] = useState(15)
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const { confirm } = useUIStore()
 
   const hojeISO = new Date().toISOString().slice(0, 10)
@@ -1754,7 +1777,10 @@ function SubLancamentos() {
       .finally(() => setLoading(false))
   }, [filtroMes, filtroTipo])
 
-  useEffect(() => { carregar() }, [carregar])
+  useEffect(() => {
+    setPagina(1)
+    carregar()
+  }, [carregar])
 
   const submeter = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1768,7 +1794,6 @@ function SubLancamentos() {
         categoria: form.categoria.trim(),
         descricao: form.descricao.trim() || null,
         valor,
-        // Meio-dia evita que o fuso do navegador jogue o lançamento para o dia anterior.
         data: `${form.data}T12:00:00`,
         recorrente: form.recorrente,
       })
@@ -1798,6 +1823,54 @@ function SubLancamentos() {
   }
 
   const rotuloTipo: Record<string, string> = { aporte: 'Aporte', despesa: 'Despesa', receita: 'Receita avulsa' }
+
+  const toggleItem = (id: string) => {
+    setSelecionados((prev) => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }
+
+  const toggleTodosPagina = () => {
+    const idsPagina = itensPaginados.map((it) => it.id)
+    const todosMarcados = idsPagina.every((id) => selecionados.has(id))
+    setSelecionados((prev) => {
+      const n = new Set(prev)
+      if (todosMarcados) {
+        idsPagina.forEach((id) => n.delete(id))
+      } else {
+        idsPagina.forEach((id) => n.add(id))
+      }
+      return n
+    })
+  }
+
+  const colunasExportacao = [
+    { header: 'Data', accessor: (it: LancamentoPlataformaItem) => fmtDataHora(it.data) },
+    { header: 'Tipo', accessor: (it: LancamentoPlataformaItem) => rotuloTipo[it.tipo] || it.tipo },
+    { header: 'Sócio/categoria', accessor: (it: LancamentoPlataformaItem) => it.categoria },
+    { header: 'Descrição', accessor: (it: LancamentoPlataformaItem) => it.descricao || '' },
+    { header: 'Valor (R$)', accessor: (it: LancamentoPlataformaItem) => it.valor },
+    { header: 'Recorrente', accessor: (it: LancamentoPlataformaItem) => (it.recorrente ? 'Sim' : 'Não') },
+  ]
+
+  const exportarSelecionados = () => {
+    const selecionadosItens = itens.filter((it) => selecionados.has(it.id))
+    exportarParaCSV('lancamentos_selecionados.csv', selecionadosItens, colunasExportacao)
+  }
+
+  const exportarTotal = () => {
+    exportarParaCSV('lancamentos_todos.csv', itens, colunasExportacao)
+  }
+
+  const totalPaginas = Math.ceil(itens.length / itensPorPagina)
+  const paginaValida = Math.max(1, Math.min(pagina, totalPaginas || 1))
+  const itensPaginados = itens.slice((paginaValida - 1) * itensPorPagina, paginaValida * itensPorPagina)
+
+  const todosNaPaginaMarcados =
+    itensPaginados.length > 0 && itensPaginados.every((it) => selecionados.has(it.id))
 
   return (
     <div>
@@ -1878,48 +1951,103 @@ function SubLancamentos() {
           <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: 13 }}
             onClick={() => { setFiltroMes(''); setFiltroTipo('') }}>Limpar</button>
         )}
+        <button
+          className="btn btn-secondary"
+          onClick={exportarTotal}
+          disabled={itens.length === 0}
+          style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, height: 40 }}
+          title="Exportar todos os lançamentos em CSV"
+        >
+          <Download size={14} /> Exportar Todos ({itens.length})
+        </button>
       </div>
+
+      {selecionados.size > 0 && (
+        <div className="sv-selection-bar">
+          <div className="sv-selection-count">
+            <span>{selecionados.size} {selecionados.size === 1 ? 'lançamento selecionado' : 'lançamentos selecionados'}</span>
+          </div>
+          <div className="sv-selection-actions">
+            <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }} onClick={exportarSelecionados}>
+              <Download size={14} /> Exportar Selecionados ({selecionados.size})
+            </button>
+            <button className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: 13 }} onClick={() => setSelecionados(new Set())}>
+              Limpar Seleção
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <LoadingState />
       ) : itens.length === 0 ? (
         <EmptyState msg="Nenhum lançamento. Comece registrando os custos que já paga hoje (Fly, Supabase, domínio)." />
       ) : (
-        <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
-          <table className="stock-table">
-            <thead>
-              <tr>
-                {['Data', 'Tipo', 'Sócio/categoria', 'Descrição', 'Valor', ''].map((h, i) => (
-                  <th key={h || i} style={h === 'Valor' ? { textAlign: 'right' } : undefined}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {itens.map((it) => (
-                <tr key={it.id}>
-                  <td style={{ color: 'var(--sv-text-dim)' }}>{fmtDataHora(it.data)}</td>
-                  <td style={{ color: 'var(--sv-text-dim)' }}>
-                    {rotuloTipo[it.tipo]}
-                    {it.recorrente && (
-                      <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--sv-text-muted)' }}>· fixo</span>
-                    )}
-                  </td>
-                  <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{it.categoria}</td>
-                  <td style={{ color: 'var(--sv-text-muted)' }}>{it.descricao || '—'}</td>
-                  <td style={{ textAlign: 'right', color: it.tipo === 'despesa' ? 'var(--sv-error)' : 'var(--sv-success)' }}>
-                    {it.tipo === 'despesa' ? '− ' : '+ '}{fmtMoeda(it.valor)}
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12 }}
-                      onClick={() => excluir(it)} aria-label="Excluir lançamento">
-                      <X size={14} />
-                    </button>
-                  </td>
+        <>
+          <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
+            <table className="stock-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      className="sv-checkbox"
+                      checked={todosNaPaginaMarcados}
+                      onChange={toggleTodosPagina}
+                      title="Selecionar todos desta página"
+                    />
+                  </th>
+                  {['Data', 'Tipo', 'Sócio/categoria', 'Descrição', 'Valor', ''].map((h, i) => (
+                    <th key={h || i} style={h === 'Valor' ? { textAlign: 'right' } : undefined}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {itensPaginados.map((it) => (
+                  <tr key={it.id}>
+                    <td style={{ textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        className="sv-checkbox"
+                        checked={selecionados.has(it.id)}
+                        onChange={() => toggleItem(it.id)}
+                      />
+                    </td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>{fmtDataHora(it.data)}</td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>
+                      {rotuloTipo[it.tipo]}
+                      {it.recorrente && (
+                        <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--sv-text-muted)' }}>· fixo</span>
+                      )}
+                    </td>
+                    <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{it.categoria}</td>
+                    <td style={{ color: 'var(--sv-text-muted)' }}>{it.descricao || '—'}</td>
+                    <td style={{ textAlign: 'right', color: it.tipo === 'despesa' ? 'var(--sv-error)' : 'var(--sv-success)' }}>
+                      {it.tipo === 'despesa' ? '− ' : '+ '}{fmtMoeda(it.valor)}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12 }}
+                        onClick={() => excluir(it)} aria-label="Excluir lançamento">
+                        <X size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <Pagination
+            pagina={paginaValida}
+            totalItens={itens.length}
+            itensPorPagina={itensPorPagina}
+            onPaginaChange={setPagina}
+            onItensPorPaginaChange={(limite) => {
+              setItensPorPagina(limite)
+              setPagina(1)
+            }}
+          />
+        </>
       )}
     </div>
   )
@@ -2442,6 +2570,9 @@ function AbaLojas() {
   const [lojas, setLojas] = useState<LojaItem[]>([])
   const [loading, setLoading] = useState(true)
   const [busca, setBusca] = useState('')
+  const [pagina, setPagina] = useState(1)
+  const [itensPorPagina, setItensPorPagina] = useState(15)
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const [modalAberto, setModalAberto] = useState(false)
   const [lojaEditandoId, setLojaEditandoId] = useState<string | null>(null)
   const [lojaFinanceiro, setLojaFinanceiro] = useState<{ id: string; nome: string } | null>(null)
@@ -2458,6 +2589,8 @@ function AbaLojas() {
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
+
+  useEffect(() => { setPagina(1) }, [busca])
 
   const toggleStatus = async (loja: LojaItem) => {
     if (loja.ativa) {
@@ -2485,9 +2618,6 @@ function AbaLojas() {
   const impersonar = async (loja: LojaItem) => {
     setImpersonarLoading(loja.id)
     try {
-      // A API devolve um código de uso único (60s), nunca o token: token em query
-      // string fica no histórico, no Referer e nos logs de acesso — e este dá
-      // sessão de gestor. O gestor troca o código pelo token num POST.
       const res = await api.post<{ codigo: string; loja_nome: string }>(`/admin/lojas/${loja.id}/impersonar`, {})
       const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
       const gestorBase = isDev
@@ -2503,16 +2633,66 @@ function AbaLojas() {
     }
   }
 
+  const toggleItem = (id: string) => {
+    setSelecionados((prev) => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }
+
+  const toggleTodosPagina = () => {
+    const idsPagina = lojasPaginadas.map((l) => l.id)
+    const todosMarcados = idsPagina.every((id) => selecionados.has(id))
+    setSelecionados((prev) => {
+      const n = new Set(prev)
+      if (todosMarcados) {
+        idsPagina.forEach((id) => n.delete(id))
+      } else {
+        idsPagina.forEach((id) => n.add(id))
+      }
+      return n
+    })
+  }
+
+  const colunasExportacao = [
+    { header: 'Nome', accessor: (l: LojaItem) => l.nome },
+    { header: 'Slug', accessor: (l: LojaItem) => l.slug },
+    { header: 'Cidade', accessor: (l: LojaItem) => l.cidade || '' },
+    { header: 'UF', accessor: (l: LojaItem) => l.estado || '' },
+    { header: 'WhatsApp', accessor: (l: LojaItem) => l.whatsapp || '' },
+    { header: 'Status', accessor: (l: LojaItem) => (l.ativa ? 'Ativa' : 'Inativa') },
+    { header: 'Destaque', accessor: (l: LojaItem) => (l.destaque ? 'Sim' : 'Não') },
+    { header: 'Criado em', accessor: (l: LojaItem) => fmtData(l.created_at) },
+  ]
+
+  const exportarSelecionados = () => {
+    const selecionadosItens = lojasFiltradas.filter((l) => selecionados.has(l.id))
+    exportarParaCSV('lojas_selecionadas.csv', selecionadosItens, colunasExportacao)
+  }
+
+  const exportarTotal = () => {
+    exportarParaCSV('lojas_todas.csv', lojasFiltradas, colunasExportacao)
+  }
+
   const lojasFiltradas = lojas.filter((l) =>
     l.nome.toLowerCase().includes(busca.toLowerCase())
   )
+
+  const totalPaginas = Math.ceil(lojasFiltradas.length / itensPorPagina)
+  const paginaValida = Math.max(1, Math.min(pagina, totalPaginas || 1))
+  const lojasPaginadas = lojasFiltradas.slice((paginaValida - 1) * itensPorPagina, paginaValida * itensPorPagina)
+
+  const todosNaPaginaMarcados =
+    lojasPaginadas.length > 0 && lojasPaginadas.every((l) => selecionados.has(l.id))
 
   return (
     <div style={{ marginTop: '24px' }}>
       {erro && (
         <ErroAlerta msg={erro} onFechar={() => setErro(null)} />
       )}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
           <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--sv-text-muted)' }} />
           <input
@@ -2532,127 +2712,182 @@ function AbaLojas() {
             onChange={(e) => setBusca(e.target.value)}
           />
         </div>
-        <button className="btn btn-primary" onClick={() => setModalAberto(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button
+          className="btn btn-secondary"
+          onClick={exportarTotal}
+          disabled={lojasFiltradas.length === 0}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40 }}
+          title="Exportar todas as lojas listadas em CSV"
+        >
+          <Download size={14} /> Exportar Todos ({lojasFiltradas.length})
+        </button>
+        <button className="btn btn-primary" onClick={() => setModalAberto(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40 }}>
           <Plus size={16} /> Nova Loja
         </button>
       </div>
+
+      {selecionados.size > 0 && (
+        <div className="sv-selection-bar">
+          <div className="sv-selection-count">
+            <span>{selecionados.size} {selecionados.size === 1 ? 'loja selecionada' : 'lojas selecionadas'}</span>
+          </div>
+          <div className="sv-selection-actions">
+            <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }} onClick={exportarSelecionados}>
+              <Download size={14} /> Exportar Selecionadas ({selecionados.size})
+            </button>
+            <button className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: 13 }} onClick={() => setSelecionados(new Set())}>
+              Limpar Seleção
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <LoadingState />
       ) : lojasFiltradas.length === 0 ? (
         <EmptyState msg={busca ? 'Nenhuma loja encontrada para essa busca.' : 'Nenhuma loja cadastrada.'} />
       ) : (
-        <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
-          <table className="stock-table">
-            <thead>
-              <tr>
-                {['Nome', 'Cidade / UF', 'WhatsApp', 'Status', 'Destaque', 'Criado em', 'Ações'].map((h) => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {lojasFiltradas.map((loja) => (
-                <tr key={loja.id}>
-                  <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{loja.nome}</td>
-                  <td style={{ color: 'var(--sv-text-dim)' }}>
-                    {loja.cidade && loja.estado ? `${loja.cidade} / ${loja.estado}` : loja.cidade || loja.estado || '—'}
-                  </td>
-                  <td style={{ color: 'var(--sv-text-dim)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>{loja.whatsapp || '—'}</span>
-                      {loja.whatsapp_divergente && (
+        <>
+          <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
+            <table className="stock-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      className="sv-checkbox"
+                      checked={todosNaPaginaMarcados}
+                      onChange={toggleTodosPagina}
+                      title="Selecionar todas desta página"
+                    />
+                  </th>
+                  {['Nome', 'Cidade / UF', 'WhatsApp', 'Status', 'Destaque', 'Criado em', 'Ações'].map((h) => (
+                    <th key={h}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {lojasPaginadas.map((loja) => (
+                  <tr key={loja.id}>
+                    <td style={{ textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        className="sv-checkbox"
+                        checked={selecionados.has(loja.id)}
+                        onChange={() => toggleItem(loja.id)}
+                      />
+                    </td>
+                    <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{loja.nome}</td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>
+                      {loja.cidade && loja.estado ? `${loja.cidade} / ${loja.estado}` : loja.cidade || loja.estado || '—'}
+                    </td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span>{loja.whatsapp || '—'}</span>
+                        {loja.whatsapp_divergente && (
+                          <span
+                            title={`Número pareado no WhatsApp (${loja.whatsapp_pareado}) diverge do cadastrado`}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              padding: '1px 8px', borderRadius: 999,
+                              fontSize: '12px', fontWeight: 600,
+                              background: 'color-mix(in srgb, var(--sv-warning) 15%, transparent)',
+                              color: 'var(--sv-warning)',
+                            }}
+                          >
+                            <AlertTriangle size={11} /> Divergente
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '2px 10px',
+                        borderRadius: 999,
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        background: loja.ativa ? 'color-mix(in srgb, var(--sv-success) 15%, transparent)' : 'color-mix(in srgb, var(--sv-error) 15%, transparent)',
+                        color: loja.ativa ? 'var(--sv-success)' : 'var(--sv-error)',
+                      }}>
+                        {loja.ativa ? 'Ativa' : 'Inativa'}
+                      </span>
+                    </td>
+                    <td>
+                      {loja.destaque ? (
                         <span
-                          title={`Número pareado no WhatsApp (${loja.whatsapp_pareado}) diverge do cadastrado`}
+                          title={loja.destaque_ate ? `Vence em ${fmtData(loja.destaque_ate)}` : 'Sem prazo definido'}
                           style={{
                             display: 'inline-flex', alignItems: 'center', gap: 4,
-                            padding: '1px 8px', borderRadius: 999,
+                            padding: '2px 10px', borderRadius: 999,
                             fontSize: '12px', fontWeight: 600,
                             background: 'color-mix(in srgb, var(--sv-warning) 15%, transparent)',
                             color: 'var(--sv-warning)',
                           }}
                         >
-                          <AlertTriangle size={11} /> Divergente
+                          <Star size={11} /> Destaque
                         </span>
+                      ) : (
+                        <span style={{ color: 'var(--sv-text-muted)', fontSize: '12px' }}>—</span>
                       )}
-                    </div>
-                  </td>
-                  <td>
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '2px 10px',
-                      borderRadius: 999,
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      background: loja.ativa ? 'color-mix(in srgb, var(--sv-success) 15%, transparent)' : 'color-mix(in srgb, var(--sv-error) 15%, transparent)',
-                      color: loja.ativa ? 'var(--sv-success)' : 'var(--sv-error)',
-                    }}>
-                      {loja.ativa ? 'Ativa' : 'Inativa'}
-                    </span>
-                  </td>
-                  <td>
-                    {loja.destaque ? (
-                      <span
-                        title={loja.destaque_ate ? `Vence em ${fmtData(loja.destaque_ate)}` : 'Sem prazo definido'}
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                          padding: '2px 10px', borderRadius: 999,
-                          fontSize: '12px', fontWeight: 600,
-                          background: 'color-mix(in srgb, var(--sv-warning) 15%, transparent)',
-                          color: 'var(--sv-warning)',
-                        }}
-                      >
-                        <Star size={11} /> Destaque
-                      </span>
-                    ) : (
-                      <span style={{ color: 'var(--sv-text-muted)', fontSize: '12px' }}>—</span>
-                    )}
-                  </td>
-                  <td style={{ color: 'var(--sv-text-dim)' }}>{fmtData(loja.created_at)}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => toggleStatus(loja)}
-                        disabled={toggleLoading === loja.id}
-                        title={loja.ativa ? 'Desativar' : 'Ativar'}
-                      >
-                        {loja.ativa ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-                        {loja.ativa ? 'Desativar' : 'Ativar'}
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => setLojaEditandoId(loja.id)}
-                        title="Editar loja e liberar módulos"
-                      >
-                        <Edit size={14} /> Editar
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => setLojaFinanceiro({ id: loja.id, nome: loja.nome })}
-                        title="Ativar, renovar ou suspender a cobrança (Pix manual)"
-                      >
-                        <CreditCard size={14} /> Financeiro
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => impersonar(loja)}
-                        disabled={impersonarLoading === loja.id}
-                        title="Observar como gestor desta loja"
-                      >
-                        <Eye size={14} /> {impersonarLoading === loja.id ? 'Abrindo…' : 'Observar'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    </td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>{fmtData(loja.created_at)}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                          onClick={() => toggleStatus(loja)}
+                          disabled={toggleLoading === loja.id}
+                          title={loja.ativa ? 'Desativar' : 'Ativar'}
+                        >
+                          {loja.ativa ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                          {loja.ativa ? 'Desativar' : 'Ativar'}
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                          onClick={() => setLojaEditandoId(loja.id)}
+                          title="Editar loja e liberar módulos"
+                        >
+                          <Edit size={14} /> Editar
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                          onClick={() => setLojaFinanceiro({ id: loja.id, nome: loja.nome })}
+                          title="Ativar, renovar ou suspender a cobrança (Pix manual)"
+                        >
+                          <CreditCard size={14} /> Financeiro
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                          onClick={() => impersonar(loja)}
+                          disabled={impersonarLoading === loja.id}
+                          title="Observar como gestor desta loja"
+                        >
+                          <Eye size={14} /> {impersonarLoading === loja.id ? 'Abrindo…' : 'Observar'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <Pagination
+            pagina={paginaValida}
+            totalItens={lojasFiltradas.length}
+            itensPorPagina={itensPorPagina}
+            onPaginaChange={setPagina}
+            onItensPorPaginaChange={(limite) => {
+              setItensPorPagina(limite)
+              setPagina(1)
+            }}
+          />
+        </>
       )}
 
       {modalAberto && <ModalNovaLoja onClose={() => setModalAberto(false)} onSaved={carregar} />}
@@ -2821,6 +3056,8 @@ function AbaAuditoria() {
   const [filtros, setFiltros] = useState<FiltrosAuditoria>(FILTROS_VAZIOS)
   const [buscaInput, setBuscaInput] = useState('')
   const [pagina, setPagina] = useState(1)
+  const [itensPorPagina, setItensPorPagina] = useState(POR_PAG_AUDITORIA)
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [exportando, setExportando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -2851,13 +3088,13 @@ function AbaAuditoria() {
   useEffect(() => {
     setLoading(true)
     api.get<AuditoriaPage>('/admin/auditoria', params({
-      limit: String(POR_PAG_AUDITORIA),
-      offset: String((pagina - 1) * POR_PAG_AUDITORIA),
+      limit: String(itensPorPagina),
+      offset: String((pagina - 1) * itensPorPagina),
     }))
       .then((r) => { setLogs(r.itens); setTotal(r.total) })
       .catch((err: any) => setErro(err?.message || 'Erro ao carregar os logs de auditoria.'))
       .finally(() => setLoading(false))
-  }, [params, pagina])
+  }, [params, pagina, itensPorPagina])
 
   const set = (campo: keyof FiltrosAuditoria, valor: string) => {
     setFiltros((f) => ({ ...f, [campo]: valor }))
@@ -2890,9 +3127,47 @@ function AbaAuditoria() {
     }
   }
 
+  const toggleItem = (id: string) => {
+    setSelecionados((prev) => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }
+
+  const toggleTodosPagina = () => {
+    const idsPagina = logs.map((l) => l.id)
+    const todosMarcados = idsPagina.every((id) => selecionados.has(id))
+    setSelecionados((prev) => {
+      const n = new Set(prev)
+      if (todosMarcados) {
+        idsPagina.forEach((id) => n.delete(id))
+      } else {
+        idsPagina.forEach((id) => n.add(id))
+      }
+      return n
+    })
+  }
+
+  const colunasExportacao = [
+    { header: 'Ação', accessor: (l: AuditoriaLogItem) => l.acao },
+    { header: 'Entidade', accessor: (l: AuditoriaLogItem) => l.entidade || '' },
+    { header: 'ID Entidade', accessor: (l: AuditoriaLogItem) => l.entidade_id || '' },
+    { header: 'Usuário', accessor: (l: AuditoriaLogItem) => l.ator_nome || '' },
+    { header: 'Loja', accessor: (l: AuditoriaLogItem) => l.loja_nome || '' },
+    { header: 'IP', accessor: (l: AuditoriaLogItem) => l.ip || '' },
+    { header: 'Data', accessor: (l: AuditoriaLogItem) => fmtDataHoraCompleta(l.created_at) },
+  ]
+
+  const exportarSelecionados = () => {
+    const selecionadosItens = logs.filter((l) => selecionados.has(l.id))
+    exportarParaCSV('auditoria_selecionados.csv', selecionadosItens, colunasExportacao)
+  }
+
   const temFiltro = Object.values(filtros).some(Boolean)
-  const paginas = Math.max(1, Math.ceil(total / POR_PAG_AUDITORIA))
   const periodoAtivo = (dias: number) => filtros.data_de === isoDiasAtras(dias) && !filtros.data_ate
+  const todosNaPaginaMarcados = logs.length > 0 && logs.every((l) => selecionados.has(l.id))
 
   return (
     <div style={{ marginTop: '24px' }}>
@@ -2979,20 +3254,33 @@ function AbaAuditoria() {
         )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ color: 'var(--sv-text-muted)', fontSize: '13px' }}>
-            {total.toLocaleString('pt-BR')} {total === 1 ? 'registro' : 'registros'}
-          </span>
           <button
             className="btn btn-secondary"
-            style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: 6, height: 40 }}
             onClick={exportar}
             disabled={exportando || total === 0}
-            title="Baixar em CSV os registros que casam com os filtros atuais"
+            title="Baixar em CSV todos os registros filtrados"
           >
-            <Download size={14} /> {exportando ? 'Exportando…' : 'Exportar CSV'}
+            <Download size={14} /> {exportando ? 'Exportando…' : `Exportar Total (${total.toLocaleString('pt-BR')})`}
           </button>
         </div>
       </div>
+
+      {selecionados.size > 0 && (
+        <div className="sv-selection-bar">
+          <div className="sv-selection-count">
+            <span>{selecionados.size} {selecionados.size === 1 ? 'registro selecionado' : 'registros selecionados'}</span>
+          </div>
+          <div className="sv-selection-actions">
+            <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }} onClick={exportarSelecionados}>
+              <Download size={14} /> Exportar Selecionados ({selecionados.size})
+            </button>
+            <button className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: 13 }} onClick={() => setSelecionados(new Set())}>
+              Limpar Seleção
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <LoadingState />
@@ -3004,6 +3292,15 @@ function AbaAuditoria() {
             <table className="stock-table">
               <thead>
                 <tr>
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      className="sv-checkbox"
+                      checked={todosNaPaginaMarcados}
+                      onChange={toggleTodosPagina}
+                      title="Selecionar todos desta página"
+                    />
+                  </th>
                   {['Ação', 'Entidade', 'Usuário', 'Loja', 'Data', ''].map((h, i) => (
                     <th key={h || i}>{h}</th>
                   ))}
@@ -3014,6 +3311,14 @@ function AbaAuditoria() {
                   const { bg, cor } = corDaAcao(log.acao)
                   return (
                     <tr key={log.id} style={{ cursor: 'pointer' }} onClick={() => setSelecionado(log)}>
+                      <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          className="sv-checkbox"
+                          checked={selecionados.has(log.id)}
+                          onChange={() => toggleItem(log.id)}
+                        />
+                      </td>
                       <td>
                         <span style={{
                           display: 'inline-block', padding: '3px 8px', borderRadius: '6px',
@@ -3042,13 +3347,17 @@ function AbaAuditoria() {
               </tbody>
             </table>
           </div>
-          {paginas > 1 && (
-            <div style={{ display: 'flex', gap: '8px', marginTop: '16px', alignItems: 'center' }}>
-              <button className="btn btn-secondary" disabled={pagina === 1} onClick={() => setPagina((p) => p - 1)}>Anterior</button>
-              <span style={{ color: 'var(--sv-text-muted)', fontSize: '14px' }}>{pagina} / {paginas}</span>
-              <button className="btn btn-secondary" disabled={pagina >= paginas} onClick={() => setPagina((p) => p + 1)}>Próxima</button>
-            </div>
-          )}
+
+          <Pagination
+            pagina={pagina}
+            totalItens={total}
+            itensPorPagina={itensPorPagina}
+            onPaginaChange={setPagina}
+            onItensPorPaginaChange={(limite) => {
+              setItensPorPagina(limite)
+              setPagina(1)
+            }}
+          />
         </>
       )}
 
@@ -3422,6 +3731,8 @@ function AbaErros() {
   const [logs, setLogs] = useState<LogItem[]>([])
   const [loading, setLoading] = useState(true)
   const [pagina, setPagina] = useState(1)
+  const [itensPorPagina, setItensPorPagina] = useState(20)
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const [subAba, setSubAba] = useState<'ativos' | 'ocultados'>('ativos')
   const [erroSelecionado, setErroSelecionado] = useState<ErroSelecionado | null>(null)
   const [logDetalhes, setLogDetalhes] = useState<LogItem | null>(null)
@@ -3430,7 +3741,6 @@ function AbaErros() {
   const [erro, setErro] = useState<string | null>(null)
   const [acaoLoading, setAcaoLoading] = useState<string | null>(null)
   const [loteLoading, setLoteLoading] = useState(false)
-  const POR_PAG = 20
 
   const carregar = useCallback(() => {
     setLoading(true)
@@ -3444,6 +3754,7 @@ function AbaErros() {
 
   useEffect(() => {
     setPagina(1)
+    setSelecionados(new Set())
     carregar()
   }, [carregar])
 
@@ -3521,9 +3832,50 @@ function AbaErros() {
     setTimeout(() => setCopiadoTodos(false), 2000)
   }
 
-  const inicio = (pagina - 1) * POR_PAG
-  const paginas = Math.ceil(logs.length / POR_PAG)
-  const slice = logs.slice(inicio, inicio + POR_PAG)
+  const toggleItem = (id: string) => {
+    setSelecionados((prev) => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }
+
+  const toggleTodosPagina = () => {
+    const idsPagina = slice.map((l) => l.id)
+    const todosMarcados = idsPagina.every((id) => selecionados.has(id))
+    setSelecionados((prev) => {
+      const n = new Set(prev)
+      if (todosMarcados) {
+        idsPagina.forEach((id) => n.delete(id))
+      } else {
+        idsPagina.forEach((id) => n.add(id))
+      }
+      return n
+    })
+  }
+
+  const colunasExportacao = [
+    { header: 'Ação/Erro', accessor: (l: LogItem) => l.acao },
+    { header: 'Origem', accessor: (l: LogItem) => l.entidade || '' },
+    { header: 'Ator/Usuário', accessor: (l: LogItem) => l.ator_nome || '' },
+    { header: 'Data', accessor: (l: LogItem) => fmtDataHoraCompleta(l.created_at) },
+    { header: 'Resolvido IA', accessor: (l: LogItem) => (l.ajusteia ? 'Sim' : 'Não') },
+  ]
+
+  const exportarSelecionados = () => {
+    const selecionadosItens = logs.filter((l) => selecionados.has(l.id))
+    exportarParaCSV('erros_selecionados.csv', selecionadosItens, colunasExportacao)
+  }
+
+  const exportarTotal = () => {
+    exportarParaCSV('erros_todos.csv', logs, colunasExportacao)
+  }
+
+  const totalPaginas = Math.ceil(logs.length / itensPorPagina)
+  const paginaValida = Math.max(1, Math.min(pagina, totalPaginas || 1))
+  const slice = logs.slice((paginaValida - 1) * itensPorPagina, paginaValida * itensPorPagina)
+  const todosNaPaginaMarcados = slice.length > 0 && slice.every((l) => selecionados.has(l.id))
 
   return (
     <div style={{ marginTop: '24px' }}>
@@ -3549,6 +3901,17 @@ function AbaErros() {
         </div>
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {logs.length > 0 && (
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: '12px', padding: '8px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              onClick={exportarTotal}
+              title="Exportar todos os registros de erro listados em CSV"
+            >
+              <Download size={14} /> Exportar Todos ({logs.length})
+            </button>
+          )}
+
           {logs.length > 0 && (
             <button
               className="btn btn-secondary"
@@ -3589,6 +3952,22 @@ function AbaErros() {
         </div>
       </div>
 
+      {selecionados.size > 0 && (
+        <div className="sv-selection-bar">
+          <div className="sv-selection-count">
+            <span>{selecionados.size} {selecionados.size === 1 ? 'erro selecionado' : 'erros selecionados'}</span>
+          </div>
+          <div className="sv-selection-actions">
+            <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }} onClick={exportarSelecionados}>
+              <Download size={14} /> Exportar Selecionados ({selecionados.size})
+            </button>
+            <button className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: 13 }} onClick={() => setSelecionados(new Set())}>
+              Limpar Seleção
+            </button>
+          </div>
+        </div>
+      )}
+
       {subAba === 'ativos' && logs.length > 0 && (
         <div style={{
           display: 'flex',
@@ -3617,7 +3996,16 @@ function AbaErros() {
             <table className="stock-table">
               <thead>
                 <tr>
-                  {['Origem', 'Rota', 'Status', 'Usuário', 'Ajuste IA', 'Data', 'Ações'].map((h) => (
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      className="sv-checkbox"
+                      checked={todosNaPaginaMarcados}
+                      onChange={toggleTodosPagina}
+                      title="Selecionar todos desta página"
+                    />
+                  </th>
+                  {['Ação / Rota', 'Origem', 'Ator / Usuário', 'Data', 'Ações'].map((h) => (
                     <th key={h}>{h}</th>
                   ))}
                 </tr>
@@ -3625,78 +4013,29 @@ function AbaErros() {
               <tbody>
                 {slice.map((log) => {
                   const det = fmtDetalhes(log.detalhes)
-                  const user_name = det.user_name || log.ator_nome
                   const user_email = det.user_email
                   const isCopiado = copiadoId === log.id
 
                   return (
                     <tr key={log.id}>
-                      <td>
-                        <span style={{
-                          display: 'inline-block',
-                          padding: '2px 8px',
-                          borderRadius: 999,
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          background: 'color-mix(in srgb, var(--sv-primary) 15%, transparent)',
-                          color: 'var(--sv-primary)',
-                        }}>
-                          {log.entidade || '—'}
-                        </span>
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          className="sv-checkbox"
+                          checked={selecionados.has(log.id)}
+                          onChange={() => toggleItem(log.id)}
+                        />
                       </td>
-                      <td style={{ color: 'var(--sv-text)', fontFamily: 'monospace', fontSize: '12px' }}>
-                        {det.path || '—'}
-                      </td>
-                      <td>
-                        <span style={{
-                          display: 'inline-block',
-                          padding: '2px 8px',
-                          borderRadius: 999,
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          background: 'color-mix(in srgb, var(--sv-error) 15%, transparent)',
-                          color: 'var(--sv-error)',
-                        }}>
-                          {det.status ?? '5xx'}
-                        </span>
-                      </td>
-                      <td style={{ color: 'var(--sv-text)' }}>
-                        {user_name ? (
-                          <div>
-                            <div style={{ fontWeight: 600 }}>{user_name}</div>
-                            {user_email && <div style={{ fontSize: '12px', color: 'var(--sv-text-dim)' }}>{user_email}</div>}
-                          </div>
-                        ) : (
-                          <span style={{ color: 'var(--sv-text-muted)' }}>Anônimo</span>
-                        )}
-                      </td>
-                      <td>
-                        <button
-                          onClick={() => toggleAjusteIA(log.id, !!log.ajusteia)}
-                          disabled={acaoLoading === log.id}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: acaoLoading === log.id ? 'wait' : 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            color: log.ajusteia ? 'var(--sv-success)' : 'var(--sv-text-muted)',
-                            fontWeight: log.ajusteia ? 600 : 'normal',
-                            fontSize: '12px',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                          }}
-                          title={log.ajusteia ? "Marcar como pendente" : "Marcar como resolvido pela IA"}
-                        >
-                          {log.ajusteia ? (
-                            <CheckCircle size={14} style={{ color: 'var(--sv-success)' }} />
-                          ) : (
-                            <AlertTriangle size={14} style={{ color: 'var(--sv-text-muted)' }} />
+                      <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>{log.acao}</span>
+                          {log.ajusteia && (
+                            <span style={{ fontSize: '11px', background: 'rgba(34, 197, 94, 0.15)', color: 'var(--sv-success)', padding: '1px 6px', borderRadius: 4 }}>IA</span>
                           )}
-                          <span>{log.ajusteia ? 'Resolvido (IA)' : 'Pendente'}</span>
-                        </button>
+                        </div>
                       </td>
+                      <td style={{ color: 'var(--sv-text-dim)' }}>{log.entidade || '—'}</td>
+                      <td style={{ color: 'var(--sv-text-dim)' }}>{log.ator_nome || det.user_name || '—'}</td>
                       <td style={{ color: 'var(--sv-text-dim)' }}>{fmtDataHoraCompleta(log.created_at)}</td>
                       <td>
                         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -3729,21 +4068,22 @@ function AbaErros() {
                                     id: log.id,
                                     path: det.path || '—',
                                     status: det.status ?? 500,
-                                    user_name: user_name || 'Anônimo',
-                                    user_email: user_email || '',
+                                    user_name: det.user_name || log.ator_nome || 'Usuário',
+                                    user_email: user_email,
                                     date: fmtDataHoraCompleta(log.created_at)
                                   })}
-                                  title="Entrar em contato com o usuário"
+                                  title="Enviar e-mail para o usuário sobre este erro"
                                 >
                                   <Mail size={14} /> Contato
                                 </button>
                               )}
+
                               <button
                                 className="btn btn-secondary"
                                 style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
                                 onClick={() => toggleVisibilidade(log.id, true)}
                                 disabled={acaoLoading === log.id}
-                                title="Ocultar da listagem ativa"
+                                title="Ocultar erro da listagem ativa"
                               >
                                 <EyeOff size={14} /> Ocultar
                               </button>
@@ -3767,13 +4107,17 @@ function AbaErros() {
               </tbody>
             </table>
           </div>
-          {paginas > 1 && (
-            <div style={{ display: 'flex', gap: '8px', marginTop: '16px', alignItems: 'center' }}>
-              <button className="btn btn-secondary" disabled={pagina === 1} onClick={() => setPagina((p) => p - 1)}>Anterior</button>
-              <span style={{ color: 'var(--sv-text-muted)', fontSize: '14px' }}>{pagina} / {paginas}</span>
-              <button className="btn btn-secondary" disabled={pagina === paginas} onClick={() => setPagina((p) => p + 1)}>Próxima</button>
-            </div>
-          )}
+
+          <Pagination
+            pagina={paginaValida}
+            totalItens={logs.length}
+            itensPorPagina={itensPorPagina}
+            onPaginaChange={setPagina}
+            onItensPorPaginaChange={(limite) => {
+              setItensPorPagina(limite)
+              setPagina(1)
+            }}
+          />
         </>
       )}
 
@@ -4177,6 +4521,9 @@ function AbaUsuarios() {
   const [usuarios, setUsuarios] = useState<UsuarioItem[]>([])
   const [loading, setLoading] = useState(true)
   const [busca, setBusca] = useState('')
+  const [pagina, setPagina] = useState(1)
+  const [itensPorPagina, setItensPorPagina] = useState(15)
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const [usuarioReset, setUsuarioReset] = useState<UsuarioItem | null>(null)
   const [usuarioEditar, setUsuarioEditar] = useState<UsuarioItem | null>(null)
   const [lojas, setLojas] = useState<{ id: string; nome: string }[]>([])
@@ -4187,7 +4534,6 @@ function AbaUsuarios() {
     return api.get<UsuarioItem[]>(`/admin/usuarios?busca=${encodeURIComponent(busca)}`)
       .then((lista) => {
         setUsuarios(lista)
-        // Mantém o modal aberto refletindo o estado recém-salvo.
         setUsuarioEditar((atual) => (atual ? lista.find((u) => u.id === atual.id) || null : null))
       })
       .catch((err: any) => setErro(err?.message || 'Erro ao carregar os usuários.'))
@@ -4196,6 +4542,7 @@ function AbaUsuarios() {
   useEffect(() => {
     const t = setTimeout(() => {
       setLoading(true)
+      setPagina(1)
       carregar().finally(() => setLoading(false))
     }, 300)
     return () => clearTimeout(t)
@@ -4207,10 +4554,57 @@ function AbaUsuarios() {
       .catch(() => setLojas([]))
   }, [])
 
+  const toggleItem = (id: string) => {
+    setSelecionados((prev) => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }
+
+  const toggleTodosPagina = () => {
+    const idsPagina = usuariosPaginados.map((u) => u.id)
+    const todosMarcados = idsPagina.every((id) => selecionados.has(id))
+    setSelecionados((prev) => {
+      const n = new Set(prev)
+      if (todosMarcados) {
+        idsPagina.forEach((id) => n.delete(id))
+      } else {
+        idsPagina.forEach((id) => n.add(id))
+      }
+      return n
+    })
+  }
+
+  const colunasExportacao = [
+    { header: 'Nome', accessor: (u: UsuarioItem) => u.nome },
+    { header: 'E-mail', accessor: (u: UsuarioItem) => u.email },
+    { header: 'Papel', accessor: (u: UsuarioItem) => PAPEL_LABELS[u.papel] || u.papel },
+    { header: 'Lojas', accessor: (u: UsuarioItem) => u.lojas.join(', ') },
+    { header: 'Status', accessor: (u: UsuarioItem) => (u.ativo ? 'Ativo' : 'Inativo') },
+  ]
+
+  const exportarSelecionados = () => {
+    const selecionadosItens = usuarios.filter((u) => selecionados.has(u.id))
+    exportarParaCSV('usuarios_selecionados.csv', selecionadosItens, colunasExportacao)
+  }
+
+  const exportarTotal = () => {
+    exportarParaCSV('usuarios_todos.csv', usuarios, colunasExportacao)
+  }
+
+  const totalPaginas = Math.ceil(usuarios.length / itensPorPagina)
+  const paginaValida = Math.max(1, Math.min(pagina, totalPaginas || 1))
+  const usuariosPaginados = usuarios.slice((paginaValida - 1) * itensPorPagina, paginaValida * itensPorPagina)
+
+  const todosNaPaginaMarcados =
+    usuariosPaginados.length > 0 && usuariosPaginados.every((u) => selecionados.has(u.id))
+
   return (
     <div style={{ marginTop: '24px' }}>
       {erro && <ErroAlerta msg={erro} onFechar={() => setErro(null)} />}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
           <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--sv-text-muted)' }} />
           <input
@@ -4230,69 +4624,125 @@ function AbaUsuarios() {
             onChange={(e) => setBusca(e.target.value)}
           />
         </div>
+
+        <button
+          className="btn btn-secondary"
+          onClick={exportarTotal}
+          disabled={usuarios.length === 0}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, height: 40 }}
+          title="Exportar todos os usuários listados em CSV"
+        >
+          <Download size={14} /> Exportar Todos ({usuarios.length})
+        </button>
       </div>
+
+      {selecionados.size > 0 && (
+        <div className="sv-selection-bar">
+          <div className="sv-selection-count">
+            <span>{selecionados.size} {selecionados.size === 1 ? 'usuário selecionado' : 'usuários selecionados'}</span>
+          </div>
+          <div className="sv-selection-actions">
+            <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }} onClick={exportarSelecionados}>
+              <Download size={14} /> Exportar Selecionados ({selecionados.size})
+            </button>
+            <button className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: 13 }} onClick={() => setSelecionados(new Set())}>
+              Limpar Seleção
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <LoadingState />
       ) : usuarios.length === 0 ? (
         <EmptyState msg={busca ? 'Nenhum usuário encontrado para essa busca.' : 'Nenhum usuário cadastrado.'} />
       ) : (
-        <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
-          <table className="stock-table">
-            <thead>
-              <tr>
-                {['Nome', 'E-mail', 'Papel', 'Lojas', 'Status', 'Ações'].map((h) => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {usuarios.map((u) => (
-                <tr key={u.id}>
-                  <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{u.nome}</td>
-                  <td style={{ color: 'var(--sv-text-dim)' }}>{u.email}</td>
-                  <td style={{ color: 'var(--sv-text-dim)' }}>{PAPEL_LABELS[u.papel] || u.papel}</td>
-                  <td style={{ color: 'var(--sv-text-dim)' }}>{u.lojas.length > 0 ? u.lojas.join(', ') : '—'}</td>
-                  <td>
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '2px 10px',
-                      borderRadius: 999,
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      background: u.ativo ? 'color-mix(in srgb, var(--sv-success) 15%, transparent)' : 'color-mix(in srgb, var(--sv-error) 15%, transparent)',
-                      color: u.ativo ? 'var(--sv-success)' : 'var(--sv-error)',
-                    }}>
-                      {u.ativo ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => setUsuarioEditar(u)}
-                        title="Editar dados e lojas deste usuário"
-                      >
-                        <Edit size={14} />
-                        Editar
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => setUsuarioReset(u)}
-                        title="Redefinir a senha deste usuário"
-                      >
-                        <KeyRound size={14} />
-                        Resetar senha
-                      </button>
-                    </div>
-                  </td>
+        <>
+          <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
+            <table className="stock-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      className="sv-checkbox"
+                      checked={todosNaPaginaMarcados}
+                      onChange={toggleTodosPagina}
+                      title="Selecionar todos desta página"
+                    />
+                  </th>
+                  {['Nome', 'E-mail', 'Papel', 'Lojas', 'Status', 'Ações'].map((h) => (
+                    <th key={h}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {usuariosPaginados.map((u) => (
+                  <tr key={u.id}>
+                    <td style={{ textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        className="sv-checkbox"
+                        checked={selecionados.has(u.id)}
+                        onChange={() => toggleItem(u.id)}
+                      />
+                    </td>
+                    <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{u.nome}</td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>{u.email}</td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>{PAPEL_LABELS[u.papel] || u.papel}</td>
+                    <td style={{ color: 'var(--sv-text-dim)' }}>{u.lojas.length > 0 ? u.lojas.join(', ') : '—'}</td>
+                    <td>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '2px 10px',
+                        borderRadius: 999,
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        background: u.ativo ? 'color-mix(in srgb, var(--sv-success) 15%, transparent)' : 'color-mix(in srgb, var(--sv-error) 15%, transparent)',
+                        color: u.ativo ? 'var(--sv-success)' : 'var(--sv-error)',
+                      }}>
+                        {u.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                          onClick={() => setUsuarioEditar(u)}
+                          title="Editar dados e lojas deste usuário"
+                        >
+                          <Edit size={14} />
+                          Editar
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 4 }}
+                          onClick={() => setUsuarioReset(u)}
+                          title="Redefinir a senha deste usuário"
+                        >
+                          <KeyRound size={14} />
+                          Resetar senha
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <Pagination
+            pagina={paginaValida}
+            totalItens={usuarios.length}
+            itensPorPagina={itensPorPagina}
+            onPaginaChange={setPagina}
+            onItensPorPaginaChange={(limite) => {
+              setItensPorPagina(limite)
+              setPagina(1)
+            }}
+          />
+        </>
       )}
 
       {usuarioReset && (
@@ -4850,25 +5300,17 @@ interface ResultadoTestes {
   saida: string
 }
 
-function AbaTestes() {
-  const [rodando, setRodando] = useState(false)
-  const [resultado, setResultado] = useState<ResultadoTestes | null>(null)
-  const [erro, setErro] = useState<string | null>(null)
-
-  const rodar = async () => {
-    setRodando(true)
-    setErro(null)
-    setResultado(null)
-    try {
-      const r = await api.post<ResultadoTestes>('/admin/testes/rodar')
-      setResultado(r)
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Falha ao executar os testes.')
-    } finally {
-      setRodando(false)
-    }
-  }
-
+function AbaTestes({
+  rodando,
+  resultado,
+  erro,
+  onRodar,
+}: {
+  rodando: boolean
+  resultado: ResultadoTestes | null
+  erro: string | null
+  onRodar: () => void
+}) {
   const cor = resultado?.ok ? 'var(--sv-success)' : 'var(--sv-error)'
 
   return (
@@ -4882,12 +5324,12 @@ function AbaTestes() {
         </div>
         <button
           className="btn btn-primary"
-          onClick={rodar}
+          onClick={onRodar}
           disabled={rodando}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: rodando ? 'wait' : 'pointer' }}
         >
           {rodando ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <Play size={16} />}
-          {rodando ? 'Rodando…' : 'Rodar testes'}
+          {rodando ? 'Rodando em segundo plano…' : 'Rodar testes'}
         </button>
       </div>
 
@@ -4898,8 +5340,25 @@ function AbaTestes() {
         </div>
       )}
 
-      {rodando && !resultado && (
-        <LoadingState msg="Executando a suíte (pode levar alguns segundos)…" />
+      {rodando && (
+        <div style={{
+          marginTop: 20,
+          padding: 16,
+          borderRadius: 'var(--sv-radius)',
+          background: 'rgba(59, 130, 246, 0.08)',
+          border: '1px solid rgba(59, 130, 246, 0.2)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12
+        }}>
+          <span className="spinner" style={{ width: 18, height: 18 }} />
+          <div>
+            <div style={{ fontWeight: 600, color: 'var(--sv-primary-text)' }}>Executando suíte de testes em segundo plano...</div>
+            <div style={{ fontSize: 13, color: 'var(--sv-text-dim)' }}>
+              Você pode trocar de aba e continuar usando o painel livremente. O resultado será exibido aqui assim que concluído.
+            </div>
+          </div>
+        </div>
       )}
 
       {resultado && (
@@ -4968,6 +5427,9 @@ function AbaConsumoIA() {
   const [dados, setDados] = useState<ConsumoIA | null>(null)
   const [dias, setDias] = useState(30)
   const [funcionalidade, setFuncionalidade] = useState('')
+  const [pagina, setPagina] = useState(1)
+  const [itensPorPagina, setItensPorPagina] = useState(15)
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -4982,10 +5444,62 @@ function AbaConsumoIA() {
       .finally(() => setLoading(false))
   }, [dias, funcionalidade])
 
-  useEffect(() => { carregar() }, [carregar])
+  useEffect(() => {
+    setPagina(1)
+    setSelecionados(new Set())
+    carregar()
+  }, [carregar])
 
   // O maior consumo vira a régua das barras de proporção.
   const maiorTotal = dados?.lojas.length ? dados.lojas[0].tokens_total : 0
+
+  const toggleItem = (id: string) => {
+    setSelecionados((prev) => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }
+
+  const toggleTodosPagina = () => {
+    const idsPagina = lojasPaginadas.map((l) => l.loja_id)
+    const todosMarcados = idsPagina.every((id) => selecionados.has(id))
+    setSelecionados((prev) => {
+      const n = new Set(prev)
+      if (todosMarcados) {
+        idsPagina.forEach((id) => n.delete(id))
+      } else {
+        idsPagina.forEach((id) => n.add(id))
+      }
+      return n
+    })
+  }
+
+  const colunasExportacao = [
+    { header: 'Loja', accessor: (l: ConsumoLoja) => l.loja_nome },
+    { header: 'Chamadas', accessor: (l: ConsumoLoja) => l.chamadas },
+    { header: 'Tokens Entrada', accessor: (l: ConsumoLoja) => l.tokens_input },
+    { header: 'Tokens Saída', accessor: (l: ConsumoLoja) => l.tokens_output },
+    { header: 'Tokens Total', accessor: (l: ConsumoLoja) => l.tokens_total },
+  ]
+
+  const exportarSelecionados = () => {
+    if (!dados) return
+    const selecionadosItens = dados.lojas.filter((l) => selecionados.has(l.loja_id))
+    exportarParaCSV('consumo_ia_selecionados.csv', selecionadosItens, colunasExportacao)
+  }
+
+  const exportarTotal = () => {
+    if (!dados) return
+    exportarParaCSV('consumo_ia_todos.csv', dados.lojas, colunasExportacao)
+  }
+
+  const totalLojas = dados?.lojas.length || 0
+  const totalPaginas = Math.ceil(totalLojas / itensPorPagina)
+  const paginaValida = Math.max(1, Math.min(pagina, totalPaginas || 1))
+  const lojasPaginadas = dados ? dados.lojas.slice((paginaValida - 1) * itensPorPagina, paginaValida * itensPorPagina) : []
+  const todosNaPaginaMarcados = lojasPaginadas.length > 0 && lojasPaginadas.every((l) => selecionados.has(l.loja_id))
 
   return (
     <div style={{ marginTop: '24px' }}>
@@ -5012,7 +5526,34 @@ function AbaConsumoIA() {
         >
           <RefreshCw size={14} /> Atualizar
         </button>
+
+        {dados && dados.lojas.length > 0 && (
+          <button
+            className="btn btn-secondary"
+            onClick={exportarTotal}
+            style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, height: 40 }}
+            title="Exportar todos os registros de consumo de IA em CSV"
+          >
+            <Download size={14} /> Exportar Todos ({dados.lojas.length})
+          </button>
+        )}
       </div>
+
+      {selecionados.size > 0 && (
+        <div className="sv-selection-bar">
+          <div className="sv-selection-count">
+            <span>{selecionados.size} {selecionados.size === 1 ? 'loja selecionada' : 'lojas selecionadas'}</span>
+          </div>
+          <div className="sv-selection-actions">
+            <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }} onClick={exportarSelecionados}>
+              <Download size={14} /> Exportar Selecionadas ({selecionados.size})
+            </button>
+            <button className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: 13 }} onClick={() => setSelecionados(new Set())}>
+              Limpar Seleção
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <LoadingState msg="Carregando consumo de IA…" />
@@ -5052,56 +5593,89 @@ function AbaConsumoIA() {
           {dados.lojas.length === 0 ? (
             <EmptyState msg="Nenhum consumo de IA registrado no período." />
           ) : (
-            <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
-              <table className="stock-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Loja</th>
-                    <th style={{ textAlign: 'right' }}>Chamadas</th>
-                    <th style={{ textAlign: 'right' }}>Entrada</th>
-                    <th style={{ textAlign: 'right' }}>Saída</th>
-                    <th style={{ textAlign: 'right' }}>Total</th>
-                    <th style={{ width: '20%' }}>Proporção</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dados.lojas.map((l, i) => (
-                    <tr key={l.loja_id}>
-                      <td style={{ color: 'var(--sv-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</td>
-                      <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{l.loja_nome}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--sv-text-dim)', fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtNum(l.chamadas)}
-                      </td>
-                      <td style={{ textAlign: 'right', color: 'var(--sv-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtTokens(l.tokens_input)}
-                      </td>
-                      <td style={{ textAlign: 'right', color: 'var(--sv-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtTokens(l.tokens_output)}
-                      </td>
-                      <td style={{ textAlign: 'right', color: 'var(--sv-text)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtNum(l.tokens_total)}
-                      </td>
-                      <td>
-                        <div
-                          style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}
-                          title={`${fmtNum(l.tokens_total)} tokens`}
-                        >
-                          <div
-                            style={{
-                              height: '100%',
-                              width: `${maiorTotal ? Math.max((l.tokens_total / maiorTotal) * 100, 2) : 0}%`,
-                              background: 'var(--sv-primary)',
-                              borderRadius: 999,
-                            }}
-                          />
-                        </div>
-                      </td>
+            <>
+              <div style={{ overflow: 'auto', borderRadius: 'var(--sv-radius-lg)', border: '1px solid var(--sv-border)' }}>
+                <table className="stock-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: 40, textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          className="sv-checkbox"
+                          checked={todosNaPaginaMarcados}
+                          onChange={toggleTodosPagina}
+                          title="Selecionar todos desta página"
+                        />
+                      </th>
+                      <th>#</th>
+                      <th>Loja</th>
+                      <th style={{ textAlign: 'right' }}>Chamadas</th>
+                      <th style={{ textAlign: 'right' }}>Entrada</th>
+                      <th style={{ textAlign: 'right' }}>Saída</th>
+                      <th style={{ textAlign: 'right' }}>Total</th>
+                      <th style={{ width: '20%' }}>Proporção</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {lojasPaginadas.map((l, i) => {
+                      const indiceGlobal = (paginaValida - 1) * itensPorPagina + i + 1
+                      return (
+                        <tr key={l.loja_id}>
+                          <td style={{ textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              className="sv-checkbox"
+                              checked={selecionados.has(l.loja_id)}
+                              onChange={() => toggleItem(l.loja_id)}
+                            />
+                          </td>
+                          <td style={{ color: 'var(--sv-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{indiceGlobal}</td>
+                          <td style={{ color: 'var(--sv-text)', fontWeight: 600 }}>{l.loja_nome}</td>
+                          <td style={{ textAlign: 'right', color: 'var(--sv-text-dim)', fontVariantNumeric: 'tabular-nums' }}>
+                            {fmtNum(l.chamadas)}
+                          </td>
+                          <td style={{ textAlign: 'right', color: 'var(--sv-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                            {fmtTokens(l.tokens_input)}
+                          </td>
+                          <td style={{ textAlign: 'right', color: 'var(--sv-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                            {fmtTokens(l.tokens_output)}
+                          </td>
+                          <td style={{ textAlign: 'right', color: 'var(--sv-text)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                            {fmtNum(l.tokens_total)}
+                          </td>
+                          <td>
+                            <div
+                              style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}
+                              title={`${fmtNum(l.tokens_total)} tokens`}
+                            >
+                              <div
+                                style={{
+                                  height: '100%',
+                                  width: `${maiorTotal ? Math.max((l.tokens_total / maiorTotal) * 100, 2) : 0}%`,
+                                  background: 'var(--sv-primary)',
+                                  borderRadius: 999,
+                                }}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <Pagination
+                pagina={paginaValida}
+                totalItens={totalLojas}
+                itensPorPagina={itensPorPagina}
+                onPaginaChange={setPagina}
+                onItensPorPaginaChange={(limite) => {
+                  setItensPorPagina(limite)
+                  setPagina(1)
+                }}
+              />
+            </>
           )}
 
           <p style={{ color: 'var(--sv-text-muted)', fontSize: 12, marginTop: 12 }}>
@@ -5120,11 +5694,11 @@ type Aba = 'overview' | 'lojas' | 'financeiro' | 'planos' | 'contrato' | 'audito
 
 const ABAS: { id: Aba; label: string; Icon: typeof Shield }[] = [
   { id: 'overview', label: 'Overview', Icon: Shield },
-  { id: 'lojas', label: 'Lojas', Icon: Building2 },
-  { id: 'usuarios', label: 'Usuários', Icon: Users },
-  { id: 'financeiro', label: 'Financeiro', Icon: CreditCard },
-  { id: 'planos', label: 'Planos', Icon: Package },
-  { id: 'contrato', label: 'Contrato', Icon: FileText },
+  { id: 'planos', label: '1. Planos', Icon: Package },
+  { id: 'contrato', label: '2. Contrato', Icon: FileText },
+  { id: 'lojas', label: '3. Lojas', Icon: Building2 },
+  { id: 'usuarios', label: '4. Usuários', Icon: Users },
+  { id: 'financeiro', label: '5. Financeiro', Icon: CreditCard },
   { id: 'consumo-ia', label: 'Consumo IA', Icon: Sparkles },
   { id: 'auditoria', label: 'Auditoria', Icon: ClipboardList },
   { id: 'erros', label: 'Erros', Icon: AlertTriangle },
@@ -5133,6 +5707,24 @@ const ABAS: { id: Aba; label: string; Icon: typeof Shield }[] = [
 
 export function AdminPage() {
   const [aba, setAba] = useState<Aba>('overview')
+  const [modalNovaLoja, setModalNovaLoja] = useState(false)
+  const [testesRodando, setTestesRodando] = useState(false)
+  const [testesResultado, setTestesResultado] = useState<ResultadoTestes | null>(null)
+  const [testesErro, setTestesErro] = useState<string | null>(null)
+
+  const rodarTestes = async () => {
+    setTestesRodando(true)
+    setTestesErro(null)
+    setTestesResultado(null)
+    try {
+      const r = await api.post<ResultadoTestes>('/admin/testes/rodar')
+      setTestesResultado(r)
+    } catch (e) {
+      setTestesErro(e instanceof Error ? e.message : 'Falha ao executar os testes.')
+    } finally {
+      setTestesRodando(false)
+    }
+  }
 
   return (
     <div className="page-content">
@@ -5145,18 +5737,61 @@ export function AdminPage() {
         </div>
       </div>
 
+      {/* Esteira de Onboarding de Clientes */}
+      <EsteiraOnboardingGuide
+        onNavegarAba={(a) => setAba(a as Aba)}
+        onAbrirModalNovaLoja={() => {
+          setAba('lojas')
+          setModalNovaLoja(true)
+        }}
+      />
+
       {/* Abas */}
       <div className="crm-tabs">
-        {ABAS.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            onClick={() => setAba(id)}
-            className={`crm-tab-btn ${aba === id ? 'active' : ''}`}
-          >
-            <Icon size={16} style={{ marginRight: '8px', display: 'inline-block', verticalAlign: 'middle', marginTop: '-2px' }} />
-            <span style={{ verticalAlign: 'middle' }}>{label}</span>
-          </button>
-        ))}
+        {ABAS.map(({ id, label, Icon }) => {
+          const isTestes = id === 'testes'
+          return (
+            <button
+              key={id}
+              onClick={() => setAba(id)}
+              className={`crm-tab-btn ${aba === id ? 'active' : ''}`}
+              style={{ position: 'relative' }}
+            >
+              <Icon size={16} style={{ marginRight: '8px', display: 'inline-block', verticalAlign: 'middle', marginTop: '-2px' }} />
+              <span style={{ verticalAlign: 'middle' }}>{label}</span>
+
+              {isTestes && testesRodando && (
+                <span
+                  style={{
+                    marginLeft: 6,
+                    display: 'inline-block',
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--sv-primary)',
+                    boxShadow: '0 0 8px var(--sv-primary)',
+                    animation: 'spin 1s linear infinite'
+                  }}
+                  title="Testes em andamento em segundo plano"
+                />
+              )}
+
+              {isTestes && !testesRodando && testesResultado && (
+                <span
+                  style={{
+                    marginLeft: 6,
+                    display: 'inline-block',
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: testesResultado.ok ? 'var(--sv-success)' : 'var(--sv-error)'
+                  }}
+                  title={testesResultado.ok ? 'Último teste passou' : 'Há testes falhando'}
+                />
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {aba === 'overview' && <AbaOverview />}
@@ -5168,7 +5803,24 @@ export function AdminPage() {
       {aba === 'consumo-ia' && <AbaConsumoIA />}
       {aba === 'auditoria' && <AbaAuditoria />}
       {aba === 'erros' && <AbaErros />}
-      {aba === 'testes' && <AbaTestes />}
+      {aba === 'testes' && (
+        <AbaTestes
+          rodando={testesRodando}
+          resultado={testesResultado}
+          erro={testesErro}
+          onRodar={rodarTestes}
+        />
+      )}
+
+      {modalNovaLoja && (
+        <ModalNovaLoja
+          onClose={() => setModalNovaLoja(false)}
+          onSaved={() => {
+            setModalNovaLoja(false)
+            setAba('lojas')
+          }}
+        />
+      )}
     </div>
   )
 }

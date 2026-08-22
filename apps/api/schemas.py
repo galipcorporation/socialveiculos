@@ -152,6 +152,7 @@ class VeiculoResumo(BaseModel):
     ano_modelo: Optional[int] = None
     placa: Optional[str] = None
     foto: Optional[str] = None
+    loja_id: Optional[str] = None
 
 
 # ── Veículo B2B (Gestor Privado) ──────────────────────────────
@@ -1700,6 +1701,7 @@ class ConversaB2CResponse(BaseModel):
     veiculo_id: Optional[str] = None
     veiculo_modelo: Optional[str] = None
     veiculo_marca: Optional[str] = None
+    veiculo_foto: Optional[str] = None
     ativa: bool
     # Arquivamento por saída do veículo (vendido/reservado/despublicado).
     arquivada_em: Optional[datetime] = None

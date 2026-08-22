@@ -93,6 +93,7 @@ interface VeiculoResumoConversa {
   ano_modelo?: number
   placa?: string
   foto?: string
+  loja_id?: string
 }
 
 type StatusNegociacao = 'pendente' | 'aceita' | 'rejeitada' | 'cancelada' | 'em_negociacao' | 'fechou' | 'nao_fechou'
@@ -1107,8 +1108,6 @@ function ChatTab({ user, addToast, initialConversaId, subTab, setSubTab }: { use
     setNewMessage('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
-    // Envia por POST REST para garantir o envio e feedback imediato.
-    // O WebSocket fará o broadcast para o outro participante em tempo real.
     try {
       const res = await api.post<Mensagem>(`/b2b/chat/conversas/${activeConversa.id}/mensagens`, { conteudo: content })
       setMensagens(prev => prev.some(m => m.id === res.id) ? prev : [...prev, res])
@@ -1117,7 +1116,6 @@ function ChatTab({ user, addToast, initialConversaId, subTab, setSubTab }: { use
           ? { ...conv, ultima_mensagem: res.conteudo, ultima_mensagem_data: res.created_at }
           : conv
       ))
-      // Opcional: envia sinal leve de digitação ou notificação pelo WebSocket se conectado
       wsRef.current?.send({ conversa_id: activeConversa.id, conteudo: content, silently: true })
     } catch (err: any) {
       addToast('error', err.message || 'Erro ao enviar mensagem')
@@ -1148,41 +1146,46 @@ function ChatTab({ user, addToast, initialConversaId, subTab, setSubTab }: { use
       {/* Sidebar */}
       <div className="gc-chat-sidebar">
         <div className="gc-chat-sidebar-head">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}>
-            <h2 
-              style={{ 
-                cursor: 'pointer', 
-                opacity: subTab === 'parceiros' ? 1 : 0.4, 
-                borderBottom: subTab === 'parceiros' ? '2px solid var(--sv-primary)' : 'none',
-                paddingBottom: 4,
-                marginBottom: 0,
-                fontSize: '18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6
-              }} 
-              onClick={() => setSubTab('parceiros')}
-            >
-              Parceiros
-              {unreadB2B > 0 && <span className="sidebar-nav-badge" style={{ padding: '2px 6px', fontSize: '10px', marginLeft: 0 }}>{unreadB2B}</span>}
-            </h2>
-            <h2 
-              style={{ 
-                cursor: 'pointer', 
-                opacity: subTab === 'clientes' ? 1 : 0.4, 
-                borderBottom: subTab === 'clientes' ? '2px solid var(--sv-primary)' : 'none',
-                paddingBottom: 4,
-                marginBottom: 0,
-                fontSize: '18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6
-              }} 
-              onClick={() => setSubTab('clientes')}
-            >
-              Clientes
-              {unreadB2C > 0 && <span className="sidebar-nav-badge" style={{ padding: '2px 6px', fontSize: '10px', marginLeft: 0 }}>{unreadB2C}</span>}
-            </h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <h2 
+                style={{ 
+                  cursor: 'pointer', 
+                  opacity: subTab === 'parceiros' ? 1 : 0.4, 
+                  borderBottom: subTab === 'parceiros' ? '2px solid var(--sv-primary)' : 'none',
+                  paddingBottom: 4,
+                  marginBottom: 0,
+                  fontSize: '18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }} 
+                onClick={() => setSubTab('parceiros')}
+              >
+                Parceiros
+                {unreadB2B > 0 && <span className="sidebar-nav-badge" style={{ padding: '2px 6px', fontSize: '10px', marginLeft: 0 }}>{unreadB2B}</span>}
+              </h2>
+              <h2 
+                style={{ 
+                  cursor: 'pointer', 
+                  opacity: subTab === 'clientes' ? 1 : 0.4, 
+                  borderBottom: subTab === 'clientes' ? '2px solid var(--sv-primary)' : 'none',
+                  paddingBottom: 4,
+                  marginBottom: 0,
+                  fontSize: '18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }} 
+                onClick={() => setSubTab('clientes')}
+              >
+                Clientes
+                {unreadB2C > 0 && <span className="sidebar-nav-badge" style={{ padding: '2px 6px', fontSize: '10px', marginLeft: 0 }}>{unreadB2C}</span>}
+              </h2>
+            </div>
+            <button className="btn quick-action-btn" style={{ fontSize: 12 }} onClick={() => setAbrirNovaModal(true)}>
+              + Nova conversa
+            </button>
           </div>
           <div className="gc-chat-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1208,8 +1211,12 @@ function ChatTab({ user, addToast, initialConversaId, subTab, setSubTab }: { use
               <div className="gc-conv-info">
                 <div className="gc-conv-name">{destName(conv)}</div>
                 {conv.veiculo ? (
-                  <div className="gc-conv-veiculo-chip">
-                    <CarIcon />
+                  <div className="gc-conv-veiculo-chip" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {conv.veiculo.foto ? (
+                      <img src={conv.veiculo.foto} alt="Carro" style={{ width: 18, height: 14, borderRadius: 2, objectFit: 'cover' }} />
+                    ) : (
+                      <CarIcon />
+                    )}
                     <span>{conv.veiculo.marca} {conv.veiculo.modelo}{conv.veiculo.ano_modelo ? ` · ${conv.veiculo.ano_modelo}` : ''}</span>
                   </div>
                 ) : null}
@@ -1348,6 +1355,7 @@ interface ConversaCliente {
   veiculo_id?: string
   veiculo_marca?: string
   veiculo_modelo?: string
+  veiculo_foto?: string
   veiculo_status?: string
   ativa: boolean
   arquivada_em?: string | null
@@ -1377,6 +1385,7 @@ function ChatClientesTab({ user, addToast, subTab, setSubTab }: { user: any, add
   const [filtered, setFiltered] = useState<ConversaCliente[]>([])
   const [search, setSearch] = useState('')
   const [activeConversa, setActiveConversa] = useState<ConversaCliente | null>(null)
+  const [modalGerenciarConversa, setModalGerenciarConversa] = useState<ConversaCliente | null>(null)
   const [mensagens, setMensagens] = useState<Mensagem[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [loadingConversas, setLoadingConversas] = useState(true)
@@ -1510,6 +1519,31 @@ function ChatClientesTab({ user, addToast, subTab, setSubTab }: { user: any, add
     }
   }
 
+  const handleArquivarConversa = async (convId: string) => {
+    try {
+      await api.post(`/vitrine/chat/conversas/${convId}/arquivar`, {})
+      addToast('success', 'Conversa arquivada com sucesso.')
+      setConversas(prev => prev.map(c => c.id === convId ? { ...c, ativa: false, arquivada_em: new Date().toISOString(), motivo_arquivo: 'manual' } : c))
+      setFiltered(prev => prev.map(c => c.id === convId ? { ...c, ativa: false, arquivada_em: new Date().toISOString(), motivo_arquivo: 'manual' } : c))
+      setModalGerenciarConversa(null)
+    } catch (err: any) {
+      addToast('error', err.message || 'Erro ao arquivar conversa')
+    }
+  }
+
+  const handleExcluirConversa = async (convId: string) => {
+    try {
+      await api.post(`/vitrine/chat/conversas/${convId}/excluir`, {})
+      addToast('success', 'Conversa excluída da listagem.')
+      setConversas(prev => prev.filter(c => c.id !== convId))
+      setFiltered(prev => prev.filter(c => c.id !== convId))
+      if (activeConversa?.id === convId) setActiveConversa(null)
+      setModalGerenciarConversa(null)
+    } catch (err: any) {
+      addToast('error', err.message || 'Erro ao excluir conversa')
+    }
+  }
+
   const autoResize = () => {
     const el = textareaRef.current
     if (!el) return
@@ -1565,9 +1599,14 @@ function ChatClientesTab({ user, addToast, subTab, setSubTab }: { user: any, add
         <div className="gc-conv-avatar">{gcInitials(clienteNome(conv))}</div>
         <div className="gc-conv-info">
           <div className="gc-conv-name">{clienteNome(conv)}</div>
-          {/* O veículo é o assunto da conversa — sem ele o vendedor não sabe de
-              qual carro o cliente está falando. */}
-          {veiculo && <div className="gc-conv-veiculo">{veiculo}</div>}
+          {veiculo && (
+            <div className="gc-conv-veiculo" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {conv.veiculo_foto ? (
+                <img src={conv.veiculo_foto} alt="Carro" style={{ width: 18, height: 14, borderRadius: 2, objectFit: 'cover' }} />
+              ) : null}
+              <span>{veiculo}</span>
+            </div>
+          )}
           <div className="gc-conv-preview">{conv.ultima_mensagem || 'Sem mensagens.'}</div>
         </div>
         <div className="gc-conv-meta">
@@ -1675,21 +1714,37 @@ function ChatClientesTab({ user, addToast, subTab, setSubTab }: { user: any, add
               <div className="gc-chat-head-left">
                 <div className="gc-chat-head-avatar">{gcInitials(clienteNome(activeConversa))}</div>
                 <div className="gc-chat-head-info">
-                  <h4>
-                    {clienteNome(activeConversa)}
-                    {veiculoDaConversa(activeConversa) && (
-                      <span className="gc-chat-head-veiculo">· {veiculoDaConversa(activeConversa)}</span>
-                    )}
-                  </h4>
+                  <h4>{clienteNome(activeConversa)}</h4>
+                  {veiculoDaConversa(activeConversa) && (
+                    <div
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginTop: 2, background: 'rgba(255, 255, 255, 0.04)', padding: '3px 8px', borderRadius: 6, border: '1px solid var(--sv-border)' }}
+                      onClick={() => {
+                        if (activeConversa.veiculo_id) navigate(`/estoque?id=${activeConversa.veiculo_id}`)
+                      }}
+                      title="Ver meu veículo no estoque"
+                    >
+                      {activeConversa.veiculo_foto ? (
+                        <img src={activeConversa.veiculo_foto} alt="Carro" style={{ width: 24, height: 18, borderRadius: 3, objectFit: 'cover' }} />
+                      ) : (
+                        <CarIcon />
+                      )}
+                      <span style={{ fontSize: 13, color: 'var(--sv-primary)', fontWeight: 600 }}>
+                        {veiculoDaConversa(activeConversa)}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--sv-text-muted)' }}>(Meu estoque)</span>
+                    </div>
+                  )}
                   {activeTriagem && (
-                    <span style={{ color: activeTriagem.classificacao === 'quente' ? '#ef4444' : 'var(--sv-text-muted)', fontSize: 11 }}>
-                      {activeTriagem.classificacao === 'quente' ? '🔥 Lead quente' : '❄️ Possível ruído'}
-                      {activeTriagem.justificativa && ` — ${activeTriagem.justificativa}`}
-                    </span>
+                    <div style={{ marginTop: 2 }}>
+                      <span style={{ color: activeTriagem.classificacao === 'quente' ? '#ef4444' : 'var(--sv-text-muted)', fontSize: 11 }}>
+                        {activeTriagem.classificacao === 'quente' ? '🔥 Lead quente' : '❄️ Possível ruído'}
+                        {activeTriagem.justificativa && ` — ${activeTriagem.justificativa}`}
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>
-              <div className="gc-chat-head-actions">
+              <div className="gc-chat-head-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button
                   className="btn quick-action-btn"
                   style={{ fontSize: 12 }}
@@ -1697,6 +1752,18 @@ function ChatClientesTab({ user, addToast, subTab, setSubTab }: { user: any, add
                   onClick={() => handleTriar(activeConversa.id)}
                 >
                   {triandoId === activeConversa.id ? 'Analisando...' : '✨ Triar com IA'}
+                </button>
+
+                <button
+                  className="btn quick-action-btn"
+                  style={{ fontSize: 12, padding: '6px 10px', color: 'var(--sv-error)', borderColor: 'color-mix(in srgb, var(--sv-error) 30%, transparent)' }}
+                  onClick={() => setModalGerenciarConversa(activeConversa)}
+                  title="Arquivar ou excluir conversa"
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
                 </button>
               </div>
             </div>
@@ -1776,6 +1843,52 @@ function ChatClientesTab({ user, addToast, subTab, setSubTab }: { user: any, add
           </div>
         )}
       </div>
+
+      {modalGerenciarConversa && (
+        <div className="modal-overlay" onClick={() => setModalGerenciarConversa(null)}>
+          <div className="modal-container glass-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 440, padding: 24 }}>
+            <div className="modal-header" style={{ marginBottom: 16 }}>
+              <h3 className="modal-title" style={{ margin: 0, fontSize: 16 }}>Gerenciar Conversa</h3>
+              <button className="modal-close" onClick={() => setModalGerenciarConversa(null)}>×</button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <p style={{ margin: 0, fontSize: 14, color: 'var(--sv-text-dim)' }}>
+                Escolha a ação para a conversa de <strong>{clienteNome(modalGerenciarConversa)}</strong>:
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'flex-start', textAlign: 'left', borderRadius: 'var(--sv-radius)' }}
+                  onClick={() => handleArquivarConversa(modalGerenciarConversa.id)}
+                >
+                  <span style={{ fontSize: 20 }}>📦</span>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--sv-text)', fontSize: 14 }}>Arquivar Conversa</div>
+                    <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>Oculta da lista ativa e move para as arquivadas.</div>
+                  </div>
+                </button>
+
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'flex-start', textAlign: 'left', borderRadius: 'var(--sv-radius)', borderColor: 'color-mix(in srgb, var(--sv-error) 30%, transparent)' }}
+                  onClick={() => handleExcluirConversa(modalGerenciarConversa.id)}
+                >
+                  <span style={{ fontSize: 20 }}>🗑️</span>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--sv-error)', fontSize: 14 }}>Excluir Conversa</div>
+                    <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>Remove a conversa da sua visão (soft delete no BD).</div>
+                  </div>
+                </button>
+              </div>
+
+              <div className="modal-footer" style={{ marginTop: 8, justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setModalGerenciarConversa(null)}>Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

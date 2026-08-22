@@ -164,6 +164,58 @@ export function Equipe() {
     }
   }
 
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === membros.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(membros.map(m => m.id))
+    }
+  }
+
+  const toggleSelectRow = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
+  }
+
+  const handleBulkDesativar = async () => {
+    if (selectedIds.length === 0) return
+    const ok = await confirm({
+      title: 'Desativar Membros em Lote',
+      message: `Tem certeza que deseja desativar os ${selectedIds.length} membro(s) selecionados?`,
+      confirmText: 'Desativar Todos',
+      cancelText: 'Cancelar',
+    })
+    if (!ok) return
+    try {
+      await Promise.all(selectedIds.map(id => api.patch(`/equipe/${id}`, { ativo: false })))
+      showToast(`${selectedIds.length} membro(s) desativado(s) com sucesso.`, 'success')
+      setSelectedIds([])
+      carregar()
+    } catch (err) {
+      showToast('Erro ao desativar membros em lote', 'error')
+    }
+  }
+
+  const handleBulkRemover = async () => {
+    if (selectedIds.length === 0) return
+    const ok = await confirm({
+      title: 'Remover Membros em Lote',
+      message: `Tem certeza que deseja remover os ${selectedIds.length} membro(s) selecionados da equipe? Esta ação não pode ser desfeita.`,
+      confirmText: 'Remover Todos',
+      cancelText: 'Cancelar',
+    })
+    if (!ok) return
+    try {
+      await Promise.all(selectedIds.map(id => api.delete(`/equipe/${id}`)))
+      showToast(`${selectedIds.length} membro(s) removido(s) com sucesso.`, 'success')
+      setSelectedIds([])
+      carregar()
+    } catch (err) {
+      showToast('Erro ao remover membros em lote', 'error')
+    }
+  }
+
   return (
     <div className="page-content">
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -284,66 +336,125 @@ export function Equipe() {
           <p>Convide gestores e vendedores para colaborar na sua loja.</p>
         </div>
       ) : (
-        <div className="glass-card" style={{ padding: 0 }}>
-          <div className="table-scroll">
-          <table className="responsive-table" style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: '14px' }}>
-            <thead>
-              <tr style={{ textAlign: 'left', color: 'var(--sv-text-dim)', fontSize: '12px', textTransform: 'uppercase' }}>
-                <th style={{ padding: '12px 16px' }}>Nome</th>
-                <th style={{ padding: '12px 16px' }}>E-mail</th>
-                <th style={{ padding: '12px 16px' }}>Papel</th>
-                <th style={{ padding: '12px 16px' }}>Comissão</th>
-                <th style={{ padding: '12px 16px' }}>Status</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {membros.map((m) => (
-                <tr key={m.id} style={{ borderTop: '1px solid var(--sv-border)' }}>
-                  <td className="cell-title" data-label="Nome" style={{ padding: '12px 16px', fontWeight: 600 }}>{m.nome}</td>
-                  <td data-label="E-mail" style={{ padding: '12px 16px', color: 'var(--sv-text-dim)', wordBreak: 'break-word' }}>{m.email}</td>
-                  <td data-label="Papel" style={{ padding: '12px 16px' }}>{PAPEL_LABEL[m.papel] ?? m.papel}</td>
-                  <td data-label="Comissão" style={{ padding: '12px 16px' }}>
-                    {m.papel === 'vendedor' ? (
-                      <ComissaoInput
-                        membro={m}
-                        onSaved={(pct) =>
-                          setMembros((prev) => prev.map((x) => (x.id === m.id ? { ...x, percentual_comissao: pct } : x)))
-                        }
-                      />
-                    ) : (
-                      <span style={{ color: 'var(--sv-text-muted)' }}>—</span>
-                    )}
-                  </td>
-                  <td data-label="Status" style={{ padding: '12px 16px' }}>
-                    <span style={{ color: m.ativo ? 'var(--sv-success)' : 'var(--sv-text-muted)', fontWeight: 600 }}>
-                      {m.ativo ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
-                  <td className="cell-actions" style={{ padding: '12px 16px', textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                    {m.papel === 'vendedor' && (
-                      <>
-                        <button className="btn btn-outline btn-sm" onClick={() => setMembroAcessos(m)}>
-                          Editar Acessos
-                        </button>
-                        <button className="btn btn-outline btn-sm" onClick={() => setMembroPermissaoIa(m)}>
-                          Config. IA
-                        </button>
-                      </>
-                    )}
-                    <button className="btn btn-glass btn-sm" onClick={() => handleToggleAtivo(m)}>
-                      {m.ativo ? 'Desativar' : 'Ativar'}
-                    </button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleRemover(m)}>
-                      Remover
-                    </button>
-                  </td>
+        <>
+          <div className="glass-card" style={{ padding: 0 }}>
+            <div className="table-scroll">
+            <table className="responsive-table" style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: '14px' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: 'var(--sv-text-dim)', fontSize: '12px', textTransform: 'uppercase' }}>
+                  <th style={{ padding: '12px 16px', width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={membros.length > 0 && selectedIds.length === membros.length}
+                      onChange={toggleSelectAll}
+                      style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--sv-primary)' }}
+                    />
+                  </th>
+                  <th style={{ padding: '12px 16px' }}>Nome</th>
+                  <th style={{ padding: '12px 16px' }}>E-mail</th>
+                  <th style={{ padding: '12px 16px' }}>Papel</th>
+                  <th style={{ padding: '12px 16px' }}>Comissão</th>
+                  <th style={{ padding: '12px 16px' }}>Status</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Ações</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {membros.map((m) => {
+                  const isSelected = selectedIds.includes(m.id)
+                  return (
+                    <tr
+                      key={m.id}
+                      style={{ borderTop: '1px solid var(--sv-border)', cursor: 'pointer' }}
+                      className={isSelected ? 'selected-row' : ''}
+                      onClick={() => setMembroAcessos(m)}
+                    >
+                      <td style={{ padding: '12px 16px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectRow(m.id)}
+                          style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--sv-primary)' }}
+                        />
+                      </td>
+                      <td className="cell-title" data-label="Nome" style={{ padding: '12px 16px', fontWeight: 600 }}>{m.nome}</td>
+                      <td data-label="E-mail" style={{ padding: '12px 16px', color: 'var(--sv-text-dim)', wordBreak: 'break-word' }}>{m.email}</td>
+                      <td data-label="Papel" style={{ padding: '12px 16px' }}>{PAPEL_LABEL[m.papel] ?? m.papel}</td>
+                      <td data-label="Comissão" style={{ padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
+                        {m.papel === 'vendedor' ? (
+                          <ComissaoInput
+                            membro={m}
+                            onSaved={(pct) =>
+                              setMembros((prev) => prev.map((x) => (x.id === m.id ? { ...x, percentual_comissao: pct } : x)))
+                            }
+                          />
+                        ) : (
+                          <span style={{ color: 'var(--sv-text-muted)' }}>—</span>
+                        )}
+                      </td>
+                      <td data-label="Status" style={{ padding: '12px 16px' }}>
+                        <span style={{ color: m.ativo ? 'var(--sv-success)' : 'var(--sv-text-muted)', fontWeight: 600 }}>
+                          {m.ativo ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </td>
+                      <td className="cell-actions" style={{ padding: '12px 16px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                          <button className="btn btn-outline btn-sm" onClick={(e) => { e.stopPropagation(); setMembroAcessos(m); }}>
+                            Editar Acessos
+                          </button>
+                          {m.papel === 'vendedor' && (
+                            <button className="btn btn-outline btn-sm" onClick={(e) => { e.stopPropagation(); setMembroPermissaoIa(m); }}>
+                              Config. IA
+                            </button>
+                          )}
+                          <button className="btn btn-glass btn-sm" onClick={(e) => { e.stopPropagation(); handleToggleAtivo(m); }}>
+                            {m.ativo ? 'Desativar' : 'Ativar'}
+                          </button>
+                          <button className="btn btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); handleRemover(m); }}>
+                            Remover
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            </div>
           </div>
-        </div>
+
+          {selectedIds.length > 0 && (
+            <div className="sv-selection-bar" style={{
+              position: 'sticky',
+              bottom: 20,
+              marginTop: 16,
+              background: 'var(--sv-surface-dim)',
+              border: '1px solid var(--sv-border)',
+              backdropFilter: 'blur(var(--sv-blur))',
+              padding: '12px 20px',
+              borderRadius: 'var(--sv-radius-lg)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              zIndex: 20,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
+            }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>
+                {selectedIds.length} membro(s) selecionado(s)
+              </span>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="btn btn-secondary btn-sm" onClick={handleBulkDesativar}>
+                  🚫 Desativar Selecionados
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={handleBulkRemover}>
+                  🗑️ Remover Selecionados
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds([])}>
+                  Limpar Seleção
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {membroPermissaoIa && (
@@ -357,6 +468,14 @@ export function Equipe() {
           onClose={() => setMembroAcessos(null)}
           onSaved={(novos) => {
             setMembros((prev) => prev.map((x) => (x.id === membroAcessos.id ? { ...x, modulos: novos } : x)))
+            setMembroAcessos(null)
+          }}
+          onToggleAtivo={(m) => {
+            handleToggleAtivo(m)
+            setMembroAcessos(null)
+          }}
+          onRemover={(m) => {
+            handleRemover(m)
             setMembroAcessos(null)
           }}
         />
@@ -499,14 +618,16 @@ function EditarAcessosModal({
   disponiveis,
   onClose,
   onSaved,
+  onToggleAtivo,
+  onRemover,
 }: {
   membro: Membro
   disponiveis: ModuloKey[]
   onClose: () => void
   onSaved: (modulos: string) => void
+  onToggleAtivo: (m: Membro) => void
+  onRemover: (m: Membro) => void
 }) {
-  // Descarta módulos que a loja já não tem mais (ex.: plano rebaixado depois
-  // do vendedor ter recebido o acesso) — o backend recusaria o salvamento.
   const [modulos, setModulos] = useState<ModuloKey[]>(
     parseModulos(membro.modulos).filter((k) => disponiveis.includes(k)),
   )
@@ -532,11 +653,46 @@ function EditarAcessosModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-glass" style={{ maxWidth: 480, width: '100%' }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Editar Acessos — {membro.nome}</h3>
+      <div className="modal-glass" style={{ maxWidth: 520, width: '100%' }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h3>Editar Acessos & Permissões</h3>
+            <div style={{ fontSize: 12, color: 'var(--sv-text-muted)', marginTop: 2 }}>{membro.nome} ({membro.email})</div>
+          </div>
           <button className="modal-close" onClick={onClose} aria-label="Fechar">×</button>
         </div>
+
+        {/* Top actions bar */}
+        <div style={{
+          display: 'flex',
+          gap: 10,
+          padding: '12px 16px',
+          background: 'var(--sv-surface-dim)',
+          borderBottom: '1px solid var(--sv-border)',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <span style={{ fontSize: 12, color: 'var(--sv-text-dim)', fontWeight: 600 }}>
+            Status: <strong style={{ color: membro.ativo ? 'var(--sv-success)' : 'var(--sv-text-muted)' }}>{membro.ativo ? 'ATIVO' : 'INATIVO'}</strong>
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-glass btn-sm"
+              onClick={() => onToggleAtivo(membro)}
+            >
+              {membro.ativo ? 'Desativar Membro' : 'Ativar Membro'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              onClick={() => { onClose(); onRemover(membro); }}
+            >
+              Remover Membro
+            </button>
+          </div>
+        </div>
+
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <ModulosChecklist
             modulos={modulos}

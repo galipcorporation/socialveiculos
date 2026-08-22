@@ -78,6 +78,11 @@ export function Financeiro() {
   const [filtroMes, setFiltroMes] = useState<string>(String(dataAtual.getMonth() + 1))
   const [filtroAno, setFiltroAno] = useState<string>(String(dataAtual.getFullYear()))
 
+  // Filtros avançados da tabela
+  const [filtroTipo, setFiltroTipo] = useState<string>('todos')
+  const [filtroVeiculoId, setFiltroVeiculoId] = useState<string>('')
+  const [buscaTexto, setBuscaTexto] = useState<string>('')
+
   const [mostrarForm, setMostrarForm] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [form, setForm] = useState<{ tipo: TipoLancamento; descricao: string; valor: string; status_pagamento: string; veiculo_id: string }>({
@@ -169,13 +174,20 @@ export function Financeiro() {
 
   useEffect(() => {
     carregar()
+    carregarVeiculos()
   }, [filtroMes, filtroAno])
 
-  useEffect(() => {
-    if (mostrarForm && veiculos.length === 0) {
-      carregarVeiculos()
+  const lancamentosFiltrados = lancamentos.filter(l => {
+    if (filtroTipo !== 'todos' && l.tipo !== filtroTipo) return false
+    if (filtroVeiculoId && l.veiculo_id !== filtroVeiculoId) return false
+    if (buscaTexto.trim()) {
+      const q = buscaTexto.toLowerCase()
+      const desc = (l.descricao || '').toLowerCase()
+      const veic = (l.veiculo_nome || '').toLowerCase()
+      if (!desc.includes(q) && !veic.includes(q)) return false
     }
-  }, [mostrarForm])
+    return true
+  })
 
   const handleCriar = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -480,12 +492,100 @@ export function Financeiro() {
         </form>
       )}
 
+      {/* Barra de Filtros Avançados */}
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 12,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 16,
+        background: 'var(--sv-surface-dim)',
+        padding: '12px 16px',
+        borderRadius: 'var(--sv-radius-lg)',
+        border: '1px solid var(--sv-border)'
+      }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', flex: 1 }}>
+          <div style={{ display: 'flex', gap: 4, background: 'var(--sv-bg)', padding: 4, borderRadius: 'var(--sv-radius)' }}>
+            {[
+              { id: 'todos', label: 'Todos' },
+              { id: 'receita', label: 'Receitas' },
+              { id: 'despesa', label: 'Despesas' },
+              { id: 'comissao', label: 'Comissões' },
+            ].map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setFiltroTipo(t.id)}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  borderRadius: 'var(--sv-radius-sm)',
+                  border: 'none',
+                  background: filtroTipo === t.id ? 'var(--sv-primary)' : 'transparent',
+                  color: filtroTipo === t.id ? '#ffffff' : 'var(--sv-text-dim)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s'
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <select
+            value={filtroVeiculoId}
+            onChange={e => setFiltroVeiculoId(e.target.value)}
+            className="filter-select"
+            style={{ height: 34, padding: '0 24px 0 10px', fontSize: 13, minWidth: 200 }}
+          >
+            <option value="">Todos os veículos</option>
+            {veiculos.map(v => (
+              <option key={v.id} value={v.id}>
+                {v.marca} {v.modelo} {v.placa ? `(${v.placa})` : ''}
+              </option>
+            ))}
+          </select>
+
+          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+            <input
+              type="text"
+              placeholder="Buscar por descrição ou veículo..."
+              value={buscaTexto}
+              onChange={e => setBuscaTexto(e.target.value)}
+              style={{
+                width: '100%',
+                height: 34,
+                padding: '0 12px',
+                fontSize: 13,
+                background: 'var(--sv-bg)',
+                border: '1px solid var(--sv-border)',
+                borderRadius: 'var(--sv-radius)',
+                color: 'var(--sv-text)',
+                outline: 'none'
+              }}
+            />
+          </div>
+        </div>
+
+        {(filtroTipo !== 'todos' || filtroVeiculoId || buscaTexto) && (
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ fontSize: 12 }}
+            onClick={() => { setFiltroTipo('todos'); setFiltroVeiculoId(''); setBuscaTexto('') }}
+          >
+            Limpar filtros
+          </button>
+        )}
+      </div>
+
       {/* Lista de lançamentos */}
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '64px' }}>
           <div className="spinner"></div>
         </div>
-      ) : lancamentos.length === 0 ? (
+      ) : lancamentosFiltrados.length === 0 ? (
         <div className="empty-state glass-card">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <line x1="12" y1="1" x2="12" y2="23" />
@@ -510,7 +610,7 @@ export function Financeiro() {
               </tr>
             </thead>
             <tbody>
-              {lancamentos.map((l) => (
+              {lancamentosFiltrados.map((l) => (
                 <tr key={l.id} style={{ borderTop: '1px solid var(--sv-border)', opacity: l.status_pagamento === 'pendente' ? 0.6 : 1 }}>
                   <td data-label="Status" style={{ padding: '12px 16px', width: '100px' }}>
                     <button 

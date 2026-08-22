@@ -430,7 +430,7 @@ function ContratosTabContent({
           <input
             className="search-input"
             type="text"
-            placeholder="Buscar por número ou observações..."
+            placeholder="Buscar por cliente, veículo, número ou CPF..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -455,27 +455,44 @@ function ContratosTabContent({
           <div className="spinner" />
           <p style={{ marginTop: 16 }}>Carregando contratos...</p>
         </div>
-      ) : contratos.length === 0 ? (
-        <div className="empty-state">
-          <DocIcon />
-          <h3>Nenhum contrato encontrado</h3>
-          <p>Crie seu primeiro contrato clicando em "Novo Contrato" ou vendendo um veículo no Estoque.</p>
-        </div>
       ) : (
-        <div className="table-scroll">
-        <table className="stock-table responsive-table">
-          <thead>
-            <tr>
-              <th>Documento</th>
-              <th>Cliente</th>
-              <th className="col-secondary">Data</th>
-              <th>Valor</th>
-              <th className="col-secondary">Status</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {contratos.map(c => (
+        (() => {
+          const contratosExibidos = contratos.filter(c => {
+            if (!search.trim()) return true
+            const q = search.toLowerCase().trim()
+            return (
+              (c.numero || '').toLowerCase().includes(q) ||
+              (c.cliente_nome || '').toLowerCase().includes(q) ||
+              (c.veiculo_nome || '').toLowerCase().includes(q) ||
+              (c.observacoes || '').toLowerCase().includes(q)
+            )
+          })
+
+          if (contratosExibidos.length === 0) {
+            return (
+              <div className="empty-state">
+                <DocIcon />
+                <h3>Nenhum contrato encontrado</h3>
+                <p>Crie seu primeiro contrato clicando em "Novo Contrato" ou vendendo um veículo no Estoque.</p>
+              </div>
+            )
+          }
+
+          return (
+            <div className="table-scroll">
+            <table className="stock-table responsive-table">
+              <thead>
+                <tr>
+                  <th>Documento</th>
+                  <th>Cliente</th>
+                  <th className="col-secondary">Data</th>
+                  <th>Valor</th>
+                  <th className="col-secondary">Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contratosExibidos.map(c => (
               <tr key={c.id}>
                 <td className="cell-title" data-label="Documento">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -554,6 +571,8 @@ function ContratosTabContent({
           </tbody>
         </table>
         </div>
+          )
+        })()
       )}
     </>
   )

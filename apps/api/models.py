@@ -777,7 +777,9 @@ class Conversa(Base):
     # despublicado), a conversa vira somente-leitura. `motivo_arquivo` é VARCHAR e não
     # enum nativo de propósito (ver ARMADILHAS-PRODUCAO.md §2 — CREATE TYPE duplicado).
     arquivada_em = Column(DateTime, nullable=True)
-    motivo_arquivo = Column(String(30), nullable=True)  # vendido | reservado | indisponivel
+    motivo_arquivo = Column(String(30), nullable=True)  # vendido | reservado | indisponivel | manual
+    deletada_em = Column(DateTime, nullable=True)
+    excluido = Column(Boolean, default=False, nullable=False, server_default="0")
     backup_url = Column(String(512), nullable=True)
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)

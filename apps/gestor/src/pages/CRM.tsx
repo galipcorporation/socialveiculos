@@ -1596,6 +1596,73 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
     }
   }
 
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === clientes.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(clientes.map(c => c.id))
+    }
+  }
+
+  const toggleSelectRow = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    )
+  }
+
+  const handleExportCSV = (apenasSelecionados = false) => {
+    const dados = apenasSelecionados
+      ? clientes.filter(c => selectedIds.includes(c.id))
+      : clientes
+    
+    if (dados.length === 0) return
+
+    const colunas = [
+      { key: 'nome', label: 'Nome' },
+      { key: 'email', label: 'E-mail' },
+      { key: 'telefone', label: 'Telefone' },
+      { key: 'cpf', label: 'CPF' },
+      { key: 'cnpj', label: 'CNPJ' },
+      { key: 'cidade', label: 'Cidade' },
+      { key: 'estado', label: 'Estado' },
+    ]
+
+    const csvContent = '\uFEFF' + [
+      colunas.map(c => `"${c.label}"`).join(','),
+      ...dados.map(row => colunas.map(c => `"${(row as any)[c.key] ?? ''}"`).join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `clientes_${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return
+    const ok = await useUIStore.getState().confirm({
+      title: 'Excluir Clientes em Lote',
+      message: `Tem certeza que deseja excluir os ${selectedIds.length} cliente(s) selecionados?`,
+      confirmText: 'Excluir Todos',
+      cancelText: 'Cancelar',
+    })
+    if (!ok) return
+    try {
+      await Promise.all(selectedIds.map(id => api.delete(`/clientes/${id}`)))
+      addToast('success', `${selectedIds.length} cliente(s) excluído(s) com sucesso.`)
+      setSelectedIds([])
+      fetchClientes()
+    } catch (err) {
+      const { message, details } = extractErrorDetails(err)
+      addToast('error', message || 'Erro ao excluir clientes', details)
+    }
+  }
+
   return (
     <div>
       <div className="filter-bar" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -1609,9 +1676,14 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
             onChange={e => handleSearchChange(e.target.value)}
           />
         </div>
-        <button className="btn btn-primary" onClick={() => { setEditingCliente(null); setShowModal(true) }}>
-          <PlusIcon /> Novo Cliente
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn btn-secondary" onClick={() => handleExportCSV(false)}>
+            📥 Exportar CSV
+          </button>
+          <button className="btn btn-primary" onClick={() => { setEditingCliente(null); setShowModal(true) }}>
+            <PlusIcon /> Novo Cliente
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -1626,50 +1698,109 @@ function ClientesTab({ addToast }: { addToast: (type: ToastType, message: string
           <p>Cadastre seu primeiro cliente clicando em "Novo Cliente".</p>
         </div>
       ) : (
-        <div className="table-scroll">
-        <table className="stock-table responsive-table">
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>Contato</th>
-              <th className="col-secondary">CPF / CNPJ</th>
-              <th className="col-secondary">Cidade / Estado</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {clientes.map(c => (
-              <tr key={c.id}>
-                <td className="cell-title" data-label="Nome">
-                  <div style={{ fontWeight: 600, color: 'var(--sv-text)' }}>{c.nome}</div>
-                  {c.email && <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>{c.email}</div>}
-                </td>
-                <td data-label="Contato">{c.telefone || '—'}</td>
-                <td className="col-secondary" data-label="CPF / CNPJ">{c.cpf || c.cnpj || '—'}</td>
-                <td className="col-secondary" data-label="Cidade / Estado">{c.cidade ? `${c.cidade} / ${c.estado || ''}` : '—'}</td>
-                <td className="cell-actions" data-label="Ações">
-                  <div className="actions-cell">
-                    <button
-                      className="action-btn"
-                      title="Editar"
-                      onClick={() => { setEditingCliente(c); setShowModal(true) }}
+        <>
+          <div className="table-scroll">
+            <table className="stock-table responsive-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={clientes.length > 0 && selectedIds.length === clientes.length}
+                      onChange={toggleSelectAll}
+                      style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--sv-primary)' }}
+                    />
+                  </th>
+                  <th>Nome</th>
+                  <th>Contato</th>
+                  <th className="col-secondary">CPF / CNPJ</th>
+                  <th className="col-secondary">Cidade / Estado</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clientes.map(c => {
+                  const isSelected = selectedIds.includes(c.id)
+                  return (
+                    <tr
+                      key={c.id}
+                      style={{ cursor: 'pointer' }}
+                      className={isSelected ? 'selected-row' : ''}
+                      onClick={() => { setEditingCliente(c); setShowModal(true); }}
                     >
-                      <EditIcon />
-                    </button>
-                    <button
-                      className="action-btn danger"
-                      title="Excluir"
-                      onClick={() => handleDelete(c)}
-                    >
-                      <TrashIcon />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
+                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectRow(c.id)}
+                          style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--sv-primary)' }}
+                        />
+                      </td>
+                      <td className="cell-title" data-label="Nome">
+                        <div style={{ fontWeight: 600, color: 'var(--sv-text)' }}>{c.nome}</div>
+                        {c.email && <div style={{ fontSize: 12, color: 'var(--sv-text-muted)' }}>{c.email}</div>}
+                      </td>
+                      <td data-label="Contato">{c.telefone || '—'}</td>
+                      <td className="col-secondary" data-label="CPF / CNPJ">{c.cpf || c.cnpj || '—'}</td>
+                      <td className="col-secondary" data-label="Cidade / Estado">{c.cidade ? `${c.cidade} / ${c.estado || ''}` : '—'}</td>
+                      <td className="cell-actions" data-label="Ações" onClick={e => e.stopPropagation()}>
+                        <div className="actions-cell">
+                          <button
+                            className="action-btn"
+                            title="Editar"
+                            onClick={(e) => { e.stopPropagation(); setEditingCliente(c); setShowModal(true); }}
+                          >
+                            <EditIcon />
+                          </button>
+                          <button
+                            className="action-btn danger"
+                            title="Excluir"
+                            onClick={(e) => { e.stopPropagation(); handleDelete(c); }}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {selectedIds.length > 0 && (
+            <div className="sv-selection-bar" style={{
+              position: 'sticky',
+              bottom: 20,
+              marginTop: 16,
+              background: 'var(--sv-surface-dim)',
+              border: '1px solid var(--sv-border)',
+              backdropFilter: 'blur(var(--sv-blur))',
+              padding: '12px 20px',
+              borderRadius: 'var(--sv-radius-lg)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              zIndex: 20,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
+            }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>
+                {selectedIds.length} cliente(s) selecionado(s)
+              </span>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => handleExportCSV(true)}>
+                  📥 Exportar Selecionados (CSV)
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={handleBulkDelete}>
+                  🗑️ Excluir Selecionados
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds([])}>
+                  Limpar Seleção
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Cliente Modal */}
