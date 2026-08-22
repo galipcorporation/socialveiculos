@@ -63,14 +63,12 @@ export default function ConversaScreen({ route, navigation }: RootScreenProps<'C
   })
 
   useChatSocket({
+    canal: tipo === 'parceiro' ? 'b2b' : 'vitrine',
+    chaveMensagens: ['chat', 'mensagens', id],
     conversaId: id,
-    onNovaMensagem: (msg) => {
-      queryClient.setQueryData<Mensagem[]>(['chat', 'mensagens', id], (old) => {
-        if (!old) return [msg]
-        if (old.some((m) => m.id === msg.id)) return old
-        return [...old, msg]
-      })
-    },
+    chavesInvalidar: [['chat', 'conversas'], ['chat', 'nao-lidas']],
+    autorProprio: 'loja',
+    autorRemoto: 'cliente',
   })
 
   useEffect(() => {
@@ -123,7 +121,7 @@ export default function ConversaScreen({ route, navigation }: RootScreenProps<'C
             style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}
             onPress={() => {
               if (veiculoId) {
-                navigation.navigate('CarroDetalhe', { id: veiculoId })
+                navigation.navigate('VeiculoDetalhe', { id: veiculoId })
               }
             }}
           >

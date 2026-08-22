@@ -991,6 +991,10 @@ function ChatTab({ user, addToast, initialConversaId, subTab, setSubTab }: { use
   const [newMessage, setNewMessage] = useState('')
   const [loadingConversas, setLoadingConversas] = useState(true)
   const [loadingMensagens, setLoadingMensagens] = useState(false)
+  const [abrirNovaModal, setAbrirNovaModal] = useState(false)
+  const [parceirosModal, setParceirosModal] = useState<LojaParceira[]>([])
+  const [loadingParceiros, setLoadingParceiros] = useState(false)
+  const [buscaParceiros, setBuscaParceiros] = useState('')
 
   const wsRef = useRef<ReconnectingSocket | null>(null)
   const messageEndRef = useRef<HTMLDivElement>(null)
@@ -1130,6 +1134,27 @@ function ChatTab({ user, addToast, initialConversaId, subTab, setSubTab }: { use
       setActiveConversa(prev => prev && prev.id === convId ? { ...prev, status_negociacao: res.status_negociacao } : prev)
     } catch (err: any) {
       addToast('error', err.message || 'Erro ao atualizar status')
+    }
+  }
+
+  useEffect(() => {
+    if (abrirNovaModal) {
+      setLoadingParceiros(true)
+      api.get<LojaParceira[]>('/b2b/parceiros')
+        .then(data => setParceirosModal(data))
+        .catch(err => addToast('error', err.message || 'Erro ao carregar parceiros'))
+        .finally(() => setLoadingParceiros(false))
+    }
+  }, [abrirNovaModal, addToast])
+
+  const handleIniciarConversaModal = async (lojaId: string) => {
+    try {
+      const res = await api.post<{ id: string }>('/b2b/chat/conversas', { outra_loja_id: lojaId })
+      setAbrirNovaModal(false)
+      await fetchConversas()
+      fetchMensagens(res.id)
+    } catch (err: any) {
+      addToast('error', err.message || 'Erro ao iniciar conversa')
     }
   }
 
@@ -1326,6 +1351,75 @@ function ChatTab({ user, addToast, initialConversaId, subTab, setSubTab }: { use
           </div>
         )}
       </div>
+
+      {abrirNovaModal && (
+        <div className="modal-overlay" onClick={() => setAbrirNovaModal(false)}>
+          <div className="modal-container glass-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 500, maxHeight: '80vh', display: 'flex', flexDirection: 'column', padding: 24 }}>
+            <div className="modal-header" style={{ marginBottom: 16 }}>
+              <h3 className="modal-title" style={{ margin: 0, fontSize: 16 }}>Nova Conversa com Parceiro</h3>
+              <button className="modal-close" onClick={() => setAbrirNovaModal(false)}>×</button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Buscar parceiro por nome..."
+                value={buscaParceiros}
+                onChange={e => setBuscaParceiros(e.target.value)}
+                style={{ width: '100%', height: 38 }}
+              />
+              <div style={{ overflowY: 'auto', maxHeight: 350, display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
+                {loadingParceiros ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><div className="spinner" /></div>
+                ) : parceirosModal.filter(p => !buscaParceiros || p.nome.toLowerCase().includes(buscaParceiros.toLowerCase())).length === 0 ? (
+                  <div style={{ padding: 20, textAlign: 'center', color: 'var(--sv-text-dim)', fontSize: 13 }}>
+                    Nenhum parceiro encontrado.
+                  </div>
+                ) : (
+                  parceirosModal
+                    .filter(p => !buscaParceiros || p.nome.toLowerCase().includes(buscaParceiros.toLowerCase()))
+                    .map(p => (
+                      <div
+                        key={p.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 12px',
+                          borderRadius: 'var(--sv-radius)',
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          border: '1px solid var(--sv-border)',
+                          gap: 12
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                          <div className="topbar-user-avatar" style={{ width: 34, height: 34, fontSize: 13, flexShrink: 0 }}>
+                            {p.nome[0]}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--sv-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {p.nome}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--sv-text-dim)' }}>
+                              📍 {p.cidade || 'Sem cidade'}{p.estado ? ` - ${p.estado}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          className="btn btn-primary"
+                          style={{ fontSize: 12, padding: '6px 14px', flexShrink: 0 }}
+                          onClick={() => handleIniciarConversaModal(p.id)}
+                        >
+                          Conversar
+                        </button>
+                      </div>
+                    ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

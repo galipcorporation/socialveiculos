@@ -14,7 +14,9 @@ export type RootStackParamList = {
     id: string
     nome?: string
     tipo?: 'cliente' | 'parceiro'
+    veiculoId?: string
     veiculoInteresse?: string
+    veiculoFoto?: string
     statusNegociacao?: string | null
     temPropostaVinculada?: boolean
     /** B2C: conversa de veículo que saiu do estoque — somente-leitura. */

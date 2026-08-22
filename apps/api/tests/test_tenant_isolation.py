@@ -28,7 +28,14 @@ from models import (
     BancoSimulador,
     Usuario,
     MembroLoja,
-    PapelUsuario
+    PapelUsuario,
+    Contrato,
+    TipoContrato,
+    StatusContrato,
+    Lead,
+    ClientePF,
+    EtapaLead,
+    OrigemLead,
 )
 from auth import create_access_token
 from simulador.crypt import encrypt_credentials
@@ -390,6 +397,148 @@ async def test_configuracao_fiscal_isolamento_tenant(client):
     finally:
         async with async_session() as db:
             await db.execute(delete(ConfiguracaoFiscal).where(ConfiguracaoFiscal.loja_id.in_([loja_a_id, loja_b_id])))
+            await db.execute(delete(MembroLoja).where(MembroLoja.id == membro_a_id))
+            await db.execute(delete(Usuario).where(Usuario.id == gestor_a_id))
+            await db.execute(delete(Loja).where(Loja.id.in_([loja_a_id, loja_b_id])))
+            await db.commit()
+
+
+@pytest.mark.asyncio
+async def test_contrato_isolamento_tenant(client):
+    """Gestor da loja A não lê nem edita contrato (dado financeiro/legal) da loja B -> 404.
+
+    Documenta a decisão de arquitetura: sem RLS no Postgres — isolamento é
+    100% em camada de aplicação (padrão nº 33/38 em BUGS.md, ver também
+    ARMADILHAS-PRODUCAO.md). Este teste é a prova comportamental de que o
+    filtro por loja_id foi de fato aplicado neste endpoint, não uma leitura
+    estática do código.
+    """
+    loja_a_id = _uid()
+    gestor_a_id = _uid()
+    membro_a_id = _uid()
+
+    loja_b_id = _uid()
+    contrato_b_id = _uid()
+
+    async with async_session() as db:
+        db.add(Loja(id=loja_a_id, nome="Loja A (contrato)", slug=f"loja-a-{loja_a_id[:8]}"))
+        db.add(Usuario(
+            id=gestor_a_id,
+            nome="Gestor A",
+            email=f"gestor_a_{gestor_a_id[:8]}@teste.com",
+            senha_hash="hash_fake",
+            papel=PapelUsuario.GESTOR,
+            ativo=True
+        ))
+        db.add(MembroLoja(
+            id=membro_a_id, usuario_id=gestor_a_id, loja_id=loja_a_id,
+            papel=PapelUsuario.GESTOR, ativo=True
+        ))
+
+        db.add(Loja(id=loja_b_id, nome="Loja B (contrato)", slug=f"loja-b-{loja_b_id[:8]}"))
+        db.add(Contrato(
+            id=contrato_b_id,
+            loja_id=loja_b_id,
+            tipo=TipoContrato.COMPRA_VENDA,
+            status=StatusContrato.RASCUNHO,
+            numero="CV-2026-SECRETO-B",
+            valor_venda=99999.0,
+        ))
+        await db.commit()
+
+    token = create_access_token(
+        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value, "typ": "access"}
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        resp_get = await client.get(f"/v1/contratos/{contrato_b_id}", headers=headers)
+        assert resp_get.status_code == 404, (
+            f"Vazamento (GET contrato): gestor leu contrato de outra loja -> {resp_get.status_code} {resp_get.text}"
+        )
+
+        resp_patch = await client.patch(
+            f"/v1/contratos/{contrato_b_id}",
+            json={"observacoes": "editado pela loja errada"},
+            headers=headers,
+        )
+        assert resp_patch.status_code == 404, (
+            f"Vazamento (PATCH contrato): gestor editou contrato de outra loja -> {resp_patch.status_code} {resp_patch.text}"
+        )
+    finally:
+        async with async_session() as db:
+            await db.execute(delete(Contrato).where(Contrato.id == contrato_b_id))
+            await db.execute(delete(MembroLoja).where(MembroLoja.id == membro_a_id))
+            await db.execute(delete(Usuario).where(Usuario.id == gestor_a_id))
+            await db.execute(delete(Loja).where(Loja.id.in_([loja_a_id, loja_b_id])))
+            await db.commit()
+
+
+@pytest.mark.asyncio
+async def test_lead_isolamento_tenant(client):
+    """Gestor da loja A não lê, edita nem exclui lead (PII de cliente) da loja B -> 404."""
+    loja_a_id = _uid()
+    gestor_a_id = _uid()
+    membro_a_id = _uid()
+
+    loja_b_id = _uid()
+    cliente_b_id = _uid()
+    lead_b_id = _uid()
+
+    async with async_session() as db:
+        db.add(Loja(id=loja_a_id, nome="Loja A (lead)", slug=f"loja-a-{loja_a_id[:8]}"))
+        db.add(Usuario(
+            id=gestor_a_id,
+            nome="Gestor A",
+            email=f"gestor_a_{gestor_a_id[:8]}@teste.com",
+            senha_hash="hash_fake",
+            papel=PapelUsuario.GESTOR,
+            ativo=True
+        ))
+        db.add(MembroLoja(
+            id=membro_a_id, usuario_id=gestor_a_id, loja_id=loja_a_id,
+            papel=PapelUsuario.GESTOR, ativo=True
+        ))
+
+        db.add(Loja(id=loja_b_id, nome="Loja B (lead)", slug=f"loja-b-{loja_b_id[:8]}"))
+        db.add(ClientePF(
+            id=cliente_b_id, loja_id=loja_b_id, nome="Cliente Secreto B",
+            telefone="11999990000", cpf="00000000000",
+        ))
+        db.add(Lead(
+            id=lead_b_id, loja_id=loja_b_id, cliente_id=cliente_b_id,
+            etapa=EtapaLead.LEAD, origem=OrigemLead.MANUAL,
+        ))
+        await db.commit()
+
+    token = create_access_token(
+        data={"sub": gestor_a_id, "email": f"gestor_a_{gestor_a_id[:8]}@teste.com", "papel": PapelUsuario.GESTOR.value, "typ": "access"}
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        resp_get = await client.get(f"/v1/leads/{lead_b_id}", headers=headers)
+        assert resp_get.status_code == 404, (
+            f"Vazamento (GET lead): gestor leu lead/PII de outra loja -> {resp_get.status_code} {resp_get.text}"
+        )
+
+        resp_patch = await client.patch(
+            f"/v1/leads/{lead_b_id}",
+            json={"observacoes": "editado pela loja errada"},
+            headers=headers,
+        )
+        assert resp_patch.status_code == 404, (
+            f"Vazamento (PATCH lead): gestor editou lead de outra loja -> {resp_patch.status_code} {resp_patch.text}"
+        )
+
+        resp_delete = await client.delete(f"/v1/leads/{lead_b_id}", headers=headers)
+        assert resp_delete.status_code == 404, (
+            f"Vazamento (DELETE lead): gestor excluiu lead de outra loja -> {resp_delete.status_code} {resp_delete.text}"
+        )
+    finally:
+        async with async_session() as db:
+            await db.execute(delete(Lead).where(Lead.id == lead_b_id))
+            await db.execute(delete(ClientePF).where(ClientePF.id == cliente_b_id))
             await db.execute(delete(MembroLoja).where(MembroLoja.id == membro_a_id))
             await db.execute(delete(Usuario).where(Usuario.id == gestor_a_id))
             await db.execute(delete(Loja).where(Loja.id.in_([loja_a_id, loja_b_id])))

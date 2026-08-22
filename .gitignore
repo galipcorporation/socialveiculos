@@ -10,12 +10,13 @@ dist/
 build/
 *.tsbuildinfo
 
-# Environment (segredos — o .env.example é versionado como template)
+# Environment — nenhum .env, nem .env.example, fica versionado (B137).
+# Template de variáveis vive fora do git (Notion/1Password/README interno).
 .env
 .env.local
 .env.production
 .env.*.local
-!.env.example
+.env.example
 
 # IDE e Ferramentas
 .vscode/

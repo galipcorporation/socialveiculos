@@ -1,28 +1,40 @@
-fastapi>=0.115,<0.140
-uvicorn[standard]>=0.34.0
-pydantic>=2.10.0
-pydantic-settings>=2.7.0
-email-validator>=2.0.0
-python-dotenv>=1.1.0
-python-multipart>=0.0.20
-sqlalchemy[asyncio]>=2.0.40
-alembic>=1.15.0
-aiosqlite>=0.21.0
-greenlet>=3.2.0
-asyncpg>=0.30.0
-bcrypt>=4.2.0
-PyJWT>=2.10.0
-boto3>=1.35.0
-Pillow>=11.0
-sentry-sdk[fastapi]>=2.0.0
-httpx>=0.27.0
-beautifulsoup4>=4.12.0
-cryptography>=44.0.0
-selenium>=4.41.0
-webdriver-manager>=4.0.2
-pyotp>=2.9.0
-qrcode[pil]>=7.4.0
-jinja2>=3.1.0
-xhtml2pdf>=0.2.17
-pytest>=8.0.0
-pytest-asyncio>=0.24.0
+# Versões travadas com "==" (B138, 2026-08-22): antes eram ranges (">=x,<y"
+# ou só ">=x"), então o Dockerfile (`pip install -r requirements.txt`)
+# resolvia versões diferentes a cada build — dois deploys do mesmo commit
+# podiam rodar código de dependência diferente, sem ninguém decidir isso.
+# Versões abaixo são as que passaram na suíte completa (145 testes) em
+# 2026-08-22. Para atualizar uma dependência: trocar o número aqui,
+# `pip install -r requirements.txt --upgrade`, rodar a suíte, só então commitar.
+fastapi==0.139.2
+uvicorn[standard]==0.51.0
+pydantic==2.12.5
+pydantic-settings==2.14.2
+email-validator==2.3.0
+python-dotenv==1.2.2
+python-multipart==0.0.32
+sqlalchemy[asyncio]==2.0.51
+alembic==1.18.5
+aiosqlite==0.22.1
+greenlet==3.2.4
+asyncpg==0.31.0
+bcrypt==5.0.0
+PyJWT==2.13.0
+boto3==1.43.56
+Pillow==12.3.0
+sentry-sdk[fastapi]==2.66.1
+httpx==0.28.1
+beautifulsoup4==4.13.5
+cryptography==50.0.0
+selenium==4.46.0
+webdriver-manager==4.0.2
+pyotp==2.10.0
+qrcode[pil]==8.2
+jinja2==3.1.6
+# xhtml2pdf: não estava instalado neste ambiente de dev no momento do pin
+# (pdf_service.py já tem fallback gracioso para HTML de impressão quando
+# ausente — não é boot-crítico). Pinado no piso já declarado antes, não
+# numa versão testada agora; ao confirmar/instalar de verdade, revalidar
+# geração de PDF de contrato antes de subir versão mais nova.
+xhtml2pdf==0.2.17
+pytest==9.0.3
+pytest-asyncio==1.4.0
